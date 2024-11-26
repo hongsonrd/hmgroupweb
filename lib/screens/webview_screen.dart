@@ -2,89 +2,103 @@ import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart' as url_launcher;
 import 'dart:html' as html;
 import 'dart:ui' as ui;
 import '../main.dart' show UserState, UserCredentials;
 
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
-
   @override
   State<WebViewScreen> createState() => _WebViewScreenState();
 }
 
-class _WebViewScreenState extends State<WebViewScreen> {
-  late WebViewController controller;
-  bool isLoading = true;
-  bool showWebView = false;
-  String? currentUrl;
-  final String viewID = 'appsheet-web-view';
-
+class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+  
+  List<Map<String, dynamic>>? _filteredItems;
+  
   final List<Map<String, dynamic>> gridData = [
     {
       'icon': 'assets/dblogo.png',
       'name': 'Bán hàng Ly',
-      'link': 'https://www.appsheet.com/start/e95d2220-9727-4cac-b4c6-1fa0c4cd116c',
+      'link': 'https://yourworldtravel.vn/api/index3.html',
       'userAccess': ['hm.tranly', 'hm.duchuy', 'bpthunghiem', 'hm.tason']
     },
     {
       'icon': 'assets/dblogo.png',
       'name': 'Bán hàng Mạnh',
-      'link': 'https://lookerstudio.google.com/s/ohNJVkrnKs8',
-      'userAccess': ['hm.lemanh', 'hm.duchuy', 'hm.tason']
+      'link': 'https://lookerstudio.google.com/embed/reporting/5baa1a38-d2eb-40fa-9316-316dbb9584e0/page/p_omy9wew3md',
+      'userAccess': ['bpthunghiem', 'hm.duchuy', 'hm.tason']
     },
-    // Add the rest of your grid items here
   ];
 
-  void initWebView(String url) {
+  void showWebViewDialog(BuildContext context, String url, String title) {
+    final String uniqueId = 'webview-${DateTime.now().millisecondsSinceEpoch}';
+    
     if (kIsWeb) {
-      try {
-        ui.platformViewRegistry.registerViewFactory(
-          viewID,
-          (int viewId) => html.IFrameElement()
-            ..src = url
-            ..style.border = 'none'
-            ..style.height = '100%'
-            ..style.width = '100%'
-            ..style.overflow = 'hidden'
-            ..allowFullscreen = true,
-        );
-      } catch (e) {
-        print('View factory already registered: $e');
-      }
-    } else {
-      controller = WebViewController()
-        ..setNavigationDelegate(
-          NavigationDelegate(
-            onPageStarted: (String url) {
-              if (mounted) {
-                setState(() {
-                  isLoading = true;
-                });
-              }
-            },
-            onPageFinished: (String url) {
-              if (mounted) {
-                setState(() {
-                  isLoading = false;
-                });
-              }
-            },
-            onWebResourceError: (WebResourceError error) {
-              print('WebView error: ${error.description}');
-            },
-          ),
-        )
-        ..enableZoom(true)
-        ..loadRequest(
-          Uri.parse(url),
-          headers: {
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-          }
-        );
+      ui.platformViewRegistry.registerViewFactory(
+        uniqueId,
+        (int id) => html.IFrameElement()
+          ..src = url
+          ..style.border = 'none'
+          ..style.height = '100%'
+          ..style.width = '100%'
+          ..style.overflow = 'hidden'
+          ..id = uniqueId
+          ..allowFullscreen = true
+          ..setAttribute('sandbox', 'allow-same-origin allow-scripts allow-forms allow-popups')
+          ..setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen'),
+      );
     }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return Dialog(
+          insetPadding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              AppBar(
+                leading: IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                ),
+                title: Text(title, style: const TextStyle(fontSize: 16)),
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.refresh),
+                    onPressed: () {
+                      if (kIsWeb) {
+                        final iframe = html.document.getElementById(uniqueId) as html.IFrameElement?;
+                        if (iframe != null) {
+                          final currentSrc = iframe.src;
+                          iframe.src = '';
+                          Future.delayed(const Duration(milliseconds: 100), () {
+                            iframe.src = currentSrc;
+                          });
+                        }
+                      }
+                    },
+                  ),
+                ],
+              ),
+              Expanded(
+                child: kIsWeb
+                    ? HtmlElementView(viewType: uniqueId)
+                    : WebViewWidget(
+                        controller: WebViewController()
+                          ..setJavaScriptMode(JavaScriptMode.unrestricted)
+                          ..enableZoom(true)
+                          ..loadRequest(Uri.parse(url)),
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   List<Map<String, dynamic>> _getFilteredGridItems(String username) {
@@ -95,97 +109,51 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }).toList();
   }
 
-  Future<void> _launchExternalUrl(String url) async {
-    final Uri uri = Uri.parse(url);
-    if (await url_launcher.canLaunchUrl(uri)) {
-      await url_launcher.launchUrl(
-        uri,
-        mode: url_launcher.LaunchMode.externalApplication,
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not launch $url')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    super.build(context);
+    
     return Consumer<UserCredentials>(
       builder: (context, userCredentials, child) {
-        final filteredGridData = _getFilteredGridItems(userCredentials.username);
+        _filteredItems ??= _getFilteredGridItems(userCredentials.username);
         
-        return WillPopScope(
-          onWillPop: () async {
-            if (showWebView) {
-              setState(() {
-                showWebView = false;
-                currentUrl = null;
-              });
-              return false;
-            }
-            return true;
-          },
-          child: Scaffold(
-            body: showWebView 
-              ? Stack(
-                  children: [
-                    if (kIsWeb)
-                      SizedBox.expand(
-                        child: HtmlElementView(viewType: viewID),
-                      )
-                    else
-                      WebViewWidget(controller: controller),
-                    if (isLoading && !kIsWeb)
-                      const Center(child: CircularProgressIndicator()),
-                  ],
-                )
-              : Container(
-                  decoration: BoxDecoration(
-                    image: DecorationImage(
-                      image: AssetImage('assets/appbackgrid.png'),
-                      fit: BoxFit.cover,
+        return Scaffold(
+          body: Container(
+            decoration: BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/appbackgrid.png'),
+                fit: BoxFit.cover,
+              ),
+            ),
+            child: CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.all(16.0),
+                  sliver: SliverGrid(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 4,
+                      mainAxisSpacing: 10.0,
+                      crossAxisSpacing: 10.0,
+                      childAspectRatio: 1 / 1.2,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        if (index >= _filteredItems!.length) return null;
+                        return GridItem(
+                          itemData: _filteredItems![index],
+                          onTap: () => showWebViewDialog(
+                            context,
+                            _filteredItems![index]['link']!,
+                            _filteredItems![index]['name']!,
+                          ),
+                        );
+                      },
+                      childCount: _filteredItems!.length,
                     ),
                   ),
-                  child: CustomScrollView(
-                    slivers: [
-                      SliverPadding(
-                        padding: const EdgeInsets.all(16.0),
-                        sliver: SliverGrid(
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 4,
-                            mainAxisSpacing: 10.0,
-                            crossAxisSpacing: 10.0,
-                            childAspectRatio: 1 / 1.2,
-                          ),
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              return GridItem(
-                                itemData: filteredGridData[index],
-                                onTap: () {
-                                  String url = filteredGridData[index]['link']!;
-                                  if (url.contains('appsheet.com') ||
-                                      url.contains('accounts.google.com') ||
-                                      url.contains('https://yourworldtravel.vn/api/index') ||
-                                      url.contains('https://lookerstudio.google.com')) {
-                                    setState(() {
-                                      currentUrl = url;
-                                      showWebView = true;
-                                    });
-                                    initWebView(url);
-                                  } else {
-                                    _launchExternalUrl(url);
-                                  }
-                                },
-                              );
-                            },
-                            childCount: filteredGridData.length,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
+              ],
+            ),
           ),
         );
       },
@@ -197,32 +165,32 @@ class GridItem extends StatelessWidget {
   final Map<String, dynamic> itemData;
   final VoidCallback onTap;
 
-  const GridItem({
-    Key? key,
-    required this.itemData,
-    required this.onTap,
-  }) : super(key: key);
+  const GridItem({Key? key, required this.itemData, required this.onTap}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    bool isImportant = itemData['important'] == 'true';
-
     return InkWell(
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
           color: const Color.fromARGB(255, 247, 247, 247).withOpacity(0.04),
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
         ),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Image.asset(itemData['icon']!, width: 50.0, height: 50.0),
-            SizedBox(height: 8.0),
-            Text(
-              itemData['name']!,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14.0),
+            Image.asset(itemData['icon']!, width: 50.0, height: 50.0, fit: BoxFit.contain),
+            const SizedBox(height: 12.0),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: Text(
+                itemData['name']!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14.0, color: Colors.white, fontWeight: FontWeight.w500),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),

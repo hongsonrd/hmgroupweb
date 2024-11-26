@@ -115,43 +115,34 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 Future<String> fetchFromWeb(String url) async {
-  final int maxRetries = 3;
-  int currentTry = 0;
-  
-  while (currentTry < maxRetries) {
-    try {
-      // Create a custom client with longer timeout
-      final client = http.Client();
-      try {
-        final response = await client.get(
-          Uri.parse(url),
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': '*/*',
-            'Access-Control-Allow-Origin': '*',
-            // Add any required headers from your backend
-          },
-        ).timeout(
-          const Duration(seconds: 15),
-        );
-        
-        if (response.statusCode == 200) {
-          return response.body;
-        }
-        throw Exception('Request failed with status: ${response.statusCode}');
-      } finally {
-        client.close();
-      }
-    } catch (e) {
-      print('Attempt ${currentTry + 1} failed: $e');
-      currentTry++;
-      if (currentTry >= maxRetries) {
-        return ''; // Return empty string after all retries fail
-      }
-      await Future.delayed(Duration(seconds: 2));
+  try {
+    // Replace the original API URL with the Worker URL
+    String workerUrl = url.replaceAll(
+      'https://yourworldtravel.vn', 
+      'https://flat-leaf-9f05.hongson.workers.dev'
+    );
+    
+    final response = await http.get(
+      Uri.parse(workerUrl),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': '*/*',
+      },
+    ).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () {
+        throw TimeoutException('Request timed out');
+      },
+    );
+    
+    if (response.statusCode == 200) {
+      return response.body;
     }
+    throw Exception('Request failed with status: ${response.statusCode}');
+  } catch (e) {
+    print('Request failed: $e');
+    return '';
   }
-  return '';
 }
 Future<void> _login() async {
   setState(() {
@@ -176,43 +167,31 @@ Future<void> _login() async {
   String encryptedQuery = encryptAES(queryString, encryptionKey);
   
   try {
-    // Build the complete URL with query parameters
-    final baseUrl = "https://yourworldtravel.vn/api/query/login";
-    final queryParams = {
-      'q': encryptedQuery,
-      // Add any additional required parameters
-      'timestamp': DateTime.now().millisecondsSinceEpoch.toString(),
-    };
+    // Try original URL format first
+    String url = "https://yourworldtravel.vn/api/query/login/${Uri.encodeComponent(encryptedQuery)}";
+    var response = await fetchFromWeb(url);
     
-    final uri = Uri.parse(baseUrl).replace(queryParameters: queryParams);
-    
-    final response = await http.get(
-      uri,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': '*/*',
-        'Origin': 'https://yourworldtravel.vn',
-        'Referer': 'https://yourworldtravel.vn/',
-      },
-    ).timeout(
-      const Duration(seconds: 15),
-      onTimeout: () {
-        throw TimeoutException('Request timed out');
-      },
-    );
+    if (response.isEmpty) {
+      // If original fails, try alternative URL format with query parameters
+      final baseUrl = "https://yourworldtravel.vn/api/query/login";
+      final queryParams = {
+        'q': encryptedQuery,
+        'timestamp': DateTime.now().millisecondsSinceEpoch.toString(),
+      };
+      
+      final uri = Uri.parse(baseUrl).replace(queryParameters: queryParams);
+      response = await fetchFromWeb(uri.toString());
+    }
 
-    if (response.statusCode == 200) {
-      final responseBody = response.body;
-      List<String> responseParts = responseBody.split('@');
+    if (response.isNotEmpty) {
+      List<String> responseParts = response.split('@');
       
       if (responseParts.isNotEmpty && responseParts[0] == "OK") {
-        // Rest of your existing login success handling code
         String name = responseParts.length > 1 ? responseParts[1] : 'Unknown';
         String employeeId = responseParts.length > 2 ? responseParts[2] : 'N/A';
         String chamCong = responseParts.length > 3 ? responseParts[3] : 'N/A';
         String queryType = responseParts.length > 4 ? responseParts[4] : '1';
         
-        // Save credentials and user data
         SharedPreferences prefs = await SharedPreferences.getInstance();
         await prefs.setString('username', inputUsername);
         await prefs.setString('password', inputPassword);
@@ -234,7 +213,7 @@ Future<void> _login() async {
         });
 
         await _userState.setUser(userData);
-        await _userState.setLoginResponse(responseBody);
+        await _userState.setLoginResponse(response);
         await _userState.setUpdateResponses('', '', '', '', chamCong);
 
         if (mounted && Navigator.canPop(context)) {
@@ -246,7 +225,7 @@ Future<void> _login() async {
         });
       }
     } else {
-      throw Exception('Request failed with status: ${response.statusCode}');
+      throw Exception('Không nhận được phản hồi từ máy chủ');
     }
   } catch (e) {
     setState(() {
