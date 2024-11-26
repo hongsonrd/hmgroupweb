@@ -62,6 +62,12 @@
       "languageVersion": "3.4"
     },
     {
+      "name": "csslib",
+      "rootUri": "file:///Users/admin/.pub-cache/hosted/pub.dev/csslib-1.0.2",
+      "packageUri": "lib/",
+      "languageVersion": "3.1"
+    },
+    {
       "name": "cupertino_icons",
       "rootUri": "file:///Users/admin/.pub-cache/hosted/pub.dev/cupertino_icons-1.0.8",
       "packageUri": "lib/",
@@ -124,6 +130,12 @@
     {
       "name": "flutter_web_plugins",
       "rootUri": "file:///Users/admin/Documents/Flutter%20SDK/flutter/packages/flutter_web_plugins",
+      "packageUri": "lib/",
+      "languageVersion": "3.2"
+    },
+    {
+      "name": "html",
+      "rootUri": "file:///Users/admin/.pub-cache/hosted/pub.dev/html-0.15.5",
       "packageUri": "lib/",
       "languageVersion": "3.2"
     },
@@ -398,6 +410,36 @@
       "languageVersion": "2.14"
     },
     {
+      "name": "video_player",
+      "rootUri": "file:///Users/admin/.pub-cache/hosted/pub.dev/video_player-2.9.2",
+      "packageUri": "lib/",
+      "languageVersion": "3.3"
+    },
+    {
+      "name": "video_player_android",
+      "rootUri": "file:///Users/admin/.pub-cache/hosted/pub.dev/video_player_android-2.7.16",
+      "packageUri": "lib/",
+      "languageVersion": "3.5"
+    },
+    {
+      "name": "video_player_avfoundation",
+      "rootUri": "file:///Users/admin/.pub-cache/hosted/pub.dev/video_player_avfoundation-2.6.3",
+      "packageUri": "lib/",
+      "languageVersion": "3.3"
+    },
+    {
+      "name": "video_player_platform_interface",
+      "rootUri": "file:///Users/admin/.pub-cache/hosted/pub.dev/video_player_platform_interface-6.2.3",
+      "packageUri": "lib/",
+      "languageVersion": "3.3"
+    },
+    {
+      "name": "video_player_web",
+      "rootUri": "file:///Users/admin/.pub-cache/hosted/pub.dev/video_player_web-2.3.3",
+      "packageUri": "lib/",
+      "languageVersion": "3.4"
+    },
+    {
       "name": "vm_service",
       "rootUri": "file:///Users/admin/.pub-cache/hosted/pub.dev/vm_service-14.2.5",
       "packageUri": "lib/",
@@ -458,7 +500,7 @@
       "languageVersion": "3.2"
     }
   ],
-  "generated": "2024-11-26T11:14:56.259664Z",
+  "generated": "2024-11-26T12:51:13.531628Z",
   "generator": "pub",
   "generatorVersion": "3.5.4",
   "flutterRoot": "file:///Users/admin/Documents/Flutter%20SDK/flutter",

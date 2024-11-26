@@ -12,6 +12,8 @@ import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
+import 'package:video_player/video_player.dart';
+import 'dart:math' show pow;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -55,7 +57,6 @@ class MainScreen extends StatefulWidget {
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
-
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
   bool _isAuthenticated = false;
@@ -73,7 +74,20 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSavedCredentials();
+    _initializeAuth();
+  }
+
+  Future<void> _initializeAuth() async {
+    await _userState.loadUser();
+    
+    if (_userState.isAuthenticated && _userState.currentUser != null) {
+      setState(() {
+        _isAuthenticated = true;
+        _currentUser = _userState.currentUser;
+      });
+    } else {
+      await _loadSavedCredentials();
+    }
   }
 
   String encryptAES(String plainText, String key) {
@@ -89,114 +103,157 @@ class _MainScreenState extends State<MainScreen> {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String? username = prefs.getString('username');
     String? password = prefs.getString('password');
+    
     if (username != null && password != null) {
       setState(() {
         _usernameController.text = username;
         _passwordController.text = password;
       });
-      _login();
+      await _login();
     } else {
       _showLoginDialog();
     }
   }
-
-  Future<void> _login() async {
-    setState(() {
-      _loginStatus = 'Đang đăng nhập...';
-    });
-
-    String inputUsername = _usernameController.text.trim().toLowerCase();
-    String inputPassword = _passwordController.text.trim().toLowerCase();
-
-    if (inputUsername.isEmpty || inputPassword.isEmpty) {
-      setState(() {
-        _loginStatus = 'Vui lòng nhập đầy đủ thông tin';
-      });
-      return;
-    }
-
-    Provider.of<UserCredentials>(context, listen: false)
-        .setCredentials(inputUsername, inputPassword);
-
-    String queryString = "$inputUsername@$inputPassword";
-    String encryptionKey = "12345678901234567890123456789012";
-    String encryptedQuery = encryptAES(queryString, encryptionKey);
-    
+Future<String> fetchFromWeb(String url) async {
+  final int maxRetries = 3;
+  int currentTry = 0;
+  
+  while (currentTry < maxRetries) {
     try {
-      final url = "https://yourworldtravel.vn/api/query/login/${Uri.encodeComponent(encryptedQuery)}";
-      final response = await fetchFromWeb(url);
-
-      if (response.isNotEmpty) {
-        List<String> responseParts = response.split('@');
+      // Create a custom client with longer timeout
+      final client = http.Client();
+      try {
+        final response = await client.get(
+          Uri.parse(url),
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': '*/*',
+            'Access-Control-Allow-Origin': '*',
+            // Add any required headers from your backend
+          },
+        ).timeout(
+          const Duration(seconds: 15),
+        );
         
-        if (responseParts.isNotEmpty && responseParts[0] == "OK") {
-          String name = responseParts.length > 1 ? responseParts[1] : 'Unknown';
-          String employeeId = responseParts.length > 2 ? responseParts[2] : 'N/A';
-          String chamCong = responseParts.length > 3 ? responseParts[3] : 'N/A';
-          String queryType = responseParts.length > 4 ? responseParts[4] : '1';
-          
-          SharedPreferences prefs = await SharedPreferences.getInstance();
-          await prefs.setString('username', inputUsername);
-          await prefs.setString('password', inputPassword);
-          await prefs.setString('cham_cong', chamCong);
-          
-          setState(() {
-            _isAuthenticated = true;
-            _currentUser = {
-              'username': inputUsername,
-              'name': name,
-              'employee_id': employeeId,
-              'cham_cong': chamCong,
-              'query_type': queryType
-            };
-            _loginStatus = '';
-          });
+        if (response.statusCode == 200) {
+          return response.body;
+        }
+        throw Exception('Request failed with status: ${response.statusCode}');
+      } finally {
+        client.close();
+      }
+    } catch (e) {
+      print('Attempt ${currentTry + 1} failed: $e');
+      currentTry++;
+      if (currentTry >= maxRetries) {
+        return ''; // Return empty string after all retries fail
+      }
+      await Future.delayed(Duration(seconds: 2));
+    }
+  }
+  return '';
+}
+Future<void> _login() async {
+  setState(() {
+    _loginStatus = 'Đang đăng nhập...';
+  });
 
-          await _userState.setUser(_currentUser!);
-          await _userState.setLoginResponse(response);
-          await _userState.setUpdateResponses('', '', '', '', chamCong);
+  String inputUsername = _usernameController.text.trim().toLowerCase();
+  String inputPassword = _passwordController.text.trim().toLowerCase();
 
+  if (inputUsername.isEmpty || inputPassword.isEmpty) {
+    setState(() {
+      _loginStatus = 'Vui lòng nhập đầy đủ thông tin';
+    });
+    return;
+  }
+
+  Provider.of<UserCredentials>(context, listen: false)
+      .setCredentials(inputUsername, inputPassword);
+
+  String queryString = "$inputUsername@$inputPassword";
+  String encryptionKey = "12345678901234567890123456789012";
+  String encryptedQuery = encryptAES(queryString, encryptionKey);
+  
+  try {
+    // Build the complete URL with query parameters
+    final baseUrl = "https://yourworldtravel.vn/api/query/login";
+    final queryParams = {
+      'q': encryptedQuery,
+      // Add any additional required parameters
+      'timestamp': DateTime.now().millisecondsSinceEpoch.toString(),
+    };
+    
+    final uri = Uri.parse(baseUrl).replace(queryParameters: queryParams);
+    
+    final response = await http.get(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': '*/*',
+        'Origin': 'https://yourworldtravel.vn',
+        'Referer': 'https://yourworldtravel.vn/',
+      },
+    ).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () {
+        throw TimeoutException('Request timed out');
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final responseBody = response.body;
+      List<String> responseParts = responseBody.split('@');
+      
+      if (responseParts.isNotEmpty && responseParts[0] == "OK") {
+        // Rest of your existing login success handling code
+        String name = responseParts.length > 1 ? responseParts[1] : 'Unknown';
+        String employeeId = responseParts.length > 2 ? responseParts[2] : 'N/A';
+        String chamCong = responseParts.length > 3 ? responseParts[3] : 'N/A';
+        String queryType = responseParts.length > 4 ? responseParts[4] : '1';
+        
+        // Save credentials and user data
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setString('username', inputUsername);
+        await prefs.setString('password', inputPassword);
+        await prefs.setString('cham_cong', chamCong);
+        await prefs.setBool('is_authenticated', true);
+        
+        final userData = {
+          'username': inputUsername,
+          'name': name,
+          'employee_id': employeeId,
+          'cham_cong': chamCong,
+          'query_type': queryType
+        };
+
+        setState(() {
+          _isAuthenticated = true;
+          _currentUser = userData;
+          _loginStatus = '';
+        });
+
+        await _userState.setUser(userData);
+        await _userState.setLoginResponse(responseBody);
+        await _userState.setUpdateResponses('', '', '', '', chamCong);
+
+        if (mounted && Navigator.canPop(context)) {
           Navigator.of(context).pop();
-        } else {
-          setState(() {
-            _loginStatus = 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.';
-          });
         }
       } else {
         setState(() {
-          _loginStatus = 'Lỗi kết nối. Vui lòng thử lại sau.';
+          _loginStatus = 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.';
         });
       }
-    } catch (e) {
-      setState(() {
-        _loginStatus = 'Lỗi kết nối. Vui lòng thử lại sau.';
-      });
+    } else {
+      throw Exception('Request failed with status: ${response.statusCode}');
     }
+  } catch (e) {
+    setState(() {
+      _loginStatus = 'Lỗi kết nối. Vui lòng thử lại sau. (${e.toString()})';
+    });
   }
-
-  Future<String> fetchFromWeb(String url) async {
-    try {
-      if (kIsWeb) {
-        final proxyUrl = 'https://api.allorigins.win/raw?url=${Uri.encodeComponent(url)}';
-        final response = await html.HttpRequest.request(
-          proxyUrl,
-          method: 'GET',
-          requestHeaders: {
-            'Content-Type': 'application/json',
-            'Accept': '*/*',
-          },
-        );
-        return response.responseText ?? '';
-      } else {
-        final response = await http.get(Uri.parse(url));
-        return response.body;
-      }
-    } catch (e) {
-      print('Request failed: $e');
-      return '';
-    }
-  }
-
+}
   void _logout() async {
     await _userState.clearUser();
     SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -211,13 +268,13 @@ class _MainScreenState extends State<MainScreen> {
     });
     _showLoginDialog();
   }
-
-  void _showLoginDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
+void _showLoginDialog() {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext context) {
+      return VideoBackground(
+        child: StatefulBuilder(
           builder: (context, setDialogState) {
             bool isLoading = false;
 
@@ -237,138 +294,204 @@ class _MainScreenState extends State<MainScreen> {
               await _login();
             }
 
-            return AlertDialog(
-              title: Column(
-                children: [
-                  const Text('Đăng nhập',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            return Center(
+              child: Container(
+                constraints: BoxConstraints(maxWidth: 400),
+                child: AlertDialog(
+                  backgroundColor: Colors.white.withOpacity(0.9),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
                   ),
-                    const Text('(Lần đầu đăng nhập trên thiết bị, thời gian chờ có thể hơi lâu)',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12),
-                  ),
-                  if (isLoading) ...[
-                    const SizedBox(height: 10),
-                    const LinearProgressIndicator(),
-                  ],
-                ],
-              ),
-              content: Container(
-                width: double.maxFinite,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: _usernameController,
-                      decoration: InputDecoration(
-                        labelText: 'Tài khoản',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.person),
-                        enabled: !isLoading,
-                      ),
-                      textInputAction: TextInputAction.next,
-                    ),
-                    SizedBox(height: 16),
-                    TextField(
-                      controller: _passwordController,
-                      decoration: InputDecoration(
-                        labelText: 'Mật khẩu',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.lock),
-                        enabled: !isLoading,
-                      ),
-                      obscureText: true,
-                      onSubmitted: (_) => handleLogin(),
-                    ),
-                    if (_loginStatus.isNotEmpty) ...[
-                      SizedBox(height: 16),
-                      Container(
-                        padding: EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: _loginStatus.contains('thất bại') ? 
-                            Colors.red.withOpacity(0.1) : 
-                            Colors.blue.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              _loginStatus.contains('thất bại') ? 
-                                Icons.error_outline : 
-                                Icons.info_outline,
-                              color: _loginStatus.contains('thất bại') ? 
-                                Colors.red : 
-                                Colors.blue,
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _loginStatus,
-                                style: TextStyle(
-                                  color: _loginStatus.contains('thất bại') ? 
-                                    Colors.red : 
-                                    Colors.blue,
-                                ),
-                              ),
-                            ),
-                          ],
+                  title: Column(
+                    children: [
+                      const Text(
+                        'Đăng nhập',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 24, 
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        '(Lần đầu đăng nhập trên thiết bị, thời gian chờ có thể hơi lâu. Sau khoảng 30s mà vẫn hiện Đang đăng nhập, nên tải lại trang rồi đăng nhập lại chắc chắn được.)',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color.fromARGB(255, 149, 0, 0),
+                        ),
+                      ),
+                      if (isLoading) ...[
+                        const SizedBox(height: 16),
+                        LinearProgressIndicator(
+                          backgroundColor: Colors.blue.withOpacity(0.1),
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                        ),
+                      ],
                     ],
-                  ],
-                ),
-              ),
-              actions: [
-                Row(
-                  children: [
-                    if (!isLoading) 
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: Text('Huỷ'),
-                      ),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: isLoading ? null : handleLogin,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          padding: EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  content: Container(
+                    width: double.maxFinite,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextField(
+                          controller: _usernameController,
+                          decoration: InputDecoration(
+                            labelText: 'Tài khoản',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            prefixIcon: Icon(Icons.person),
+                            enabled: !isLoading,
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          textInputAction: TextInputAction.next,
+                          style: TextStyle(color: Colors.black87),
                         ),
-                        child: isLoading
-                            ? SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                ),
-                              )
-                            : Text('Đăng nhập',
-                                style: TextStyle(color: Colors.white),
+                        SizedBox(height: 16),
+                        TextField(
+                          controller: _passwordController,
+                          decoration: InputDecoration(
+                            labelText: 'Mật khẩu',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            prefixIcon: Icon(Icons.lock),
+                            enabled: !isLoading,
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          obscureText: true,
+                          onSubmitted: (_) => handleLogin(),
+                          style: TextStyle(color: Colors.black87),
+                        ),
+                        if (_loginStatus.isNotEmpty) ...[
+                          SizedBox(height: 16),
+                          Container(
+                            padding: EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: _loginStatus.contains('thất bại') 
+                                ? Colors.red.withOpacity(0.1)
+                                : Colors.blue.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: _loginStatus.contains('thất bại')
+                                  ? Colors.red.withOpacity(0.3)
+                                  : Colors.blue.withOpacity(0.3),
                               ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _loginStatus.contains('thất bại')
+                                    ? Icons.error_outline
+                                    : Icons.info_outline,
+                                  color: _loginStatus.contains('thất bại')
+                                    ? Colors.red
+                                    : Colors.blue,
+                                  size: 20,
+                                ),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _loginStatus,
+                                    style: TextStyle(
+                                      color: _loginStatus.contains('thất bại')
+                                        ? Colors.red
+                                        : Colors.blue,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Row(
+                        children: [
+                          if (!isLoading)
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              style: TextButton.styleFrom(
+                                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: Text(
+                                'Huỷ',
+                                style: TextStyle(
+                                  color: Colors.grey[700],
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: isLoading ? null : handleLogin,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                elevation: 2,
+                              ),
+                              child: isLoading
+                                ? SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    ),
+                                  )
+                                : Text(
+                                    'Đăng nhập',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-              ],
+              ),
             );
           },
-        );
-      },
-    );
-  }
-
+        ),
+      );
+    },
+  );
+}
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
   }
-
-  @override
+@override
   Widget build(BuildContext context) {
     if (!_isAuthenticated) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+      return VideoBackground(
+        child: const Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Center(child: CircularProgressIndicator()),
+        ),
       );
     }
 
@@ -471,16 +594,22 @@ Future<void> setUpdateResponses(String response1, String response2, String respo
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String? userData = prefs.getString('current_user');
     _isAuthenticated = prefs.getBool('is_authenticated') ?? false;
+    
     if (userData != null) {
-      _currentUser = json.decode(userData);
-      _queryType = _currentUser?['query_type'] ?? '1';
+      try {
+        _currentUser = json.decode(userData);
+        _queryType = _currentUser?['query_type'] ?? '1';
+        _chamCong = prefs.getString('cham_cong');
+        _updateResponse1 = prefs.getString('update_response1') ?? '';
+        _updateResponse2 = prefs.getString('update_response2') ?? '';
+        _updateResponse3 = prefs.getString('update_response3') ?? '';
+        _updateResponse4 = prefs.getString('update_response4') ?? '';
+        _defaultScreen = prefs.getString('default_screen') ?? 'Chụp ảnh';
+      } catch (e) {
+        print('Error loading user data: $e');
+        await clearUser();
+      }
     }
-    _updateResponse1 = prefs.getString('update_response1') ?? '';
-    _updateResponse2 = prefs.getString('update_response2') ?? '';
-    _updateResponse3 = prefs.getString('update_response3') ?? '';
-    _updateResponse4 = prefs.getString('update_response4') ?? '';
-    _chamCong = prefs.getString('cham_cong') ?? '';
-    _defaultScreen = prefs.getString('default_screen') ?? 'Chụp ảnh';
     notifyListeners();
   }
 
@@ -526,5 +655,75 @@ Future<void> setUpdateResponses(String response1, String response2, String respo
     await prefs.remove('update_response4');
     await prefs.remove('cham_cong');
     notifyListeners();
+  }
+}
+class VideoBackground extends StatefulWidget {
+  final Widget child;
+  final bool showVideo;
+  
+  const VideoBackground({
+    Key? key,
+    required this.child,
+    this.showVideo = true,
+  }) : super(key: key);
+
+  @override
+  State<VideoBackground> createState() => _VideoBackgroundState();
+}
+
+class _VideoBackgroundState extends State<VideoBackground> {
+  late VideoPlayerController _controller;
+  bool _isInitialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeVideo();
+  }
+
+  Future<void> _initializeVideo() async {
+    _controller = VideoPlayerController.network(
+      'https://video.wixstatic.com/video/9cf7b1_8236f043004f4db4988ce4fbea62c2a8/720p/mp4/file.mp4',
+    );
+
+    await _controller.initialize();
+    _controller.setLooping(true);
+    _controller.setVolume(0.0);
+    _controller.play();
+    
+    if (mounted) {
+      setState(() {
+        _isInitialized = true;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (widget.showVideo && _isInitialized) ...[
+          FittedBox(
+            fit: BoxFit.cover,
+            child: SizedBox(
+              width: _controller.value.size.width,
+              height: _controller.value.size.height,
+              child: VideoPlayer(_controller),
+            ),
+          ),
+          Container(
+            color: Colors.black.withOpacity(0.25), // 75% opacity (1 - 0.75 = 0.25)
+          ),
+        ],
+        widget.child,
+      ],
+    );
   }
 }
