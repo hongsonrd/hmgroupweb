@@ -28,7 +28,7 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
       'icon': 'assets/dblogo.png',
       'name': 'Bán hàng Mạnh',
       'link': 'https://lookerstudio.google.com/embed/reporting/5baa1a38-d2eb-40fa-9316-316dbb9584e0/page/p_omy9wew3md',
-      'userAccess': ['EMP003', 'EMP002', 'hm thử nghiệm']
+      'userAccess': []
     },
   ];
 void showWebViewDialog(BuildContext context, String url, String title) {
@@ -104,11 +104,11 @@ List<Map<String, dynamic>> _getFilteredGridItems(String? employeeId) {
     return gridData.where((item) {
       if (!item.containsKey('userAccess')) return true;
       List<String> allowedUsers = (item['userAccess'] as List).cast<String>();
-      return allowedUsers.contains(employeeId);
+      // If userAccess list is empty, allow all users
+      return allowedUsers.isEmpty || allowedUsers.contains(employeeId);
     }).toList();
   }
-
-  @override
+@override
   Widget build(BuildContext context) {
     super.build(context);
     

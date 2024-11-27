@@ -1,6 +1,6 @@
 {
-  "name": "hmdam",
-  "short_name": "hmdam",
+  "name": "hmgroupweb",
+  "short_name": "hmgroupweb",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#ffffff",

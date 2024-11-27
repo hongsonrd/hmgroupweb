@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -29,13 +29,15 @@ jobs:
         run: flutter config --enable-web
         
       - name: Build web
+        env:
+          FLUTTER_BASE_HREF: "/"
         run: |
           flutter build web --release \
             --web-renderer html \
             --dart-define=FLUTTER_WEB_USE_SKIA=true
         
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v1
+        uses: actions/upload-pages-artifact@v3
         with:
           path: './build/web'
           
@@ -48,4 +50,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v2
+        uses: actions/deploy-pages@v4

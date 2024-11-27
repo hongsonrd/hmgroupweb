@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_web_plugins/flutter_web_plugins.dart';  // Add this import
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_web/webview_flutter_web.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,6 +18,8 @@ import 'dart:math' show pow;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // Add this line to use URL strategy without hash
+  setUrlStrategy(PathUrlStrategy());
   WebViewPlatform.instance = WebWebViewPlatform();
   runApp(const MyApp());
 }
@@ -32,7 +35,6 @@ class UserCredentials extends ChangeNotifier {
     notifyListeners();
   }
 }
-
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
   @override
@@ -46,12 +48,18 @@ class MyApp extends StatelessWidget {
         title: 'HM GROUP',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(primarySwatch: Colors.blue),
+        // Add this to handle routing properly
+        onGenerateRoute: (settings) {
+          return MaterialPageRoute(
+            builder: (context) => const MainScreen(),
+            settings: settings,
+          );
+        },
         home: const MainScreen(),
       ),
     );
   }
 }
-
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
   @override
@@ -649,7 +657,6 @@ class VideoBackground extends StatefulWidget {
   @override
   State<VideoBackground> createState() => _VideoBackgroundState();
 }
-
 class _VideoBackgroundState extends State<VideoBackground> {
   late VideoPlayerController _controller;
   bool _isInitialized = false;
@@ -676,14 +683,12 @@ class _VideoBackgroundState extends State<VideoBackground> {
       });
     }
   }
-
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
   }
-
-  @override
+ @override
   Widget build(BuildContext context) {
     return Stack(
       fit: StackFit.expand,
@@ -698,7 +703,7 @@ class _VideoBackgroundState extends State<VideoBackground> {
             ),
           ),
           Container(
-            color: Colors.black.withOpacity(0.25), // 75% opacity (1 - 0.75 = 0.25)
+            color: Colors.black.withOpacity(0.25),
           ),
         ],
         widget.child,

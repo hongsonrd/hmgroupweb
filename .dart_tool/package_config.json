@@ -494,13 +494,13 @@
       "languageVersion": "3.2"
     },
     {
-      "name": "hmdam",
+      "name": "hmgroupweb",
       "rootUri": "../",
       "packageUri": "lib/",
       "languageVersion": "3.2"
     }
   ],
-  "generated": "2024-11-27T02:04:36.243943Z",
+  "generated": "2024-11-27T02:21:42.912384Z",
   "generator": "pub",
   "generatorVersion": "3.5.4",
   "flutterRoot": "file:///Users/mtc/Documents/FlutterSDK/flutter",
