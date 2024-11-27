@@ -7,7 +7,8 @@ import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:excel/excel.dart' as excel;
 import 'dart:convert'; 
-import '../main.dart' show UserState;
+import '../main.dart' show UserState, MainScreen;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SalaryRecord {
   final String period;
@@ -46,7 +47,6 @@ class _IntroScreenState extends State<IntroScreen> {
     _initializeWebView();
     _loadData();
   }
-
   void _initializeWebView() {
     if (kIsWeb) {
       try {
@@ -199,8 +199,7 @@ Future<void> _loadData() async {
     );
   }
 }
-
-  @override
+@override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Column(
@@ -213,26 +212,76 @@ Future<void> _loadData() async {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // User info
+                // User info with logout button
                 if (widget.userData != null) 
                   Row(
                     children: [
                       const SizedBox(width: 16),
-                      Text(
-                        widget.userData!['name'].toString().toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Text(
+                              widget.userData!['name'].toString().toUpperCase(),
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Text(
+                              'Mã NV: ${widget.userData!['employee_id']}',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: Color.fromARGB(255, 185, 0, 0),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      Text(
-                        'Mã NV: ${widget.userData!['employee_id']}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: Color.fromARGB(255, 185, 0, 0),
-                        ),
-                      ),
+                      TextButton.icon(
+  onPressed: () async {
+    // Get the UserState instance
+    final userState = UserState();
+    
+    // Clear UserState
+    await userState.clearUser();
+    
+    // Clear SharedPreferences
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.remove('username');
+    await prefs.remove('password');
+    await prefs.remove('is_authenticated');
+    await prefs.remove('current_user');
+    await prefs.remove('login_response');
+    await prefs.remove('update_response1');
+    await prefs.remove('update_response2');
+    await prefs.remove('update_response3');
+    await prefs.remove('update_response4');
+    await prefs.remove('cham_cong');
+    
+    // Navigate back to login screen
+    if (context.mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (context) => const MainScreen(),
+        ),
+        (route) => false,
+      );
+    }
+  },
+  icon: const Icon(Icons.logout, size: 20),
+  label: const Text(
+    'Đăng xuất',
+    style: TextStyle(fontSize: 16),
+  ),
+  style: TextButton.styleFrom(
+    foregroundColor: Colors.red,
+    padding: const EdgeInsets.symmetric(
+      horizontal: 12,
+      vertical: 8,
+    ),
+  ),
+),
                     ],
                   ),
                 const SizedBox(height: 4),

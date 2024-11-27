@@ -57,6 +57,124 @@ class MainScreen extends StatefulWidget {
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
+class NumericKeypad extends StatelessWidget {
+  final TextEditingController controller;
+  final VoidCallback? onSubmitted;
+
+  const NumericKeypad({
+    Key? key,
+    required this.controller,
+    this.onSubmitted,
+  }) : super(key: key);
+
+  void _onKeyPress(String value) {
+    if (value == 'backspace') {
+      if (controller.text.isNotEmpty) {
+        controller.text = controller.text.substring(0, controller.text.length - 1);
+      }
+    } else if (value == 'clear') {
+      controller.clear();
+    } else {
+      controller.text = controller.text + value;
+    }
+  }
+
+  Widget _buildKey(String value, {bool isIcon = false, IconData? icon}) {
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.all(4.0),
+        child: ElevatedButton(
+          onPressed: () => _onKeyPress(value),
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.all(16),
+            backgroundColor: isIcon ? Colors.grey.shade200 : Colors.white,
+            foregroundColor: Colors.black87,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            elevation: 2,
+          ),
+          child: isIcon 
+            ? Icon(icon, color: Colors.black87)
+            : Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              _buildKey('1'),
+              _buildKey('2'),
+              _buildKey('3'),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _buildKey('4'),
+              _buildKey('5'),
+              _buildKey('6'),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _buildKey('7'),
+              _buildKey('8'),
+              _buildKey('9'),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _buildKey('clear', isIcon: true, icon: Icons.clear),
+              _buildKey('0'),
+              _buildKey('backspace', isIcon: true, icon: Icons.backspace),
+            ],
+          ),
+          if (onSubmitted != null) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: onSubmitted,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.all(16),
+                  backgroundColor: Colors.blue,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Nhập',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
   bool _isAuthenticated = false;
@@ -256,6 +374,7 @@ void _showLoginDialog() {
         child: StatefulBuilder(
           builder: (context, setDialogState) {
             bool isLoading = false;
+            bool showKeypad = true;
 
             Future<void> handleLogin() async {
               if (_usernameController.text.isEmpty || _passwordController.text.isEmpty) {
@@ -275,180 +394,153 @@ void _showLoginDialog() {
 
             return Center(
               child: Container(
-                constraints: BoxConstraints(maxWidth: 400),
-                child: AlertDialog(
-                  backgroundColor: Colors.white.withOpacity(0.9),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  title: Column(
-                    children: [
-                      const Text(
-                        'Đăng nhập',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 24, 
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        '(Lần đầu đăng nhập trên thiết bị, thời gian chờ có thể hơi lâu. Sau khoảng 30s mà vẫn hiện Đang đăng nhập, nên tải lại trang rồi đăng nhập lại chắc chắn được.)',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Color.fromARGB(255, 149, 0, 0),
-                        ),
-                      ),
-                      if (isLoading) ...[
-                        const SizedBox(height: 16),
-                        LinearProgressIndicator(
-                          backgroundColor: Colors.blue.withOpacity(0.1),
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
-                        ),
-                      ],
-                    ],
-                  ),
-                  content: Container(
-                    width: double.maxFinite,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: SingleChildScrollView(
+                  child: AlertDialog(
+                    backgroundColor: Colors.white.withOpacity(0.9),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    title: Column(
                       children: [
-                        TextField(
-                          controller: _usernameController,
-                          decoration: InputDecoration(
-                            labelText: 'Tài khoản',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            prefixIcon: Icon(Icons.person),
-                            enabled: !isLoading,
-                            filled: true,
-                            fillColor: Colors.white,
+                          Image.asset(
+    'assets/logo.png',
+    height: 130,
+    width: 130,
+    fit: BoxFit.contain,
+  ),
+                        const Text(
+                          'Đăng nhập tài khoản HM',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 24, 
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
                           ),
-                          textInputAction: TextInputAction.next,
-                          style: TextStyle(color: Colors.black87),
                         ),
-                        SizedBox(height: 16),
-                        TextField(
-                          controller: _passwordController,
-                          decoration: InputDecoration(
-                            labelText: 'Mật khẩu',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            prefixIcon: Icon(Icons.lock),
-                            enabled: !isLoading,
-                            filled: true,
-                            fillColor: Colors.white,
+                        const SizedBox(height: 8),
+                        const Text(
+                          '(Lần đầu đăng nhập trên thiết bị, thời gian chờ có thể hơi lâu. Sau khoảng 20s mà vẫn hiện Đang đăng nhập, nên tải lại trang rồi đăng nhập lại chắc chắn được.)',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Color.fromARGB(255, 149, 0, 0),
                           ),
-                          obscureText: true,
-                          onSubmitted: (_) => handleLogin(),
-                          style: TextStyle(color: Colors.black87),
                         ),
-                        if (_loginStatus.isNotEmpty) ...[
-                          SizedBox(height: 16),
-                          Container(
-                            padding: EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: _loginStatus.contains('thất bại') 
-                                ? Colors.red.withOpacity(0.1)
-                                : Colors.blue.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: _loginStatus.contains('thất bại')
-                                  ? Colors.red.withOpacity(0.3)
-                                  : Colors.blue.withOpacity(0.3),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  _loginStatus.contains('thất bại')
-                                    ? Icons.error_outline
-                                    : Icons.info_outline,
-                                  color: _loginStatus.contains('thất bại')
-                                    ? Colors.red
-                                    : Colors.blue,
-                                  size: 20,
-                                ),
-                                SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    _loginStatus,
-                                    style: TextStyle(
-                                      color: _loginStatus.contains('thất bại')
-                                        ? Colors.red
-                                        : Colors.blue,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                        if (isLoading) ...[
+                          const SizedBox(height: 16),
+                          LinearProgressIndicator(
+                            backgroundColor: Colors.blue.withOpacity(0.1),
+                            valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
                           ),
                         ],
                       ],
                     ),
-                  ),
-                  actions: [
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: Row(
+                    content: Container(
+                      width: double.maxFinite,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (!isLoading)
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              style: TextButton.styleFrom(
-                                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
+                          TextField(
+                            controller: _usernameController,
+                            decoration: InputDecoration(
+                              labelText: 'Tài khoản',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
                               ),
-                              child: Text(
-                                'Huỷ',
-                                style: TextStyle(
-                                  color: Colors.grey[700],
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                              prefixIcon: const Icon(Icons.person),
+                              enabled: !isLoading,
+                              filled: true,
+                              fillColor: Colors.white,
                             ),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: isLoading ? null : handleLogin,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blue,
-                                padding: EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
+                            textInputAction: TextInputAction.next,
+                            style: const TextStyle(color: Colors.black87),
+                          ),
+                          const SizedBox(height: 16),
+                          GestureDetector(
+                            onTap: () {
+                              setDialogState(() {
+                                showKeypad = !showKeypad;
+                              });
+                            },
+                            child: TextField(
+                              controller: _passwordController,
+                              decoration: InputDecoration(
+                                labelText: 'Mật khẩu',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
-                                elevation: 2,
+                                prefixIcon: const Icon(Icons.lock),
+                                suffixIcon: IconButton(
+                                  icon: Icon(showKeypad ? Icons.keyboard_hide : Icons.keyboard),
+                                  onPressed: () {
+                                    setDialogState(() {
+                                      showKeypad = !showKeypad;
+                                    });
+                                  },
+                                ),
+                                enabled: !isLoading,
+                                filled: true,
+                                fillColor: Colors.white,
                               ),
-                              child: isLoading
-                                ? SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                    ),
-                                  )
-                                : Text(
-                                    'Đăng nhập',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
-                                  ),
+                              obscureText: true,
+                              onSubmitted: (_) => handleLogin(),
+                              style: const TextStyle(color: Colors.black87),
                             ),
                           ),
+                          if (showKeypad) ...[
+                            const SizedBox(height: 16),
+                            NumericKeypad(
+                              controller: _passwordController,
+                              onSubmitted: handleLogin,
+                            ),
+                          ],
+                          if (_loginStatus.isNotEmpty) ...[
+                            const SizedBox(height: 16),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: _loginStatus.contains('thất bại') 
+                                  ? Colors.red.withOpacity(0.1)
+                                  : Colors.blue.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: _loginStatus.contains('thất bại')
+                                    ? Colors.red.withOpacity(0.3)
+                                    : Colors.blue.withOpacity(0.3),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    _loginStatus.contains('thất bại')
+                                      ? Icons.error_outline
+                                      : Icons.info_outline,
+                                    color: _loginStatus.contains('thất bại')
+                                      ? Colors.red
+                                      : Colors.blue,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _loginStatus,
+                                      style: TextStyle(
+                                        color: _loginStatus.contains('thất bại')
+                                          ? Colors.red
+                                          : Colors.blue,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             );
@@ -662,7 +754,8 @@ class _VideoBackgroundState extends State<VideoBackground> {
 
   Future<void> _initializeVideo() async {
     _controller = VideoPlayerController.network(
-      'https://video.wixstatic.com/video/9cf7b1_8236f043004f4db4988ce4fbea62c2a8/720p/mp4/file.mp4',
+//      'https://video.wixstatic.com/video/9cf7b1_8236f043004f4db4988ce4fbea62c2a8/720p/mp4/file.mp4',
+      'https://storage.googleapis.com/times1/DocumentApp/lychee.mp4',
     );
 
     await _controller.initialize();
