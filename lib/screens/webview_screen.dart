@@ -11,7 +11,6 @@ class WebViewScreen extends StatefulWidget {
   @override
   State<WebViewScreen> createState() => _WebViewScreenState();
 }
-
 class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
@@ -23,17 +22,16 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
       'icon': 'assets/dblogo.png',
       'name': 'Bán hàng Ly',
       'link': 'https://yourworldtravel.vn/api/index3.html',
-      'userAccess': ['hm.tranly', 'hm.duchuy', 'bpthunghiem', 'hm.tason']
+      'userAccess': ['EMP001', 'EMP002', 'EMP003', 'HM thử nghiệm']
     },
     {
       'icon': 'assets/dblogo.png',
       'name': 'Bán hàng Mạnh',
       'link': 'https://lookerstudio.google.com/embed/reporting/5baa1a38-d2eb-40fa-9316-316dbb9584e0/page/p_omy9wew3md',
-      'userAccess': ['bpthunghiem', 'hm.duchuy', 'hm.tason']
+      'userAccess': ['EMP003', 'EMP002', 'hm thử nghiệm']
     },
   ];
-
-  void showWebViewDialog(BuildContext context, String url, String title) {
+void showWebViewDialog(BuildContext context, String url, String title) {
     final String uniqueId = 'webview-${DateTime.now().millisecondsSinceEpoch}';
     
     if (kIsWeb) {
@@ -100,12 +98,13 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
       },
     );
   }
-
-  List<Map<String, dynamic>> _getFilteredGridItems(String username) {
+List<Map<String, dynamic>> _getFilteredGridItems(String? employeeId) {
+    if (employeeId == null) return [];
+    
     return gridData.where((item) {
       if (!item.containsKey('userAccess')) return true;
       List<String> allowedUsers = (item['userAccess'] as List).cast<String>();
-      return allowedUsers.contains(username.toLowerCase());
+      return allowedUsers.contains(employeeId);
     }).toList();
   }
 
@@ -113,9 +112,10 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
   Widget build(BuildContext context) {
     super.build(context);
     
-    return Consumer<UserCredentials>(
-      builder: (context, userCredentials, child) {
-        _filteredItems ??= _getFilteredGridItems(userCredentials.username);
+    return Consumer<UserState>(
+      builder: (context, userState, child) {
+        final employeeId = userState.currentUser?['employee_id'];
+        _filteredItems ??= _getFilteredGridItems(employeeId);
         
         return Scaffold(
           body: Container(
@@ -160,7 +160,6 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
     );
   }
 }
-
 class GridItem extends StatelessWidget {
   final Map<String, dynamic> itemData;
   final VoidCallback onTap;
