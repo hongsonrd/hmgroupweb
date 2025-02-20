@@ -3,7 +3,14 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  desktop_webview_window
+  file_selector_windows
+  flutter_inappwebview_windows
+  geolocator_windows
+  screen_retriever
+  share_plus
   url_launcher_windows
+  window_manager
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST

@@ -1,0 +1,190 @@
+Bản 96 (18/02):
+- Cho phép đổi mật khẩu khi đang đăng nhập
+- Cho phép gửi mật khẩu về tin nhắn khi quên
+- Cho phép đặt lại mật khẩu mới tự động
+- Cho phép đăng nhập khi bấm enter trên bàn phím
+- Cập nhật chức năng HM AI
+Bản 95 (17/02):
+- Bổ sung mục khai báo kế hoạch cho GS
+Bản 94 (14/02):
+- Điều chỉnh giao diện báo cáo giám sát
+- Điền tự động nội dung khi báo cáo chủ đề GS
+- Sửa lỗi điền chữ báo cáo NS hàng loạt
+- Chỉ thị màu theo trạng thái đơn đồng phục
+- Sửa lỗi không hiển thị chi tiết khi duyệt đơn QLDV
+Bản 93 (13/02):
+- Thêm nút phản hồi lại kế hoạch đã tạo
+- Chặn gửi báo cáo không hợp lệ
+- Sắp xếp hiển thị báo cáo/ kế hoạch theo lượt mới trước
+- Đổi giao diện mặc định khi vào app từ Chụp ảnh > Dự án
+- Sửa hiện thị nút tại Dự án, Thông báo nổi
+Bản 92 (12/02):
+- Sửa lỗi gửi kế hoạch
+- Thêm tổng hợp danh sách tương tác khi xuất báo cáo
+- Cập nhập giao diện lúc chưa đăng nhập
+Bản 91 (11/02):
+- Cập nhật DB phiên bản 8, tự động reset khi lên bản mới
+- Cập nhật giao diện theo dõi BC NVVP theo dạng bảng
+- Báo cáo kế hoạch công việc, phát sinh và duyệt
+- Hiển thị số dự án và CN đang làm việc của tài khoản tương ứng
+- Thêm nút tương tác, giao việc của QLDV tới GS
+- Hiển thị thông báo nổi giao việc, công việc khi vào app
+- Cập nhật vị trí định kỳ
+Bản 90 (06/02):
+- Sửa lỗi camera báo cáo
+Bản 89 (06/02):
+- Điều chỉnh file báo cáo chi tiết QLDV hiện đủ các mục
+- Cho phép tạo đơn & đặt đồng phục CN
+- Cho phép sửa/ gửi đơn, xoá CN đặt đồng phục
+- Cho phép QLDV xem đơn và duyệt đơn
+- Sửa lỗi khi gửi báo cáo NS hàng loạt
+- Cập nhật DB bản 6 về đồng phục
+Bản 88 (04/02):
+- Dự án: Bổ sung nút Tổng hợp theo ngày cho phép xem tổng hợp kết quả báo cáo, nhân sự các BP theo ngày được chọn
+- Dự án: Bổ sung nút Xuất báo cáo cho phép tạo và chia sẻ báo cáo tổng hợp, biểu đồ, excel chi tiết
+- Dự án: Hiển thị số CN đủ trên tổng CN khi vào xem chi tiết danh sách
+- Dự án: Báo cáo công việc cho phép chia sẻ nhiều người
+- Dự án: Bổ sung nút Tổng hợp cho phép xuất tổng hợp báo cáo của nhân viên phòng
+- Cloud hoá cơ chế đăng nhập/ cập nhật dữ liệu/ chấm công app
+- Dự án: tự động hiển thị phân loại công việc theo NV phòng ban
+- Dự án: tự động hiện biểu tượng phân loại công việc
+- Dự án: hiển thị biểu đồ báo cáo theo ngày
+Bản 86 (03/02):
+- Cập nhật hiển thị lịch sử nhân sự dự án
+Bản 85 (24/01):
+- Cập nhật DB phiên bản 5, tự động reset khi lên bản mới
+- Thêm báo cáo giải pháp xử lý khi có vấn đề 
+- Hiển thị số lượng tổng CN đang làm việc và BC thực hiện hôm nay
+- Tự động hiển thị danh sách CN khi vào dự án
+- Thêm & tuỳ chỉnh điều hướng giao diện Dự án dựa trên tài khoản: GS, QLDV, CN
+- Cho phép QLDV tải và kiểm tra lịch sử báo cáo theo ngày/ nhiều ngày, bộ phận, chủ đề, phân loại, vấn đề
+- Cho phép Kinh doanh, Nhân sự, Tuyển dụng, Kế toán, Kỹ thuật xem và báo cáo công việc
+- Hiển thị, chia sẻ báo cáo mới tới người liên quan
+Bản 84 (22/01/2025):
+- Cập nhật DB phiên bản 3
+- Cho phép báo cáo TT Nhân sự hàng loạt từ quản lý dự án
+- Hiển thị toàn bộ thông tin công nhân
+- Cho phép GS cập nhật chiều cao, cân nặng, ngày cấp ĐP cuối
+Bản 83 (21/01/2025):
+- Sửa lựa chọn đổi VT cho CN
+- Hiển thị trạng thái nhân sự cuối cho mỗi người
+Bản 82 (20/01/2025):
+- Cho phép báo cáo phương án nhân sự từ danh sách
+- Cho phép báo cáo nhanh/ chi tiết công việc và hình ảnh về VT từ danh sách
+- Cho phép cập nhật danh sách công nhân/ vị trí từ quản lý dự án
+- Cho phép báo cáo công việc các chủ đề chung từ quản lý dự án
+- Hiển thị ngay lịch sử sau khi báo cáo thành công
+- Điều chỉnh giao diện màn hình Dự án, Cập nhật dự án
+Bản 81 (15/01/2025):
+- Cho phép duy trì dữ liệu cập nhật ở trang cá nhân khi chuyển và xoá khi đăng xuất
+- Bỏ mục Album khỏi thanh điều hướng
+- Bổ sung mục Dự án cho phép quản lý nhân sự theo dự án
+- Cập nhật lựa chọn trong danh sách màn hình khởi động ở Cài đặt
+- Điều chỉnh giới hạn chữ tối đa để hạn chế lệch thanh điều hướng
+- Bổ sung 6 bảng DB và hệ SQL trên thiết bị
+- Bổ sung hình ảnh truyền thông sự kiện mới
+- Cập nhật DB tự động và thủ công, cho phép lựa chọn
+- Cho phép server kích hoạt đăng xuất tài khoản từ xa
+Bản 80 (07/01/2025):
+- Sửa lỗi không rời khỏi màn hình khởi động
+- Sửa lỗi hiển thị màn hình khởi động theo giai đoạn
+Bản 79 (17/12):
+- Bổ sung lựa chọn xem phiếu yêu cầu kỹ thuật trong mục công việc
+Bản 77 (10/12):
+- Lưu lịch sử và cho phép xem lại ngay sau khi báo cáo theo lịch làm việc
+- Trong mục báo cáo theo LLV, cho phép hiển thị lựa chọn mặc định công việc GS
+- Cho phép bổ sung ghi chú khi báo cáo theo LLV
+- Vô hiệu chức năng báo cáo theo LLV nếu không đăng nhập
+- Gộp giao diện Chụp ảnh - Album - Lịch sử
+- Cập nhật hệ số bước chân
+Bản 76 (06/12):
+- Xử lý lỗi phần công việc
+- Cập nhật cơ chế tính bước chân đi bộ và chạy riêng biệt
+Bản 75 (04/12):
+- Cập nhật chi tiết khảo sát
+- Điều chỉnh lỗi giao diện khởi động & công việc
+Bản 74 (03/12):
+- Cập nhật khảo sát với các mục chi tiết
+- Bổ sung mục Tạo chữ ký và Bảng chấm công 6 tháng trong Công việc
+- Bổ sung giao diện các kỳ lễ
+- Tự động hiển thị giao diện mới khi đến ngày
+Bản 73 (28/11):
+- Thêm nút Lưu bảng lương về máy theo giai đoạn được chọn
+- Điều chỉnh giao diện phù hợp mục Cài Đặt
+Bản 72 (25/11):
+- Điều chỉnh cập nhật file dữ liệu linh hoạt
+- Kiểm tra phiên bản app mới tự động và thông báo người dùng
+- Điều chỉnh giao diện phù hợp mục Cài Đặt
+Bản 70 (20/11):
+- Thêm chức năng hiển thị các mục theo tài khoản cho phép
+- Bổ sung các mục chỉ số Hotel
+- Bỏ chức năng trượt để chuyển màn hình trong Cài đặt
+Bản 69 (11/11):
+- Thêm chức năng gửi báo cáo về server và tạo link QR
+Bản 68 (8/11):
+- Bổ sung giao diện mở lịch sử báo cáo từ trang cá nhân
+- Cho phép đồng bộ dữ liệu từ server và tự động cập nhật nếu lâu chưa cập nhật
+- Cho phép lọc theo ngày, chủ đề báo cáo và hiển thị thống kê chỉ số
+Bản 67 (2/11):
+- Fix giao diện Cài đặt & Khảo sát
+Bản 66 (1/11) -> 1.1.0
+- Sửa lỗi tìm kiếm BP trong báo cáo máy
+- Cập nhật giao diện trang Cài đặt
+- Thêm chức năng đếm bước chân
+- Thêm giao diện hiển thị lịch sử số bước chân
+- Thêm nút mở giao diện Khảo sát trong cài đặt
+- Thêm chức năng chọn logo BQL lên ảnh - Thêm chế độ báo cáo khảo sát (thử nghiệm)
+Bản 64 (30/10) -> 1.1.0
+- Cập nhật giao diện Hoàn Mỹ AI và truy cập được từ nhiều màn hình khác nhau
+- Hoàn Mỹ AI: thêm gửi ảnh, xoá hội thoại tự động và nút bấm xoá thủ công
+- Điều chỉnh giao diện album ảnh
+- Cho phép đánh giá ảnh bằng AI từ album app
+- Tại trang cá nhân thêm nút Xem lịch máy móc/ xe làm buồng/ công nhân
+- Cho phép lọc loại lịch hiển thị
+- Thêm thanh tìm kiếm lịch
+- Cho phép lưu ảnh về album khi chụp
+Bản 62 (28/10) -> 1.1.0
+- Cập nhật chức năng chụp ảnh các app con
+- Điều chỉnh giao diện trang chụp ảnh, cài đặt, cá nhân
+- Thêm lựa chọn xem lịch sử cập nhật app trong cài đặt
+- Chặn & tự động xoá dấu cách thừa khi đăng nhập
+- Tự động giới hạn kích thước chữ/giao diện tối đa 130% và tối thiểu 85% có thể từ thiết bị
+- Tự động cảnh báo khi không điền thông tin lúc chụp ảnh vấn đề
+- Tại trang cá nhân thêm lựa chọn tuỳ chỉnh
+- Cho phép lựa chọn ảnh avatar và hình nền cá nhân &cũng như từ danh sách có sẵn
+- Bổ sung lựa chọn xác định địa chỉ
+Bản 61 (27/10):
+- Bổ sung trang chờ tải
+- Cập nhật giao diện hiện đại
+Bản 60 (24/10):
+- Tự động cập nhật dữ liệu Lịch/Khác khi khởi động
+- Xem bảng Lương hàng tháng trong Cài Đặt
+- Cập nhật giao diện hiện đại
+Bản 56 (18/10):
+- Thêm thông báo thành công ở nhiều giao diện
+- Thêm chế độ báo cáo cho kiểm soát viên
+- Chuyển chế độ từ GS qua KSV
+Bản 55 (15/10):
+- Thêm chức năng chụp ảnh vấn đề
+- Tự động điền tên BP, VT khi quét mã máy/xe
+- Điều chỉnh giao diện, chức năng ổn định
+Bản 52 (7/10):
+- Bổ sung chức năng đăng nhập bằng Wifi
+- Bổ sung Hoàn Mỹ AI bằng chữ và giọng nói
+- Hiện đại hoá các giao diện + sửa lỗi
+Bản 49 (4/10):
+- Điều chỉnh giao diện báo cáo
+Bản 48 (2/10):
+- Điều chỉnh phần báo xe làm buồng + Quét QR
+- Cập nhật thương hiệu
+- Cải thiện định vị chính xác và lịch sử
+Bản 47 (17/9):
+- Thêm mục đào tạo trực tuyến
+Bản 46 (16/9):
+- Thêm nút báo cáo nhanh xe đồ
+Bản 45 (3/9):
+- Gửi thông báo thông tin theo tài khoản
+- Đăng nhập nhanh tài khoản bằng FaceID, Vân tay
+- Tự động điền thông tin đăng nhập khi vào app con lần đầu
+- Bổ sung hình ảnh đại diện, trạng thái đăng nhập
+- Đăng nhập bằng mã QR

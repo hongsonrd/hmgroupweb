@@ -1,53 +1,175 @@
 import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
-import 'package:webview_flutter_web/webview_flutter_web.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/intro_screen.dart';
 import 'screens/webview_screen.dart';
+import 'user_credentials.dart';
+import 'projectrouter.dart';
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'dart:convert';
 import 'package:provider/provider.dart';
-import 'dart:html' as html;
+//import 'dart:html' as html;
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
-import 'dart:math' show pow;
+import 'dart:math' show pow, Random;
+import 'package:crypto/crypto.dart';
+import 'package:flutter/services.dart';
+import 'user_state.dart';
+import 'multifile.dart';
+import 'db_helper.dart';
+import 'package:window_manager/window_manager.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-void main() {
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  WebViewPlatform.instance = WebWebViewPlatform();
-  runApp(const MyApp());
-}
+  
+  // Initialize window manager
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    await windowManager.ensureInitialized();
 
-class UserCredentials extends ChangeNotifier {
-  String _username = '';
-  String _password = '';
-  String get username => _username;
-  String get password => _password;
-  void setCredentials(String username, String password) {
-    _username = username;
-    _password = password;
-    notifyListeners();
+    WindowOptions windowOptions = const WindowOptions(
+      size: Size(1024, 768),
+      minimumSize: Size(800, 600),
+      center: true,
+      backgroundColor: Colors.transparent,
+      skipTaskbar: false,
+      titleBarStyle: TitleBarStyle.normal,
+    );
+    
+    await windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.maximize();
+    });
+  }
+
+  await MultiFileAccessUtility.initialize();
+  final dbHelper = DBHelper();
+  await dbHelper.database; 
+  await dbHelper.checkDatabaseStatus(); 
+  
+  final userState = UserState();
+  
+  // Check app version
+  checkAppVersion();
+  
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: userState),
+        ChangeNotifierProvider(create: (_) => UserCredentials()),
+      ],
+      child: const MyApp(),
+    ),
+  );
+}
+Future<void> checkAppVersion() async {
+  try {
+    // Get current app version
+    PackageInfo packageInfo = await PackageInfo.fromPlatform();
+    String currentVersion = packageInfo.version;
+
+    // Fetch latest version
+    final response = await http.get(
+      Uri.parse('https://yourworldtravel.vn/api/document/versiondesktop.txt')
+    );
+
+    if (response.statusCode == 200) {
+      String latestVersion = response.body.trim();
+      
+      if (currentVersion != latestVersion) {
+        showDialog(
+          context: navigatorKey.currentContext!,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('Cập nhật mới'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Phiên bản mới $latestVersion đã có sẵn. Bạn nên cập nhật để có trải nghiệm tốt nhất.'),
+                  const SizedBox(height: 20),
+                  const Text('Chọn phiên bản phù hợp với thiết bị của bạn:'),
+                ],
+              ),
+              actions: <Widget>[
+                Column(
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.laptop_mac),
+                        label: const Text('Tải bản macOS'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          backgroundColor: Colors.black,
+                        ),
+                        onPressed: () async {
+                          final url = Uri.parse('https://yourworldtravel.vn/download/macos');
+                          try {
+                            await launchUrl(url, mode: LaunchMode.externalApplication);
+                          } catch (e) {
+                            print('Error launching URL: $e');
+                          }
+                          Navigator.of(context).pop();
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.laptop),
+                        label: const Text('Tải bản Windows'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          backgroundColor: Colors.blue,
+                        ),
+                        onPressed: () async {
+                          final url = Uri.parse('https://yourworldtravel.vn/download/windows');
+                          try {
+                            await launchUrl(url, mode: LaunchMode.externalApplication);
+                          } catch (e) {
+                            print('Error launching URL: $e');
+                          }
+                          Navigator.of(context).pop();
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      child: const Text('Để sau'),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        );
+      }
+    }
+  } catch (e) {
+    print('Error checking version: $e');
   }
 }
-
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
+  
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => UserCredentials()),
-        ChangeNotifierProvider(create: (_) => UserState()),
-      ],
-      child: MaterialApp(
-        title: 'HM GROUP',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(primarySwatch: Colors.blue),
-        home: const MainScreen(),
-      ),
+    return MaterialApp(
+      navigatorKey: navigatorKey,  
+      title: 'HM GROUP',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(primarySwatch: Colors.blue),
+      home: const MainScreen(),
     );
   }
 }
@@ -57,124 +179,6 @@ class MainScreen extends StatefulWidget {
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
-class NumericKeypad extends StatelessWidget {
-  final TextEditingController controller;
-  final VoidCallback? onSubmitted;
-
-  const NumericKeypad({
-    Key? key,
-    required this.controller,
-    this.onSubmitted,
-  }) : super(key: key);
-
-  void _onKeyPress(String value) {
-    if (value == 'backspace') {
-      if (controller.text.isNotEmpty) {
-        controller.text = controller.text.substring(0, controller.text.length - 1);
-      }
-    } else if (value == 'clear') {
-      controller.clear();
-    } else {
-      controller.text = controller.text + value;
-    }
-  }
-
-  Widget _buildKey(String value, {bool isIcon = false, IconData? icon}) {
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.all(4.0),
-        child: ElevatedButton(
-          onPressed: () => _onKeyPress(value),
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.all(16),
-            backgroundColor: isIcon ? Colors.grey.shade200 : Colors.white,
-            foregroundColor: Colors.black87,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            elevation: 2,
-          ),
-          child: isIcon 
-            ? Icon(icon, color: Colors.black87)
-            : Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              _buildKey('1'),
-              _buildKey('2'),
-              _buildKey('3'),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _buildKey('4'),
-              _buildKey('5'),
-              _buildKey('6'),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _buildKey('7'),
-              _buildKey('8'),
-              _buildKey('9'),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _buildKey('clear', isIcon: true, icon: Icons.clear),
-              _buildKey('0'),
-              _buildKey('backspace', isIcon: true, icon: Icons.backspace),
-            ],
-          ),
-          if (onSubmitted != null) ...[
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: onSubmitted,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.all(16),
-                  backgroundColor: Colors.blue,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  'Nhập',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
   bool _isAuthenticated = false;
@@ -182,19 +186,32 @@ class _MainScreenState extends State<MainScreen> {
   Map<String, dynamic>? _currentUser;
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final UserState _userState = UserState();
-
+  Timer? _tokenRefreshTimer;
+   UserState get _userState => Provider.of<UserState>(context, listen: false);
   List<Widget> get _screens => [
-    IntroScreen(userData: _currentUser),
-    const WebViewScreen(),
-  ];
+  ProjectRouter(userState: _userState),
+  const WebViewScreen(),
+  IntroScreen(userData: _currentUser),
+];
 
   @override
   void initState() {
     super.initState();
     _initializeAuth();
+    _setupTokenRefresh();
   }
-
+  void _setupTokenRefresh() {
+    AppAuthentication.generateToken();
+    _tokenRefreshTimer = Timer.periodic(
+      const Duration(hours: 23),
+      (_) => AppAuthentication.generateToken()
+    );
+  }
+  @override
+  void dispose() {
+    _tokenRefreshTimer?.cancel();
+    super.dispose();
+  }
   Future<void> _initializeAuth() async {
     await _userState.loadUser();
     
@@ -218,33 +235,33 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Future<void> _loadSavedCredentials() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? username = prefs.getString('username');
-    String? password = prefs.getString('password');
-    
-    if (username != null && password != null) {
-      setState(() {
-        _usernameController.text = username;
-        _passwordController.text = password;
-      });
-      await _login();
-    } else {
-      _showLoginDialog();
-    }
+  final credentials = Provider.of<UserCredentials>(context, listen: false);
+  
+  if (credentials.username.isNotEmpty && credentials.password.isNotEmpty) {
+    setState(() {
+      _usernameController.text = credentials.username;
+      _passwordController.text = credentials.password;
+    });
+    await _login();
+  } else {
+    _showLoginDialog();
   }
+}
 Future<String> fetchFromWeb(String url) async {
   try {
-    // Replace the original API URL with the Worker URL
-    String workerUrl = url.replaceAll(
-      'https://yourworldtravel.vn', 
-      'https://flat-leaf-9f05.hongson.workers.dev'
-    );
+    // Get UserState from Provider
+    final userState = Provider.of<UserState>(context, listen: false);
+    
+    // Generate new token if needed
+    final tokenData = await AppAuthentication.generateToken();
     
     final response = await http.get(
-      Uri.parse(workerUrl),
+      Uri.parse(url),
       headers: {
         'Content-Type': 'application/json',
         'Accept': '*/*',
+        'Authorization': 'Bearer ${tokenData['token'] ?? ''}',
+        'X-Timestamp': tokenData['timestamp'] ?? ''
       },
     ).timeout(
       const Duration(seconds: 15),
@@ -255,12 +272,45 @@ Future<String> fetchFromWeb(String url) async {
     
     if (response.statusCode == 200) {
       return response.body;
+    } else if (response.statusCode == 401) {
+      // Token expired, generate new one
+      final newTokenData = await AppAuthentication.generateToken();
+      
+      // Retry request with new token
+      final retryResponse = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': '*/*',
+          'Authorization': 'Bearer ${newTokenData['token'] ?? ''}',
+          'X-Timestamp': newTokenData['timestamp'] ?? ''
+        },
+      );
+      
+      if (retryResponse.statusCode == 200) {
+        return retryResponse.body;
+      }
     }
     throw Exception('Request failed with status: ${response.statusCode}');
   } catch (e) {
     print('Request failed: $e');
     return '';
   }
+}
+Future<bool> verifyStoredToken() async {
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  String? token = prefs.getString('auth_token');
+  String? timestamp = prefs.getString('token_timestamp');
+  
+  if (token == null || timestamp == null) {
+    return false;
+  }
+  final tokenTime = int.parse(timestamp);
+  if (DateTime.now().millisecondsSinceEpoch - tokenTime > 24 * 3600000) {
+    return false;
+  }
+  
+  return true;
 }
 Future<void> _login() async {
   setState(() {
@@ -277,94 +327,429 @@ Future<void> _login() async {
     return;
   }
 
-  Provider.of<UserCredentials>(context, listen: false)
-      .setCredentials(inputUsername, inputPassword);
-
-  String queryString = "$inputUsername@$inputPassword";
-  String encryptionKey = "12345678901234567890123456789012";
-  String encryptedQuery = encryptAES(queryString, encryptionKey);
-  
   try {
-    // Try original URL format first
-    String url = "https://yourworldtravel.vn/api/query/login/${Uri.encodeComponent(encryptedQuery)}";
-    var response = await fetchFromWeb(url);
+    // Save credentials first
+    final credentials = Provider.of<UserCredentials>(context, listen: false);
+    await credentials.setCredentials(inputUsername, inputPassword);
+
+    final tokenData = await AppAuthentication.generateToken();
+    String verificationUrl = "https://hmclourdrun1-81200125587.asia-southeast1.run.app/tokenweb";
     
-    if (response.isEmpty) {
-      // If original fails, try alternative URL format with query parameters
-      final baseUrl = "https://yourworldtravel.vn/api/query/login";
+    final verificationResponse = await http.post(
+      Uri.parse(verificationUrl),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': '*/*',
+      },
+      body: json.encode({
+        'token': tokenData['token'] ?? '',
+        'timestamp': tokenData['timestamp'] ?? ''
+      })
+    );
+    
+    if (verificationResponse.statusCode != 200) {
+      throw Exception('Token verification failed: ${verificationResponse.body}');
+    }
+
+    // Save credentials using UserCredentials provider
+    await Provider.of<UserCredentials>(context, listen: false)
+        .setCredentials(inputUsername, inputPassword);
+
+    String queryString = "$inputUsername@$inputPassword";
+    String encryptionKey = "12345678901234567890123456789012";
+    String encryptedQuery = encryptAES(queryString, encryptionKey);
+    
+    String url = "https://hmclourdrun1-81200125587.asia-southeast1.run.app/loginweb/${Uri.encodeComponent(encryptedQuery)}";
+    
+    final response = await http.get(
+      Uri.parse(url),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': '*/*',
+        'Authorization': 'Bearer ${tokenData['token'] ?? ''}',
+        'X-Timestamp': tokenData['timestamp'] ?? ''
+      },
+    );
+
+    if (response.body.isEmpty) {
+      final baseUrl = "https://hmclourdrun1-81200125587.asia-southeast1.run.app/loginweb";
       final queryParams = {
         'q': encryptedQuery,
-        'timestamp': DateTime.now().millisecondsSinceEpoch.toString(),
       };
       
       final uri = Uri.parse(baseUrl).replace(queryParameters: queryParams);
-      response = await fetchFromWeb(uri.toString());
+      final altResponse = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': '*/*',
+          'Authorization': 'Bearer ${tokenData['token'] ?? ''}',
+          'X-Timestamp': tokenData['timestamp'] ?? ''
+        },
+      );
+      
+      if (altResponse.statusCode == 200 && altResponse.body.isNotEmpty) {
+        return await processLoginResponse(altResponse.body);
+      } else {
+        throw Exception('Alternative login request failed: ${altResponse.statusCode}');
+      }
     }
 
-    if (response.isNotEmpty) {
-      List<String> responseParts = response.split('@');
-      
-      if (responseParts.isNotEmpty && responseParts[0] == "OK") {
-        String name = responseParts.length > 1 ? responseParts[1] : 'Unknown';
-        String employeeId = responseParts.length > 2 ? responseParts[2] : 'N/A';
-        String chamCong = responseParts.length > 3 ? responseParts[3] : 'N/A';
-        String queryType = responseParts.length > 4 ? responseParts[4] : '1';
-        
-        SharedPreferences prefs = await SharedPreferences.getInstance();
-        await prefs.setString('username', inputUsername);
-        await prefs.setString('password', inputPassword);
-        await prefs.setString('cham_cong', chamCong);
-        await prefs.setBool('is_authenticated', true);
-        
-        final userData = {
-          'username': inputUsername,
-          'name': name,
-          'employee_id': employeeId,
-          'cham_cong': chamCong,
-          'query_type': queryType
-        };
-
-        setState(() {
-          _isAuthenticated = true;
-          _currentUser = userData;
-          _loginStatus = '';
-        });
-
-        await _userState.setUser(userData);
-        await _userState.setLoginResponse(response);
-        await _userState.setUpdateResponses('', '', '', '', chamCong);
-
-        if (mounted && Navigator.canPop(context)) {
-          Navigator.of(context).pop();
-        }
-      } else {
-        setState(() {
-          _loginStatus = 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.';
-        });
-      }
+    if (response.body.isNotEmpty) {
+      return await processLoginResponse(response.body);
     } else {
       throw Exception('Không nhận được phản hồi từ máy chủ');
     }
   } catch (e) {
+    print('Detailed error: $e');
     setState(() {
       _loginStatus = 'Lỗi kết nối. Vui lòng thử lại sau. (${e.toString()})';
     });
   }
 }
-  void _logout() async {
-    await _userState.clearUser();
+
+Future<void> processLoginResponse(String responseBody) async {
+  List<String> responseParts = responseBody.split('@');
+  
+  if (responseParts.isNotEmpty && responseParts[0] == "OK") {
+    String name = responseParts.length > 1 ? responseParts[1] : 'Unknown';
+    String employeeId = responseParts.length > 2 ? responseParts[2] : 'N/A';
+    String chamCong = responseParts.length > 3 ? responseParts[3] : 'N/A';
+    String queryType = responseParts.length > 4 ? responseParts[4] : '1';
+    
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.remove('username');
-    await prefs.remove('password');
+    await prefs.setString('username', _usernameController.text.trim().toLowerCase());
+    await prefs.setString('password', _passwordController.text.trim().toLowerCase());
+    await prefs.setString('cham_cong', chamCong);
+    await prefs.setBool('is_authenticated', true);
+    
+    final userData = {
+      'username': _usernameController.text.trim().toLowerCase(),
+      'name': name,
+      'employee_id': employeeId,
+      'cham_cong': chamCong,
+      'queryType': queryType
+    };
+
     setState(() {
-      _isAuthenticated = false;
-      _currentUser = null;
+      _isAuthenticated = true;
+      _currentUser = userData;
       _loginStatus = '';
-      _usernameController.clear();
-      _passwordController.clear();
+      _selectedIndex = 0;
     });
-    _showLoginDialog();
+
+    await _userState.setUser(userData);
+    await _userState.setLoginResponse(responseBody);
+    await _userState.setUpdateResponses('', '', '', '', chamCong);
+
+    if (mounted && Navigator.canPop(context)) {
+      Navigator.of(context).pop();
+    }
+  } else {
+    setState(() {
+      _loginStatus = 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.';
+    });
   }
+}
+void processResponse(String responseBody) async {
+  if (responseBody.isNotEmpty) {
+    List<String> responseParts = responseBody.split('@');
+    
+    if (responseParts.isNotEmpty && responseParts[0] == "OK") {
+      String name = responseParts.length > 1 ? responseParts[1] : 'Unknown';
+      String employeeId = responseParts.length > 2 ? responseParts[2] : 'N/A';
+      String chamCong = responseParts.length > 3 ? responseParts[3] : 'N/A';
+      String queryType = responseParts.length > 4 ? responseParts[4] : '1';
+      
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setString('username', _usernameController.text.trim().toLowerCase());
+      await prefs.setString('password', _passwordController.text.trim().toLowerCase());
+      await prefs.setString('cham_cong', chamCong);
+      await prefs.setBool('is_authenticated', true);
+      
+      final userData = {
+        'username': _usernameController.text.trim().toLowerCase(),
+        'name': name,
+        'employee_id': employeeId,
+        'cham_cong': chamCong,
+        'query_type': queryType
+      };
+
+      setState(() {
+        _isAuthenticated = true;
+        _currentUser = userData;
+        _loginStatus = '';
+      });
+
+      await _userState.setUser(userData);
+      await _userState.setLoginResponse(responseBody);
+      await _userState.setUpdateResponses('', '', '', '', chamCong);
+
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.of(context).pop();
+      }
+    } else {
+      setState(() {
+        _loginStatus = 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.';
+      });
+    }
+  } else {
+    throw Exception('Không nhận được phản hồi từ máy chủ');
+  }
+}
+void _logout() async {
+  await _userState.clearUser();
+  
+  final credentials = Provider.of<UserCredentials>(context, listen: false);
+  await credentials.clearCredentials();
+  
+  setState(() {
+    _isAuthenticated = false;
+    _currentUser = null;
+    _loginStatus = '';
+    _usernameController.clear();
+    _passwordController.clear();
+  });
+  _showLoginDialog();
+}
+void _showResetPasswordDialog() {
+  final TextEditingController resetUsernameController = TextEditingController();
+  
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext dialogContext) {
+      // Use ValueNotifier to manage loading state
+      final ValueNotifier<bool> isLoadingNotifier = ValueNotifier<bool>(false);
+      return StatefulBuilder(
+        builder: (BuildContext context, StateSetter setState) {
+          return Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            elevation: 0,
+            backgroundColor: Colors.transparent,
+            child: Container(
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    spreadRadius: 5,
+                    blurRadius: 15,
+                    offset: Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: ValueListenableBuilder<bool>(
+                valueListenable: isLoadingNotifier,
+                builder: (context, isLoading, child) {
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: EdgeInsets.symmetric(vertical: 10),
+                        child: Text(
+                          'Quản lý mật khẩu',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue[800],
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 20),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey[300]!),
+                        ),
+                        child: TextField(
+                          controller: resetUsernameController,
+                          decoration: InputDecoration(
+                            labelText: 'Tài khoản',
+                            labelStyle: TextStyle(color: Colors.blue[800]),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                            prefixIcon: Icon(Icons.person_outline, color: Colors.blue[800]),
+                          ),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9.@_-]')),
+                            LengthLimitingTextInputFormatter(50),
+                          ],
+                          enabled: !isLoading,
+                        ),
+                      ),
+                      SizedBox(height: 20),
+                      Container(
+                        padding: EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue[50],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'Mật khẩu mới sẽ được gửi tới số điện thoại nhân viên của bạn (nếu có hồ sơ), vui lòng kiểm tra và sử dụng mật khẩu mới (đổi cho app Group và Time)\nVui lòng bấm Tải lại trang sau khi thành công',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.blue[800],
+                            height: 1.5,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      SizedBox(height: 25),
+                      
+                      // Loading or Button state
+                      isLoading 
+                        ? Column(
+                            children: [
+                              CircularProgressIndicator(),
+                              SizedBox(height: 16),
+                              Text(
+                                'Đang xử lý yêu cầu...',
+                                style: TextStyle(
+                                  color: Colors.blue[800],
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          )
+                        : Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.teal,
+                                        padding: EdgeInsets.symmetric(vertical: 16),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                        ),
+                                        elevation: 4,
+                                      ),
+                                      onPressed: isLoading ? null : () async {
+                                        if (resetUsernameController.text.isEmpty) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('Vui lòng nhập tài khoản'), backgroundColor: Colors.red)
+                                          );
+                                          return;
+                                        }
+                                        
+                                        // Set loading state
+                                        isLoadingNotifier.value = true;
+                                        
+                                        try {
+                                          final tokenData = await AppAuthentication.generateToken();
+                                          await http.post(
+                                            Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/matkhauquen/${resetUsernameController.text.trim()}'),
+                                            headers: {
+                                              'Content-Type': 'application/json',
+                                              'Accept': '*/*',
+                                              'Authorization': 'Bearer ${tokenData['token'] ?? ''}',
+                                              'X-Timestamp': tokenData['timestamp'] ?? ''
+                                            },
+                                          );
+                                          
+                                          await Future.delayed(Duration(seconds: 10));
+                                          
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('Yêu cầu lấy lại mật khẩu đã được gửi'), backgroundColor: Colors.green)
+                                          );
+                                        } catch (e) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('Có lỗi xảy ra'), backgroundColor: Colors.red)
+                                          );
+                                        } finally {
+                                          // Reset loading state
+                                          isLoadingNotifier.value = false;
+                                        }
+                                      },
+                                      child: Text(
+                                        'Quên \nmật khẩu',
+                                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(width: 16),
+                                  Expanded(
+                                    child: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.indigo,
+                                        padding: EdgeInsets.symmetric(vertical: 16),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                        ),
+                                        elevation: 4,
+                                      ),
+                                      onPressed: isLoading ? null : () async {
+                                        if (resetUsernameController.text.isEmpty) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('Vui lòng nhập tài khoản'), backgroundColor: Colors.red)
+                                          );
+                                          return;
+                                        }
+                                        
+                                        // Set loading state
+                                        isLoadingNotifier.value = true;
+                                        
+                                        try {
+                                          final tokenData = await AppAuthentication.generateToken();
+                                          await http.post(
+                                            Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/matkhaureset/${resetUsernameController.text.trim()}'),
+                                            headers: {
+                                              'Content-Type': 'application/json',
+                                              'Accept': '*/*',
+                                              'Authorization': 'Bearer ${tokenData['token'] ?? ''}',
+                                              'X-Timestamp': tokenData['timestamp'] ?? ''
+                                            },
+                                          );
+                                          
+                                          await Future.delayed(Duration(seconds: 10));
+                                          
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('Yêu cầu đặt lại mật khẩu đã được gửi'), backgroundColor: Colors.green)
+                                          );
+                                        } catch (e) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('Có lỗi xảy ra'), backgroundColor: Colors.red)
+                                          );
+                                        } finally {
+                                          // Reset loading state
+                                          isLoadingNotifier.value = false;
+                                        }
+                                      },
+                                      child: Text(
+                                        'Đặt lại\nmật khẩu',
+                                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 12),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: Text('Huỷ', style: TextStyle(color: Colors.grey[600], fontSize: 16)),
+                              ),
+                            ],
+                          ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+}
 void _showLoginDialog() {
   showDialog(
     context: context,
@@ -403,12 +788,12 @@ void _showLoginDialog() {
                     ),
                     title: Column(
                       children: [
-                          Image.asset(
-    'assets/logo.png',
-    height: 130,
-    width: 130,
-    fit: BoxFit.contain,
-  ),
+                        Image.asset(
+                          'assets/logo.png',
+                          height: 130,
+                          width: 130,
+                          fit: BoxFit.contain,
+                        ),
                         const Text(
                           'Đăng nhập tài khoản HM',
                           textAlign: TextAlign.center,
@@ -442,20 +827,24 @@ void _showLoginDialog() {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           TextField(
-                            controller: _usernameController,
-                            decoration: InputDecoration(
-                              labelText: 'Tài khoản',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              prefixIcon: const Icon(Icons.person),
-                              enabled: !isLoading,
-                              filled: true,
-                              fillColor: Colors.white,
-                            ),
-                            textInputAction: TextInputAction.next,
-                            style: const TextStyle(color: Colors.black87),
-                          ),
+  controller: _usernameController,
+  decoration: InputDecoration(
+    labelText: 'Tài khoản',
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+    ),
+    prefixIcon: const Icon(Icons.person),
+    enabled: !isLoading,
+    filled: true,
+    fillColor: Colors.white,
+  ),
+  inputFormatters: [
+    FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9.@_-]')),
+    LengthLimitingTextInputFormatter(50),
+  ],
+  textInputAction: TextInputAction.next,
+  style: const TextStyle(color: Colors.black87),
+),
                           const SizedBox(height: 16),
                           GestureDetector(
                             onTap: () {
@@ -464,37 +853,48 @@ void _showLoginDialog() {
                               });
                             },
                             child: TextField(
-                              controller: _passwordController,
-                              decoration: InputDecoration(
-                                labelText: 'Mật khẩu',
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                prefixIcon: const Icon(Icons.lock),
-                                suffixIcon: IconButton(
-                                  icon: Icon(showKeypad ? Icons.keyboard_hide : Icons.keyboard),
-                                  onPressed: () {
-                                    setDialogState(() {
-                                      showKeypad = !showKeypad;
-                                    });
-                                  },
-                                ),
-                                enabled: !isLoading,
-                                filled: true,
-                                fillColor: Colors.white,
+  controller: _passwordController,
+  decoration: InputDecoration(
+    labelText: 'Mật khẩu',
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+    ),
+    prefixIcon: const Icon(Icons.lock),
+    suffixIcon: IconButton(
+      icon: Icon(showKeypad ? Icons.keyboard_hide : Icons.keyboard),
+      onPressed: () {
+        setDialogState(() {
+          showKeypad = !showKeypad;
+        });
+      },
+    ),
+    enabled: !isLoading,
+    filled: true,
+    fillColor: Colors.white,
+  ),
+  inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9.@]')),
+                        LengthLimitingTextInputFormatter(50),
+                      ],
+  obscureText: true,
+  onSubmitted: (_) => handleLogin(),
+  style: const TextStyle(color: Colors.black87),
+),
+                          ),
+                          const SizedBox(height: 16),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              _showResetPasswordDialog();
+                            },
+                            child: const Text(
+                              'Quên / Đặt lại mật khẩu',
+                              style: TextStyle(
+                                color: Colors.blue,
+                                decoration: TextDecoration.underline,
                               ),
-                              obscureText: true,
-                              onSubmitted: (_) => handleLogin(),
-                              style: const TextStyle(color: Colors.black87),
                             ),
                           ),
-                          if (showKeypad) ...[
-                            const SizedBox(height: 16),
-                            NumericKeypad(
-                              controller: _passwordController,
-                              onSubmitted: handleLogin,
-                            ),
-                          ],
                           if (_loginStatus.isNotEmpty) ...[
                             const SizedBox(height: 16),
                             Container(
@@ -591,18 +991,22 @@ void _showLoginDialog() {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(30),
               child: BottomNavigationBar(
-                items: const [
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.home),
-                    label: 'Hướng dẫn',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.web),
-                    label: 'Vào app',
-                  ),
-                ],
-                currentIndex: _selectedIndex,
-                onTap: _onItemTapped,
+  items: const [
+    BottomNavigationBarItem(
+      icon: Icon(Icons.folder),
+      label: 'Dự án',
+    ),
+    BottomNavigationBarItem(
+      icon: Icon(Icons.web),
+      label: 'App khác',
+    ),
+    BottomNavigationBarItem(
+      icon: Icon(Icons.home),
+      label: 'Hướng dẫn',
+    ),
+  ],
+  currentIndex: _selectedIndex,
+  onTap: _onItemTapped,
                 backgroundColor: Colors.white,
                 selectedItemColor: const Color.fromARGB(255, 73, 54, 244),
                 unselectedItemColor: Colors.grey,
@@ -619,115 +1023,6 @@ void _showLoginDialog() {
   }
 }
 
-class UserState extends ChangeNotifier {
-  static final UserState _instance = UserState._internal();
-  factory UserState() => _instance;
-  UserState._internal();
-
-  bool _isAuthenticated = false;
-  String? _chamCong;
-  String? _updateResponse1;
-  String? _updateResponse2;
-  String? _updateResponse3;
-  String? _updateResponse4;
-  Map<String, dynamic>? _currentUser;
-  String _defaultScreen = 'Chụp ảnh';
-  String? _loginResponse;
-  String _queryType = '1';
-
-  bool get isAuthenticated => _isAuthenticated;
-  String? get chamCong => _chamCong;
-  String? get updateResponse1 => _updateResponse1;
-  String? get updateResponse2 => _updateResponse2;
-  String? get updateResponse3 => _updateResponse3;
-  String? get updateResponse4 => _updateResponse4;
-  Map<String, dynamic>? get currentUser => _currentUser;
-  String get defaultScreen => _defaultScreen;
-  String? get loginResponse => _loginResponse;
-  String get queryType => _queryType;
-
-Future<void> setUpdateResponses(String response1, String response2, String response3, String response4, String chamCong) async {
-    _updateResponse1 = response1;
-    _updateResponse2 = response2;
-    _updateResponse3 = response3;
-    _updateResponse4 = response4;
-    _chamCong = chamCong;
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setString('update_response1', response1);
-    await prefs.setString('update_response2', response2);
-    await prefs.setString('update_response3', response3);
-    await prefs.setString('update_response4', response4);
-    await prefs.setString('cham_cong', chamCong);
-    notifyListeners();
-  }
-
-  Future<void> loadUser() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? userData = prefs.getString('current_user');
-    _isAuthenticated = prefs.getBool('is_authenticated') ?? false;
-    
-    if (userData != null) {
-      try {
-        _currentUser = json.decode(userData);
-        _queryType = _currentUser?['query_type'] ?? '1';
-        _chamCong = prefs.getString('cham_cong');
-        _updateResponse1 = prefs.getString('update_response1') ?? '';
-        _updateResponse2 = prefs.getString('update_response2') ?? '';
-        _updateResponse3 = prefs.getString('update_response3') ?? '';
-        _updateResponse4 = prefs.getString('update_response4') ?? '';
-        _defaultScreen = prefs.getString('default_screen') ?? 'Chụp ảnh';
-      } catch (e) {
-        print('Error loading user data: $e');
-        await clearUser();
-      }
-    }
-    notifyListeners();
-  }
-
-  Future<void> setUser(Map<String, dynamic> user) async {
-    _currentUser = user;
-    _isAuthenticated = true;
-    _queryType = user['query_type'] ?? '1';
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setString('current_user', json.encode(user));
-    await prefs.setBool('is_authenticated', true);
-    notifyListeners();
-  }
-
-  Future<void> setDefaultScreen(String screen) async {
-    _defaultScreen = screen;
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setString('default_screen', screen);
-    notifyListeners();
-  }
-
-  Future<void> setLoginResponse(String response) async {
-    _loginResponse = response;
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setString('login_response', response);
-    notifyListeners();
-  }
-
-  Future<void> clearUser() async {
-    _currentUser = null;
-    _isAuthenticated = false;
-    _loginResponse = null;
-    _updateResponse1 = null;
-    _updateResponse2 = null;
-    _updateResponse3 = null;
-    _updateResponse4 = null;
-    _chamCong = null;
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.remove('current_user');
-    await prefs.remove('login_response');
-    await prefs.remove('update_response1');
-    await prefs.remove('update_response2');
-    await prefs.remove('update_response3');
-    await prefs.remove('update_response4');
-    await prefs.remove('cham_cong');
-    notifyListeners();
-  }
-}
 class VideoBackground extends StatefulWidget {
   final Widget child;
   final bool showVideo;
@@ -797,5 +1092,61 @@ class _VideoBackgroundState extends State<VideoBackground> {
         widget.child,
       ],
     );
+  }
+}
+class AppAuthentication {
+  static const String _secretKey = "12345678901234567890123456789012"; // Same as your encryption key
+  
+  static Future<Map<String, String>> generateToken() async {
+    // Get device identifier or generate instance ID
+    final prefs = await SharedPreferences.getInstance();
+    String? instanceId = prefs.getString('instance_id');
+    final random = Random();
+    
+    if (instanceId == null) {
+      instanceId = base64Encode(List<int>.generate(32, (_) => random.nextInt(256)));
+      await prefs.setString('instance_id', instanceId);
+    }
+    
+    // Create payload
+    final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+    final nonce = base64Encode(List<int>.generate(16, (_) => random.nextInt(256)));
+    
+    final payload = {
+      'instance_id': instanceId,
+      'timestamp': timestamp,
+      'nonce': nonce
+    };
+    
+    // Generate signature
+    final payloadString = json.encode(payload);
+    final hmac = Hmac(sha256, utf8.encode(_secretKey));
+    final signature = base64Encode(hmac.convert(utf8.encode(payloadString)).bytes);
+    
+    // Combine and encrypt final token
+    final tokenData = {
+      'payload': payload,
+      'signature': signature
+    };
+    
+    final token = encryptAES(json.encode(tokenData), _secretKey);
+    
+    // Store token for reuse
+    await prefs.setString('auth_token', token);
+    await prefs.setString('token_timestamp', timestamp);
+    
+    return {
+      'token': token,
+      'timestamp': timestamp
+    };
+  }
+
+  static String encryptAES(String plainText, String key) {
+    final keyBytes = encrypt.Key.fromUtf8(key);
+    final iv = encrypt.IV.fromLength(16);
+    final encrypter = encrypt.Encrypter(encrypt.AES(keyBytes, mode: encrypt.AESMode.cbc, padding: 'PKCS7'));
+    final encrypted = encrypter.encrypt(plainText, iv: iv);
+    final concatenated = iv.bytes + encrypted.bytes;
+    return base64.encode(concatenated);
   }
 }
