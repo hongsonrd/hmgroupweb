@@ -7,9 +7,8 @@ import 'projectrouter.dart';
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'dart:convert';
 import 'package:provider/provider.dart';
-//import 'dart:html' as html;
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
@@ -22,51 +21,191 @@ import 'db_helper.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+Future<bool> checkWebView2Installation() async {
+  if (!Platform.isWindows) return true;
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    bool webview2Checked = prefs.getBool('webview2_checked') ?? false;
+    if (webview2Checked) return true;
+
+    final result = await Process.run('reg', ['query', 'HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}', '/ve']);
+    if (result.exitCode == 0) {
+      await prefs.setBool('webview2_checked', true);
+      return true;
+    }
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+
+void showWebView2InstallDialog(BuildContext context) {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: const Text('Cần cài đặt WebView2 Runtime'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Ứng dụng cần Microsoft WebView2 Runtime để hoạt động.'),
+            SizedBox(height: 10),
+            Text('Hướng dẫn cài đặt:'),
+            Text('1. Tải và chạy file cài đặt'),
+            Text('2. Khởi động lại ứng dụng sau khi hoàn tất'),
+            SizedBox(height: 10),
+            Text('Lưu ý: Cài đặt này chỉ cần thực hiện một lần.', 
+              style: TextStyle(fontStyle: FontStyle.italic)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            child: const Text('Tải WebView2 Runtime'),
+            onPressed: () async {
+              const url = 'https://go.microsoft.com/fwlink/p/?LinkId=2124703';
+              if (await canLaunchUrl(Uri.parse(url))) {
+                await launchUrl(Uri.parse(url), 
+                  mode: LaunchMode.externalApplication);
+              }
+            },
+          ),
+          TextButton(
+            child: const Text('Đóng'),
+            onPressed: () => exit(0),
+          ),
+        ],
+      );
+    },
+  );
+}
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize window manager
-  if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-    await windowManager.ensureInitialized();
+  try {
+    WidgetsFlutterBinding.ensureInitialized();
+    if (Platform.isWindows) {
+      sqfliteFfiInit();
+      databaseFactory = databaseFactoryFfi;
+    }
+    await Future.delayed(const Duration(milliseconds: 100));
 
-    WindowOptions windowOptions = const WindowOptions(
-      size: Size(1024, 768),
-      minimumSize: Size(800, 600),
-      center: true,
-      backgroundColor: Colors.transparent,
-      skipTaskbar: false,
-      titleBarStyle: TitleBarStyle.normal,
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      await windowManager.ensureInitialized();
+      WindowOptions windowOptions = const WindowOptions(
+        size: Size(1024, 768),
+        minimumSize: Size(800, 600),
+        center: true,
+        backgroundColor: Colors.transparent,
+        skipTaskbar: false,
+        titleBarStyle: TitleBarStyle.normal,
+      );
+      await windowManager.waitUntilReadyToShow(windowOptions, () async {
+        await windowManager.show();
+        await windowManager.maximize();
+      });
+    }
+
+    // Check WebView2 installation on Windows
+    if (Platform.isWindows) {
+      bool hasWebView2 = await checkWebView2Installation();
+      if (!hasWebView2) {
+        runApp(
+          MaterialApp(
+            home: Builder(
+              builder: (context) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  showWebView2InstallDialog(context);
+                });
+                return const Scaffold(
+                  body: Center(child: CircularProgressIndicator()),
+                );
+              },
+            ),
+          ),
+        );
+        return;
+      }
+    }
+
+    // Initialize app dependencies
+    await MultiFileAccessUtility.initialize();
+    final dbHelper = DBHelper();
+    await dbHelper.database;
+    await dbHelper.checkDatabaseStatus();
+    final userState = UserState();
+    await checkAppVersion();
+
+    // Run the app with providers
+    runApp(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider.value(value: userState),
+          ChangeNotifierProvider(create: (_) => UserCredentials()),
+        ],
+        child: const MyApp(),
+      ),
     );
+  } catch (e, stackTrace) {
+    print('Initialization error: $e');
+    print('Stack trace: $stackTrace');
     
-    await windowManager.waitUntilReadyToShow(windowOptions, () async {
-      await windowManager.show();
-      await windowManager.maximize();
-    });
+    // Show error UI if initialization fails
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  color: Colors.red,
+                  size: 48,
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Failed to initialize application',
+                  style: TextStyle(fontSize: 18),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  e.toString(),
+                  style: const TextStyle(fontSize: 14, color: Colors.grey),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    exit(0); // Or implement retry logic
+                  },
+                  child: const Text('Close Application'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
-
-  await MultiFileAccessUtility.initialize();
-  final dbHelper = DBHelper();
-  await dbHelper.database; 
-  await dbHelper.checkDatabaseStatus(); 
+}
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
   
-  final userState = UserState();
-  
-  // Check app version
-  checkAppVersion();
-  
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider.value(value: userState),
-        ChangeNotifierProvider(create: (_) => UserCredentials()),
-      ],
-      child: const MyApp(),
-    ),
-  );
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      navigatorKey: navigatorKey,  
+      title: 'HM GROUP',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(primarySwatch: Colors.blue),
+      home: const MainScreen(),
+    );
+  }
 }
 Future<void> checkAppVersion() async {
   try {
@@ -111,7 +250,7 @@ Future<void> checkAppVersion() async {
                           backgroundColor: Colors.black,
                         ),
                         onPressed: () async {
-                          final url = Uri.parse('https://yourworldtravel.vn/download/macos');
+                          final url = Uri.parse('https://storage.googleapis.com/times1/DocumentApp/HMGROUPmac.zip');
                           try {
                             await launchUrl(url, mode: LaunchMode.externalApplication);
                           } catch (e) {
@@ -132,7 +271,7 @@ Future<void> checkAppVersion() async {
                           backgroundColor: Colors.blue,
                         ),
                         onPressed: () async {
-                          final url = Uri.parse('https://yourworldtravel.vn/download/windows');
+                          final url = Uri.parse('https://storage.googleapis.com/times1/DocumentApp/HMGROUPwin.zip');
                           try {
                             await launchUrl(url, mode: LaunchMode.externalApplication);
                           } catch (e) {
@@ -159,28 +298,13 @@ Future<void> checkAppVersion() async {
     print('Error checking version: $e');
   }
 }
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-  
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      navigatorKey: navigatorKey,  
-      title: 'HM GROUP',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(primarySwatch: Colors.blue),
-      home: const MainScreen(),
-    );
-  }
-}
-
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
 class _MainScreenState extends State<MainScreen> {
-  int _selectedIndex = 0;
+  int _selectedIndex = 1;
   bool _isAuthenticated = false;
   String _loginStatus = '';
   Map<String, dynamic>? _currentUser;
@@ -435,7 +559,7 @@ Future<void> processLoginResponse(String responseBody) async {
       _isAuthenticated = true;
       _currentUser = userData;
       _loginStatus = '';
-      _selectedIndex = 0;
+      _selectedIndex = 1;
     });
 
     await _userState.setUser(userData);

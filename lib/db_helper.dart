@@ -4,50 +4,37 @@ import 'package:path/path.dart';
 import 'table_models.dart';
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
+import 'package:path_provider/path_provider.dart';
 class DBHelper {
   static final DBHelper _instance = DBHelper._internal();
   static Database? _database;
 
   factory DBHelper() => _instance;
-  DBHelper._internal();
-Future<List<Map<String, dynamic>>> getStaffListByDepartment(String department) async {
-    final db = await database;
-    return await db.query(
-      DatabaseTables.staffListTable,
-      where: 'BoPhan = ?',
-      whereArgs: [department],
-    );
+
+  DBHelper._internal() {
+    // Initialize FFI for Windows/Linux
+    if (Platform.isWindows || Platform.isLinux) {
+      sqfliteFfiInit();
+      databaseFactory = databaseFactoryFfi;
+    }
   }
-Future<List<Map<String, dynamic>>> getAllStaffbio() async {
-    final db = await database;
-    return await db.query(DatabaseTables.staffbioTable);
-  }
+
   Future<Database> get database async {
     _database ??= await _initDatabase();
     return _database!;
   }
-Future<void> checkDatabaseStatus() async {
+  Future<Database> _initDatabase() async {
   try {
-    final db = await database;
-    // Check if taskhistory table exists
-    final tables = await db.query('sqlite_master',
-      where: 'type = ? AND name = ?',
-      whereArgs: ['table', DatabaseTables.taskHistoryTable]
-    );
-    print('Task history table exists: ${tables.isNotEmpty}');
-    
-    // Try a test query
-    final testQuery = await db.query(DatabaseTables.taskHistoryTable, limit: 1);
-    print('Test query successful, found ${testQuery.length} records');
-  } catch (e) {
-    print('Database status check failed: $e');
-  }
-}
-Future<Database> _initDatabase() async {
-  try {
-    String path = join(await getDatabasesPath(), 'app_database.db');
-    
+    String path;
+    if (Platform.isWindows || Platform.isLinux) {
+      final appDir = await getApplicationDocumentsDirectory();
+      path = join(appDir.path, 'app_database.db');
+    } else {
+      path = join(await getDatabasesPath(), 'app_database.db');
+    }
+
     SharedPreferences prefs = await SharedPreferences.getInstance();
     bool hasReset = prefs.getBool('db_reset_v9') ?? false;
     
@@ -65,46 +52,82 @@ Future<Database> _initDatabase() async {
     
     await Directory(dirname(path)).create(recursive: true);
     
-    return await openDatabase(
+    final db = await databaseFactory.openDatabase(
       path,
-      version: 9,
-      onCreate: (Database db, int version) async {
-        print('Creating database tables...');
-        await db.execute(DatabaseTables.createInteractionTable);
-        await db.execute(DatabaseTables.createStaffbioTable);
-        await db.execute(DatabaseTables.createChecklistTable);
-        await db.execute(DatabaseTables.createTaskHistoryTable);
-        await db.execute(DatabaseTables.createVTHistoryTable);
-        await db.execute(DatabaseTables.createStaffListTable);
-        await db.execute(DatabaseTables.createPositionListTable);
-        await db.execute(DatabaseTables.createProjectListTable);
-        await db.execute(DatabaseTables.createBaocaoTable);
-        await db.execute(DatabaseTables.createDongPhucTable);
-        await db.execute(DatabaseTables.createChiTietDPTable);
-        await ChecklistInitializer.initializeChecklistTable(db);
-        print('Database tables created successfully');
-      },
-      onUpgrade: (Database db, int oldVersion, int newVersion) async {
-        if (oldVersion < 9) {
-          print('Upgrading database: adding baocao table');
+      options: OpenDatabaseOptions(
+        version: 9,
+        onCreate: (Database db, int version) async {
+          print('Creating database tables...');
+          await db.execute(DatabaseTables.createInteractionTable);
+          await db.execute(DatabaseTables.createStaffbioTable);
+          await db.execute(DatabaseTables.createChecklistTable);
+          await db.execute(DatabaseTables.createTaskHistoryTable);
+          await db.execute(DatabaseTables.createVTHistoryTable);
+          await db.execute(DatabaseTables.createStaffListTable);
+          await db.execute(DatabaseTables.createPositionListTable);
+          await db.execute(DatabaseTables.createProjectListTable);
           await db.execute(DatabaseTables.createBaocaoTable);
+          await db.execute(DatabaseTables.createDongPhucTable);
+          await db.execute(DatabaseTables.createChiTietDPTable);
+          await ChecklistInitializer.initializeChecklistTable(db);
+          print('Database tables created successfully');
+        },
+        onUpgrade: (Database db, int oldVersion, int newVersion) async {
+          if (oldVersion < 9) {
+            print('Upgrading database: adding baocao table');
+            await db.execute(DatabaseTables.createBaocaoTable);
+          }
+        },
+        onOpen: (db) async {
+          print('Database opened successfully');
+          final tables = await db.query('sqlite_master', 
+            where: 'type = ?', 
+            whereArgs: ['table']
+          );
+          print('Available tables: ${tables.map((t) => t['name']).toList()}');
         }
-      },
-      onOpen: (db) async {
-        print('Database opened successfully');
-        final tables = await db.query('sqlite_master', 
-          where: 'type = ?', 
-          whereArgs: ['table']
-        );
-        print('Available tables: ${tables.map((t) => t['name']).toList()}');
-      }
+      ),
     );
+
+    return db;
+
   } catch (e, stackTrace) {
     print('Error initializing database: $e');
     print('Stack trace: $stackTrace');
     rethrow;
   }
 }
+  Future<List<Map<String, dynamic>>> getStaffListByDepartment(String department) async {
+  final db = await database;
+  return await db.query(
+    DatabaseTables.staffListTable,
+    where: 'BoPhan = ?',
+    whereArgs: [department],
+  );
+}
+Future<List<Map<String, dynamic>>> getAllStaffbio() async {
+    final db = await database;
+    return await db.query(DatabaseTables.staffbioTable);
+  }
+  
+Future<void> checkDatabaseStatus() async {
+  try {
+    final db = await database;
+    // Check if taskhistory table exists
+    final tables = await db.query('sqlite_master',
+      where: 'type = ? AND name = ?',
+      whereArgs: ['table', DatabaseTables.taskHistoryTable]
+    );
+    print('Task history table exists: ${tables.isNotEmpty}');
+    
+    // Try a test query
+    final testQuery = await db.query(DatabaseTables.taskHistoryTable, limit: 1);
+    print('Test query successful, found ${testQuery.length} records');
+  } catch (e) {
+    print('Database status check failed: $e');
+  }
+}
+
 Future<void> batchInsertInteraction(List<InteractionModel> interactions) async {
   final db = await database;
   final batch = db.batch();

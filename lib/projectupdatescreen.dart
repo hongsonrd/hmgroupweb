@@ -22,25 +22,11 @@ class ProjectUpdateScreen extends StatefulWidget {
   _ProjectUpdateScreenState createState() => _ProjectUpdateScreenState();
 }
 
-class _ProjectUpdateScreenState extends State<ProjectUpdateScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 4, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
+class _ProjectUpdateScreenState extends State<ProjectUpdateScreen> {
   @override
   Widget build(BuildContext context) {
     final userCredentials = Provider.of<UserCredentials>(context);
-    
+   
     return Scaffold(
       appBar: AppBar(
         title: Text('Cập nhật ${widget.boPhan}'),
@@ -49,94 +35,103 @@ class _ProjectUpdateScreenState extends State<ProjectUpdateScreen> with SingleTi
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
-      body: GridView.count(
-        crossAxisCount: 2,
-        padding: EdgeInsets.all(16.0),
-        mainAxisSpacing: 16.0,
-        crossAxisSpacing: 16.0,
-        children: [
-          MenuCard(
-            title: 'Danh sách\ncông nhân',
-          icon: Icons.people,
-          color: Colors.blue,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => StaffListTab(
-                boPhan: widget.boPhan,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          int crossAxisCount = constraints.maxWidth > 1200 ? 6 :
+                              constraints.maxWidth > 800 ? 4 : 2;
+   
+          return GridView.count(
+            crossAxisCount: crossAxisCount,
+            padding: EdgeInsets.all(16.0),
+            mainAxisSpacing: 16.0,
+            crossAxisSpacing: 16.0,
+            childAspectRatio: 1.5,
+          children: [
+            MenuCard(
+              title: 'Danh sách\ncông nhân',
+              icon: Icons.people,
+              color: Colors.blue,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => StaffListTab(
+                    boPhan: widget.boPhan,
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-        MenuCard(
-          title: 'Danh sách\nvị trí',
-          icon: Icons.place,
-          color: Colors.green,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => PositionListTab(
-                boPhan: widget.boPhan,
+            MenuCard(
+              title: 'Danh sách\nvị trí',
+              icon: Icons.place,
+              color: Colors.green,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => PositionListTab(
+                    boPhan: widget.boPhan,
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-        MenuCard(
-          title: 'Lịch sử\nbáo cáo',
-          icon: Icons.history,
-          color: Colors.orange,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => TaskHistoryTab(
-                boPhan: widget.boPhan,
+            MenuCard(
+              title: 'Lịch sử\nbáo cáo',
+              icon: Icons.history,
+              color: Colors.orange,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => TaskHistoryTab(
+                    boPhan: widget.boPhan,
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-        MenuCard(
-          title: 'Cập nhật TT\nNhân sự',
-          icon: Icons.update,
-          color: Colors.purple,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => StaffStatusTab(
-                boPhan: widget.boPhan,
-                username: userCredentials.username,
+            MenuCard(
+              title: 'Cập nhật TT\nNhân sự',
+              icon: Icons.update,
+              color: Colors.purple,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => StaffStatusTab(
+                    boPhan: widget.boPhan,
+                    username: userCredentials.username,
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-        MenuCard(
-          title: 'Đặt\nđồng phục',
-          icon: Icons.checkroom,
-          color: Colors.teal,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => UniformOrderScreen(
-                boPhan: widget.boPhan,
+            MenuCard(
+              title: 'Đặt\nđồng phục',
+              icon: Icons.checkroom,
+              color: Colors.teal,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => UniformOrderScreen(
+                    boPhan: widget.boPhan,
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-        MenuCard(
-  title: 'Kế hoạch\nLàm việc',
-  icon: Icons.calendar_today,
-  color: Colors.indigo,
-  onTap: () => Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => ProjectPlan2(
-        selectedBoPhan: widget.boPhan,
-        userType: 'HM-DV',
+            MenuCard(
+              title: 'Kế hoạch\nLàm việc',
+              icon: Icons.calendar_today,
+              color: Colors.indigo,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProjectPlan2(
+                    selectedBoPhan: widget.boPhan,
+                    userType: 'HM-DV',
+                  ),
+                ),
+              ),
+            ),
+          
+         ],
+          );
+        },
       ),
-    ),
-  ),
-),
-      ],
-    ),
     );
   }
 }

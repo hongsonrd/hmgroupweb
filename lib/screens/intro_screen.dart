@@ -255,7 +255,7 @@ Widget build(BuildContext context) {
       ),
       const SizedBox(width: 16),
       SizedBox(
-        width: 240,
+        width: 120,
         child: ElevatedButton(
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.blue,
@@ -350,7 +350,7 @@ Widget build(BuildContext context) {
            );
          },
          child: Text(
-           'Đổi \nmật khẩu',
+           'Đổi mật khẩu',
            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
            textAlign: TextAlign.center,
          ),
