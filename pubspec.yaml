@@ -37,7 +37,9 @@ dependencies:
   table_calendar: ^3.0.9
   path: ^1.8.0
   flutter_inappwebview: ^6.0.0
-
+  media_kit: ^1.1.10                        
+  media_kit_video: ^1.2.4                   
+  media_kit_libs_windows_video: ^1.0.9  
   window_manager: ^0.3.8
   package_info_plus: ^4.0.0
   sqflite_common_ffi: ^2.3.2+1
@@ -50,6 +52,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/fonts/RobotoCondensed-Regular.ttf
     - assets/logo.png
     - assets/logo2.png
     - assets/logo3.png

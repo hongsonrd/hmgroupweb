@@ -22,7 +22,9 @@ import 'package:window_manager/window_manager.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-
+import 'package:path_provider/path_provider.dart';
+import 'package:media_kit/media_kit.dart';                    
+import 'package:media_kit_video/media_kit_video.dart'; 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<bool> checkWebView2Installation() async {
@@ -929,7 +931,7 @@ void _showLoginDialog() {
                         ),
                         const SizedBox(height: 8),
                         const Text(
-                          '(Lần đầu đăng nhập trên thiết bị, thời gian chờ có thể hơi lâu. Sau khoảng 20s mà vẫn hiện Đang đăng nhập, nên tải lại trang rồi đăng nhập lại chắc chắn được.)',
+                          '(Lần đầu đăng nhập trên thiết bị, thời gian chờ có thể hơi lâu.\nVui lòng tắt ứng dụng khi hết ngày, mở lại vào ngày mới .)',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 10,
@@ -1162,7 +1164,8 @@ class VideoBackground extends StatefulWidget {
 }
 
 class _VideoBackgroundState extends State<VideoBackground> {
-  late VideoPlayerController _controller;
+  late final player = Player();
+  late final controller = VideoController(player);
   bool _isInitialized = false;
 
   @override
@@ -1172,26 +1175,42 @@ class _VideoBackgroundState extends State<VideoBackground> {
   }
 
   Future<void> _initializeVideo() async {
-    _controller = VideoPlayerController.network(
-//      'https://video.wixstatic.com/video/9cf7b1_8236f043004f4db4988ce4fbea62c2a8/720p/mp4/file.mp4',
-      'https://storage.googleapis.com/times1/DocumentApp/lychee.mp4',
-    );
-
-    await _controller.initialize();
-    _controller.setLooping(true);
-    _controller.setVolume(0.0);
-    _controller.play();
-    
-    if (mounted) {
-      setState(() {
-        _isInitialized = true;
+    try {
+      // Set up the video
+      await player.open(Media(
+        'https://storage.googleapis.com/times1/DocumentApp/lychee.mp4'
+      ));
+      
+      player.stream.playing.listen((playing) {
+        if (playing && mounted) {
+          setState(() {
+            _isInitialized = true;
+          });
+        }
       });
+      
+      // Set volume to 0
+      player.setVolume(0);
+      
+      // Handle looping through playback ended event
+      player.stream.completed.listen((_) {
+        player.seek(Duration.zero);
+        player.play();
+      });
+      
+    } catch (e) {
+      print('Video initialization error: $e');
+      if (mounted) {
+        setState(() {
+          _isInitialized = false;
+        });
+      }
     }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    player.dispose();
     super.dispose();
   }
 
@@ -1201,16 +1220,27 @@ class _VideoBackgroundState extends State<VideoBackground> {
       fit: StackFit.expand,
       children: [
         if (widget.showVideo && _isInitialized) ...[
-          FittedBox(
-            fit: BoxFit.cover,
-            child: SizedBox(
-              width: _controller.value.size.width,
-              height: _controller.value.size.height,
-              child: VideoPlayer(_controller),
+          SizedBox.expand(
+            child: Video(
+              controller: controller,
+              fit: BoxFit.cover,
             ),
           ),
           Container(
-            color: Colors.black.withOpacity(0.25), // 75% opacity (1 - 0.75 = 0.25)
+            color: Colors.black.withOpacity(0.25),
+          ),
+        ] else ...[
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.blue[900]!,
+                  Colors.blue[600]!,
+                ],
+              ),
+            ),
           ),
         ],
         widget.child,
@@ -1219,7 +1249,7 @@ class _VideoBackgroundState extends State<VideoBackground> {
   }
 }
 class AppAuthentication {
-  static const String _secretKey = "12345678901234567890123456789012"; // Same as your encryption key
+  static const String _secretKey = "12345678901234567890123456789012";
   
   static Future<Map<String, String>> generateToken() async {
     // Get device identifier or generate instance ID

@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import 'dart:io' show Platform;
 import '../http_client.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class SalaryRecord {
   final String period;
@@ -27,6 +28,8 @@ class IntroScreen extends StatefulWidget {
 }
 
 class _IntroScreenState extends State<IntroScreen> {
+  String _currentVersion = '';
+
   final TextEditingController resetUsernameController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
 
@@ -44,8 +47,14 @@ class _IntroScreenState extends State<IntroScreen> {
   void initState() {
     super.initState();
     _loadData();
+    _getAppVersion();
   }
-
+Future<void> _getAppVersion() async {
+  final packageInfo = await PackageInfo.fromPlatform();
+  setState(() {
+    _currentVersion = packageInfo.version;
+  });
+}
   Future<void> _loadData() async {
     setState(() => _isLoadingData = true);
     try {
@@ -351,11 +360,73 @@ Widget build(BuildContext context) {
          },
          child: Text(
            'Đổi mật khẩu',
-           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+           style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
            textAlign: TextAlign.center,
          ),
        ),
      ),
+const SizedBox(width: 16),
+SizedBox(
+  width: 120,
+  child: ElevatedButton(
+    style: ElevatedButton.styleFrom(
+      backgroundColor: const Color.fromARGB(255, 24, 144, 0),
+      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+    ),
+    onPressed: () async {
+      final url = 'https://storage.googleapis.com/times1/DocumentApp/HMGROUPmac.zip';
+      try {
+        if (Platform.isMacOS) {
+          await Clipboard.setData(ClipboardData(text: url));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Link tải đã được copy vào clipboard'), backgroundColor: Colors.green)
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể copy link tải'), backgroundColor: Colors.red)
+        );
+      }
+    },
+    child: Text(
+      'Tải macOS',
+      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+      textAlign: TextAlign.center,
+    ),
+  ),
+),
+const SizedBox(width: 8),
+SizedBox(
+  width: 120,
+  child: ElevatedButton(
+    style: ElevatedButton.styleFrom(
+      backgroundColor: Colors.blue,
+      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+    ),
+    onPressed: () async {
+      final url = 'https://storage.googleapis.com/times1/DocumentApp/HMGROUPwin.zip';
+      try {
+        if (Platform.isWindows) {
+          await Clipboard.setData(ClipboardData(text: url));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Link tải đã được copy vào clipboard'), backgroundColor: Colors.green)
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể copy link tải'), backgroundColor: Colors.red)
+        );
+      }
+    },
+    child: Text(
+      'Tải Windows',
+      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+      textAlign: TextAlign.center,
+    ),
+  ),
+),
+ const SizedBox(width: 16),
+Text('v$_currentVersion', style: TextStyle(fontSize: 13, color: Colors.grey[600])),
    ],
  );
 }
