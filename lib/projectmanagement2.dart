@@ -1034,7 +1034,134 @@ Future<void> _loadHistory() async {
     } catch (e) {
       print('Error fetching interaction history, skipping: $e');
     }
+    // Step 6: Try to fetch department attendance history
+try {
+  print('Starting attendance history sync...');
+  setState(() => _syncStatus = 'Đang lấy lịch sử chấm công...');
+  
+  print('Fetching attendance data from: $baseUrl/chamcongqldv/$username');
+  final chamCongResponse = await AuthenticatedHttpClient.get(
+    Uri.parse('$baseUrl/chamcongqldv/$username')
+  );
 
+  print('Attendance API response status: ${chamCongResponse.statusCode}');
+  if (chamCongResponse.statusCode == 200) {
+    print('Successfully received attendance data');
+    final List<dynamic> chamCongData = json.decode(chamCongResponse.body);
+    print('Parsed attendance records: ${chamCongData.length}');
+
+    print('Clearing existing attendance table...');
+    await dbHelper.clearTable(DatabaseTables.chamCongCNTable);
+
+    print('Converting attendance data to models...');
+    final chamCongModels = chamCongData.map((data) {
+      try {
+        return ChamCongCNModel.fromMap(data as Map<String, dynamic>);
+      } catch (e) {
+        print('Error converting attendance record: $e');
+        print('Problematic attendance data: $data');
+        rethrow;
+      }
+    }).toList();
+
+    print('Inserting ${chamCongModels.length} attendance records...');
+    await dbHelper.batchInsertChamCongCN(chamCongModels);
+    print('Attendance history sync completed');
+  } else {
+    print('Failed to fetch attendance data: ${chamCongResponse.body}');
+  }
+} catch (e) {
+  print('ERROR in attendance sync:');
+  print('Error type: ${e.runtimeType}');
+  print('Error message: $e');
+  print('Stack trace: ${StackTrace.current}');
+}
+
+// Step 7: Try to fetch order history
+try {
+  print('Starting order history sync...');
+  setState(() => _syncStatus = 'Đang lấy lịch sử đơn hàng...');
+  
+  print('Fetching order data from: $baseUrl/orderdon/$username');
+  final orderResponse = await AuthenticatedHttpClient.get(
+    Uri.parse('$baseUrl/orderdon/$username')
+  );
+
+  print('Order API response status: ${orderResponse.statusCode}');
+  if (orderResponse.statusCode == 200) {
+    print('Successfully received order data');
+    final List<dynamic> orderData = json.decode(orderResponse.body);
+    print('Parsed order records: ${orderData.length}');
+
+    print('Clearing existing orders table...');
+    await dbHelper.clearTable(DatabaseTables.orderTable);
+
+    print('Converting order data to models...');
+    final orderModels = orderData.map((data) {
+      try {
+        return OrderModel.fromMap(data as Map<String, dynamic>);
+      } catch (e) {
+        print('Error converting order record: $e');
+        print('Problematic order data: $data');
+        rethrow;
+      }
+    }).toList();
+
+    print('Inserting ${orderModels.length} order records...');
+    await dbHelper.batchInsertOrders(orderModels);
+    print('Order history sync completed');
+  } else {
+    print('Failed to fetch order data: ${orderResponse.body}');
+  }
+} catch (e) {
+  print('ERROR in order sync:');
+  print('Error type: ${e.runtimeType}');
+  print('Error message: $e');
+  print('Stack trace: ${StackTrace.current}');
+}
+
+// Step 8: Try to fetch order details
+try {
+  print('Starting order details sync...');
+  setState(() => _syncStatus = 'Đang lấy chi tiết đơn hàng...');
+  
+  print('Fetching order details from: $baseUrl/orderchitiet/$username');
+  final orderChiTietResponse = await AuthenticatedHttpClient.get(
+    Uri.parse('$baseUrl/orderchitiet/$username')
+  );
+
+  print('Order details API response status: ${orderChiTietResponse.statusCode}');
+  if (orderChiTietResponse.statusCode == 200) {
+    print('Successfully received order details data');
+    final List<dynamic> orderChiTietData = json.decode(orderChiTietResponse.body);
+    print('Parsed order detail records: ${orderChiTietData.length}');
+
+    print('Clearing existing order details table...');
+    await dbHelper.clearTable(DatabaseTables.orderChiTietTable);
+
+    print('Converting order details to models...');
+    final orderChiTietModels = orderChiTietData.map((data) {
+      try {
+        return OrderChiTietModel.fromMap(data as Map<String, dynamic>);
+      } catch (e) {
+        print('Error converting order detail record: $e');
+        print('Problematic order detail data: $data');
+        rethrow;
+      }
+    }).toList();
+
+    print('Inserting ${orderChiTietModels.length} order detail records...');
+    await dbHelper.batchInsertOrderChiTiet(orderChiTietModels);
+    print('Order details sync completed');
+  } else {
+    print('Failed to fetch order details: ${orderChiTietResponse.body}');
+  }
+} catch (e) {
+  print('ERROR in order details sync:');
+  print('Error type: ${e.runtimeType}');
+  print('Error message: $e');
+  print('Stack trace: ${StackTrace.current}');
+}
     await _updateLastSyncTime();
     _showSuccess('Đồng bộ lịch sử thành công');
     await _loadDateList();

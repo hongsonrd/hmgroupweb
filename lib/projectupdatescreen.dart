@@ -9,7 +9,8 @@ import 'table_models.dart';
 import 'package:intl/intl.dart';
 import 'projectplan2.dart';
 import 'http_client.dart';
-
+import 'projectworker.dart';
+import 'projectorder.dart';
 class ProjectUpdateScreen extends StatefulWidget {
   final String boPhan;
 
@@ -47,6 +48,32 @@ class _ProjectUpdateScreenState extends State<ProjectUpdateScreen> {
             crossAxisSpacing: 16.0,
             childAspectRatio: 1.5,
           children: [
+            MenuCard(
+  title: 'Chấm công\nCN',
+  icon: Icons.assignment_turned_in,
+  color: Colors.brown,
+  onTap: () => Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => ProjectWorker(
+        selectedBoPhan: widget.boPhan,
+      ),
+    ),
+  ),
+),
+MenuCard(
+  title: 'Đặt\nvật tư',
+  icon: Icons.inventory,
+  color: Colors.amber,
+  onTap: () => Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => ProjectOrder(
+        selectedBoPhan: widget.boPhan,
+      ),
+    ),
+  ),
+),
             MenuCard(
               title: 'Danh sách\ncông nhân',
               icon: Icons.people,

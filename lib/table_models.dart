@@ -865,6 +865,381 @@ class PositionListModel {
     caKetthuc: map['Ca_ketthuc']
   );
 }
+// 1. Order Model
+class OrderModel {
+  final String orderId;
+  DateTime? ngay;
+  String? tenDon;
+  String? boPhan;
+  String? nguoiDung;
+  String? trangThai;
+  String? ghiChu;
+  int? dinhMuc;
+  String? nguoiDuyet;
+  int? tongTien;
+  String? phanLoai;
+  DateTime? ngayCapNhat;
+  String? vanDe;
+  String? hinhAnh;
+
+  OrderModel({
+    required this.orderId,
+    this.ngay,
+    this.tenDon,
+    this.boPhan,
+    this.nguoiDung,
+    this.trangThai,
+    this.ghiChu,
+    this.dinhMuc,
+    this.nguoiDuyet,
+    this.tongTien,
+    this.phanLoai,
+    this.ngayCapNhat,
+    this.vanDe,
+    this.hinhAnh,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'OrderID': orderId,
+    'Ngay': ngay?.toIso8601String(),
+    'TenDon': tenDon,
+    'BoPhan': boPhan,
+    'NguoiDung': nguoiDung,
+    'TrangThai': trangThai,
+    'GhiChu': ghiChu,
+    'DinhMuc': dinhMuc,
+    'NguoiDuyet': nguoiDuyet,
+    'TongTien': tongTien,
+    'PhanLoai': phanLoai,
+    'NgayCapNhat': ngayCapNhat?.toIso8601String(),
+    'VanDe': vanDe,
+    'HinhAnh': hinhAnh,
+  };
+
+  factory OrderModel.fromMap(Map<String, dynamic> map) { 
+    int? parseInteger(dynamic value) {
+      if (value == null) return null;
+      if (value is int) return value;
+      if (value is String) return int.tryParse(value);
+      return null;
+    }
+
+    double? parseDouble(dynamic value) {
+      if (value == null) return null;
+      if (value is double) return value;
+      if (value is int) return value.toDouble();
+      if (value is String) return double.tryParse(value);
+      return null;
+    }
+    return OrderModel(
+    orderId: map['OrderID'],
+    ngay: map['Ngay'] != null ? DateTime.parse(map['Ngay']) : null,
+    tenDon: map['TenDon'],
+    boPhan: map['BoPhan'],
+    nguoiDung: map['NguoiDung'],
+    trangThai: map['TrangThai'],
+    ghiChu: map['GhiChu'],
+    dinhMuc: parseInteger(map['DinhMuc']),
+    nguoiDuyet: map['NguoiDuyet'],
+    tongTien: parseInteger(map['TongTien']),
+    phanLoai: map['PhanLoai'],
+    ngayCapNhat: map['NgayCapNhat'] != null ? DateTime.parse(map['NgayCapNhat']) : null,
+    vanDe: map['VanDe'],
+    hinhAnh: map['HinhAnh'],
+  );
+}}
+
+// 2. OrderDinhMuc Model
+class OrderDinhMucModel {
+  final String boPhan;
+  final String thangDat;
+  String? nguoiDuyet;
+  String? nguoiDung;
+  String? maKho;
+  int? tanSuat;
+  String? ghiChu;
+  double? soCongNhan;
+  int? dinhMucTCN;
+  int? congTruKhac;
+  int? dinhMuc;
+
+  OrderDinhMucModel({
+    required this.boPhan,
+    required this.thangDat,
+    this.nguoiDuyet,
+    this.nguoiDung,
+    this.maKho,
+    this.tanSuat,
+    this.ghiChu,
+    this.soCongNhan,
+    this.dinhMucTCN,
+    this.congTruKhac,
+    this.dinhMuc,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'BoPhan': boPhan,
+    'ThangDat': thangDat,
+    'NguoiDuyet': nguoiDuyet,
+    'NguoiDung': nguoiDung,
+    'MaKho': maKho,
+    'TanSuat': tanSuat,
+    'GhiChu': ghiChu,
+    'SoCongNhan': soCongNhan,
+    'DinhMucTCN': dinhMucTCN,
+    'CongTruKhac': congTruKhac,
+    'DinhMuc': dinhMuc,
+  };
+
+  factory OrderDinhMucModel.fromMap(Map<String, dynamic> map) {
+    int? parseInteger(dynamic value) {
+      if (value == null) return null;
+      if (value is int) return value;
+      if (value is String) return int.tryParse(value);
+      return null;
+    }
+
+    double? parseDouble(dynamic value) {
+      if (value == null) return null;
+      if (value is double) return value;
+      if (value is int) return value.toDouble();
+      if (value is String) return double.tryParse(value);
+      return null;
+    }
+
+    return OrderDinhMucModel(
+      boPhan: map['BoPhan'] ?? '',
+      thangDat: map['ThangDat'] ?? '',
+      nguoiDuyet: map['NguoiDuyet']?.toString(),
+      nguoiDung: map['NguoiDung']?.toString(),
+      maKho: map['MaKho']?.toString(),
+      tanSuat: parseInteger(map['TanSuat']),
+      ghiChu: map['GhiChu']?.toString(),
+      soCongNhan: parseDouble(map['SoCongNhan']),
+      dinhMucTCN: parseInteger(map['DinhMucTCN']),
+      congTruKhac: parseInteger(map['CongTrucKhac']),
+      dinhMuc: parseInteger(map['DinhMuc']),
+    );
+  }
+}
+
+// 3. OrderChiTiet Model
+class OrderChiTietModel {
+  final String uid;
+  String? orderId;
+  String? itemId;
+  String? ten;
+  String? phanLoai;
+  String? ghiChu;
+  String? donVi;
+  double? soLuong;
+  int? donGia;
+  bool? khachTra;
+  int? thanhTien;
+
+  OrderChiTietModel({
+    required this.uid,
+    this.orderId,
+    this.itemId,
+    this.ten,
+    this.phanLoai,
+    this.ghiChu,
+    this.donVi,
+    this.soLuong,
+    this.donGia,
+    this.khachTra,
+    this.thanhTien,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'UID': uid,
+    'OrderID': orderId,
+    'ItemID': itemId,
+    'Ten': ten,
+    'PhanLoai': phanLoai,
+    'GhiChu': ghiChu,
+    'DonVi': donVi,
+    'SoLuong': soLuong,
+    'DonGia': donGia,
+    'KhachTra': khachTra,
+    'ThanhTien': thanhTien,
+  };
+
+  factory OrderChiTietModel.fromMap(Map<String, dynamic> map) { 
+    int? parseInteger(dynamic value) {
+      if (value == null) return null;
+      if (value is int) return value;
+      if (value is String) return int.tryParse(value);
+      return null;
+    }
+
+    double? parseDouble(dynamic value) {
+      if (value == null) return null;
+      if (value is double) return value;
+      if (value is int) return value.toDouble();
+      if (value is String) return double.tryParse(value);
+      return null;
+    }
+    return OrderChiTietModel(
+    uid: map['UID'],
+    orderId: map['OrderID'],
+    itemId: map['ItemID'],
+    ten: map['Ten'],
+    phanLoai: map['PhanLoai'],
+    ghiChu: map['GhiChu'],
+    donVi: map['DonVi'],
+    soLuong: parseDouble(map['SoLuong']),
+    donGia: parseInteger(map['DonGia']),
+    khachTra: map['KhachTra'] == 1,
+    thanhTien: parseInteger(map['ThanhTien']),
+  );
+}}
+
+// 4. ChamCongCN Model
+class ChamCongCNModel {
+  final String uid;
+  DateTime? ngay;
+  String? gio;
+  String? nguoiDung;
+  String? boPhan;
+  String? maBP;
+  String? phanLoai;
+  String? maNV;
+  String? congThuongChu;
+  double? ngoaiGioThuong;
+  double? ngoaiGioKhac;
+  double? ngoaiGiox15;
+  double? ngoaiGiox2;
+  int? hoTro;
+  int? partTime;
+  int? partTimeSang;
+  int? partTimeChieu;
+  double? congLe;
+
+  ChamCongCNModel({
+    required this.uid,
+    this.ngay,
+    this.gio,
+    this.nguoiDung,
+    this.boPhan,
+    this.maBP,
+    this.phanLoai,
+    this.maNV,
+    this.congThuongChu,
+    this.ngoaiGioThuong,
+    this.ngoaiGioKhac,
+    this.ngoaiGiox15,
+    this.ngoaiGiox2,
+    this.hoTro,
+    this.partTime,
+    this.partTimeSang,
+    this.partTimeChieu,
+    this.congLe,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'UID': uid,
+    'Ngay': ngay?.toIso8601String(),
+    'Gio': gio,
+    'NguoiDung': nguoiDung,
+    'BoPhan': boPhan,
+    'MaBP': maBP,
+    'PhanLoai': phanLoai,
+    'MaNV': maNV,
+    'CongThuongChu': congThuongChu,
+    'NgoaiGioThuong': ngoaiGioThuong,
+    'NgoaiGioKhac': ngoaiGioKhac,
+    'NgoaiGiox15': ngoaiGiox15,
+    'NgoaiGiox2': ngoaiGiox2,
+    'HoTro': hoTro,
+    'PartTime': partTime,
+    'PartTimeSang': partTimeSang,
+    'PartTimeChieu': partTimeChieu,
+    'CongLe': congLe,
+  };
+
+  factory ChamCongCNModel.fromMap(Map<String, dynamic> map) { 
+    int? parseInteger(dynamic value) {
+      if (value == null) return null;
+      if (value is int) return value;
+      if (value is String) return int.tryParse(value);
+      return null;
+    }
+
+    double? parseDouble(dynamic value) {
+      if (value == null) return null;
+      if (value is double) return value;
+      if (value is int) return value.toDouble();
+      if (value is String) return double.tryParse(value);
+      return null;
+    }
+    return ChamCongCNModel(
+    uid: map['UID'],
+    ngay: map['Ngay'] != null ? DateTime.parse(map['Ngay']) : null,
+    gio: map['Gio'],
+    nguoiDung: map['NguoiDung'],
+    boPhan: map['BoPhan'],
+    maBP: map['MaBP'],
+    phanLoai: map['PhanLoai'],
+    maNV: map['MaNV'],
+    congThuongChu: map['CongThuongChu'],
+    ngoaiGioThuong: parseDouble(map['NgoaiGioThuong']),
+    ngoaiGioKhac: parseDouble(map['NgoaiGioKhac']),
+    ngoaiGiox15: parseDouble(map['NgoaiGiox15']),
+    ngoaiGiox2: parseDouble(map['NgoaiGiox2']),
+    hoTro: parseInteger(map['HoTro']),
+    partTime: parseInteger(map['PartTime']),
+    partTimeSang: parseInteger(map['PartTimeSang']),
+    partTimeChieu: parseInteger(map['PartTimeChieu']),
+    congLe: parseDouble(map['CongLe']),
+  );
+}}
+class OrderMatHangModel {
+  final String itemId;
+  String ten, donVi;
+  int? donGia;
+  String? phanLoai, phanNhom, hinhAnh;
+
+  OrderMatHangModel({
+    required this.itemId,
+    required this.ten,
+    required this.donVi,
+    this.donGia,
+    this.phanLoai,
+    this.phanNhom,
+    this.hinhAnh,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'ItemId': itemId,
+    'Ten': ten,
+    'DonVi': donVi,
+    'DonGia': donGia,
+    'PhanLoai': phanLoai,
+    'PhanNhom': phanNhom,
+    'HinhAnh': hinhAnh,
+  };
+
+  factory OrderMatHangModel.fromMap(Map<String, dynamic> map) {
+    // Handle numeric conversion safely
+    int? parseDonGia(dynamic value) {
+      if (value == null) return null;
+      if (value is int) return value;
+      if (value is String) return int.tryParse(value);
+      return null;
+    }
+
+    return OrderMatHangModel(
+      itemId: map['ItemId'] ?? '',
+      ten: map['Ten'] ?? '',
+      donVi: map['DonVi'] ?? '',
+      donGia: parseDonGia(map['DonGia']),
+      phanLoai: map['PhanLoai'],
+      phanNhom: map['PhanNhom'],
+      hinhAnh: map['HinhAnh'],
+    );
+  }
+}
 // Database Tables
 class DatabaseTables {
   // Table Names
@@ -879,7 +1254,106 @@ class DatabaseTables {
   static const String dongPhucTable = 'dongphuc';
   static const String chiTietDPTable = 'chitietdp';
   static const String interactionTable = 'interaction';
-  static const String createDongPhucTable = '''
+  static const String orderMatHangTable = 'ordermathang';
+  static const String orderTable = 'orders';
+  static const String orderChiTietTable = 'orderchitiet';
+  static const String orderDinhMucTable = 'orderdinhmuc';
+  static const String chamCongCNTable = 'chamcongcn';
+
+// Order table
+static const String createOrderTable = '''
+  CREATE TABLE $orderTable (
+    OrderID VARCHAR(100),
+    Ngay DATE,
+    TenDon TEXT,
+    BoPhan TEXT,
+    NguoiDung VARCHAR(100),
+    TrangThai VARCHAR(100),
+    GhiChu VARCHAR(100),
+    DinhMuc INT,
+    NguoiDuyet VARCHAR(100),
+    TongTien INT,
+    PhanLoai VARCHAR(100),
+    NgayCapNhat DATE,
+    VanDe TEXT,
+    HinhAnh TEXT,
+    PRIMARY KEY (OrderID)
+  )
+''';
+
+// OrderDinhMuc table
+static const String createOrderDinhMucTable = '''
+  CREATE TABLE $orderDinhMucTable (
+    BoPhan TEXT,
+    ThangDat VARCHAR(100),
+    NguoiDuyet VARCHAR(100),
+    NguoiDung VARCHAR(100),
+    MaKho TEXT,
+    TanSuat INT,
+    GhiChu TEXT,
+    SoCongNhan DECIMAL(10,0),
+    DinhMucTCN INT,
+    CongTruKhac INT,
+    DinhMuc INT,
+    PRIMARY KEY (BoPhan, ThangDat)
+  )
+''';
+
+// OrderChiTiet table
+static const String createOrderChiTietTable = '''
+  CREATE TABLE $orderChiTietTable (
+    UID VARCHAR(100),
+    OrderID VARCHAR(100),
+    ItemID VARCHAR(100),
+    Ten TEXT,
+    PhanLoai VARCHAR(100),
+    GhiChu VARCHAR(100),
+    DonVi VARCHAR(100),
+    SoLuong DECIMAL(10,0),
+    DonGia INT,
+    KhachTra TINYINT(1),
+    ThanhTien INT,
+    PRIMARY KEY (UID)
+  )
+''';
+
+// ChamCongCN table
+static const String createChamCongCNTable = '''
+  CREATE TABLE $chamCongCNTable (
+    UID VARCHAR(100),
+    Ngay DATE,
+    Gio TIME,
+    NguoiDung TEXT,
+    BoPhan TEXT,
+    MaBP VARCHAR(100),
+    PhanLoai VARCHAR(100),
+    MaNV VARCHAR(100),
+    CongThuongChu VARCHAR(100),
+    NgoaiGioThuong DECIMAL(10,0),
+    NgoaiGioKhac DECIMAL(10,0),
+    NgoaiGiox15 DECIMAL(10,0),
+    NgoaiGiox2 DECIMAL(10,0),
+    HoTro INT,
+    PartTime INT,
+    PartTimeSang INT,
+    PartTimeChieu INT,
+    CongLe DECIMAL(10,0),
+    PRIMARY KEY (UID)
+  )
+''';
+  static const String createOrderMatHangTable = '''
+  CREATE TABLE $orderMatHangTable (
+    ItemId VARCHAR(100),
+    Ten TEXT,
+    DonVi VARCHAR(100),
+    DonGia INT,
+    PhanLoai VARCHAR(100),
+    PhanNhom VARCHAR(100),
+    HinhAnh TEXT,
+    PRIMARY KEY (ItemId)
+  )
+''';
+static const String createDongPhucTable = '''
   CREATE TABLE $dongPhucTable (
     UID VARCHAR(100),
     NguoiDung VARCHAR(100),

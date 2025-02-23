@@ -223,7 +223,7 @@ Future<void> _loadProjects() async {
           builder: (BuildContext context) {
             return SyncProgressDialog(
               currentStep: step,
-              totalSteps: 6,
+              totalSteps: 11,
               currentStepNumber: stepNumber,
             );
           },
@@ -538,7 +538,326 @@ try {
     );
   }
 }
+// Step 6: Update DongPhuc and ChiTietDP
+showProgress('Đồng bộ dữ liệu đồng phục', 6);
 
+try {
+  // First, sync DongPhuc data
+  final dongPhucResponse = await http.get(
+    Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/dongphuc/$username'),
+  );
+
+  if (dongPhucResponse.statusCode == 200) {
+    final List<dynamic> dongPhucData = json.decode(dongPhucResponse.body);
+    final dbHelper = DBHelper();
+    
+    // Clear existing dongphuc data
+    await dbHelper.clearTable(DatabaseTables.dongPhucTable);
+    
+    // Convert and insert dongphuc data
+    final dongPhucModels = dongPhucData.map((data) => 
+      DongPhucModel.fromMap(data as Map<String, dynamic>)
+    ).toList();
+
+    await dbHelper.batchInsertDongPhuc(dongPhucModels);
+
+    // Next, sync ChiTietDP data
+    final chiTietDPResponse = await http.get(
+      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/dongphuclist'),
+    );
+
+    if (chiTietDPResponse.statusCode == 200) {
+      final List<dynamic> chiTietDPData = json.decode(chiTietDPResponse.body);
+      
+      // Clear existing chitietdp data
+      await dbHelper.clearTable(DatabaseTables.chiTietDPTable);
+      
+      // Convert and insert chitietdp data
+      final chiTietDPModels = chiTietDPData.map((data) => 
+        ChiTietDPModel.fromMap(data as Map<String, dynamic>)
+      ).toList();
+
+      await dbHelper.batchInsertChiTietDP(chiTietDPModels);
+      
+      // Close Step 6 dialog
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } else {
+      throw Exception('Failed to load ChiTietDP data');
+    }
+  } else {
+    throw Exception('Failed to load DongPhuc data');
+  }
+} catch (e) {
+  print('Error updating uniform data: $e');
+  if (mounted) {
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Không thể cập nhật dữ liệu đồng phục: ${e.toString()}'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+}
+// Step 7: Update OrderMatHang
+showProgress('Cập nhật danh sách mặt hàng', 7);
+
+try {
+  final orderMatHangResponse = await AuthenticatedHttpClient.get(
+    Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/ordermathang'),
+  );
+
+  if (orderMatHangResponse.statusCode == 200) {
+    final List<dynamic> orderMatHangData = json.decode(orderMatHangResponse.body);
+    final dbHelper = DBHelper();
+    
+    await dbHelper.clearTable(DatabaseTables.orderMatHangTable);
+    
+    final orderMatHangModels = orderMatHangData.map((data) => 
+      OrderMatHangModel.fromMap(data as Map<String, dynamic>)
+    ).toList();
+
+    await dbHelper.batchInsertOrderMatHang(orderMatHangModels);
+    
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+  } else {
+    throw Exception('Failed to load OrderMatHang data');
+  }
+} catch (e) {
+  print('Error updating OrderMatHang data: $e');
+  if (mounted) {
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Không thể cập nhật danh sách mặt hàng: ${e.toString()}'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+  return;
+}
+
+// Step 8: Update OrderDinhMuc
+showProgress('Cập nhật định mức đơn hàng', 8);
+
+try {
+  final orderDinhMucResponse = await AuthenticatedHttpClient.get(
+    Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/orderdinhmuc/$username'),
+  );
+
+  print('OrderDinhMuc API Response Status: ${orderDinhMucResponse.statusCode}');
+  print('OrderDinhMuc Raw Response: ${orderDinhMucResponse.body}');
+
+  if (orderDinhMucResponse.statusCode == 200) {
+    final List<dynamic> orderDinhMucData = json.decode(orderDinhMucResponse.body);
+    print('Decoded OrderDinhMuc Data: $orderDinhMucData');
+    
+    final dbHelper = DBHelper();
+    
+    // Log before clearing table
+    final existingData = await dbHelper.query(DatabaseTables.orderDinhMucTable);
+    print('Existing OrderDinhMuc records before clear: ${existingData.length}');
+    
+    await dbHelper.clearTable(DatabaseTables.orderDinhMucTable);
+    print('OrderDinhMuc table cleared');
+
+    // Log each data conversion
+    final orderDinhMucModels = orderDinhMucData.map((data) {
+      print('Processing OrderDinhMuc record: $data');
+      try {
+        final model = OrderDinhMucModel.fromMap(data as Map<String, dynamic>);
+        print('Successfully converted to model: ${model.toMap()}');
+        return model;
+      } catch (e) {
+        print('Error converting record: $e');
+        print('Problematic data: $data');
+        rethrow;
+      }
+    }).toList();
+    
+    print('Total OrderDinhMuc models created: ${orderDinhMucModels.length}');
+
+    // Log batch insert
+    try {
+      await dbHelper.batchInsertOrderDinhMuc(orderDinhMucModels);
+      print('Batch insert completed');
+
+      // Verify inserted data
+      final insertedData = await dbHelper.query(DatabaseTables.orderDinhMucTable);
+      print('Records in OrderDinhMuc table after insert: ${insertedData.length}');
+      print('Sample of inserted data: ${insertedData.take(2)}');
+    } catch (e) {
+      print('Error during batch insert: $e');
+      rethrow;
+    }
+
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+  } else {
+    print('API request failed with status: ${orderDinhMucResponse.statusCode}');
+    throw Exception('Failed to load OrderDinhMuc data');
+  }
+} catch (e, stackTrace) {
+  print('Error updating OrderDinhMuc data: $e');
+  print('Stack trace: $stackTrace');
+  if (mounted) {
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Không thể cập nhật định mức đơn hàng: ${e.toString()}'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+  return;
+}
+
+// Step 9: Update Orders
+showProgress('Cập nhật đơn hàng', 9);
+
+try {
+  final orderResponse = await AuthenticatedHttpClient.get(
+    Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/orderdon/$username'),
+  );
+
+  if (orderResponse.statusCode == 200) {
+    final List<dynamic> orderData = json.decode(orderResponse.body);
+    final dbHelper = DBHelper();
+    
+    await dbHelper.clearTable(DatabaseTables.orderTable);
+    
+    final orderModels = orderData.map((data) => 
+      OrderModel.fromMap(data as Map<String, dynamic>)
+    ).toList();
+
+    await dbHelper.batchInsertOrders(orderModels);
+    
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+  } else {
+    throw Exception('Failed to load Orders data');
+  }
+} catch (e) {
+  print('Error updating Orders data: $e');
+  if (mounted) {
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Không thể cập nhật đơn hàng: ${e.toString()}'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+  return;
+}
+
+// Step 10: Update OrderChiTiet
+showProgress('Cập nhật chi tiết đơn hàng', 10);
+
+try {
+  final orderChiTietResponse = await AuthenticatedHttpClient.get(
+    Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/orderchitiet/$username'),
+  );
+
+  if (orderChiTietResponse.statusCode == 200) {
+    final List<dynamic> orderChiTietData = json.decode(orderChiTietResponse.body);
+    final dbHelper = DBHelper();
+    
+    await dbHelper.clearTable(DatabaseTables.orderChiTietTable);
+    
+    final orderChiTietModels = orderChiTietData.map((data) => 
+      OrderChiTietModel.fromMap(data as Map<String, dynamic>)
+    ).toList();
+
+    await dbHelper.batchInsertOrderChiTiet(orderChiTietModels);
+    
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+  } else {
+    throw Exception('Failed to load OrderChiTiet data');
+  }
+} catch (e) {
+  print('Error updating OrderChiTiet data: $e');
+  if (mounted) {
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Không thể cập nhật chi tiết đơn hàng: ${e.toString()}'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+  return;
+}
+// Step 11: Update ChamCongCN
+showProgress('Cập nhật chấm công công nhân', 11);
+
+try {
+  print('Starting ChamCongCN update...');
+  print('Fetching data from URL: https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongcn/$username');
+  
+  final chamCongCNResponse = await AuthenticatedHttpClient.get(
+    Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongcn/$username'),
+  );
+  
+  print('Response status code: ${chamCongCNResponse.statusCode}');
+  print('LICH SU CHAM CONG: ${chamCongCNResponse.body}');
+
+  if (chamCongCNResponse.statusCode == 200) {
+    final List<dynamic> chamCongCNData = json.decode(chamCongCNResponse.body);
+    print('Successfully decoded JSON data. Number of records: ${chamCongCNData.length}');
+    
+    final dbHelper = DBHelper();
+    
+    print('Clearing existing ChamCongCN table...');
+    await dbHelper.clearTable(DatabaseTables.chamCongCNTable);
+    
+    print('Converting data to ChamCongCN models...');
+    final chamCongCNModels = chamCongCNData.map((data) {
+      try {
+        return ChamCongCNModel.fromMap(data as Map<String, dynamic>);
+      } catch (e) {
+        print('Error converting record to model: $e');
+        print('Problematic data: $data');
+        rethrow;
+      }
+    }).toList();
+    
+    print('Inserting ${chamCongCNModels.length} records into database...');
+    await dbHelper.batchInsertChamCongCN(chamCongCNModels);
+    print('Database insertion completed successfully');
+
+    if (mounted) {
+      print('Closing progress dialog...');
+      Navigator.of(context).pop();
+    }
+  } else {
+    throw Exception('Failed to load ChamCongCN data');
+  }
+} catch (e) {
+  print('ERROR: Detailed error in ChamCongCN update:');
+  print('Error type: ${e.runtimeType}');
+  print('Error message: $e');
+  print('Stack trace: ${StackTrace.current}');
+  
+  if (mounted) {
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Không thể cập nhật chấm công công nhân: ${e.toString()}'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+  return;
+}
   } catch (e) {
     print('Error loading projects: $e');
     if (mounted) {

@@ -36,14 +36,14 @@ class DBHelper {
     }
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool hasReset = prefs.getBool('db_reset_v9') ?? false;
+    bool hasReset = prefs.getBool('db_reset_v11') ?? false;
     
     if (!hasReset) {
-      print('Forcing database reset for version 9...');
+      print('Forcing database reset for version 11...');
       try {
         await deleteDatabase(path);
         await prefs.clear();
-        await prefs.setBool('db_reset_v9', true);
+        await prefs.setBool('db_reset_v11', true);
         print('Database reset successful');
       } catch (e) {
         print('Error during database reset: $e');
@@ -55,7 +55,7 @@ class DBHelper {
     final db = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 9,
+        version: 11,
         onCreate: (Database db, int version) async {
           print('Creating database tables...');
           await db.execute(DatabaseTables.createInteractionTable);
@@ -69,13 +69,25 @@ class DBHelper {
           await db.execute(DatabaseTables.createBaocaoTable);
           await db.execute(DatabaseTables.createDongPhucTable);
           await db.execute(DatabaseTables.createChiTietDPTable);
+        await db.execute(DatabaseTables.createOrderMatHangTable);
+        await db.execute(DatabaseTables.createOrderTable);
+        await db.execute(DatabaseTables.createOrderChiTietTable);
+        await db.execute(DatabaseTables.createOrderDinhMucTable);
+        await db.execute(DatabaseTables.createChamCongCNTable);
           await ChecklistInitializer.initializeChecklistTable(db);
           print('Database tables created successfully');
         },
         onUpgrade: (Database db, int oldVersion, int newVersion) async {
-          if (oldVersion < 9) {
+          if (oldVersion < 11) {
             print('Upgrading database: adding baocao table');
-            await db.execute(DatabaseTables.createBaocaoTable);
+          await db.execute(DatabaseTables.createBaocaoTable);
+        await db.execute(DatabaseTables.createDongPhucTable);
+        await db.execute(DatabaseTables.createChiTietDPTable);
+        await db.execute(DatabaseTables.createOrderMatHangTable);
+        await db.execute(DatabaseTables.createOrderTable);
+        await db.execute(DatabaseTables.createOrderChiTietTable);
+        await db.execute(DatabaseTables.createOrderDinhMucTable);
+        await db.execute(DatabaseTables.createChamCongCNTable);
           }
         },
         onOpen: (db) async {
@@ -96,6 +108,327 @@ class DBHelper {
     print('Stack trace: $stackTrace');
     rethrow;
   }
+}
+// ==================== Order CRUD Operations ====================
+Future<void> insertOrder(OrderModel order) async {
+  await insert(DatabaseTables.orderTable, order.toMap());
+}
+
+Future<List<OrderModel>> getAllOrders() async {
+  final maps = await query(DatabaseTables.orderTable);
+  return maps.map((map) => OrderModel.fromMap(map)).toList();
+}
+
+Future<OrderModel?> getOrderByOrderId(String orderId) async {
+  final maps = await query(
+    DatabaseTables.orderTable,
+    where: 'OrderID = ?',
+    whereArgs: [orderId],
+  );
+  if (maps.isEmpty) return null;
+  return OrderModel.fromMap(maps.first);
+}
+
+Future<List<OrderModel>> getOrdersByDepartment(String boPhan) async {
+  print('Executing query for department: $boPhan');
+  
+  final maps = await query(
+    DatabaseTables.orderTable,
+    where: 'BoPhan = ?',
+    whereArgs: [boPhan],
+  );
+  
+  print('Query result count: ${maps.length}');
+  if (maps.isNotEmpty) {
+    print('Sample record: ${maps.first}');
+  }
+  
+  return maps.map((map) => OrderModel.fromMap(map)).toList();
+}
+
+Future<int> updateOrder(String orderId, Map<String, dynamic> updates) async {
+  return await update(
+    DatabaseTables.orderTable,
+    updates,
+    where: 'OrderID = ?',
+    whereArgs: [orderId],
+  );
+}
+
+Future<int> deleteOrder(String orderId) async {
+  return await delete(
+    DatabaseTables.orderTable,
+    where: 'OrderID = ?',
+    whereArgs: [orderId],
+  );
+}
+
+Future<void> batchInsertOrders(List<OrderModel> orders) async {
+  final db = await database;
+  await db.transaction((txn) async {
+    final batch = txn.batch();
+    for (var order in orders) {
+      batch.insert(
+        DatabaseTables.orderTable, 
+        order.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace
+      );
+    }
+    await batch.commit(noResult: true);
+  });
+}
+
+// ==================== OrderDinhMuc CRUD Operations ====================
+Future<void> insertOrderDinhMuc(OrderDinhMucModel orderDinhMuc) async {
+  await insert(DatabaseTables.orderDinhMucTable, orderDinhMuc.toMap());
+}
+
+Future<List<OrderDinhMucModel>> getAllOrderDinhMuc() async {
+  final maps = await query(DatabaseTables.orderDinhMucTable);
+  return maps.map((map) => OrderDinhMucModel.fromMap(map)).toList();
+}
+
+Future<OrderDinhMucModel?> getOrderDinhMucByKey(String boPhan, String thangDat) async {
+  final maps = await query(
+    DatabaseTables.orderDinhMucTable,
+    where: 'BoPhan = ? AND ThangDat = ?',
+    whereArgs: [boPhan, thangDat],
+  );
+  if (maps.isEmpty) return null;
+  return OrderDinhMucModel.fromMap(maps.first);
+}
+
+Future<int> updateOrderDinhMuc(String boPhan, String thangDat, Map<String, dynamic> updates) async {
+  return await update(
+    DatabaseTables.orderDinhMucTable,
+    updates,
+    where: 'BoPhan = ? AND ThangDat = ?',
+    whereArgs: [boPhan, thangDat],
+  );
+}
+
+Future<int> deleteOrderDinhMuc(String boPhan, String thangDat) async {
+  return await delete(
+    DatabaseTables.orderDinhMucTable,
+    where: 'BoPhan = ? AND ThangDat = ?',
+    whereArgs: [boPhan, thangDat],
+  );
+}
+
+Future<void> batchInsertOrderDinhMuc(List<OrderDinhMucModel> items) async {
+  final db = await database;
+  await db.transaction((txn) async {
+    final batch = txn.batch();
+    for (var item in items) {
+      batch.insert(
+        DatabaseTables.orderDinhMucTable, 
+        item.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace
+      );
+    }
+    await batch.commit(noResult: true);
+  });
+}
+
+// ==================== OrderChiTiet CRUD Operations ====================
+Future<void> insertOrderChiTiet(OrderChiTietModel orderChiTiet) async {
+  await insert(DatabaseTables.orderChiTietTable, orderChiTiet.toMap());
+}
+
+Future<List<OrderChiTietModel>> getAllOrderChiTiet() async {
+  final maps = await query(DatabaseTables.orderChiTietTable);
+  return maps.map((map) => OrderChiTietModel.fromMap(map)).toList();
+}
+
+Future<OrderChiTietModel?> getOrderChiTietByUID(String uid) async {
+  final maps = await query(
+    DatabaseTables.orderChiTietTable,
+    where: 'UID = ?',
+    whereArgs: [uid],
+  );
+  if (maps.isEmpty) return null;
+  return OrderChiTietModel.fromMap(maps.first);
+}
+
+Future<List<OrderChiTietModel>> getOrderChiTietByOrderId(String orderId) async {
+  final maps = await query(
+    DatabaseTables.orderChiTietTable,
+    where: 'OrderID = ?',
+    whereArgs: [orderId],
+  );
+  return maps.map((map) => OrderChiTietModel.fromMap(map)).toList();
+}
+
+Future<int> updateOrderChiTiet(String uid, Map<String, dynamic> updates) async {
+  return await update(
+    DatabaseTables.orderChiTietTable,
+    updates,
+    where: 'UID = ?',
+    whereArgs: [uid],
+  );
+}
+
+Future<int> deleteOrderChiTiet(String uid) async {
+  return await delete(
+    DatabaseTables.orderChiTietTable,
+    where: 'UID = ?',
+    whereArgs: [uid],
+  );
+}
+
+Future<void> batchInsertOrderChiTiet(List<OrderChiTietModel> items) async {
+  final db = await database;
+  await db.transaction((txn) async {
+    final batch = txn.batch();
+    for (var item in items) {
+      batch.insert(
+        DatabaseTables.orderChiTietTable, 
+        item.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace
+      );
+    }
+    await batch.commit(noResult: true);
+  });
+}
+// ==================== OrderMatHang CRUD Operations ====================
+Future<void> insertOrderMatHang(OrderMatHangModel item) async {
+  await insert(DatabaseTables.orderMatHangTable, item.toMap());
+}
+
+Future<List<OrderMatHangModel>> getAllOrderMatHang() async {
+  final maps = await query(DatabaseTables.orderMatHangTable);
+  return maps.map((map) => OrderMatHangModel.fromMap(map)).toList();
+}
+
+Future<OrderMatHangModel?> getOrderMatHangByItemId(String itemId) async {
+  final maps = await query(
+    DatabaseTables.orderMatHangTable,
+    where: 'ItemId = ?',
+    whereArgs: [itemId],
+  );
+  if (maps.isEmpty) return null;
+  return OrderMatHangModel.fromMap(maps.first);
+}
+
+Future<List<OrderMatHangModel>> getOrderMatHangByPhanLoai(String phanLoai) async {
+  final maps = await query(
+    DatabaseTables.orderMatHangTable,
+    where: 'PhanLoai = ?',
+    whereArgs: [phanLoai],
+  );
+  return maps.map((map) => OrderMatHangModel.fromMap(map)).toList();
+}
+
+Future<int> updateOrderMatHang(String itemId, Map<String, dynamic> updates) async {
+  return await update(
+    DatabaseTables.orderMatHangTable,
+    updates,
+    where: 'ItemId = ?',
+    whereArgs: [itemId],
+  );
+}
+
+Future<int> deleteOrderMatHang(String itemId) async {
+  return await delete(
+    DatabaseTables.orderMatHangTable,
+    where: 'ItemId = ?',
+    whereArgs: [itemId],
+  );
+}
+
+Future<void> batchInsertOrderMatHang(List<OrderMatHangModel> items) async {
+  final db = await database;
+  await db.transaction((txn) async {
+    final batch = txn.batch();
+    for (var item in items) {
+      batch.insert(
+        DatabaseTables.orderMatHangTable, 
+        item.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace
+      );
+    }
+    await batch.commit(noResult: true);
+  });
+}
+
+// ==================== ChamCongCN CRUD Operations ====================
+Future<void> insertChamCongCN(ChamCongCNModel chamCong) async {
+  await insert(DatabaseTables.chamCongCNTable, chamCong.toMap());
+}
+
+Future<List<ChamCongCNModel>> getAllChamCongCN() async {
+  final maps = await query(DatabaseTables.chamCongCNTable);
+  return maps.map((map) => ChamCongCNModel.fromMap(map)).toList();
+}
+
+Future<ChamCongCNModel?> getChamCongCNByUID(String uid) async {
+  final maps = await query(
+    DatabaseTables.chamCongCNTable,
+    where: 'UID = ?',
+    whereArgs: [uid],
+  );
+  if (maps.isEmpty) return null;
+  return ChamCongCNModel.fromMap(maps.first);
+}
+
+Future<List<ChamCongCNModel>> getChamCongCNByDepartment(String boPhan) async {
+  final maps = await query(
+    DatabaseTables.chamCongCNTable,
+    where: 'BoPhan = ?',
+    whereArgs: [boPhan],
+  );
+  return maps.map((map) => ChamCongCNModel.fromMap(map)).toList();
+}
+
+Future<List<ChamCongCNModel>> getChamCongCNByNhanVien(String maNV) async {
+  final maps = await query(
+    DatabaseTables.chamCongCNTable,
+    where: 'MaNV = ?',
+    whereArgs: [maNV],
+  );
+  return maps.map((map) => ChamCongCNModel.fromMap(map)).toList();
+}
+
+Future<List<ChamCongCNModel>> getChamCongCNByDateRange(
+    DateTime startDate, DateTime endDate) async {
+  final maps = await query(
+    DatabaseTables.chamCongCNTable,
+    where: 'Ngay BETWEEN ? AND ?',
+    whereArgs: [startDate.toIso8601String(), endDate.toIso8601String()],
+  );
+  return maps.map((map) => ChamCongCNModel.fromMap(map)).toList();
+}
+
+Future<int> updateChamCongCN(String uid, Map<String, dynamic> updates) async {
+  return await update(
+    DatabaseTables.chamCongCNTable,
+    updates,
+    where: 'UID = ?',
+    whereArgs: [uid],
+  );
+}
+
+Future<int> deleteChamCongCN(String uid) async {
+  return await delete(
+    DatabaseTables.chamCongCNTable,
+    where: 'UID = ?',
+    whereArgs: [uid],
+  );
+}
+
+Future<void> batchInsertChamCongCN(List<ChamCongCNModel> items) async {
+  final db = await database;
+  await db.transaction((txn) async {
+    final batch = txn.batch();
+    for (var item in items) {
+      batch.insert(
+        DatabaseTables.chamCongCNTable, 
+        item.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace
+      );
+    }
+    await batch.commit(noResult: true);
+  });
 }
   Future<List<Map<String, dynamic>>> getStaffListByDepartment(String department) async {
   final db = await database;

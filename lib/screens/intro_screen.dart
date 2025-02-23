@@ -12,6 +12,8 @@ import 'package:flutter/services.dart';
 import 'dart:io' show Platform;
 import '../http_client.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:math';
 
 class SalaryRecord {
   final String period;
@@ -374,17 +376,21 @@ SizedBox(
       padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
     ),
     onPressed: () async {
-      final url = 'https://storage.googleapis.com/times1/DocumentApp/HMGROUPmac.zip';
+      final random = Random().nextInt(10000);
+      final url = 'https://storage.googleapis.com/times1/DocumentApp/HMGROUPmac.zip?version=$random';
       try {
         if (Platform.isMacOS) {
-          await Clipboard.setData(ClipboardData(text: url));
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Link tải đã được copy vào clipboard'), backgroundColor: Colors.green)
-          );
+          if (await canLaunchUrl(Uri.parse(url))) {
+            await launchUrl(Uri.parse(url));
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Không thể mở link tải'), backgroundColor: Colors.red)
+            );
+          }
         }
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Không thể copy link tải'), backgroundColor: Colors.red)
+          SnackBar(content: Text('Có lỗi xảy ra'), backgroundColor: Colors.red)
         );
       }
     },
@@ -404,17 +410,21 @@ SizedBox(
       padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
     ),
     onPressed: () async {
-      final url = 'https://storage.googleapis.com/times1/DocumentApp/HMGROUPwin.zip';
+      final random = Random().nextInt(10000);
+      final url = 'https://storage.googleapis.com/times1/DocumentApp/HMGROUPwin.zip?version=$random';
       try {
         if (Platform.isWindows) {
-          await Clipboard.setData(ClipboardData(text: url));
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Link tải đã được copy vào clipboard'), backgroundColor: Colors.green)
-          );
+          if (await canLaunchUrl(Uri.parse(url))) {
+            await launchUrl(Uri.parse(url));
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Không thể mở link tải'), backgroundColor: Colors.red)
+            );
+          }
         }
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Không thể copy link tải'), backgroundColor: Colors.red)
+          SnackBar(content: Text('Có lỗi xảy ra'), backgroundColor: Colors.red)
         );
       }
     },
