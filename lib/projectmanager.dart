@@ -22,10 +22,10 @@ class ProjectManager extends StatelessWidget {
           backgroundColor: Color.fromARGB(255, 114, 255, 217),
         ),
         body: GridView.count(
-          padding: EdgeInsets.all(16),
-          crossAxisCount: 2,
-          mainAxisSpacing: 16,
-          crossAxisSpacing: 16,
+          padding: EdgeInsets.all(12),
+          crossAxisCount: 4,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 1.2,
           children: [
             _buildGridItem(
               context,

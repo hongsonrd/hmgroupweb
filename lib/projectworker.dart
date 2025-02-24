@@ -8,6 +8,8 @@ import 'db_helper.dart';
 import 'table_models.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart';
+import 'http_client.dart';
+
 class ProjectWorker extends StatefulWidget {
  final String selectedBoPhan;
  const ProjectWorker({Key? key, required this.selectedBoPhan}) : super(key: key);
@@ -62,7 +64,7 @@ class _ProjectWorkerState extends State<ProjectWorker> {
 
   Future<void> _loadProjects() async {
     try {
-      final response = await http.get(
+      final response = await AuthenticatedHttpClient.get(
         Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/$_username'),
       );
       if (response.statusCode == 200) {
@@ -80,7 +82,7 @@ Future<void> _initializeData() async {
  setState(() => _isLoading = true);
  try {
    try {
-     final response = await http.get(
+     final response = await AuthenticatedHttpClient.get(
         Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/$_username'),
         headers: {'Content-Type': 'application/json'},
       );
@@ -423,37 +425,45 @@ Widget build(BuildContext context) {
           return DataRow(
             cells: [
               DataCell(
-  Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Text(empId),
-      Text(
-        _staffNames[empId] ?? '',
-        style: TextStyle(
-          fontSize: 12,
-          color: Colors.grey[600],
-        ),
-      ),
-    ],
-  ),
-),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(empId),
+                    Text(
+                      _staffNames[empId] ?? '',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               ...days.map((day) {
-                final attendance = _getAttendanceForDay(empId, day, columnType) ?? 
-                  (columnType == 'CongThuongChu' ? 'Ro' : '0');
+                final attendance = _getAttendanceForDay(empId, day, columnType);
+                final defaultValue = columnType == 'CongThuongChu' ? 'Ro' : '0';
+                final value = attendance ?? defaultValue;
                 final canEdit = _canEditDay(day);
                 
                 return DataCell(
                   columnType == 'CongThuongChu'
                     ? DropdownButton<String>(
-                        value: attendance,
+                        value: _congThuongChoices.contains(value) ? value : defaultValue,
                         items: _congThuongChoices.map((choice) =>
-                          DropdownMenuItem(value: choice, child: Text(choice))
+                          DropdownMenuItem(
+                            value: choice,
+                            child: Text(choice),
+                          )
                         ).toList(),
-                        onChanged: canEdit ? (value) => _updateAttendance(empId, day, columnType, value) : null,
+                        onChanged: canEdit ? (newValue) {
+                          if (newValue != null) {
+                            _updateAttendance(empId, day, columnType, newValue);
+                          }
+                        } : null,
                       )
                     : TextField(
-                        controller: TextEditingController(text: attendance),
+                        controller: TextEditingController(text: value),
                         keyboardType: TextInputType.number,
                         enabled: canEdit,
                         onChanged: (value) => _updateAttendance(empId, day, columnType, value),

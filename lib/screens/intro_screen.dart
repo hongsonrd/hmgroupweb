@@ -12,9 +12,8 @@ import 'package:flutter/services.dart';
 import 'dart:io' show Platform;
 import '../http_client.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'dart:math';
-
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 class SalaryRecord {
   final String period;
   final String category;
@@ -160,29 +159,41 @@ Widget build(BuildContext context) {
                       ),
                     ),
                     TextButton.icon(
-                      onPressed: () async {
-                        try {
-                          SharedPreferences prefs = await SharedPreferences.getInstance();
-                          await prefs.clear();
-                          final userState = Provider.of<UserState>(context, listen: false);
-                          await userState.clearUser();
-                          if (mounted) {
-                            Navigator.of(context).pushAndRemoveUntil(
-                              MaterialPageRoute(builder: (_) => const MainScreen()),
-                              (route) => false,
-                            );
-                          }
-                        } catch (e) {
-                          print('Reset error: $e');
-                        }
-                      },
-                      icon: const Icon(Icons.logout, size: 20),
-                      label: const Text('Reset', style: TextStyle(fontSize: 16)),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.red,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      ),
-                    ),
+  onPressed: () async {
+    try {
+      // Clear ALL SharedPreferences data
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      // Clear UserState
+      final userState = Provider.of<UserState>(context, listen: false);
+      await userState.clearUser();
+
+      // Force set authentication to false
+      await prefs.setBool('is_authenticated', false);
+      
+      // Exit the app (this will force user to fully restart and re-authenticate)
+      exit(0);  // Import 'dart:io' for this
+
+    } catch (e) {
+      print('Reset error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Có lỗi khi đăng xuất'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  },
+  icon: const Icon(Icons.logout, size: 20),
+  label: const Text('Đăng xuất', style: TextStyle(fontSize: 16)),
+  style: TextButton.styleFrom(
+    foregroundColor: Colors.red,
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+  ),
+),
                   ],
                 ),
               const SizedBox(height: 4),
@@ -376,21 +387,17 @@ SizedBox(
       padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
     ),
     onPressed: () async {
-      final random = Random().nextInt(10000);
-      final url = 'https://storage.googleapis.com/times1/DocumentApp/HMGROUPmac.zip?version=$random';
+      final url = 'https://storage.googleapis.com/times1/DocumentApp/HMGROUPmac.zip';
       try {
         if (Platform.isMacOS) {
-          if (await canLaunchUrl(Uri.parse(url))) {
-            await launchUrl(Uri.parse(url));
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Không thể mở link tải'), backgroundColor: Colors.red)
-            );
-          }
+          await Clipboard.setData(ClipboardData(text: url));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Link tải đã được copy vào clipboard'), backgroundColor: Colors.green)
+          );
         }
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Có lỗi xảy ra'), backgroundColor: Colors.red)
+          SnackBar(content: Text('Không thể copy link tải'), backgroundColor: Colors.red)
         );
       }
     },
@@ -410,21 +417,17 @@ SizedBox(
       padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
     ),
     onPressed: () async {
-      final random = Random().nextInt(10000);
-      final url = 'https://storage.googleapis.com/times1/DocumentApp/HMGROUPwin.zip?version=$random';
+      final url = 'https://storage.googleapis.com/times1/DocumentApp/HMGROUPwin.zip';
       try {
         if (Platform.isWindows) {
-          if (await canLaunchUrl(Uri.parse(url))) {
-            await launchUrl(Uri.parse(url));
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Không thể mở link tải'), backgroundColor: Colors.red)
-            );
-          }
+          await Clipboard.setData(ClipboardData(text: url));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Link tải đã được copy vào clipboard'), backgroundColor: Colors.green)
+          );
         }
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Có lỗi xảy ra'), backgroundColor: Colors.red)
+          SnackBar(content: Text('Không thể copy link tải'), backgroundColor: Colors.red)
         );
       }
     },
