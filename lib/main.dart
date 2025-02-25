@@ -90,6 +90,7 @@ void showWebView2InstallDialog(BuildContext context) {
 void main() async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
+    MediaKit.ensureInitialized();
     if (Platform.isWindows) {
       sqfliteFfiInit();
       databaseFactory = databaseFactoryFfi;
@@ -571,6 +572,11 @@ Future<void> processLoginResponse(String responseBody) async {
     if (mounted && Navigator.canPop(context)) {
       Navigator.of(context).pop();
     }
+  } else if (responseParts.isNotEmpty && responseParts[0] == "WRONG") {
+    // Handle WRONG response specifically
+    setState(() {
+      _loginStatus = 'Sai tên đăng nhập hoặc mật khẩu. Vui lòng kiểm tra lại thông tin hoặc sử dụng chức năng đặt lại mật khẩu nếu bạn quên mật khẩu.';
+    });
   } else {
     setState(() {
       _loginStatus = 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.';
@@ -1175,38 +1181,42 @@ class _VideoBackgroundState extends State<VideoBackground> {
   }
 
   Future<void> _initializeVideo() async {
-    try {
-      // Set up the video
-      await player.open(Media(
-        'https://storage.googleapis.com/times1/DocumentApp/lychee.mp4'
-      ));
-      
-      player.stream.playing.listen((playing) {
-        if (playing && mounted) {
-          setState(() {
-            _isInitialized = true;
-          });
-        }
-      });
-      
-      // Set volume to 0
-      player.setVolume(0);
-      
-      // Handle looping through playback ended event
-      player.stream.completed.listen((_) {
-        player.seek(Duration.zero);
-        player.play();
-      });
-      
-    } catch (e) {
-      print('Video initialization error: $e');
-      if (mounted) {
+  try {
+    print('Attempting to load video from URL');
+    // Set up the video
+    await player.open(Media(
+      'https://storage.googleapis.com/times1/DocumentApp/lychee.mp4'
+    ));
+    
+    print('Video loaded successfully');
+    
+    player.stream.playing.listen((playing) {
+      print('Video playing state changed: $playing');
+      if (playing && mounted) {
         setState(() {
-          _isInitialized = false;
+          _isInitialized = true;
         });
       }
+    });
+    
+    // Set volume to 0
+    player.setVolume(0);
+    
+    // Handle looping through playback ended event
+    player.stream.completed.listen((_) {
+      player.seek(Duration.zero);
+      player.play();
+    });
+    
+  } catch (e) {
+    print('Video initialization error: $e');
+    if (mounted) {
+      setState(() {
+        _isInitialized = false;
+      });
     }
   }
+}
 
   @override
   void dispose() {

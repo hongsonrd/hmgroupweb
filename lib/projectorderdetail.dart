@@ -198,8 +198,10 @@ class _ProjectOrderDetailState extends State<ProjectOrderDetail> {
  final Map<String, TextEditingController> soLuongControllers = {};
  final Map<String, TextEditingController> ghiChuControllers = {};
  final Map<String, bool> khachTraValues = {};
-
- for (var item in _availableItems) {
+ 
+ // Add search controller
+ final searchController = TextEditingController();
+for (var item in _availableItems) {
    final existing = _orderItems.firstWhere(
      (oi) => oi.itemId == item.itemId,
      orElse: () => OrderChiTietModel(uid: ''),
@@ -207,7 +209,17 @@ class _ProjectOrderDetailState extends State<ProjectOrderDetail> {
    soLuongControllers[item.itemId] = TextEditingController(text: existing.soLuong?.toString() ?? '');
    ghiChuControllers[item.itemId] = TextEditingController(text: existing.ghiChu ?? '');
    khachTraValues[item.itemId] = existing.khachTra ?? false;
+   hasQuantity[item.itemId] = (existing.soLuong ?? 0) > 0;
  }
+
+ List<OrderMatHangModel> getSortedItems(List<OrderMatHangModel> items) {
+   return List<OrderMatHangModel>.from(items)..sort((a, b) {
+     final aQuantity = double.tryParse(soLuongControllers[a.itemId]?.text ?? '0') ?? 0;
+     final bQuantity = double.tryParse(soLuongControllers[b.itemId]?.text ?? '0') ?? 0;
+     return bQuantity.compareTo(aQuantity); // Higher quantities first
+   });
+ }
+ List<OrderMatHangModel> filteredItems = getSortedItems(_availableItems);
 
  showDialog(
    context: context,
@@ -221,7 +233,7 @@ class _ProjectOrderDetailState extends State<ProjectOrderDetail> {
          ),
          actions: [
            ElevatedButton(
-  onPressed: () async {
+             onPressed: () async {
     List<OrderChiTietModel> itemsToSave = [];
     List<Map<String, dynamic>> itemsForApi = [];
 
@@ -350,91 +362,151 @@ try {
       backgroundColor: Colors.red,
     ),
   );
-}
-  },
-  style: ElevatedButton.styleFrom(
-    backgroundColor: Colors.green,
-    foregroundColor: Colors.white,
-  ),
-  child: Padding(
-    padding: EdgeInsets.symmetric(horizontal: 16),
-    child: Text('LƯU', style: TextStyle(fontWeight: FontWeight.bold)),
-  ),
-),
+}},
+             style: ElevatedButton.styleFrom(
+               backgroundColor: Colors.green,
+               foregroundColor: Colors.white,
+             ),
+             child: Padding(
+               padding: EdgeInsets.symmetric(horizontal: 16),
+               child: Text('LƯU', style: TextStyle(fontWeight: FontWeight.bold)),
+             ),
+           ),
            SizedBox(width: 16),
          ],
        ),
        body: StatefulBuilder(
-         builder: (context, setState) => SingleChildScrollView(
-           scrollDirection: Axis.horizontal,
-           child: SingleChildScrollView(
-             child: DataTable(
-               columnSpacing: 20,
-               columns: [
-                 DataColumn(label: Container(width: 150, child: Text('Tên vật tư'))),
-                 DataColumn(label: Container(width: 60, child: Text('ĐVT'))),
-                 DataColumn(label: Container(width: 100, child: Text('Số lượng'))),
-                 DataColumn(label: Container(width: 80, child: Text('Khách trả'))),
-                 DataColumn(label: Container(width: 120, child: Text('Ghi chú'))),
-               ],
-               rows: _availableItems.map((item) {
-                 return DataRow(
-                   color: MaterialStateProperty.resolveWith<Color?>((Set<MaterialState> states) {
-                     return hasQuantity[item.itemId] == true ? Colors.green.withOpacity(0.1) : null;
-                   }),
-                   cells: [
-                     DataCell(Container(
-                       width: 150,
-                       child: Text(item.ten ?? '', softWrap: true, maxLines: 3, overflow: TextOverflow.ellipsis),
-                     )),
-                     DataCell(Text(item.donVi ?? '')),
-                     DataCell(TextField(
-                       controller: soLuongControllers[item.itemId],
-                       keyboardType: TextInputType.number,
-                       decoration: InputDecoration(isDense: true, contentPadding: EdgeInsets.all(8)),
-                       onChanged: (value) {
-                         setState(() {
-                           hasQuantity[item.itemId] = double.tryParse(value) != null && double.tryParse(value)! > 0;
-                           selectedItems[item.itemId] = {
-                             'soLuong': value,
-                             'khachTra': khachTraValues[item.itemId],
-                             'ghiChu': ghiChuControllers[item.itemId]?.text,
-                             'item': item,
-                           };
-                         });
-                       },
-                     )),
-                     DataCell(Checkbox(
-                       value: khachTraValues[item.itemId],
-                       onChanged: (bool? value) {
-                         setState(() {
-                           khachTraValues[item.itemId] = value ?? false;
-                           selectedItems[item.itemId] = {
-                             'soLuong': soLuongControllers[item.itemId]?.text,
-                             'khachTra': value,
-                             'ghiChu': ghiChuControllers[item.itemId]?.text,
-                             'item': item,
-                           };
-                         });
-                       },
-                     )),
-                     DataCell(TextField(
-                       controller: ghiChuControllers[item.itemId],
-                       decoration: InputDecoration(isDense: true, contentPadding: EdgeInsets.all(8)),
-                       onChanged: (value) {
-                         selectedItems[item.itemId] = {
-                           'soLuong': soLuongControllers[item.itemId]?.text,
-                           'khachTra': khachTraValues[item.itemId],
-                           'ghiChu': value,
-                           'item': item,
-                         };
-                       },
-                     )),
-                   ],
-                 );
-               }).toList(),
+         builder: (context, setState) => Column(
+           children: [
+             Padding(
+               padding: EdgeInsets.all(16),
+               child: TextField(
+                 controller: searchController,
+                 decoration: InputDecoration(
+                   labelText: 'Tìm kiếm vật tư',
+                   prefixIcon: Icon(Icons.search),
+                   border: OutlineInputBorder(),
+                 ),
+                 onChanged: (value) {
+                   setState(() {
+                     filteredItems = _availableItems
+                         .where((item) => item.ten?.toLowerCase().contains(value.toLowerCase()) ?? false)
+                         .toList();
+                     
+                     // Sort items with quantity > 0 to top
+                     filteredItems.sort((a, b) {
+                       final aQuantity = double.tryParse(soLuongControllers[a.itemId]?.text ?? '0') ?? 0;
+                       final bQuantity = double.tryParse(soLuongControllers[b.itemId]?.text ?? '0') ?? 0;
+                       return bQuantity.compareTo(aQuantity);
+                     });
+                   });
+                 },
+               ),
              ),
-           ),
+             Expanded(
+               child: SingleChildScrollView(
+                 scrollDirection: Axis.horizontal,
+                 child: SingleChildScrollView(
+                   child: Column(
+                     children: [
+                       // Fixed header
+                       Container(
+                         color: Theme.of(context).scaffoldBackgroundColor,
+                         child: DataTable(
+                           columnSpacing: 20,
+                           columns: [
+                             DataColumn(label: Container(width: 150, child: Text('Tên vật tư'))),
+                             DataColumn(label: Container(width: 60, child: Text('ĐVT'))),
+                             DataColumn(label: Container(width: 100, child: Text('Số lượng'))),
+                             DataColumn(label: Container(width: 100, child: Text('Đơn giá'))),
+                             DataColumn(label: Container(width: 100, child: Text('Thành tiền'))),
+                             DataColumn(label: Container(width: 80, child: Text('Khách trả'))),
+                             DataColumn(label: Container(width: 120, child: Text('Ghi chú'))),
+                           ],
+                           rows: [],
+                         ),
+                       ),
+                       // Scrollable content
+                       DataTable(
+                         columnSpacing: 20,
+                         columns: [
+                           DataColumn(label: Container(width: 150, child: Text(''))),
+                           DataColumn(label: Container(width: 60, child: Text(''))),
+                           DataColumn(label: Container(width: 100, child: Text(''))),
+                           DataColumn(label: Container(width: 100, child: Text(''))),
+                           DataColumn(label: Container(width: 100, child: Text(''))),
+                           DataColumn(label: Container(width: 80, child: Text(''))),
+                           DataColumn(label: Container(width: 120, child: Text(''))),
+                         ],
+                         rows: filteredItems.map((item) {
+                           final soLuong = double.tryParse(soLuongControllers[item.itemId]?.text ?? '') ?? 0;
+                           final khachTra = khachTraValues[item.itemId] ?? false;
+                           final thanhTien = khachTra ? 0 : (soLuong * (item.donGia ?? 0)).round();
+                           
+                           return DataRow(
+                             color: MaterialStateProperty.resolveWith<Color?>((Set<MaterialState> states) {
+                               return hasQuantity[item.itemId] == true ? Colors.green.withOpacity(0.1) : null;
+                             }),
+                             cells: [
+                               DataCell(Container(
+                                 width: 150,
+                                 child: Text(item.ten ?? '', softWrap: true, maxLines: 3, overflow: TextOverflow.ellipsis),
+                               )),
+                               DataCell(Text(item.donVi ?? '')),
+                               DataCell(TextField(
+                                 controller: soLuongControllers[item.itemId],
+                                 keyboardType: TextInputType.number,
+                                 decoration: InputDecoration(isDense: true, contentPadding: EdgeInsets.all(8)),
+                                 onChanged: (value) {
+                                   setState(() {
+                                     hasQuantity[item.itemId] = double.tryParse(value) != null && double.tryParse(value)! > 0;
+                                     selectedItems[item.itemId] = {
+                                       'soLuong': value,
+                                       'khachTra': khachTraValues[item.itemId],
+                                       'ghiChu': ghiChuControllers[item.itemId]?.text,
+                                       'item': item,
+                                     };
+                                   });
+                                 },
+                               )),
+                               DataCell(Text(formatter.format(item.donGia ?? 0))),
+                               DataCell(Text(formatter.format(thanhTien))),
+                               DataCell(Checkbox(
+                                 value: khachTraValues[item.itemId],
+                                 onChanged: (bool? value) {
+                                   setState(() {
+                                     khachTraValues[item.itemId] = value ?? false;
+                                     selectedItems[item.itemId] = {
+                                       'soLuong': soLuongControllers[item.itemId]?.text,
+                                       'khachTra': value,
+                                       'ghiChu': ghiChuControllers[item.itemId]?.text,
+                                       'item': item,
+                                     };
+                                   });
+                                 },
+                               )),
+                               DataCell(TextField(
+                                 controller: ghiChuControllers[item.itemId],
+                                 decoration: InputDecoration(isDense: true, contentPadding: EdgeInsets.all(8)),
+                                 onChanged: (value) {
+                                   selectedItems[item.itemId] = {
+                                     'soLuong': soLuongControllers[item.itemId]?.text,
+                                     'khachTra': khachTraValues[item.itemId],
+                                     'ghiChu': value,
+                                     'item': item,
+                                   };
+                                 },
+                               )),
+                             ],
+                           );
+                         }).toList(),
+                       ),
+                     ],
+                   ),
+                 ),
+               ),
+             ),
+           ],
          ),
        ),
      ),
@@ -465,7 +537,63 @@ try {
       });
     }
   }
+Widget _buildItemImage(String? itemId) {
+  if (itemId == null) return Container();
+  
+  // Find the corresponding MatHang item to get the HinhAnh
+  final matchingItem = _availableItems.firstWhere(
+    (item) => item.itemId == itemId,
+    orElse: () => OrderMatHangModel(
+      itemId: '', 
+      ten: '', 
+      donVi: '', // Added required 'donVi' parameter
+    ),
+  );
+  
+  final imageSource = matchingItem.hinhAnh ?? '';
+  
+  if (imageSource.isEmpty) {
+    return Container(
+      color: Colors.grey[200],
+      child: Icon(Icons.image_not_supported, color: Colors.grey),
+    );
+  }
 
+  if (imageSource.startsWith('http')) {
+    // Handle URL images
+    return Image.network(
+      imageSource,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          color: Colors.grey[200],
+          child: Icon(Icons.error, color: Colors.grey),
+        );
+      },
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Center(child: CircularProgressIndicator());
+      },
+    );
+  } else if (imageSource.startsWith('assets/')) {
+    // Handle asset images
+    return Image.asset(
+      imageSource,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          color: Colors.grey[200],
+          child: Icon(Icons.error, color: Colors.grey),
+        );
+      },
+    );
+  }
+
+  return Container(
+    color: Colors.grey[200],
+    child: Icon(Icons.image_not_supported, color: Colors.grey),
+  );
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -557,25 +685,30 @@ try {
                   ),
                 ),
                 ..._orderItems.map((item) => Card(
-                  margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: ListTile(
-                    title: Text(item.ten ?? 'Chưa có tên'),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Số lượng: ${item.soLuong ?? 0} ${item.donVi ?? ''}'),
-                        Text('Đơn giá: ${formatter.format(item.donGia ?? 0)}'),
-                        if (item.phanLoai != null)
-                          Text('Phân loại: ${item.phanLoai}'),
-                        if (item.ghiChu != null)
-                          Text('Ghi chú: ${item.ghiChu}'),
-                        if (item.khachTra == true)
-                          Text('Khách trả: Có'),
-                      ],
-                    ),
-                    trailing: Text(formatter.format(item.thanhTien ?? 0)),
-                  ),
-                )).toList(),
+  margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+  child: ListTile(
+    leading: Container(
+      width: 60,
+      height: 60,
+      child: _buildItemImage(item.itemId),
+    ),
+    title: Text(item.ten ?? 'Chưa có tên'),
+    subtitle: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Số lượng: ${item.soLuong ?? 0} ${item.donVi ?? ''}'),
+        Text('Đơn giá: ${formatter.format(item.donGia ?? 0)}'),
+        if (item.phanLoai != null)
+          Text('Phân loại: ${item.phanLoai}'),
+        if (item.ghiChu != null)
+          Text('Ghi chú: ${item.ghiChu}'),
+        if (item.khachTra == true)
+          Text('Khách trả: Có'),
+      ],
+    ),
+    trailing: Text(formatter.format(item.thanhTien ?? 0)),
+  ),
+)).toList(),
               ],
             ),
           ),

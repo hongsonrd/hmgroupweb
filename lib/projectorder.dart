@@ -66,7 +66,7 @@ void initState() {
 
   try {
     final DBHelper dbHelper = DBHelper();
-    final List<OrderModel> orders = await dbHelper.getOrdersByDepartment(widget.selectedBoPhan);
+    final List<OrderModel> orders = await dbHelper.getAllOrders();
     
     setState(() {
       _orderList = orders.map((order) => order.toMap()).toList();

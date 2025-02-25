@@ -206,8 +206,15 @@ class _ProjectDailyViewState extends State<ProjectDailyView> {
           headingRowColor: MaterialStateProperty.all(Colors.grey[200]),
           columns: [
             DataColumn(label: Text('Ngày')),
-            DataColumn(label: Text('Bộ phận')),
-            DataColumn(label: Text('Số báo cáo')),
+DataColumn(
+  label: Container(
+    width: 300,
+    child: Text(
+      'Bộ phận',
+      softWrap: true,
+    ),
+  ),
+),            DataColumn(label: Text('Số báo cáo')),
             DataColumn(label: Text('Số vấn đề')),
             DataColumn(label: Text('Vấn đề chưa giải quyết')),
           ],
@@ -215,8 +222,16 @@ class _ProjectDailyViewState extends State<ProjectDailyView> {
             return DataRow(
               cells: [
                 DataCell(Text(stat['date'])),
-                DataCell(Text(stat['BoPhan'])),
-                DataCell(Text(stat['report_count'].toString())),
+DataCell(
+  Container(
+    width: 300,
+    child: Text(
+      stat['BoPhan'],
+      softWrap: true,
+      overflow: TextOverflow.visible,
+    ),
+  ),
+),                DataCell(Text(stat['report_count'].toString())),
                 DataCell(Text(stat['issue_count'].toString())),
                 DataCell(Text(stat['unresolved_count'].toString())),
               ],
@@ -229,8 +244,15 @@ class _ProjectDailyViewState extends State<ProjectDailyView> {
 
   Widget _buildPersonnelStatsTab() {
     List<DataColumn> columns = [
-      DataColumn(label: Text('Bộ phận')),
-      DataColumn(label: Text('Vị trí')),
+DataColumn(
+  label: Container(
+    width: 300,
+    child: Text(
+      'Bộ phận',
+      softWrap: true,
+    ),
+  ),
+),      DataColumn(label: Text('Vị trí')),
       ..._dateRange.map((date) => DataColumn(label: Text(date))),
     ];
 
@@ -243,8 +265,16 @@ class _ProjectDailyViewState extends State<ProjectDailyView> {
           rows: _personnelStats.map((stat) {
             return DataRow(
               cells: [
-                DataCell(Text(stat['BoPhan'])),
-                DataCell(Text(stat['ViTri'])),
+DataCell(
+  Container(
+    width: 300,
+    child: Text(
+      stat['BoPhan'],
+      softWrap: true,
+      overflow: TextOverflow.visible,
+    ),
+  ),
+),                DataCell(Text(stat['ViTri'])),
                 ..._dateRange.map((date) => 
                   DataCell(Text(stat[date] ?? ''))),
               ],

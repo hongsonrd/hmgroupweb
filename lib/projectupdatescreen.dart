@@ -62,18 +62,19 @@ class _ProjectUpdateScreenState extends State<ProjectUpdateScreen> {
   ),
 ),
 MenuCard(
-  title: 'Đặt\nvật tư',
-  icon: Icons.inventory,
-  color: Colors.amber,
-  onTap: () => Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => ProjectOrder(
-        selectedBoPhan: widget.boPhan,
-      ),
-    ),
-  ),
-),
+              title: 'Kế hoạch\nLàm việc',
+              icon: Icons.calendar_today,
+              color: Colors.indigo,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProjectPlan2(
+                    selectedBoPhan: widget.boPhan,
+                    userType: 'HM-DV',
+                  ),
+                ),
+              ),
+            ),
             MenuCard(
               title: 'Danh sách\ncông nhân',
               icon: Icons.people,
@@ -141,19 +142,18 @@ MenuCard(
               ),
             ),
             MenuCard(
-              title: 'Kế hoạch\nLàm việc',
-              icon: Icons.calendar_today,
-              color: Colors.indigo,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ProjectPlan2(
-                    selectedBoPhan: widget.boPhan,
-                    userType: 'HM-DV',
-                  ),
-                ),
-              ),
-            ),
+  title: 'Đặt\nvật tư',
+  icon: Icons.inventory,
+  color: Colors.amber,
+  onTap: () => Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => ProjectOrder(
+        selectedBoPhan: widget.boPhan,
+      ),
+    ),
+  ),
+),
           
          ],
           );
