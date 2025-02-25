@@ -468,6 +468,7 @@ Future<void> _loadProjects() async {
     child: DataTable(
       columns: [
         DataColumn(label: Text('')),
+        if (!isMyPlans) DataColumn(label: Text('Người dùng')),
         DataColumn(label: Text('Ngày')),
         DataColumn(label: Text('Thời gian')),
         DataColumn(label: Text('Dự án')),
@@ -481,31 +482,33 @@ Future<void> _loadProjects() async {
         
         return DataRow(
           color: MaterialStateProperty.all(rowColor),
+          onSelectChanged: (_) => _showPlanDetailsDialog(plan), // Add this line to make row clickable
           cells: [
             DataCell(
-  Container(
-    height: 36,
-    child: IconButton(
-      icon: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.reply, size: 14, color: const Color.fromARGB(255, 0, 113, 206)),
-          SizedBox(width: 4),
-          Text(
-            'Trả lời',
-            style: TextStyle(
-              color: Color.fromARGB(255, 0, 113, 206),
-              fontSize: 12,
+              Container(
+                height: 36,
+                child: IconButton(
+                  icon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.reply, size: 14, color: const Color.fromARGB(255, 0, 113, 206)),
+                      SizedBox(width: 4),
+                      Text(
+                        'Trả lời',
+                        style: TextStyle(
+                          color: Color.fromARGB(255, 0, 113, 206),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                  onPressed: () => _showReportDialog(plan),
+                  tooltip: 'Phản hồi kế hoạch',
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                ),
+              ),
             ),
-          ),
-        ],
-      ),
-      onPressed: () => _showReportDialog(plan),
-      tooltip: 'Phản hồi kế hoạch',
-      padding: EdgeInsets.symmetric(horizontal: 8),
-    ),
-  ),
-),
+            if (!isMyPlans) DataCell(Text(plan.nguoiDung ?? '')),
             DataCell(Text(DateFormat('dd/MM/yyyy').format(plan.ngay))),
             DataCell(Text(plan.phanLoai ?? '')),
             DataCell(Text(plan.boPhan ?? '')),
@@ -532,6 +535,130 @@ Future<void> _loadProjects() async {
           ],
         );
       }).toList(),
+    ),
+  );
+}
+void _showPlanDetailsDialog(BaocaoModel plan) {
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return Dialog(
+        insetPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.9,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(4),
+                    topRight: Radius.circular(4),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Chi tiết kế hoạch',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              // Content
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildDetailRow('Người tạo', plan.nguoiDung ?? 'N/A'),
+                      _buildDetailRow('Ngày', DateFormat('dd/MM/yyyy').format(plan.ngay)),
+                      _buildDetailRow('Thời gian', plan.phanLoai ?? 'N/A'),
+                      _buildDetailRow('Dự án', plan.boPhan ?? 'N/A'),
+                      _buildDetailRow('Chi tiết', plan.moTaChung ?? 'N/A', multiLine: true),
+                      _buildDetailRow('Phát sinh', plan.phatSinh ?? 'Không'),
+                      _buildDetailRow('Trạng thái', plan.xetDuyet ?? 'Chưa duyệt'),
+                      _buildDetailRow('Chia sẻ với', plan.chiaSe ?? 'N/A'),
+                      SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          // Add buttons based on user permissions
+                          if (plan.nguoiDung == Provider.of<UserCredentials>(context, listen: false).username &&
+                              plan.xetDuyet != 'Đồng ý')
+                            ElevatedButton(
+                              child: Text('Chỉnh sửa'),
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                _showPlanDialog(plan);
+                              },
+                            ),
+                          SizedBox(width: 8),
+                          ElevatedButton(
+                            child: Text('Phản hồi'),
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              _showReportDialog(plan);
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+Widget _buildDetailRow(String label, String value, {bool multiLine = false}) {
+  return Padding(
+    padding: EdgeInsets.only(bottom: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.grey.shade700,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(height: 4),
+        multiLine
+            ? Container(
+                width: double.infinity,
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  value,
+                  style: TextStyle(fontSize: 14),
+                ),
+              )
+            : Text(
+                value,
+                style: TextStyle(fontSize: 14),
+              ),
+      ],
     ),
   );
 }
