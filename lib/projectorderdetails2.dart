@@ -192,254 +192,307 @@ class _ProjectOrderDetail2State extends State<ProjectOrderDetail2> {
     }
   }
   Future<void> _showAddItemDialog() async {
- final List<OrderChiTietModel> newItems = [];
- final selectedItems = Map<String, Map<String, dynamic>>();
- final Map<String, bool> hasQuantity = {};
- final Map<String, TextEditingController> soLuongControllers = {};
- final Map<String, TextEditingController> ghiChuControllers = {};
- final Map<String, bool> khachTraValues = {};
-
- for (var item in _availableItems) {
-   final existing = _orderItems.firstWhere(
-     (oi) => oi.itemId == item.itemId,
-     orElse: () => OrderChiTietModel(uid: ''),
-   );
-   soLuongControllers[item.itemId] = TextEditingController(text: existing.soLuong?.toString() ?? '');
-   ghiChuControllers[item.itemId] = TextEditingController(text: existing.ghiChu ?? '');
-   khachTraValues[item.itemId] = existing.khachTra ?? false;
- }
-
- showDialog(
-   context: context,
-   builder: (context) => Dialog.fullscreen(
-     child: Scaffold(
-       appBar: AppBar(
-         title: Text('Thêm vật tư'),
-         leading: IconButton(
-           icon: Icon(Icons.close),
-           onPressed: () => Navigator.pop(context),
-         ),
-         actions: [
-           ElevatedButton(
-  onPressed: () async {
-    List<OrderChiTietModel> itemsToSave = [];
-    List<Map<String, dynamic>> itemsForApi = [];
-
-    // Log initial state
-    print('Current controllers state:');
-    soLuongControllers.forEach((key, controller) {
-      print('ItemID: $key, Quantity: ${controller.text}');
-    });
-
-    // Collect all items that have quantity
-    for (var item in _availableItems) {
-      final soLuong = double.tryParse(soLuongControllers[item.itemId]?.text ?? '') ?? 0;
-      
-      print('Processing item ${item.itemId}: quantity = $soLuong');
-      
-      if (soLuong > 0) {
-        final khachTra = khachTraValues[item.itemId] ?? false;
-        final ghiChu = ghiChuControllers[item.itemId]?.text ?? '';
-        final thanhTien = khachTra ? 0 : (soLuong * (item.donGia ?? 0)).round();
-
-        final existingItem = _orderItems.firstWhere(
-          (oi) => oi.itemId == item.itemId,
-          orElse: () => OrderChiTietModel(uid: ''),
-        );
-
-        final uid = existingItem.uid.isNotEmpty ? existingItem.uid : Uuid().v4();
-
-        print('Creating/Updating item: ID=${item.itemId}, UID=$uid, Quantity=$soLuong, CustomerReturn=$khachTra');
-
-        final orderChiTiet = OrderChiTietModel(
-          uid: uid,
-          orderId: widget.orderId,
-          itemId: item.itemId,
-          ten: item.ten,
-          phanLoai: item.phanLoai,
-          donVi: item.donVi,
-          soLuong: soLuong,
-          donGia: item.donGia,
-          khachTra: khachTra,
-          thanhTien: thanhTien,
-          ghiChu: ghiChu,
-        );
-
-        itemsToSave.add(orderChiTiet);
-        itemsForApi.add({
-          ...orderChiTiet.toMap(),
-          'IsUpdate': existingItem.uid.isNotEmpty,
-        });
-      }
-    }
-
-    print('Items to save: ${itemsToSave.length}');
-    if (itemsToSave.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Vui lòng nhập số lượng cho ít nhất một vật tư'))
-      );
-      return;
-    }
-try {
-  final apiPayload = itemsForApi.map((item) => {
-    'UID': item['UID'],
-    'OrderID': item['OrderID'],
-    'ItemID': item['ItemID'],
-    'Ten': item['Ten'],
-    'PhanLoai': item['PhanLoai'],
-    'GhiChu': item['GhiChu'],
-    'DonVi': item['DonVi'],
-    'SoLuong': item['SoLuong'],
-    'DonGia': item['DonGia'],
-    'KhachTra': item['KhachTra'],
-    'ThanhTien': item['ThanhTien'],
-    'IsUpdate': item['IsUpdate'],
-  }).toList();
-
-  final response = await http.post(
-    Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/ordervtthemct'),
-    headers: {'Content-Type': 'application/json'},
-    body: json.encode(apiPayload),
-  );
-
-  if (response.statusCode == 200) {
-    final DBHelper dbHelper = DBHelper();
-    
-    // Update items in local DB
-    for (var item in itemsToSave) {
-      final exists = _orderItems.any((oi) => oi.itemId == item.itemId);
-      if (exists) {
-        await dbHelper.updateOrderChiTiet(item.uid, item.toMap());
-      } else {
-        await dbHelper.insertOrderChiTiet(item);
-      }
-    }
-
-    // Calculate new total
-    final allItems = await dbHelper.getOrderChiTietByOrderId(widget.orderId);
-    final newTotal = allItems.fold<int>(0, (sum, item) => sum + (item.thanhTien ?? 0));
-
-    // Update order total on server
-    final updateOrderResponse = await http.post(
-      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/ordervtsua'),
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({
-        'OrderID': widget.orderId,
-        'TongTien': newTotal,
-      }),
+  final selectedItems = Map<String, Map<String, dynamic>>();
+  final Map<String, bool> hasQuantity = {};
+  final Map<String, TextEditingController> soLuongControllers = {};
+  final Map<String, TextEditingController> ghiChuControllers = {};
+  final Map<String, bool> khachTraValues = {};
+  
+  // Add search controller
+  final searchController = TextEditingController();
+  
+  for (var item in _availableItems) {
+    final existing = _orderItems.firstWhere(
+      (oi) => oi.itemId == item.itemId,
+      orElse: () => OrderChiTietModel(uid: ''),
     );
-
-    if (updateOrderResponse.statusCode == 200) {
-      // Update order total in local DB
-      await dbHelper.updateOrder(widget.orderId, {'TongTien': newTotal});
-      
-      // Reload all details
-      await _loadOrderDetails();
-      Navigator.pop(context);
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Đã lưu ${itemsToSave.length} vật tư'))
-      );
-    }
+    soLuongControllers[item.itemId] = TextEditingController(text: existing.soLuong?.toString() ?? '');
+    ghiChuControllers[item.itemId] = TextEditingController(text: existing.ghiChu ?? '');
+    khachTraValues[item.itemId] = existing.khachTra ?? false;
+    hasQuantity[item.itemId] = (existing.soLuong ?? 0) > 0;
   }
-} catch (e) {
-  print('Error saving items: $e');
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text('Lỗi khi lưu vật tư'),
-      backgroundColor: Colors.red,
+  
+  // Create initial filtered list
+  List<OrderMatHangModel> filteredItems = List.from(_availableItems);
+  
+  showDialog(
+    context: context,
+    builder: (context) => Dialog.fullscreen(
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('Thêm vật tư'),
+          leading: IconButton(
+            icon: Icon(Icons.close),
+            onPressed: () => Navigator.pop(context),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () async {
+                List<OrderChiTietModel> itemsToSave = [];
+                List<Map<String, dynamic>> itemsForApi = [];
+                
+                // Collect all items that have quantity
+                for (var item in _availableItems) {
+                  final soLuong = double.tryParse(soLuongControllers[item.itemId]?.text ?? '') ?? 0;
+                  
+                  if (soLuong > 0) {
+                    final khachTra = khachTraValues[item.itemId] ?? false;
+                    final ghiChu = ghiChuControllers[item.itemId]?.text ?? '';
+                    final thanhTien = khachTra ? 0 : (soLuong * (item.donGia ?? 0)).round();
+                    
+                    final existingItem = _orderItems.firstWhere(
+                      (oi) => oi.itemId == item.itemId,
+                      orElse: () => OrderChiTietModel(uid: ''),
+                    );
+                    
+                    final uid = existingItem.uid.isNotEmpty ? existingItem.uid : Uuid().v4();
+                    
+                    final orderChiTiet = OrderChiTietModel(
+                      uid: uid,
+                      orderId: widget.orderId,
+                      itemId: item.itemId,
+                      ten: item.ten,
+                      phanLoai: item.phanLoai,
+                      donVi: item.donVi,
+                      soLuong: soLuong,
+                      donGia: item.donGia,
+                      khachTra: khachTra,
+                      thanhTien: thanhTien,
+                      ghiChu: ghiChu,
+                    );
+                    
+                    itemsToSave.add(orderChiTiet);
+                    itemsForApi.add({
+                      ...orderChiTiet.toMap(),
+                      'IsUpdate': existingItem.uid.isNotEmpty,
+                    });
+                  }
+                }
+                
+                if (itemsToSave.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Vui lòng nhập số lượng cho ít nhất một vật tư'))
+                  );
+                  return;
+                }
+                
+                try {
+                  final apiPayload = itemsForApi.map((item) => {
+                    'UID': item['UID'],
+                    'OrderID': item['OrderID'],
+                    'ItemID': item['ItemID'],
+                    'Ten': item['Ten'],
+                    'PhanLoai': item['PhanLoai'],
+                    'GhiChu': item['GhiChu'],
+                    'DonVi': item['DonVi'],
+                    'SoLuong': item['SoLuong'],
+                    'DonGia': item['DonGia'],
+                    'KhachTra': item['KhachTra'],
+                    'ThanhTien': item['ThanhTien'],
+                    'IsUpdate': item['IsUpdate'],
+                  }).toList();
+                  
+                  final response = await http.post(
+                    Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/ordervtthemct'),
+                    headers: {'Content-Type': 'application/json'},
+                    body: json.encode(apiPayload),
+                  );
+                  
+                  if (response.statusCode == 200) {
+                    final DBHelper dbHelper = DBHelper();
+                    
+                    // Update items in local DB
+                    for (var item in itemsToSave) {
+                      final exists = _orderItems.any((oi) => oi.itemId == item.itemId);
+                      if (exists) {
+                        await dbHelper.updateOrderChiTiet(item.uid, item.toMap());
+                      } else {
+                        await dbHelper.insertOrderChiTiet(item);
+                      }
+                    }
+                    
+                    // Calculate new total
+                    final allItems = await dbHelper.getOrderChiTietByOrderId(widget.orderId);
+                    final newTotal = allItems.fold<int>(0, (sum, item) => sum + (item.thanhTien ?? 0));
+                    
+                    // Update order total on server
+                    final updateOrderResponse = await http.post(
+                      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/ordervtsua'),
+                      headers: {'Content-Type': 'application/json'},
+                      body: json.encode({
+                        'OrderID': widget.orderId,
+                        'TongTien': newTotal,
+                      }),
+                    );
+                    
+                    if (updateOrderResponse.statusCode == 200) {
+                      // Update order total in local DB
+                      await dbHelper.updateOrder(widget.orderId, {'TongTien': newTotal});
+                      
+                      // Reload all details
+                      await _loadOrderDetails();
+                      Navigator.pop(context);
+                      
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Đã lưu ${itemsToSave.length} vật tư'))
+                      );
+                    }
+                  }
+                } catch (e) {
+                  print('Error saving items: $e');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Lỗi khi lưu vật tư'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Text('LƯU', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ),
+            SizedBox(width: 16),
+          ],
+        ),
+        body: StatefulBuilder(
+          builder: (context, setState) => Column(
+            children: [
+              // Search box
+              Padding(
+                padding: EdgeInsets.all(16),
+                child: TextField(
+                  controller: searchController,
+                  decoration: InputDecoration(
+                    labelText: 'Tìm kiếm vật tư',
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      if (value.isEmpty) {
+                        filteredItems = List.from(_availableItems);
+                      } else {
+                        filteredItems = _availableItems
+                            .where((item) => item.ten?.toLowerCase().contains(value.toLowerCase()) ?? false)
+                            .toList();
+                      }
+                      
+                      // Sort items with quantity > 0 to top
+                      filteredItems.sort((a, b) {
+                        final aQuantity = double.tryParse(soLuongControllers[a.itemId]?.text ?? '0') ?? 0;
+                        final bQuantity = double.tryParse(soLuongControllers[b.itemId]?.text ?? '0') ?? 0;
+                        return bQuantity.compareTo(aQuantity);
+                      });
+                    });
+                  },
+                ),
+              ),
+              // List of items
+              Expanded(
+                child: ListView.builder(
+                  itemCount: filteredItems.length,
+                  itemBuilder: (context, index) {
+                    final item = filteredItems[index];
+                    final soLuong = double.tryParse(soLuongControllers[item.itemId]?.text ?? '') ?? 0;
+                    final khachTra = khachTraValues[item.itemId] ?? false;
+                    final thanhTien = khachTra ? 0 : (soLuong * (item.donGia ?? 0)).round();
+                    
+                    return Card(
+                      color: hasQuantity[item.itemId] == true 
+                          ? Colors.green.withOpacity(0.1) 
+                          : null,
+                      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      child: Padding(
+                        padding: EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.ten ?? 'No name',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Đơn vị: ${item.donVi ?? ''}'),
+                                      Text('Đơn giá: ${formatter.format(item.donGia ?? 0)}'),
+                                      if (soLuong > 0)
+                                        Text('Thành tiền: ${formatter.format(thanhTien)}'),
+                                    ],
+                                  ),
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text('Số lượng: '),
+                                        SizedBox(
+                                          width: 80,
+                                          child: TextField(
+                                            controller: soLuongControllers[item.itemId],
+                                            keyboardType: TextInputType.number,
+                                            decoration: InputDecoration(
+                                              isDense: true,
+                                              contentPadding: EdgeInsets.all(8),
+                                              border: OutlineInputBorder(),
+                                            ),
+                                            onChanged: (value) {
+                                              setState(() {
+                                                hasQuantity[item.itemId] = double.tryParse(value) != null && double.tryParse(value)! > 0;
+                                              });
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    Row(
+                                      children: [
+                                        Text('Khách trả: '),
+                                        Checkbox(
+                                          value: khachTraValues[item.itemId],
+                                          onChanged: (value) {
+                                            setState(() {
+                                              khachTraValues[item.itemId] = value ?? false;
+                                            });
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            TextField(
+                              controller: ghiChuControllers[item.itemId],
+                              decoration: InputDecoration(
+                                labelText: 'Ghi chú',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     ),
   );
-}
-  },
-  style: ElevatedButton.styleFrom(
-    backgroundColor: Colors.green,
-    foregroundColor: Colors.white,
-  ),
-  child: Padding(
-    padding: EdgeInsets.symmetric(horizontal: 16),
-    child: Text('LƯU', style: TextStyle(fontWeight: FontWeight.bold)),
-  ),
-),
-           SizedBox(width: 16),
-         ],
-       ),
-       body: StatefulBuilder(
-         builder: (context, setState) => SingleChildScrollView(
-           scrollDirection: Axis.horizontal,
-           child: SingleChildScrollView(
-             child: DataTable(
-               columnSpacing: 20,
-               columns: [
-                 DataColumn(label: Container(width: 150, child: Text('Tên vật tư'))),
-                 DataColumn(label: Container(width: 60, child: Text('ĐVT'))),
-                 DataColumn(label: Container(width: 100, child: Text('Số lượng'))),
-                 DataColumn(label: Container(width: 80, child: Text('Khách trả'))),
-                 DataColumn(label: Container(width: 120, child: Text('Ghi chú'))),
-               ],
-               rows: _availableItems.map((item) {
-                 return DataRow(
-                   color: MaterialStateProperty.resolveWith<Color?>((Set<MaterialState> states) {
-                     return hasQuantity[item.itemId] == true ? Colors.green.withOpacity(0.1) : null;
-                   }),
-                   cells: [
-                     DataCell(Container(
-                       width: 150,
-                       child: Text(item.ten ?? '', softWrap: true, maxLines: 3, overflow: TextOverflow.ellipsis),
-                     )),
-                     DataCell(Text(item.donVi ?? '')),
-                     DataCell(TextField(
-                       controller: soLuongControllers[item.itemId],
-                       keyboardType: TextInputType.number,
-                       decoration: InputDecoration(isDense: true, contentPadding: EdgeInsets.all(8)),
-                       onChanged: (value) {
-                         setState(() {
-                           hasQuantity[item.itemId] = double.tryParse(value) != null && double.tryParse(value)! > 0;
-                           selectedItems[item.itemId] = {
-                             'soLuong': value,
-                             'khachTra': khachTraValues[item.itemId],
-                             'ghiChu': ghiChuControllers[item.itemId]?.text,
-                             'item': item,
-                           };
-                         });
-                       },
-                     )),
-                     DataCell(Checkbox(
-                       value: khachTraValues[item.itemId],
-                       onChanged: (bool? value) {
-                         setState(() {
-                           khachTraValues[item.itemId] = value ?? false;
-                           selectedItems[item.itemId] = {
-                             'soLuong': soLuongControllers[item.itemId]?.text,
-                             'khachTra': value,
-                             'ghiChu': ghiChuControllers[item.itemId]?.text,
-                             'item': item,
-                           };
-                         });
-                       },
-                     )),
-                     DataCell(TextField(
-                       controller: ghiChuControllers[item.itemId],
-                       decoration: InputDecoration(isDense: true, contentPadding: EdgeInsets.all(8)),
-                       onChanged: (value) {
-                         selectedItems[item.itemId] = {
-                           'soLuong': soLuongControllers[item.itemId]?.text,
-                           'khachTra': khachTraValues[item.itemId],
-                           'ghiChu': value,
-                           'item': item,
-                         };
-                       },
-                     )),
-                   ],
-                 );
-               }).toList(),
-             ),
-           ),
-         ),
-       ),
-     ),
-   ),
- );
 }
 Future<void> _updateOrderStatus(String status) async {
   try {
@@ -499,6 +552,64 @@ Future<void> _updateOrderStatus(String status) async {
         _isLoading = false;
       });
     }
+  }
+
+  Widget _buildItemImage(String? itemId) {
+    if (itemId == null) return Container();
+    
+    // Find the corresponding MatHang item to get the HinhAnh
+    final matchingItem = _availableItems.firstWhere(
+      (item) => item.itemId == itemId,
+      orElse: () => OrderMatHangModel(
+        itemId: '', 
+        ten: '', 
+        donVi: '', // Added required 'donVi' parameter
+      ),
+    );
+    
+    final imageSource = matchingItem.hinhAnh ?? '';
+    
+    if (imageSource.isEmpty) {
+      return Container(
+        color: Colors.grey[200],
+        child: Icon(Icons.image_not_supported, color: Colors.grey),
+      );
+    }
+
+    if (imageSource.startsWith('http')) {
+      // Handle URL images
+      return Image.network(
+        imageSource,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            color: Colors.grey[200],
+            child: Icon(Icons.error, color: Colors.grey),
+          );
+        },
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Center(child: CircularProgressIndicator());
+        },
+      );
+    } else if (imageSource.startsWith('assets/')) {
+      // Handle asset images
+      return Image.asset(
+        imageSource,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            color: Colors.grey[200],
+            child: Icon(Icons.error, color: Colors.grey),
+          );
+        },
+      );
+    }
+
+    return Container(
+      color: Colors.grey[200],
+      child: Icon(Icons.image_not_supported, color: Colors.grey),
+    );
   }
 
   @override
@@ -620,28 +731,33 @@ Future<void> _updateOrderStatus(String status) async {
   ),
 ),
                 ..._orderItems.map((item) => Card(
-                  margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: ListTile(
-                    title: Text(item.ten ?? 'Chưa có tên'),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Số lượng: ${item.soLuong ?? 0} ${item.donVi ?? ''}'),
-                        Text('Đơn giá: ${formatter.format(item.donGia ?? 0)}'),
-                        if (item.phanLoai != null)
-                          Text('Phân loại: ${item.phanLoai}'),
-                        if (item.ghiChu != null)
-                          Text('Ghi chú: ${item.ghiChu}'),
-                        if (item.khachTra == true)
-                          Text('Khách trả: Có'),
-                      ],
-                    ),
-                    trailing: Text(formatter.format(item.thanhTien ?? 0)),
-                  ),
-                )).toList(),
-              ],
-            ),
-          ),
-    );
-  }
+  margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+  child: ListTile(
+    leading: Container(
+      width: 60,
+      height: 60,
+      child: _buildItemImage(item.itemId),
+    ),
+    title: Text(item.ten ?? 'Chưa có tên'),
+    subtitle: Column(
+     crossAxisAlignment: CrossAxisAlignment.start,
+     children: [
+       Text('Số lượng: ${item.soLuong ?? 0} ${item.donVi ?? ''}'),
+       Text('Đơn giá: ${formatter.format(item.donGia ?? 0)}'),
+       if (item.phanLoai != null)
+         Text('Phân loại: ${item.phanLoai}'),
+       if (item.ghiChu != null)
+         Text('Ghi chú: ${item.ghiChu}'),
+       if (item.khachTra == true)
+         Text('Khách trả: Có'),
+     ],
+   ),
+   trailing: Text(formatter.format(item.thanhTien ?? 0)),
+ ),
+)).toList(),
+             ],
+           ),
+         ),
+   );
+ }
 }

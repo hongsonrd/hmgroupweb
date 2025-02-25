@@ -323,7 +323,7 @@ Future<void> _loadProjects() async {
     };
 
     // Send request to server
-    final response = await AuthenticatedHttpClient.post(
+    final response = await http.post(
       Uri.parse('$baseUrl/submitplan'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode(planData),
@@ -617,7 +617,7 @@ void _showReportDialog(BaocaoModel plan) {
 
       print('Full report data: ${json.encode(reportData)}'); // Debug log
 
-      final response = await AuthenticatedHttpClient.post(
+      final response = await http.post(
         Uri.parse('$baseUrl/submitplan'),
         headers: {
           'Content-Type': 'application/json',
@@ -715,7 +715,7 @@ void _showReportDialog(BaocaoModel plan) {
 }
   Future<void> _updatePlanStatus(BaocaoModel plan, String status) async {
     try {
-      final response = await AuthenticatedHttpClient.post(
+      final response = await http.post(
         Uri.parse('$baseUrl/submitplanchange'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
