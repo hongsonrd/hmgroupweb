@@ -1204,24 +1204,54 @@ try {
     userType = (await roleResponse.body).trim();
     await _saveUserType(userType!);
     // Step 2: Fetch project list
-    setState(() => _syncStatus = 'Đang lấy danh sách dự án...');
-    final projectResponse = await AuthenticatedHttpClient.get(
-      Uri.parse('$baseUrl/projectlist/$username')
-    );
+        try {
+      setState(() => _syncStatus = 'Đang lấy danh sách dự án...');
+      print('Fetching project list for: $username');
+      final projectResponse = await AuthenticatedHttpClient.get(
+        Uri.parse('$baseUrl/projectlist/$username')
+      );
+      
+      print('Project list response status: ${projectResponse.statusCode}');
+      if (projectResponse.statusCode != 200) {
+        print('PL data: ${projectResponse.body}');
+        throw Exception('Failed to load projects: ${projectResponse.statusCode}');
+      }
 
-    if (projectResponse.statusCode != 200) {
-      throw Exception('Failed to load projects: ${projectResponse.statusCode}');
+      final String responseText = projectResponse.body;
+      print('Project list response length: ${responseText.length}');
+      print('Project list response preview: ${projectResponse.body}');
+
+      final List<dynamic> projectData = json.decode(responseText);
+      print('Project list JSON parse successful, count: ${projectData.length}');
+      
+      await dbHelper.clearTable(DatabaseTables.projectListTable);
+      print('Project list table cleared');
+      
+      final List<ProjectListModel> projects = [];
+      for (var i = 0; i < projectData.length; i++) {
+        final project = projectData[i];
+        print('Processing project $i: ${project.toString()}');
+        try {
+          final model = ProjectListModel(
+            boPhan: project['BoPhan'] ?? '',
+            maBP: project['MaBP'] ?? '',
+          );
+          projects.add(model);
+        } catch (e) {
+          print('Error creating project model for item $i: $e');
+          print('Problematic data: $project');
+          throw e;
+        }
+      }
+
+      await dbHelper.batchInsertProjectList(projects);
+      print('Projects inserted successfully');
+    } catch (e) {
+      print('ERROR in Step 2 - Project list fetching:');
+      print('Error type: ${e.runtimeType}');
+      print('Error message: $e');
+      throw e;
     }
-
-    final List<dynamic> projectData = json.decode(projectResponse.body);
-    await dbHelper.clearTable(DatabaseTables.projectListTable);
-    
-    final projects = projectData.map((project) => ProjectListModel(
-      boPhan: project['BoPhan'],
-      maBP: project['MaBP'],
-    )).toList();
-
-    await dbHelper.batchInsertProjectList(projects);
 
     // Step 3: Fetch staff bio data
     setState(() => _syncStatus = 'Đang lấy thông tin công nhân...');

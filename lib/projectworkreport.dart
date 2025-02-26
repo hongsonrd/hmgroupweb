@@ -372,13 +372,18 @@ late List<String> topicList;
     );
   }
 
-  Future<void> _submitReport() async {
+  Future<void> _submitReport({bool createTask = false, DateTime? taskDate, String? taskContent}) async {
   if (!_formKey.currentState!.validate()) return;
 
   final userCredentials = Provider.of<UserCredentials>(context, listen: false);
   final username = userCredentials.username;
   final uuid = Uuid().v4();
   final now = DateTime.now();
+
+  // Capture current values before any state changes
+  final currentProject = _selectedProject;
+  final currentShares = List<String>.from(_selectedShare);
+  final currentTopic = _selectedTopic;
 
   try {
     var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/baocaocongviec'));
@@ -396,9 +401,9 @@ late List<String> topicList;
       'ngay': formattedDate,
       'gio': formattedTime,
       'nguoiDung': username ?? '',
-      'boPhan': _selectedProject ?? '',
-      'chiaSe': _selectedShare.join(','),
-      'phanLoai': _selectedTopic ?? '',
+      'boPhan': currentProject ?? '',
+      'chiaSe': currentShares.join(','),
+      'phanLoai': currentTopic ?? '',
       'moTaChung': _moTaChungController.text.trim().isEmpty ? '.' : _moTaChungController.text.trim(),
       'giaiPhapChung': _giaiPhapChungController.text.trim().isEmpty ? '.' : _giaiPhapChungController.text.trim(),
       'danhGiaNS': _danhGiaNSController.text.trim().isEmpty ? '.' : _danhGiaNSController.text.trim(),
@@ -411,9 +416,9 @@ late List<String> topicList;
       'giaiPhapYKienKhachHang': _giaiPhapYKienKhachHangController.text.trim().isEmpty ? '.' : _giaiPhapYKienKhachHangController.text.trim(),
       'danhGiaMayMoc': _danhGiaMayMocController.text.trim().isEmpty ? '.' : _danhGiaMayMocController.text.trim(),
       'giaiPhapMayMoc': _giaiPhapMayMocController.text.trim().isEmpty ? '.' : _giaiPhapMayMocController.text.trim(),
-      'nhom': 'Báo cáo' ?? '',
-      'phatSinh': 'Không' ?? '',
-      'xetDuyet': 'Chưa duyệt' ?? '',
+      'nhom': 'Báo cáo',
+      'phatSinh': 'Không',
+      'xetDuyet': 'Chưa duyệt',
     });
 
     // Print the request fields for debugging
@@ -421,10 +426,7 @@ late List<String> topicList;
     request.fields.forEach((key, value) {
       print('$key: $value');
     });
-    print('Submitting report with fields:');
-request.fields.forEach((key, value) {
-  print('$key: $value');
-});
+
     final response = await request.send();
     final responseData = await response.stream.bytesToString();
     print('Server response: $responseData');
@@ -433,6 +435,49 @@ request.fields.forEach((key, value) {
       final Map<String, dynamic> data = json.decode(responseData);
       final report = BaocaoModel.fromMap(data);
       await dbHelper.insertBaocao(report);
+
+      // Now handle task submission if requested
+      if (createTask && taskDate != null && taskContent != null) {
+        final taskUuid = Uuid().v4();
+        final taskFormattedDate = taskDate.toIso8601String().split('T')[0];
+
+        final taskData = {
+          'uid': taskUuid,
+          'ngay': taskFormattedDate,
+          'gio': formattedTime,
+          'nguoiDung': username ?? '',
+          'boPhan': currentProject ?? '',  // Use the captured values
+          'chiaSe': currentShares.join(','),  // Use the captured values
+          'phanLoai': 'Cả ngày',
+          'moTaChung': taskContent.trim().isEmpty ? '.' : taskContent.trim(),
+          'nhom': 'Kế hoạch',
+          'phatSinh': 'Có',
+          'xetDuyet': 'Chưa duyệt',
+        };
+
+        print('Submitting task with data:');
+        taskData.forEach((key, value) {
+          print('$key: $value');
+        });
+
+        final taskResponse = await http.post(
+          Uri.parse('$baseUrl/submitplan'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode(taskData),
+        );
+
+        final taskResponseData = await taskResponse.body;
+        print('Server response for task: $taskResponseData');
+
+        if (taskResponse.statusCode == 200) {
+          _showSuccess('Báo cáo và hẹn xử lý đã được gửi thành công');
+        } else {
+          throw Exception('Báo cáo đã gửi nhưng lỗi tạo hẹn: ${taskResponse.statusCode}');
+        }
+      } else {
+        _showSuccess('Báo cáo đã được gửi thành công');
+      }
+
       _formKey.currentState?.reset(); // Reset the form
       setState(() {
         _selectedProject = null;
@@ -452,7 +497,7 @@ request.fields.forEach((key, value) {
         _danhGiaMayMocController.clear();
         _giaiPhapMayMocController.clear();
       });
-      _showSuccess('Báo cáo đã được gửi thành công');
+      
       Navigator.of(context).pop();
       _loadReports(); // Reload the reports list
     } else {
@@ -474,222 +519,388 @@ request.fields.forEach((key, value) {
       _showError('Error loading reports: $e');
     }
   }
+  Future<void> _submitTask(DateTime taskDate, String content) async {
+  final userCredentials = Provider.of<UserCredentials>(context, listen: false);
+  final username = userCredentials.username;
+  final uuid = Uuid().v4();
+  final now = DateTime.now();
+
+  try {
+    // Format dates properly
+    final formattedDate = taskDate.toIso8601String().split('T')[0]; // YYYY-MM-DD
+    final formattedTime = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
+    // Make sure we're capturing the current values, not the class variables
+    final currentProject = _selectedProject;
+    final currentShares = _selectedShare;
+
+    final taskData = {
+      'uid': uuid,
+      'ngay': formattedDate,
+      'gio': formattedTime,
+      'nguoiDung': username ?? '',
+      'boPhan': currentProject ?? '', // Explicitly use the current project value
+      'chiaSe': currentShares.join(','), // Explicitly use the current shares
+      'phanLoai': 'Cả ngày',
+      'moTaChung': content.trim().isEmpty ? '.' : content.trim(),
+      'nhom': 'Kế hoạch',
+      'phatSinh': 'Có',
+      'xetDuyet': 'Chưa duyệt',
+    };
+
+    // Print for debugging
+    print('Submitting task with data:');
+    taskData.forEach((key, value) {
+      print('$key: $value');
+    });
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/submitplan'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(taskData),
+    );
+
+    final responseData = await response.body;
+    print('Server response for task: $responseData');
+
+    if (response.statusCode == 200) {
+      _showSuccess('Hẹn xử lý đã được tạo thành công');
+    } else {
+      throw Exception('Failed to create task: ${response.statusCode}');
+    }
+  } catch (e) {
+    print('Error submitting task: $e');
+    _showError('Error creating task: $e');
+  }
+}
 Future<void> _showReportDialog() async {
- showDialog(
-   context: context,
-   barrierDismissible: false,
-   builder: (BuildContext context) {
-     return Dialog.fullscreen(
-       child: Scaffold(
-         appBar: AppBar(
-           title: Text('Tạo báo cáo'),
-           leading: IconButton(
-             icon: Icon(Icons.close),
-             onPressed: () => Navigator.of(context).pop(),
-           ),
-           actions: [
-             TextButton(
-               onPressed: () => _submitReport(),
-               child: Text('Gửi'),
-             ),
-           ],
-         ),
-         body: SingleChildScrollView(
-           padding: EdgeInsets.all(16),
-           child: Form(
-             key: _formKey,
-             child: Column(
-               mainAxisSize: MainAxisSize.min,
-               children: [
-                 if (_imageFile != null)
-                   Stack(
-                     alignment: Alignment.topRight,
-                     children: [
-                       Image.file(
-                         _imageFile!,
-                         height: 200,
-                         width: double.infinity,
-                         fit: BoxFit.cover,
-                       ),
-                       IconButton(
-                         icon: Icon(Icons.close, color: Colors.red),
-                         onPressed: () {
-                           setState(() {
-                             _imageFile = null;
-                           });
-                         },
-                       ),
-                     ],
-                   ),
-                 ElevatedButton.icon(
-                   icon: Icon(Icons.image),
-                   label: Text(_imageFile == null ? 'Chọn ảnh' : 'Đổi ảnh khác'),
-                   onPressed: _showImagePickerOptions,
-                 ),
-                 SizedBox(height: 16),
-                 Row(
-  children: [
-    Expanded(
-      child: MultiSelectDialogField<String>(
-        items: _userList.map((user) => MultiSelectItem<String>(user, user)).toList(),
-        listType: MultiSelectListType.CHIP,
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey),
-          borderRadius: BorderRadius.circular(5),
-        ),
-        buttonText: Text("Chia sẻ với"),
-        title: Text("Chọn người chia sẻ"),
-        initialValue: _selectedShare,
-        onConfirm: (values) {
-          setState(() {
-            _selectedShare = values;
-          });
-        },
-        chipDisplay: MultiSelectChipDisplay(
-          onTap: (value) {
-            setState(() {
-              _selectedShare.remove(value);
-            });
-          },
-        ),
-      ),
-    ),
-    SizedBox(width: 8),
-    IconButton(
-      icon: Icon(Icons.clear),
-      onPressed: () {
-        setState(() {
-          _selectedShare = [];
-        });
-      },
-      tooltip: 'Xoá chia sẻ',
-    ),
-  ],
+  bool _createTask = false;
+  DateTime _taskDate = DateTime.now().add(Duration(days: 1)); // Default to tomorrow
+  final _taskContentController = TextEditingController();
+  
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return Dialog.fullscreen(
+            child: Scaffold(
+              appBar: AppBar(
+                title: Text('Tạo báo cáo'),
+                leading: IconButton(
+                  icon: Icon(Icons.close),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                actions: [
+                  TextButton(
+  onPressed: () {
+    _submitReport(
+      createTask: _createTask,
+      taskDate: _createTask ? _taskDate : null,
+      taskContent: _createTask ? _taskContentController.text : null
+    );
+  },
+  child: Text('Gửi'),
 ),
-                 SizedBox(height: 16),
-                 TextFormField(
-                   controller: _moTaChungController,
-                   decoration: InputDecoration(
-                     labelText: 'Mô tả chung',
-                     border: OutlineInputBorder(),
-                   ),
-                   maxLines: 3,
-                   validator: (value) {
-                     if (value == null || value.isEmpty) {
-                       return 'Vui lòng nhập mô tả';
-                     }
-                     return null;
-                   },
-                 ),
-                 SizedBox(height: 16),
-                 TextFormField(
-                   controller: _giaiPhapChungController,
-                   decoration: InputDecoration(
-                     labelText: 'Giải pháp chung',
-                     border: OutlineInputBorder(),
-                   ),
-                   maxLines: 3,
-                 ),
-                 SizedBox(height: 16),
-                 if (_selectedTopic == 'Kiểm tra dự án') ...[
-                   TextFormField(
-                     controller: _danhGiaNSController,
-                     decoration: InputDecoration(
-                       labelText: 'Đánh giá nhân sự',
-                       border: OutlineInputBorder(),
-                     ),
-                     maxLines: 2,
-                   ),
-                   SizedBox(height: 16),
-                   TextFormField(
-                     controller: _giaiPhapNSController,
-                     decoration: InputDecoration(
-                       labelText: 'Giải pháp nhân sự',
-                       border: OutlineInputBorder(),
-                     ),
-                     maxLines: 2,
-                   ),
-                   SizedBox(height: 16),
-                   TextFormField(
-                     controller: _danhGiaCLController,
-                     decoration: InputDecoration(
-                       labelText: 'Đánh giá chất lượng',
-                       border: OutlineInputBorder(),
-                     ),
-                     maxLines: 2,
-                   ),
-                   SizedBox(height: 16),
-                   TextFormField(
-                     controller: _giaiPhapCLController,
-                     decoration: InputDecoration(
-                       labelText: 'Giải pháp chất lượng',
-                       border: OutlineInputBorder(),
-                     ),
-                     maxLines: 2,
-                   ),
-                   SizedBox(height: 16),
-                   TextFormField(
-                     controller: _danhGiaVTController,
-                     decoration: InputDecoration(
-                       labelText: 'Đánh giá vật tư',
-                       border: OutlineInputBorder(),
-                     ),
-                     maxLines: 2,
-                   ),
-                   SizedBox(height: 16),
-                   TextFormField(
-                     controller: _giaiPhapVTController,
-                     decoration: InputDecoration(
-                       labelText: 'Giải pháp vật tư',
-                       border: OutlineInputBorder(),
-                     ),
-                     maxLines: 2,
-                   ),
-                   SizedBox(height: 16),
-                   TextFormField(
-                     controller: _danhGiaYKienKhachHangController,
-                     decoration: InputDecoration(
-                       labelText: 'Đánh giá ý kiến khách hàng',
-                       border: OutlineInputBorder(),
-                     ),
-                     maxLines: 2,
-                   ),
-                   SizedBox(height: 16),
-                   TextFormField(
-                     controller: _giaiPhapYKienKhachHangController,
-                     decoration: InputDecoration(
-                       labelText: 'Giải pháp ý kiến khách hàng',
-                       border: OutlineInputBorder(),
-                     ),
-                     maxLines: 2,
-                   ),
-                   SizedBox(height: 16),
-                   TextFormField(
-                     controller: _danhGiaMayMocController,
-                     decoration: InputDecoration(
-                       labelText: 'Đánh giá máy móc',
-                       border: OutlineInputBorder(),
-                     ),
-                     maxLines: 2,
-                   ),
-                   SizedBox(height: 16),
-                   TextFormField(
-                     controller: _giaiPhapMayMocController,
-                     decoration: InputDecoration(
-                       labelText: 'Giải pháp máy móc',
-                       border: OutlineInputBorder(),
-                     ),
-                     maxLines: 2,
-                   ),
-                 ],
-               ],
-             ),
-           ),
-         ),
-       ),
-     );
-   },
- );
+                ],
+              ),
+              body: SingleChildScrollView(
+                padding: EdgeInsets.all(16),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_imageFile != null)
+                        Stack(
+                          alignment: Alignment.topRight,
+                          children: [
+                            Image.file(
+                              _imageFile!,
+                              height: 200,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            ),
+                            IconButton(
+                              icon: Icon(Icons.close, color: Colors.red),
+                              onPressed: () {
+                                setState(() {
+                                  _imageFile = null;
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                      ElevatedButton.icon(
+                        icon: Icon(Icons.image),
+                        label: Text(_imageFile == null ? 'Chọn ảnh' : 'Đổi ảnh khác'),
+                        onPressed: _showImagePickerOptions,
+                      ),
+                      SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: MultiSelectDialogField<String>(
+                              items: _userList.map((user) => MultiSelectItem<String>(user, user)).toList(),
+                              listType: MultiSelectListType.CHIP,
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey),
+                                borderRadius: BorderRadius.circular(5),
+                              ),
+                              buttonText: Text("Chia sẻ với"),
+                              title: Text("Chọn người chia sẻ"),
+                              initialValue: _selectedShare,
+                              onConfirm: (values) {
+                                setState(() {
+                                  _selectedShare = values;
+                                });
+                              },
+                              chipDisplay: MultiSelectChipDisplay(
+                                onTap: (value) {
+                                  setState(() {
+                                    _selectedShare.remove(value);
+                                  });
+                                },
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          IconButton(
+                            icon: Icon(Icons.clear),
+                            onPressed: () {
+                              setState(() {
+                                _selectedShare = [];
+                              });
+                            },
+                            tooltip: 'Xoá chia sẻ',
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 16),
+                      TextFormField(
+                        controller: _moTaChungController,
+                        decoration: InputDecoration(
+                          labelText: 'Mô tả chung',
+                          border: OutlineInputBorder(),
+                        ),
+                        maxLines: 3,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Vui lòng nhập mô tả';
+                          }
+                          return null;
+                        },
+                      ),
+                      SizedBox(height: 16),
+                      TextFormField(
+                        controller: _giaiPhapChungController,
+                        decoration: InputDecoration(
+                          labelText: 'Giải pháp chung',
+                          border: OutlineInputBorder(),
+                        ),
+                        maxLines: 3,
+                      ),
+                      SizedBox(height: 16),
+                      if (_selectedTopic == 'Kiểm tra dự án') ...[
+                        TextFormField(
+                          controller: _danhGiaNSController,
+                          decoration: InputDecoration(
+                            labelText: 'Đánh giá nhân sự',
+                            border: OutlineInputBorder(),
+                          ),
+                          maxLines: 2,
+                        ),
+                        SizedBox(height: 16),
+                        TextFormField(
+                          controller: _giaiPhapNSController,
+                          decoration: InputDecoration(
+                            labelText: 'Giải pháp nhân sự',
+                            border: OutlineInputBorder(),
+                          ),
+                          maxLines: 2,
+                        ),
+                        SizedBox(height: 16),
+                        TextFormField(
+                          controller: _danhGiaCLController,
+                          decoration: InputDecoration(
+                            labelText: 'Đánh giá chất lượng',
+                            border: OutlineInputBorder(),
+                          ),
+                          maxLines: 2,
+                        ),
+                        SizedBox(height: 16),
+                        TextFormField(
+                          controller: _giaiPhapCLController,
+                          decoration: InputDecoration(
+                            labelText: 'Giải pháp chất lượng',
+                            border: OutlineInputBorder(),
+                          ),
+                          maxLines: 2,
+                        ),
+                        SizedBox(height: 16),
+                        TextFormField(
+                          controller: _danhGiaVTController,
+                          decoration: InputDecoration(
+                            labelText: 'Đánh giá vật tư',
+                            border: OutlineInputBorder(),
+                          ),
+                          maxLines: 2,
+                        ),
+                        SizedBox(height: 16),
+                        TextFormField(
+                          controller: _giaiPhapVTController,
+                          decoration: InputDecoration(
+                            labelText: 'Giải pháp vật tư',
+                            border: OutlineInputBorder(),
+                          ),
+                          maxLines: 2,
+                        ),
+                        SizedBox(height: 16),
+                        TextFormField(
+                          controller: _danhGiaYKienKhachHangController,
+                          decoration: InputDecoration(
+                            labelText: 'Đánh giá ý kiến khách hàng',
+                            border: OutlineInputBorder(),
+                          ),
+                          maxLines: 2,
+                        ),
+                        SizedBox(height: 16),
+                        TextFormField(
+                          controller: _giaiPhapYKienKhachHangController,
+                          decoration: InputDecoration(
+                            labelText: 'Giải pháp ý kiến khách hàng',
+                            border: OutlineInputBorder(),
+                          ),
+                          maxLines: 2,
+                        ),
+                        SizedBox(height: 16),
+                        TextFormField(
+                          controller: _danhGiaMayMocController,
+                          decoration: InputDecoration(
+                            labelText: 'Đánh giá máy móc',
+                            border: OutlineInputBorder(),
+                          ),
+                          maxLines: 2,
+                        ),
+                        SizedBox(height: 16),
+                        TextFormField(
+                          controller: _giaiPhapMayMocController,
+                          decoration: InputDecoration(
+                            labelText: 'Giải pháp máy móc',
+                            border: OutlineInputBorder(),
+                          ),
+                          maxLines: 2,
+                        ),
+                      ],
+                      SizedBox(height: 24),
+                      Container(
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Switch(
+                                  value: _createTask,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _createTask = value;
+                                      
+                                      // Initialize task content when toggled on
+                                      if (_createTask) {
+                                        // Prioritize giaiPhapChung if it has content
+                                        if (_giaiPhapChungController.text.isNotEmpty && 
+                                            _giaiPhapChungController.text != '.') {
+                                          _taskContentController.text = _giaiPhapChungController.text;
+                                        } 
+                                        // Otherwise use moTaChung
+                                        else if (_moTaChungController.text.isNotEmpty && 
+                                                 _moTaChungController.text != '.') {
+                                          _taskContentController.text = _moTaChungController.text;
+                                        }
+                                      }
+                                    });
+                                  },
+                                ),
+                                Text(
+                                  'Tạo hẹn xử lý',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (_createTask) ...[
+                              SizedBox(height: 16),
+                              Text('Ngày xử lý:'),
+                              InkWell(
+                                onTap: () async {
+                                  final DateTime? picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: _taskDate,
+                                    firstDate: DateTime.now(),
+                                    lastDate: DateTime(2030),
+                                  );
+                                  if (picked != null && picked != _taskDate) {
+                                    setState(() {
+                                      _taskDate = picked;
+                                    });
+                                  }
+                                },
+                                child: Container(
+                                  padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.grey),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        '${_taskDate.day}/${_taskDate.month}/${_taskDate.year}',
+                                        style: TextStyle(fontSize: 16),
+                                      ),
+                                      Icon(Icons.calendar_today),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              SizedBox(height: 16),
+                              TextFormField(
+                                controller: _taskContentController,
+                                decoration: InputDecoration(
+                                  labelText: 'Nội dung',
+                                  border: OutlineInputBorder(),
+                                ),
+                                maxLines: 3,
+                                validator: (value) {
+                                  if (_createTask && (value == null || value.isEmpty)) {
+                                    return 'Vui lòng nhập nội dung hẹn xử lý';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+      );
+    },
+  );
 }
 
   Widget _buildReportList(bool isMyReports) {

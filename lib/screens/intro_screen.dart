@@ -209,7 +209,8 @@ Widget build(BuildContext context) {
                 child: Stack(
                   children: [
                     Positioned(
-                      top: -(MediaQuery.of(context).size.height * 0.04),
+                      //top: -(MediaQuery.of(context).size.height * 0.04),
+                      top: 0,
                       left: 0,
                       right: 0,
                       bottom: 0,
@@ -217,7 +218,17 @@ Widget build(BuildContext context) {
                         initialUrlRequest: URLRequest(url: WebUri(url)),
                         onLoadStart: (controller, url) => setState(() => isLoading = true),
                         onLoadStop: (controller, url) => setState(() => isLoading = false),
-                        onWebViewCreated: (controller) => _webViewController = controller,
+                        onWebViewCreated: (controller) {
+  try {
+    _webViewController = controller;
+    print("WebView controller initialized successfully");
+  } catch (e) {
+    print("Error initializing WebView controller: $e");
+  }
+},
+onReceivedError: (controller, request, error) {
+  print("WebView error: ${error.description}");
+},
                       ),
                     ),
                     Align(
