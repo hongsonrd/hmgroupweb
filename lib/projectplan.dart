@@ -447,8 +447,7 @@ Future<void> _loadProjects() async {
     },
   );
 }
-
- Widget _buildPlanList(bool isMyPlans) {
+Widget _buildPlanList(bool isMyPlans) {
   final userCredentials = Provider.of<UserCredentials>(context, listen: false);
   final username = userCredentials.username;
 
@@ -466,6 +465,7 @@ Future<void> _loadProjects() async {
   return SingleChildScrollView(
     scrollDirection: Axis.horizontal,
     child: DataTable(
+      showCheckboxColumn: false,  // Add this line to hide the default checkbox column
       columns: [
         DataColumn(label: Text('')),
         if (!isMyPlans) DataColumn(label: Text('Người dùng')),
@@ -479,33 +479,45 @@ Future<void> _loadProjects() async {
       ],
       rows: filteredPlans.map((plan) {
         final rowColor = !isMyPlans ? _getStatusColor(plan.xetDuyet ?? '') : null;
+        final isPhatSinh = plan.phatSinh == 'Có';
         
         return DataRow(
           color: MaterialStateProperty.all(rowColor),
-          onSelectChanged: (_) => _showPlanDetailsDialog(plan), // Add this line to make row clickable
+          onSelectChanged: (_) => _showPlanDetailsDialog(plan),
           cells: [
             DataCell(
-              Container(
-                height: 36,
-                child: IconButton(
-                  icon: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.reply, size: 14, color: const Color.fromARGB(255, 0, 113, 206)),
-                      SizedBox(width: 4),
-                      Text(
-                        'Trả lời',
-                        style: TextStyle(
-                          color: Color.fromARGB(255, 0, 113, 206),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Add checkbox that's red if PhatSinh is "Có"
+                  Icon(
+                    Icons.check_box,
+                    color: isPhatSinh ? Colors.red : Colors.grey,
+                    size: 18,
                   ),
-                  onPressed: () => _showReportDialog(plan),
-                  tooltip: 'Phản hồi kế hoạch',
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                ),
+                  Container(
+                    height: 36,
+                    child: IconButton(
+                      icon: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.reply, size: 14, color: const Color.fromARGB(255, 0, 113, 206)),
+                          SizedBox(width: 4),
+                          Text(
+                            'Trả lời',
+                            style: TextStyle(
+                              color: Color.fromARGB(255, 0, 113, 206),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                      onPressed: () => _showReportDialog(plan),
+                      tooltip: 'Phản hồi kế hoạch',
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                  ),
+                ],
               ),
             ),
             if (!isMyPlans) DataCell(Text(plan.nguoiDung ?? '')),
@@ -588,24 +600,14 @@ void _showPlanDetailsDialog(BaocaoModel plan) {
                       _buildDetailRow('Thời gian', plan.phanLoai ?? 'N/A'),
                       _buildDetailRow('Dự án', plan.boPhan ?? 'N/A'),
                       _buildDetailRow('Chi tiết', plan.moTaChung ?? 'N/A', multiLine: true),
-                      _buildDetailRow('Phát sinh', plan.phatSinh ?? 'Không'),
+                      _buildDetailRow('Phát sinh', plan.phatSinh ?? 'Không', 
+                        isHighlighted: plan.phatSinh == 'Có'),
                       _buildDetailRow('Trạng thái', plan.xetDuyet ?? 'Chưa duyệt'),
                       _buildDetailRow('Chia sẻ với', plan.chiaSe ?? 'N/A'),
                       SizedBox(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          // Add buttons based on user permissions
-                          if (plan.nguoiDung == Provider.of<UserCredentials>(context, listen: false).username &&
-                              plan.xetDuyet != 'Đồng ý')
-                            ElevatedButton(
-                              child: Text('Chỉnh sửa'),
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                                _showPlanDialog(plan);
-                              },
-                            ),
-                          SizedBox(width: 8),
                           ElevatedButton(
                             child: Text('Phản hồi'),
                             onPressed: () {
@@ -626,8 +628,7 @@ void _showPlanDetailsDialog(BaocaoModel plan) {
     },
   );
 }
-
-Widget _buildDetailRow(String label, String value, {bool multiLine = false}) {
+Widget _buildDetailRow(String label, String value, {bool multiLine = false, bool isHighlighted = false}) {
   return Padding(
     padding: EdgeInsets.only(bottom: 12),
     child: Column(
@@ -654,9 +655,22 @@ Widget _buildDetailRow(String label, String value, {bool multiLine = false}) {
                   style: TextStyle(fontSize: 14),
                 ),
               )
-            : Text(
-                value,
-                style: TextStyle(fontSize: 14),
+            : Row(
+                children: [
+                  // Show red checkbox for highlighted values (PhatSinh = 'Có')
+                  if (isHighlighted)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Icon(Icons.check_box, color: Colors.red, size: 18),
+                    ),
+                  Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isHighlighted ? Colors.red : null,
+                    ),
+                  ),
+                ],
               ),
       ],
     ),

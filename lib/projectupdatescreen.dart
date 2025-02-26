@@ -1432,17 +1432,17 @@ class _UniformOrderScreenState extends State<UniformOrderScreen> {
     print('Sample record: ${allDetails.isNotEmpty ? allDetails.first : "no records"}');
 
     if (mounted) {
-      showDialog(
-        context: context,
-        builder: (context) => OrderDetailsDialog(
-          order: order,
-          details: allDetails.map((d) => ChiTietDPModel.fromMap(d)).toList(),
-          onRefresh: () {
-            _loadOrders();
-          },
-        ),
-      );
-    }
+  showDialog(
+    context: context,
+    builder: (context) => OrderDetailsDialog(
+      order: order,
+      initialDetails: allDetails.map((d) => ChiTietDPModel.fromMap(d)).toList(),
+      onRefresh: () {
+        _loadOrders();
+      },
+    ),
+  );
+}
   } catch (e, stackTrace) {
     print('Error loading order details: $e');
     print('Stack trace: $stackTrace');
@@ -1582,32 +1582,62 @@ Color _getStatusColor(String status) {
     );
   }
 }
-class OrderDetailsDialog extends StatelessWidget {
+class OrderDetailsDialog extends StatefulWidget {
   final DongPhucModel order;
-  final List<ChiTietDPModel> details;
+  final List<ChiTietDPModel> initialDetails;
   final VoidCallback onRefresh;
 
   const OrderDetailsDialog({
     Key? key,
     required this.order,
-    required this.details,
+    required this.initialDetails,
     required this.onRefresh,
   }) : super(key: key);
+
+  @override
+  _OrderDetailsDialogState createState() => _OrderDetailsDialogState();
+}
+
+class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
+  late List<ChiTietDPModel> _details;
+  
+  @override
+  void initState() {
+    super.initState();
+    _details = List.from(widget.initialDetails);
+  }
+  
+  Future<void> _refreshDetails() async {
+    try {
+      final dbHelper = DBHelper();
+      final allDetails = await dbHelper.query(
+        DatabaseTables.chiTietDPTable,
+        where: 'OrderUID = ?',
+        whereArgs: [widget.order.uid],
+      );
+      
+      setState(() {
+        _details = allDetails.map((d) => ChiTietDPModel.fromMap(d)).toList();
+      });
+    } catch (e) {
+      print('Error refreshing details: $e');
+    }
+  }
 
   Future<void> _updateOrderStatus(BuildContext context) async {
     try {
       final updatedOrder = DongPhucModel(
-        uid: order.uid,
-        nguoiDung: order.nguoiDung,
-        boPhan: order.boPhan,
-        phanLoai: order.phanLoai,
-        thoiGianNhan: order.thoiGianNhan,
+        uid: widget.order.uid,
+        nguoiDung: widget.order.nguoiDung,
+        boPhan: widget.order.boPhan,
+        phanLoai: widget.order.phanLoai,
+        thoiGianNhan: widget.order.thoiGianNhan,
         trangThai: 'Gửi',  // Change status to Gửi
-        thang: order.thang,
-        xuLy: order.xuLy,
+        thang: widget.order.thang,
+        xuLy: widget.order.xuLy,
       );
 
-      final response = await AuthenticatedHttpClient.post(
+      final response = await http.post(
         Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/dongphuccapnhat'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(updatedOrder.toMap()),
@@ -1619,11 +1649,11 @@ class OrderDetailsDialog extends StatelessWidget {
           DatabaseTables.dongPhucTable,
           updatedOrder.toMap(),
           where: 'UID = ?',
-          whereArgs: [order.uid],
+          whereArgs: [widget.order.uid],
         );
         
         Navigator.pop(context);
-        onRefresh();
+        widget.onRefresh();
       } else {
         throw Exception('Server returned ${response.statusCode}');
       }
@@ -1633,208 +1663,334 @@ class OrderDetailsDialog extends StatelessWidget {
       );
     }
   }
-void _showAddItemDialog(BuildContext context) {
+
+  void _showAddItemDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => AddUniformItemDialog(
-        orderUid: order.uid,
-        boPhan: order.boPhan,
+        orderUid: widget.order.uid,
+        boPhan: widget.order.boPhan,
         onItemAdded: () {
           Navigator.pop(context);
-          onRefresh();
+          _refreshDetails(); // Refresh the list after adding
         },
       ),
     );
   }
-Future<void> _deleteOrderItem(BuildContext context, ChiTietDPModel item) async {
-  try {
-    final response = await AuthenticatedHttpClient.post(
-      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chitietdpxoa'),
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({'UID': item.uid}),
-    );
 
-    if (response.statusCode == 200) {
-      final dbHelper = DBHelper();
-      await dbHelper.delete(
-        DatabaseTables.chiTietDPTable,
-        where: 'UID = ?',
-        whereArgs: [item.uid],
+  Future<void> _deleteOrderItem(BuildContext context, ChiTietDPModel item) async {
+    try {
+      final response = await http.post(
+        Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chitietdpxoa'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'UID': item.uid}),
       );
-      onRefresh();
-    } else {
-      throw Exception('Server returned ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final dbHelper = DBHelper();
+        await dbHelper.delete(
+          DatabaseTables.chiTietDPTable,
+          where: 'UID = ?',
+          whereArgs: [item.uid],
+        );
+        
+        // Refresh the details list
+        await _refreshDetails();
+        
+        // Also notify parent to refresh
+        widget.onRefresh();
+      } else {
+        throw Exception('Server returned ${response.statusCode}');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi khi xóa chi tiết: $e')),
+      );
     }
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Lỗi khi xóa chi tiết: $e')),
-    );
   }
-}
-@override
-Widget build(BuildContext context) {
-  return Dialog(
-    child: SingleChildScrollView(
-      padding: EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  children: [
-    Text(
-      'Chi tiết đơn',
-      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-    ),
-    if (order.trangThai == 'Nháp')
-      Row(
-        mainAxisSize: MainAxisSize.min, // Add this
-        children: [
-          TextButton(
-            onPressed: () async {
-              final result = await showDialog(
-                context: context,
-                builder: (context) => EditOrderDialog(
-                  order: order,
-                  onUpdate: () {
-                    Navigator.pop(context);
-                    onRefresh();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Chi tiết đơn'),
+        actions: [
+          if (widget.order.trangThai == 'Nháp')
+            Row(
+              children: [
+                TextButton(
+                  onPressed: () async {
+                    final result = await showDialog(
+                      context: context,
+                      builder: (context) => EditOrderDialog(
+                        order: widget.order,
+                        onUpdate: () {
+                          Navigator.pop(context);
+                          widget.onRefresh();
+                        },
+                      ),
+                    );
+                    if (result == true) {
+                      widget.onRefresh();
+                    }
                   },
+                  child: Text('Sửa'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                  ),
                 ),
-              );
-              if (result == true) {
-                onRefresh();
-              }
-            },
-            child: Text('Sửa'),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.blue,
-              padding: EdgeInsets.symmetric(horizontal: 8),
+                TextButton(
+                  onPressed: () => _updateOrderStatus(context),
+                  child: Text('Gửi'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
             ),
-          ),
-          TextButton(
-            onPressed: () => _updateOrderStatus(context),
-            child: Text('Gửi'),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.green,
-              padding: EdgeInsets.symmetric(horizontal: 8),
-            ),
-          ),
         ],
       ),
-  ],
-),
-          SizedBox(height: 16),
-          // Order info
-          Text('Người đặt: ${order.nguoiDung}'),
-          Text('Phân loại: ${order.phanLoai}'),
-          Text('Trạng thái: ${order.trangThai}'),
-          if (order.thoiGianNhan != null)
-            Text('Thời gian nhận: ${DateFormat('dd/MM/yyyy').format(order.thoiGianNhan!)}'),
-          Text('Bộ phận: ${order.boPhan}'),
-          if (order.xuLy?.isNotEmpty == true)
-            Text('Xử lý: ${order.xuLy}'),
-            SizedBox(height: 16),
-            Row(
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Order info section
+          Container(
+            color: Colors.grey[200],
+            padding: EdgeInsets.all(16),
+            width: double.infinity,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Người đặt: ${widget.order.nguoiDung}', style: TextStyle(fontSize: 16)),
+                Text('Phân loại: ${widget.order.phanLoai}', style: TextStyle(fontSize: 16)),
+                Text('Trạng thái: ${widget.order.trangThai}', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                if (widget.order.thoiGianNhan != null)
+                  Text('Thời gian nhận: ${DateFormat('dd/MM/yyyy').format(widget.order.thoiGianNhan!)}', style: TextStyle(fontSize: 16)),
+                Text('Bộ phận: ${widget.order.boPhan}', style: TextStyle(fontSize: 16)),
+                if (widget.order.xuLy?.isNotEmpty == true)
+                  Text('Xử lý: ${widget.order.xuLy}', style: TextStyle(fontSize: 16)),
+              ],
+            ),
+          ),
+          
+          // Action bar for order details
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: Colors.grey[100],
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Danh sách chi tiết (${details.length})',
+                  'Danh sách chi tiết (${_details.length})',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                if (order.trangThai == 'Nháp')
-                  IconButton(
+                if (widget.order.trangThai == 'Nháp')
+                  ElevatedButton.icon(
                     icon: Icon(Icons.add),
+                    label: Text('Thêm'),
                     onPressed: () => _showAddItemDialog(context),
-                    color: Colors.green,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                    ),
                   ),
               ],
             ),
-            SizedBox(height: 8),
-            ListView.builder(
-  shrinkWrap: true,
-  physics: NeverScrollableScrollPhysics(),
-  itemCount: details.length,
-  itemBuilder: (context, index) {
-    final detail = details[index];
-    return Card(
-      margin: EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: EdgeInsets.all(8.0),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Mã CN: ${detail.maCN ?? ''}'),
-                  Text('Tên: ${detail.ten ?? ''}'),
-                  Text('Giới tính: ${detail.gioiTinh ?? ''}'),
-                  if (detail.loaiAo?.isNotEmpty == true)
-                    Text('Áo: ${detail.loaiAo} - Size ${detail.sizeAo}'),
-                  if (detail.loaiQuan?.isNotEmpty == true)
-                    Text('Quần: ${detail.loaiQuan} - Size ${detail.sizeQuan}'),
-                  if (detail.loaiGiay?.isNotEmpty == true)
-                    Text('Giày: ${detail.loaiGiay} - Size ${detail.sizeGiay}'),
-                  if (detail.loaiKhac?.isNotEmpty == true)
-                    Text('Khác: ${detail.loaiKhac} - Size ${detail.sizeKhac}'),
-                  if (detail.ghiChu?.isNotEmpty == true)
-                    Text('Ghi chú: ${detail.ghiChu}'),
-                  if (detail.thoiGianGanNhat != null)
-                    Text('Thời gian cấp gần nhất: ${DateFormat('dd/MM/yyyy').format(detail.thoiGianGanNhat!)}'),
-                ],
-              ),
+          ),
+          
+          // Table header
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Expanded(flex: 3, child: Text('Nhân viên', style: TextStyle(fontWeight: FontWeight.bold))),
+                Expanded(flex: 2, child: Text('Áo', style: TextStyle(fontWeight: FontWeight.bold))),
+                Expanded(flex: 2, child: Text('Quần', style: TextStyle(fontWeight: FontWeight.bold))),
+                Expanded(flex: 2, child: Text('Giày', style: TextStyle(fontWeight: FontWeight.bold))),
+                Expanded(flex: 2, child: Text('Khác', style: TextStyle(fontWeight: FontWeight.bold))),
+                if (widget.order.trangThai == 'Nháp') SizedBox(width: 48),
+              ],
             ),
-            if (order.trangThai == 'Nháp')
-              IconButton(
-                icon: Icon(Icons.delete, color: Colors.red),
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: Text('Xác nhận'),
-                      content: Text('Bạn có chắc muốn xóa chi tiết này?'),
-                      actions: [
-                        TextButton(
-                          child: Text('Hủy'),
-                          onPressed: () => Navigator.of(context).pop(),
-                        ),
-                        TextButton(
-                          child: Text('Xóa'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.red,
+          ),
+          
+          Divider(height: 1),
+          
+          // Detail items
+          Expanded(
+            child: _details.isEmpty 
+                ? Center(child: Text('Chưa có chi tiết đơn hàng', style: TextStyle(color: Colors.grey)))
+                : ListView.separated(
+                    itemCount: _details.length,
+                    separatorBuilder: (context, index) => Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final detail = _details[index];
+                      return InkWell(
+                        onTap: () {
+                          // Show detailed view when clicked
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            builder: (context) => Container(
+                              padding: EdgeInsets.all(16),
+                              height: MediaQuery.of(context).size.height * 0.6,
+                              child: SingleChildScrollView(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Chi tiết đồng phục', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                                    SizedBox(height: 16),
+                                    Text('Mã CN: ${detail.maCN ?? ''}'),
+                                    Text('Tên: ${detail.ten ?? ''}'),
+                                    Text('Giới tính: ${detail.gioiTinh ?? ''}'),
+                                    SizedBox(height: 8),
+                                    if (detail.loaiAo?.isNotEmpty == true) ...[
+                                      Text('Áo:', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      Text('${detail.loaiAo} - Size ${detail.sizeAo}'),
+                                      SizedBox(height: 8),
+                                    ],
+                                    if (detail.loaiQuan?.isNotEmpty == true) ...[
+                                      Text('Quần:', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      Text('${detail.loaiQuan} - Size ${detail.sizeQuan}'),
+                                      SizedBox(height: 8),
+                                    ],
+                                    if (detail.loaiGiay?.isNotEmpty == true) ...[
+                                      Text('Giày:', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      Text('${detail.loaiGiay} - Size ${detail.sizeGiay}'),
+                                      SizedBox(height: 8),
+                                    ],
+                                    if (detail.loaiKhac?.isNotEmpty == true) ...[
+                                      Text('Khác:', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      Text('${detail.loaiKhac} - Size ${detail.sizeKhac}'),
+                                      SizedBox(height: 8),
+                                    ],
+                                    if (detail.ghiChu?.isNotEmpty == true) ...[
+                                      Text('Ghi chú:', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      Text('${detail.ghiChu}'),
+                                      SizedBox(height: 8),
+                                    ],
+                                    if (detail.thoiGianGanNhat != null) ...[
+                                      Text('Thời gian cấp gần nhất:', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      Text('${DateFormat('dd/MM/yyyy').format(detail.thoiGianGanNhat!)}'),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          child: Row(
+                            children: [
+                              // Staff info
+                              Expanded(
+                                flex: 3,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(detail.ten ?? '', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    Text(detail.maCN ?? '', style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+                                  ],
+                                ),
+                              ),
+                              
+                              // Áo
+                              Expanded(
+                                flex: 2,
+                                child: detail.loaiAo?.isNotEmpty == true
+                                    ? Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(detail.loaiAo ?? ''),
+                                          Text('Size: ${detail.sizeAo ?? ''}', style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+                                        ],
+                                      )
+                                    : Text('-'),
+                              ),
+                              
+                              // Quần
+                              Expanded(
+                                flex: 2,
+                                child: detail.loaiQuan?.isNotEmpty == true
+                                    ? Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(detail.loaiQuan ?? ''),
+                                          Text('Size: ${detail.sizeQuan ?? ''}', style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+                                        ],
+                                      )
+                                    : Text('-'),
+                              ),
+                              
+                              // Giày
+                              Expanded(
+                                flex: 2,
+                                child: detail.loaiGiay?.isNotEmpty == true
+                                    ? Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(detail.loaiGiay ?? ''),
+                                          Text('Size: ${detail.sizeGiay ?? ''}', style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+                                        ],
+                                      )
+                                    : Text('-'),
+                              ),
+                              
+                              // Khác
+                              Expanded(
+                                flex: 2,
+                                child: detail.loaiKhac?.isNotEmpty == true
+                                    ? Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(detail.loaiKhac ?? ''),
+                                          Text('Size: ${detail.sizeKhac ?? ''}', style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+                                        ],
+                                      )
+                                    : Text('-'),
+                              ),
+                              
+                              // Delete action
+                              if (widget.order.trangThai == 'Nháp')
+                                IconButton(
+                                  icon: Icon(Icons.delete, color: Colors.red),
+                                  onPressed: () {
+                                    showDialog(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: Text('Xác nhận'),
+                                        content: Text('Bạn có chắc muốn xóa chi tiết này?'),
+                                        actions: [
+                                          TextButton(
+                                            child: Text('Hủy'),
+                                            onPressed: () => Navigator.of(context).pop(),
+                                          ),
+                                          TextButton(
+                                            child: Text('Xóa'),
+                                            style: TextButton.styleFrom(
+                                              foregroundColor: Colors.red,
+                                            ),
+                                            onPressed: () {
+                                              Navigator.of(context).pop();
+                                              _deleteOrderItem(context, detail);
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                            ],
                           ),
-                          onPressed: () {
-                            Navigator.of(context).pop();
-                            _deleteOrderItem(context, detail);
-                          },
                         ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  },
-),
-            SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: TextButton(
-                child: Text('Đóng'),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ),
-          ],
-        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }
@@ -2091,7 +2247,10 @@ class _AddUniformItemDialogState extends State<AddUniformItemDialog> {
   final TextEditingController _ghiChuController = TextEditingController();
   bool _isLoading = true;
   List<Map<String, dynamic>> _staffList = [];
-
+  bool _isPreparationOrder = false;
+  String? _selectedGender;
+  int _orderAmount = 1;
+  
   @override
   void initState() {
     super.initState();
@@ -2259,55 +2418,73 @@ class _AddUniformItemDialogState extends State<AddUniformItemDialog> {
       }
     }
   }
-
-  Future<void> _saveItem() async {
-    if (_selectedStaff == null) {
+Future<void> _saveItem() async {
+    // Validation for regular staff order
+    if (!_isPreparationOrder && _selectedStaff == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Vui lòng chọn nhân viên')),
       );
       return;
     }
+    
+    // Validation for preparation order
+    if (_isPreparationOrder && _selectedGender == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Vui lòng chọn giới tính')),
+      );
+      return;
+    }
 
     try {
-      final newItem = ChiTietDPModel(
-        orderUid: widget.orderUid,
-        uid: const Uuid().v4(),
-        maCN: _selectedStaff!['MaNV'],
-        ten: _staffbioData?['Ho_ten'],
-        gioiTinh: _staffbioData?['Gioi_tinh'],
-        thoiGianGanNhat: _staffbioData?['NgayCapDP'] != null 
-            ? DateTime.parse(_staffbioData!['NgayCapDP']) 
-            : null,
-        loaiAo: _selectedAo,
-        sizeAo: _selectedSizeAo,
-        loaiQuan: _selectedQuan,
-        sizeQuan: _selectedSizeQuan,
-        loaiGiay: _selectedGiay,
-        sizeGiay: _selectedSizeGiay,
-        loaiKhac: _selectedLoaiKhac,
-        sizeKhac: _selectedSizeKhac,
-        ghiChu: _ghiChuController.text,
-      );
-
-      final response = await AuthenticatedHttpClient.post(
-        Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chitietdpmoi'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(newItem.toMap()),
-      );
-
-      if (response.statusCode == 200) {
-      final dbHelper = DBHelper();
-      await dbHelper.insertChiTietDP(newItem);
-      final allItems = await dbHelper.query(
-        DatabaseTables.chiTietDPTable,
-        where: 'OrderUID = ?',
-        whereArgs: [widget.orderUid],
-      );
-      print('Total items for order ${widget.orderUid}: ${allItems.length}');
-      
-      widget.onItemAdded();
-    } else {
-        throw Exception('Server returned ${response.statusCode}');
+      if (_isPreparationOrder) {
+        // Create multiple items for preparation order
+        for (int i = 0; i < _orderAmount; i++) {
+          final newItem = ChiTietDPModel(
+            orderUid: widget.orderUid,
+            uid: const Uuid().v4(),
+            maCN: 'HDM-${_selectedGender == 'Nam' ? 'NAM' : 'NU'}-${DateTime.now().millisecondsSinceEpoch}-$i',
+            ten: 'Hợp đồng mới ${_selectedGender}',
+            gioiTinh: _selectedGender,
+            thoiGianGanNhat: null,
+            loaiAo: _selectedAo,
+            sizeAo: _selectedSizeAo,
+            loaiQuan: _selectedQuan,
+            sizeQuan: _selectedSizeQuan,
+            loaiGiay: _selectedGiay,
+            sizeGiay: _selectedSizeGiay,
+            loaiKhac: _selectedLoaiKhac,
+            sizeKhac: _selectedSizeKhac,
+            ghiChu: 'Đặt hàng chuẩn bị nhân viên mới. ${_ghiChuController.text}',
+          );
+          
+          await _submitItemToServer(newItem);
+        }
+        
+        widget.onItemAdded();
+      } else {
+        // Create single item for existing staff
+        final newItem = ChiTietDPModel(
+          orderUid: widget.orderUid,
+          uid: const Uuid().v4(),
+          maCN: _selectedStaff!['MaNV'],
+          ten: _staffbioData?['Ho_ten'],
+          gioiTinh: _staffbioData?['Gioi_tinh'],
+          thoiGianGanNhat: _staffbioData?['NgayCapDP'] != null 
+              ? DateTime.parse(_staffbioData!['NgayCapDP']) 
+              : null,
+          loaiAo: _selectedAo,
+          sizeAo: _selectedSizeAo,
+          loaiQuan: _selectedQuan,
+          sizeQuan: _selectedSizeQuan,
+          loaiGiay: _selectedGiay,
+          sizeGiay: _selectedSizeGiay,
+          loaiKhac: _selectedLoaiKhac,
+          sizeKhac: _selectedSizeKhac,
+          ghiChu: _ghiChuController.text,
+        );
+        
+        await _submitItemToServer(newItem);
+        widget.onItemAdded();
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2316,255 +2493,383 @@ class _AddUniformItemDialogState extends State<AddUniformItemDialog> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final gioiTinh = _staffbioData?['Gioi_tinh'] ?? '';
-
-    return Dialog(
-      child: SingleChildScrollView(
-        padding: EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Thêm chi tiết đồng phục',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 16),
-
-            // Staff selection dropdown
-            DropdownButtonFormField<Map<String, dynamic>>(
-              value: _selectedStaff,
-              decoration: InputDecoration(
-                labelText: 'Chọn nhân viên',
-                border: OutlineInputBorder(),
-              ),
-              items: _staffList.map((staff) {
-                return DropdownMenuItem<Map<String, dynamic>>(
-                  value: staff,
-                  child: Text('${staff['MaNV']} - ${staff['Ho_ten'] ?? ''}'),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  _selectedStaff = value;
-                  if (value != null) {
-                    _loadStaffbioData(value['MaNV']);
-                  }
-                });
-              },
-            ),
-
-            if (_staffbioData != null) ...[
-              SizedBox(height: 16),
-              
-              // Áo selection
-              DropdownButtonFormField<String>(
-                value: _selectedAo,
-                decoration: InputDecoration(
-                  labelText: 'Áo',
-                  border: OutlineInputBorder(),
-                ),
-                items: _getAoOptions(gioiTinh).map((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedAo = value;
-                    _selectedSizeAo = null;
-                  });
-                },
-              ),
-
-              if (_selectedAo != null) ...[
-                SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: _selectedSizeAo,
-                  decoration: InputDecoration(
-                    labelText: 'Size áo',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: _getSizeAoOptions(gioiTinh, _selectedAo!).map((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedSizeAo = value;
-                    });
-                  },
-                ),
-              ],
-SizedBox(height: 16),
-              // Quần selectionâ
-DropdownButtonFormField<String>(
-  value: _selectedQuan,
-  decoration: InputDecoration(
-    labelText: 'Quần',
-    border: OutlineInputBorder(),
-  ),
-  items: _getQuanOptions(gioiTinh).map((String value) {
-    return DropdownMenuItem<String>(
-      value: value,
-      child: Text(value),
+  Future<void> _submitItemToServer(ChiTietDPModel item) async {
+    final response = await http.post(
+      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chitietdpmoi'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(item.toMap()),
     );
-  }).toList(),
-  onChanged: (value) {
+
+    if (response.statusCode == 200) {
+      final dbHelper = DBHelper();
+      await dbHelper.insertChiTietDP(item);
+    } else {
+      throw Exception('Server returned ${response.statusCode}');
+    }
+  }
+   void _toggleOrderMode(String gender) {
     setState(() {
-      _selectedQuan = value;
+      _isPreparationOrder = true;
+      _selectedGender = gender;
+      _selectedStaff = null;
+      _staffbioData = null;
+      
+      // Reset selections
+      _selectedAo = null;
+      _selectedSizeAo = null;
+      _selectedQuan = null;
       _selectedSizeQuan = null;
-    });
-  },
-),
-
-if (_selectedQuan != null) ...[
-  SizedBox(height: 8),
-  DropdownButtonFormField<String>(
-    value: _selectedSizeQuan,
-    decoration: InputDecoration(
-      labelText: 'Size quần',
-      border: OutlineInputBorder(),
-    ),
-    items: _getSizeQuanOptions().map((String value) {
-      return DropdownMenuItem<String>(
-        value: value,
-        child: Text(value),
-      );
-    }).toList(),
-    onChanged: (value) {
-      setState(() {
-        _selectedSizeQuan = value;
-      });
-    },
-  ),
-],
-
-SizedBox(height: 16),
-
-// Giày selection
-DropdownButtonFormField<String>(
-  value: _selectedGiay,
-  decoration: InputDecoration(
-    labelText: 'Giày',
-    border: OutlineInputBorder(),
-  ),
-  items: _getGiayOptions(gioiTinh).map((String value) {
-    return DropdownMenuItem<String>(
-      value: value,
-      child: Text(value),
-    );
-  }).toList(),
-  onChanged: (value) {
-    setState(() {
-      _selectedGiay = value;
+      _selectedGiay = null;
       _selectedSizeGiay = null;
-    });
-  },
-),
-
-if (_selectedGiay != null) ...[
-  SizedBox(height: 8),
-  DropdownButtonFormField<String>(
-    value: _selectedSizeGiay,
-    decoration: InputDecoration(
-      labelText: 'Size giày',
-      border: OutlineInputBorder(),
-    ),
-    items: _getSizeGiayOptions(gioiTinh, _selectedGiay!).map((String value) {
-      return DropdownMenuItem<String>(
-        value: value,
-        child: Text(value),
-      );
-    }).toList(),
-    onChanged: (value) {
-      setState(() {
-        _selectedSizeGiay = value;
-      });
-    },
-  ),
-],
-
-SizedBox(height: 16),
-
-// Loại khác selection
-DropdownButtonFormField<String>(
-  value: _selectedLoaiKhac,
-  decoration: InputDecoration(
-    labelText: 'Loại khác',
-    border: OutlineInputBorder(),
-  ),
-  items: _getLoaiKhacOptions(gioiTinh).map((String value) {
-    return DropdownMenuItem<String>(
-      value: value,
-      child: Text(value),
-    );
-  }).toList(),
-  onChanged: (value) {
-    setState(() {
-      _selectedLoaiKhac = value;
+      _selectedLoaiKhac = null;
       _selectedSizeKhac = null;
     });
-  },
-),
+  } 
+@override
+Widget build(BuildContext context) {
+  final String gioiTinh = _isPreparationOrder 
+      ? _selectedGender ?? '' 
+      : _staffbioData?['Gioi_tinh'] ?? '';
 
-if (_selectedLoaiKhac != null) ...[
-  SizedBox(height: 8),
-  DropdownButtonFormField<String>(
-    value: _selectedSizeKhac,
-    decoration: InputDecoration(
-      labelText: 'Size loại khác',
-      border: OutlineInputBorder(),
-    ),
-    items: _getSizeKhacOptions(gioiTinh, _selectedLoaiKhac!).map((String value) {
-      return DropdownMenuItem<String>(
-        value: value,
-        child: Text(value),
-      );
-    }).toList(),
-    onChanged: (value) {
-      setState(() {
-        _selectedSizeKhac = value;
-      });
-    },
-  ),
-],
+  return Dialog(
+    child: SingleChildScrollView(
+      padding: EdgeInsets.all(16.0),
+      child: Column(
+       crossAxisAlignment: CrossAxisAlignment.start,
+       mainAxisSize: MainAxisSize.min,
+       children: [
+         Text(
+           'Thêm chi tiết đồng phục',
+           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+         ),
+         SizedBox(height: 16),
 
-SizedBox(height: 16),
+         if (!_isPreparationOrder) ...[
+           DropdownButtonFormField<Map<String, dynamic>>(
+             value: _selectedStaff,
+             decoration: InputDecoration(
+               labelText: 'Chọn nhân viên',
+               border: OutlineInputBorder(),
+             ),
+             items: _staffList.map((staff) {
+               return DropdownMenuItem<Map<String, dynamic>>(
+                 value: staff,
+                 child: Text('${staff['MaNV']} - ${staff['Ho_ten'] ?? ''}'),
+               );
+             }).toList(),
+             onChanged: (value) {
+               setState(() {
+                 _selectedStaff = value;
+                 if (value != null) {
+                   _loadStaffbioData(value['MaNV']);
+                 }
+               });
+             },
+           ),
+           
+           SizedBox(height: 16),
+           
+           Row(
+             children: [
+               Expanded(
+                 child: ElevatedButton(
+                   onPressed: () => _toggleOrderMode('Nam'),
+                   child: Text('Đặt HĐ mới NV Nam'),
+                   style: ElevatedButton.styleFrom(
+                     backgroundColor: Colors.blue,
+                     foregroundColor: Colors.white,
+                   ),
+                 ),
+               ),
+               SizedBox(width: 8),
+               Expanded(
+                 child: ElevatedButton(
+                   onPressed: () => _toggleOrderMode('Nữ'),
+                   child: Text('Đặt HĐ mới NV Nữ'),
+                   style: ElevatedButton.styleFrom(
+                     backgroundColor: Colors.pink,
+                     foregroundColor: Colors.white,
+                   ),
+                 ),
+               ),
+             ],
+           ),
+         ],
+         
+         if (_isPreparationOrder) ...[
+           Card(
+             color: _selectedGender == 'Nam' ? Colors.blue[50] : Colors.pink[50],
+             child: Padding(
+               padding: EdgeInsets.all(16.0),
+               child: Column(
+                 crossAxisAlignment: CrossAxisAlignment.start,
+                 children: [
+                   Text(
+                     'Đặt đồng phục cho nhân viên ${_selectedGender} mới',
+                     style: TextStyle(
+                       fontWeight: FontWeight.bold,
+                       fontSize: 16,
+                     ),
+                   ),
+                   SizedBox(height: 8),
+                   
+                   Row(
+                     children: [
+                       Text('Số lượng:'),
+                       Expanded(
+                         child: Slider(
+                           value: _orderAmount.toDouble(),
+                           min: 1,
+                           max: 20,
+                           divisions: 19,
+                           label: _orderAmount.toString(),
+                           onChanged: (value) {
+                             setState(() {
+                               _orderAmount = value.toInt();
+                             });
+                           },
+                         ),
+                       ),
+                       Container(
+                         width: 40,
+                         child: Text(
+                           _orderAmount.toString(),
+                           style: TextStyle(
+                             fontWeight: FontWeight.bold,
+                             fontSize: 18,
+                           ),
+                           textAlign: TextAlign.center,
+                         ),
+                       ),
+                     ],
+                   ),
+                   
+                   SizedBox(height: 8),
+                   ElevatedButton(
+                     onPressed: () {
+                       setState(() {
+                         _isPreparationOrder = false;
+                         _selectedStaff = null;
+                         _staffbioData = null;
+                       });
+                     },
+                     child: Text('Quay lại đặt cho nhân viên cũ'),
+                     style: ElevatedButton.styleFrom(
+                       backgroundColor: Colors.grey,
+                       foregroundColor: Colors.white,
+                     ),
+                   ),
+                 ],
+               ),
+             ),
+           ),
+           SizedBox(height: 16),
+         ],
 
-              SizedBox(height: 16),
-              TextField(
-                controller: _ghiChuController,
-                decoration: InputDecoration(
-                  labelText: 'Ghi chú',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 3,
-              ),
+         if (gioiTinh.isNotEmpty) ...[
+           DropdownButtonFormField<String>(
+             value: _selectedAo,
+             decoration: InputDecoration(
+               labelText: 'Áo',
+               border: OutlineInputBorder(),
+             ),
+             items: _getAoOptions(gioiTinh).map((String value) {
+               return DropdownMenuItem<String>(
+                 value: value,
+                 child: Text(value),
+               );
+             }).toList(),
+             onChanged: (value) {
+               setState(() {
+                 _selectedAo = value;
+                 _selectedSizeAo = null;
+               });
+             },
+           ),
 
-              SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color.fromARGB(255, 0, 204, 34),
-                    foregroundColor: Colors.white,
-                  ),
-                  onPressed: _saveItem,
-                  child: Text('Lưu'),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
+           if (_selectedAo != null) ...[
+             SizedBox(height: 8),
+             DropdownButtonFormField<String>(
+               value: _selectedSizeAo,
+               decoration: InputDecoration(
+                 labelText: 'Size áo',
+                 border: OutlineInputBorder(),
+               ),
+               items: _getSizeAoOptions(gioiTinh, _selectedAo!).map((String value) {
+                 return DropdownMenuItem<String>(
+                   value: value,
+                   child: Text(value),
+                 );
+               }).toList(),
+               onChanged: (value) {
+                 setState(() {
+                   _selectedSizeAo = value;
+                 });
+               },
+             ),
+           ],
+           SizedBox(height: 16),
+           
+           DropdownButtonFormField<String>(
+             value: _selectedQuan,
+             decoration: InputDecoration(
+               labelText: 'Quần',
+               border: OutlineInputBorder(),
+             ),
+             items: _getQuanOptions(gioiTinh).map((String value) {
+               return DropdownMenuItem<String>(
+                 value: value,
+                 child: Text(value),
+               );
+             }).toList(),
+             onChanged: (value) {
+               setState(() {
+                 _selectedQuan = value;
+                 _selectedSizeQuan = null;
+               });
+             },
+           ),
+
+           if (_selectedQuan != null) ...[
+             SizedBox(height: 8),
+             DropdownButtonFormField<String>(
+               value: _selectedSizeQuan,
+               decoration: InputDecoration(
+                 labelText: 'Size quần',
+                 border: OutlineInputBorder(),
+               ),
+               items: _getSizeQuanOptions().map((String value) {
+                 return DropdownMenuItem<String>(
+                   value: value,
+                   child: Text(value),
+                 );
+               }).toList(),
+               onChanged: (value) {
+                 setState(() {
+                   _selectedSizeQuan = value;
+                 });
+               },
+             ),
+           ],
+
+           SizedBox(height: 16),
+
+           DropdownButtonFormField<String>(
+             value: _selectedGiay,
+             decoration: InputDecoration(
+               labelText: 'Giày',
+               border: OutlineInputBorder(),
+             ),
+             items: _getGiayOptions(gioiTinh).map((String value) {
+               return DropdownMenuItem<String>(
+                 value: value,
+                 child: Text(value),
+               );
+             }).toList(),
+             onChanged: (value) {
+               setState(() {
+                 _selectedGiay = value;
+                 _selectedSizeGiay = null;
+               });
+             },
+           ),
+
+           if (_selectedGiay != null) ...[
+             SizedBox(height: 8),
+             DropdownButtonFormField<String>(
+               value: _selectedSizeGiay,
+               decoration: InputDecoration(
+                 labelText: 'Size giày',
+                 border: OutlineInputBorder(),
+               ),
+               items: _getSizeGiayOptions(gioiTinh, _selectedGiay!).map((String value) {
+                 return DropdownMenuItem<String>(
+                   value: value,
+                   child: Text(value),
+                 );
+               }).toList(),
+               onChanged: (value) {
+                 setState(() {
+                   _selectedSizeGiay = value;
+                 });
+               },
+             ),
+           ],
+
+           SizedBox(height: 16),
+
+           DropdownButtonFormField<String>(
+             value: _selectedLoaiKhac,
+             decoration: InputDecoration(
+               labelText: 'Loại khác',
+               border: OutlineInputBorder(),
+             ),
+             items: _getLoaiKhacOptions(gioiTinh).map((String value) {
+               return DropdownMenuItem<String>(
+                 value: value,
+                 child: Text(value),
+               );
+             }).toList(),
+             onChanged: (value) {
+               setState(() {
+                 _selectedLoaiKhac = value;
+                 _selectedSizeKhac = null;
+               });
+             },
+           ),
+
+           if (_selectedLoaiKhac != null) ...[
+             SizedBox(height: 8),
+             DropdownButtonFormField<String>(
+               value: _selectedSizeKhac,
+               decoration: InputDecoration(
+                 labelText: 'Size loại khác',
+                 border: OutlineInputBorder(),
+               ),
+               items: _getSizeKhacOptions(gioiTinh, _selectedLoaiKhac!).map((String value) {
+                 return DropdownMenuItem<String>(
+                   value: value,
+                   child: Text(value),
+                 );
+               }).toList(),
+               onChanged: (value) {
+                 setState(() {
+                   _selectedSizeKhac = value;
+                 });
+               },
+             ),
+           ],
+
+           SizedBox(height: 16),
+           TextField(
+             controller: _ghiChuController,
+             decoration: InputDecoration(
+               labelText: 'Ghi chú',
+               border: OutlineInputBorder(),
+             ),
+             maxLines: 3,
+           ),
+
+           SizedBox(height: 24),
+           SizedBox(
+             width: double.infinity,
+             child: ElevatedButton(
+               style: ElevatedButton.styleFrom(
+                 backgroundColor: const Color.fromARGB(255, 0, 204, 34),
+                 foregroundColor: Colors.white,
+               ),
+               onPressed: _saveItem,
+               child: Text(_isPreparationOrder 
+                 ? 'Lưu (${_orderAmount} đơn)' 
+                 : 'Lưu'),
+             ),
+           ),
+         ],
+       ],
+     ),
+   ),
+ );
+}
 }
 class EditOrderDialog extends StatefulWidget {
   final DongPhucModel order;

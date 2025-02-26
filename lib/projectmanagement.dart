@@ -2016,41 +2016,67 @@ class _TaskReportSheetState extends State<TaskReportSheet> {
     return null;
   }
 bool _validateSubmission() {
+  List<String> errors = [];
   if (widget.username.trim().isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Không thể xác định người dùng')),
-    );
-    return false;
+    errors.add('Không thể xác định người dùng');
   }
-
   if (widget.boPhan.trim().isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Không thể xác định dự án')),
-    );
-    return false;
+    errors.add('Không thể xác định dự án');
   }
-
   if (_selectedResult == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Vui lòng chọn kết quả')),
-    );
-    return false;
+    errors.add('Vui lòng chọn kết quả');
   }
-
-  if (!widget.isTopicReport && (_selectedResult == '⚠️' || _selectedResult == '❌') && _imageFile == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Vui lòng chụp ảnh')),
-    );
-    return false;
+  if (widget.isTopicReport && 
+      (widget.task.task == 'Máy móc' || widget.task.task == 'Xe/Giỏ đồ')) {
+    
+    if (_imageFile == null) {
+      errors.add('Vui lòng chụp ảnh cho báo cáo này');
+    }
+    
+    if (_codeController.text.isEmpty) {
+      errors.add('Vui lòng quét mã QR cho báo cáo này');
+    }
   }
-
+  else if (!widget.isTopicReport && (_selectedResult == '⚠️' || _selectedResult == '❌') && _imageFile == null) {
+    errors.add('Vui lòng chụp ảnh');
+  }
   if ((_selectedResult == '⚠️' || _selectedResult == '❌') && _giaiPhapController.text.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Vui lòng nhập giải pháp')),
+    errors.add('Vui lòng nhập giải pháp');
+  }
+  if (errors.isNotEmpty) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Lỗi kiểm tra'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: errors.map((error) => Padding(
+              padding: EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.red, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(child: Text(error)),
+                ],
+              ),
+            )).toList(),
+          ),
+          actions: [
+            TextButton(
+              child: Text('Đóng'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
     );
     return false;
   }
-
   return true;
 }
 Future<void> _submitReport() async {
