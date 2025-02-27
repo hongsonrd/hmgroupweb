@@ -1,7 +1,7 @@
 name: hmgroupweb
 description: "Ứng dụng công nghệ chuyển đổi số Hoàn Mỹ Group."
 publish_to: 'none'
-version: 0.1.7
+version: 0.1.8
 
 environment:
   sdk: ">=3.2.0 <4.0.0"
@@ -10,7 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
 
-  
+  file_picker: ^5.2.0+1
   desktop_webview_window: ^0.2.3
   cupertino_icons: ^1.0.2
   url_launcher: ^6.1.14
@@ -78,3 +78,4 @@ flutter:
     - assets/officitylogo.png
     - assets/logokt.png
     - assets/appbackgrid.png
+    - assets/appbackgrid.jpg

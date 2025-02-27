@@ -65,6 +65,32 @@ class _ProjectWorkReportState extends State<ProjectWorkReport> with SingleTicker
     'Gặp khách hàng',
     'Triển khai HĐ mới',
     'Đề xuất/ Ý kiến sáng tạo'
+    'Làm thầu',
+    'Tương tác: Biến động NS',
+    'Tương tác: PA bố trí NS thiếu',
+    'Tương tác: Kiểm soát CL',
+    'Tương tác: Vật tư',
+    'Tương tác: Máy móc',
+    'Tương tác: Đề xuất GS',
+    'Kiểm soát chất lượng DV',
+    'Khách hàng: gặp họp nghiệm thu',
+    'Đánh giá đối thủ',
+    'Họp CN BP',
+    'In nghiệm thu',
+    'Khảo sát HDM',
+    'Họp GS',
+    'Đào tạo CN',
+    'Đào tạo GS',
+    'Họp giao ban',
+    'Họp phòng DV',
+    'Triển khai hợp đồng mới',
+    'Đi hỗ trợ',
+    'Làm giáo trình đào tạo',
+    'Thay thế giám sát',
+    'Làm công nghiệm thu',
+    'Làm báo cáo cho KH',
+    'Yêu cầu vật tư ban đầu',
+    'Yêu cầu cung cấp đồng phục ban đầu'
   ],
   'HM-CSKH': [
     'Ý kiến KH',
@@ -105,13 +131,16 @@ class _ProjectWorkReportState extends State<ProjectWorkReport> with SingleTicker
     'Đề xuất cải tiến'
   ],
   'HM-RD': [
-    'Chung',
+    'Họp',
+    'Hỗ trợ người dùng',
+    'Cập nhật app',
     'Nhân sự',
     'Kinh doanh',
     'Tuyển dụng',
     'QLDV',
     'Giám sát',
-    'Công lương'
+    'Công lương',
+    'Chung'
   ],
   'HM-QA': [
     'Báo cáo',

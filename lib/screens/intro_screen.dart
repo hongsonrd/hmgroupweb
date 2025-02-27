@@ -51,10 +51,17 @@ class _IntroScreenState extends State<IntroScreen> {
     _getAppVersion();
   }
 Future<void> _getAppVersion() async {
-  final packageInfo = await PackageInfo.fromPlatform();
-  setState(() {
-    _currentVersion = packageInfo.version;
-  });
+  try {
+    final packageInfo = await PackageInfo.fromPlatform();
+    if (mounted) {
+      setState(() {
+        _currentVersion = packageInfo.version;
+      });
+    }
+  } catch (e) {
+    print('Error getting app version: $e');
+    _currentVersion = 'unknown';
+  }
 }
   Future<void> _loadData() async {
     setState(() => _isLoadingData = true);
@@ -133,131 +140,160 @@ Future<void> _getAppVersion() async {
   }
 @override
 Widget build(BuildContext context) {
-  return Scaffold(
-    body: Column(
-      children: [
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (widget.userData != null) 
-                Row(
-                  children: [
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Row(
+ return Scaffold(
+   body: Column(
+     children: [
+       Container(
+         color: Colors.white,
+         padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+         child: Column(
+           mainAxisSize: MainAxisSize.min,
+           crossAxisAlignment: CrossAxisAlignment.start,
+           children: [
+             if (widget.userData != null) 
+               Row(
+                 children: [
+                   const SizedBox(width: 16),
+                   Expanded(
+                     child: Row(
+                       children: [
+                         Text(widget.userData!['name'].toString().toUpperCase(),
+                           style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                         const SizedBox(width: 16),
+                         Text('Mã NV: ${widget.userData!['employee_id']}',
+                           style: const TextStyle(fontSize: 16, color: Color.fromARGB(255, 185, 0, 0))),
+                       ],
+                     ),
+                   ),
+                   TextButton.icon(
+                     onPressed: () async {
+                       try {
+                         SharedPreferences prefs = await SharedPreferences.getInstance();
+                         await prefs.clear();
+                         final userState = Provider.of<UserState>(context, listen: false);
+                         await userState.clearUser();
+                         await prefs.setBool('is_authenticated', false);
+                         Navigator.of(context).pushAndRemoveUntil(
+                           MaterialPageRoute(builder: (context) => MainScreen()),
+                           (route) => false
+                         );
+                       } catch (e) {
+                         print('Reset error: $e');
+                         if (mounted) {
+                           ScaffoldMessenger.of(context).showSnackBar(
+                             SnackBar(
+                               content: Text('Có lỗi khi đăng xuất'),
+                               backgroundColor: Colors.red,
+                             ),
+                           );
+                         }
+                       }
+                     },
+                     icon: const Icon(Icons.logout, size: 20),
+                     label: const Text('Đăng xuất', style: TextStyle(fontSize: 16)),
+                     style: TextButton.styleFrom(
+                       foregroundColor: Colors.red,
+                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                     ),
+                   ),
+                 ],
+               ),
+             const SizedBox(height: 4),
+             _buildSegmentedButton(),
+           ],
+         ),
+       ),
+       Expanded(
+  child: Row(
+    children: [
+      Expanded(
+        flex: 6,
+        child: Stack(
+          children: [
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Platform.isWindows
+                ? Container(
+                    color: Colors.white,
+                    child: SingleChildScrollView(
+                      child: Column(
                         children: [
-                          Text(widget.userData!['name'].toString().toUpperCase(),
-                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                          const SizedBox(width: 16),
-                          Text('Mã NV: ${widget.userData!['employee_id']}',
-                            style: const TextStyle(fontSize: 16, color: Color.fromARGB(255, 185, 0, 0))),
+                          // Company long image (like a screenshot of the website)
+                          Image.network(
+                            'https://storage.googleapis.com/times1/DocumentApp/appguide.jpg',
+                            fit: BoxFit.fitWidth,
+                            width: double.infinity,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                height: 500,
+                                color: Colors.grey[200],
+                                child: Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
+                                      SizedBox(height: 16),
+                                      Text(
+                                        "Không thể tải hình ảnh",
+                                        style: TextStyle(fontSize: 16, color: Colors.grey[700]),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                         ],
                       ),
                     ),
-                    TextButton.icon(
-  onPressed: () async {
-    try {
-      // Clear ALL SharedPreferences data
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      await prefs.clear();
-
-      // Clear UserState
-      final userState = Provider.of<UserState>(context, listen: false);
-      await userState.clearUser();
-
-      // Force set authentication to false
-      await prefs.setBool('is_authenticated', false);
-      
-      // Exit the app (this will force user to fully restart and re-authenticate)
-      exit(0);  // Import 'dart:io' for this
-
-    } catch (e) {
-      print('Reset error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Có lỗi khi đăng xuất'),
-            backgroundColor: Colors.red,
+                  )
+                : InAppWebView(
+                    initialUrlRequest: URLRequest(url: WebUri(url)),
+                    onLoadStart: (controller, url) => setState(() => isLoading = true),
+                    onLoadStop: (controller, url) => setState(() => isLoading = false),
+                    onWebViewCreated: (controller) {
+                      try {
+                        _webViewController = controller;
+                        print("WebView controller initialized successfully");
+                      } catch (e) {
+                        print("Error initializing WebView controller: $e");
+                      }
+                    },
+                    onReceivedError: (controller, request, error) {
+                      print("WebView error: ${error.description}");
+                    },
+                  ),
+            ),
+            Align(
+              alignment: Alignment.topCenter,
+              child: Container(
+                height: MediaQuery.of(context).size.height * 0.02,
+                color: Colors.white,
+              ),
+            ),
+            if (isLoading && !Platform.isWindows)
+              const Center(child: CircularProgressIndicator()),
+          ],
+        ),
+      ),
+      Expanded(
+        flex: 4,
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border(left: BorderSide(color: Colors.grey.shade300, width: 1)),
           ),
-        );
-      }
-    }
-  },
-  icon: const Icon(Icons.logout, size: 20),
-  label: const Text('Đăng xuất', style: TextStyle(fontSize: 16)),
-  style: TextButton.styleFrom(
-    foregroundColor: Colors.red,
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: _isLoadingData ? const Center(child: CircularProgressIndicator()) : _buildHistoryContent(),
+        ),
+      ),
+    ],
   ),
 ),
-                  ],
-                ),
-              const SizedBox(height: 4),
-              _buildSegmentedButton(),
-            ],
-          ),
-        ),
-        Expanded(
-          child: Row(
-            children: [
-              Expanded(
-                flex: 6,
-                child: Stack(
-                  children: [
-                    Positioned(
-                      //top: -(MediaQuery.of(context).size.height * 0.04),
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: InAppWebView(
-                        initialUrlRequest: URLRequest(url: WebUri(url)),
-                        onLoadStart: (controller, url) => setState(() => isLoading = true),
-                        onLoadStop: (controller, url) => setState(() => isLoading = false),
-                        onWebViewCreated: (controller) {
-  try {
-    _webViewController = controller;
-    print("WebView controller initialized successfully");
-  } catch (e) {
-    print("Error initializing WebView controller: $e");
-  }
-},
-onReceivedError: (controller, request, error) {
-  print("WebView error: ${error.description}");
-},
-                      ),
-                    ),
-                    Align(
-                      alignment: Alignment.topCenter,
-                      child: Container(
-                        height: MediaQuery.of(context).size.height * 0.02,
-                        color: Colors.white,
-                      ),
-                    ),
-                    if (isLoading)
-                      const Center(child: CircularProgressIndicator()),
-                  ],
-                ),
-              ),
-              Expanded(
-                flex: 4,
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border(left: BorderSide(color: Colors.grey.shade300, width: 1)),
-                  ),
-                  child: _isLoadingData ? const Center(child: CircularProgressIndicator()) : _buildHistoryContent(),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
+     ],
+   ),
+ );
 }
 
  Widget _buildSegmentedButton() {
@@ -398,20 +434,24 @@ SizedBox(
       padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
     ),
     onPressed: () async {
-      final url = 'https://storage.googleapis.com/times1/DocumentApp/HMGROUPmac.zip';
-      try {
-        if (Platform.isMacOS) {
-          await Clipboard.setData(ClipboardData(text: url));
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Link tải đã được copy vào clipboard'), backgroundColor: Colors.green)
-          );
-        }
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Không thể copy link tải'), backgroundColor: Colors.red)
-        );
-      }
-    },
+  final url = 'https://storage.googleapis.com/times1/DocumentApp/HMGROUPmac.zip';
+  try {
+    // Remove platform check to let it work on all platforms
+    await Clipboard.setData(ClipboardData(text: url));
+    if (mounted) {  // Check if widget is still mounted
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Link tải đã được copy vào clipboard'), backgroundColor: Colors.green)
+      );
+    }
+  } catch (e) {
+    print('Copy link error: $e');  // Log the error for debugging
+    if (mounted) {  // Check if widget is still mounted
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Không thể copy link tải: $e'), backgroundColor: Colors.red)
+      );
+    }
+  }
+},
     child: Text(
       'Tải macOS',
       style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
@@ -428,20 +468,23 @@ SizedBox(
       padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
     ),
     onPressed: () async {
-      final url = 'https://storage.googleapis.com/times1/DocumentApp/HMGROUPwin.zip';
-      try {
-        if (Platform.isWindows) {
-          await Clipboard.setData(ClipboardData(text: url));
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Link tải đã được copy vào clipboard'), backgroundColor: Colors.green)
-          );
-        }
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Không thể copy link tải'), backgroundColor: Colors.red)
-        );
-      }
-    },
+  final url = 'https://storage.googleapis.com/times1/DocumentApp/HMGROUPwin.zip';
+  try {
+    await Clipboard.setData(ClipboardData(text: url));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Link tải đã được copy vào clipboard'), backgroundColor: Colors.green)
+      );
+    }
+  } catch (e) {
+    print('Copy link error: $e');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Không thể copy link tải: $e'), backgroundColor: Colors.red)
+      );
+    }
+  }
+},
     child: Text(
       'Tải Windows',
       style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),

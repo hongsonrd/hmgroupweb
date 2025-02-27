@@ -369,9 +369,9 @@ Future<void> _initializeData() async {
    _departments = _departments.toSet().toList()..sort();
    debugLog('Final departments: $_departments');
 
-   final months = await dbHelper.rawQuery(
-     'SELECT DISTINCT strftime("%Y-%m", Ngay) as month FROM chamcongcn ORDER BY month DESC'
-   );
+final months = await dbHelper.rawQuery(
+  r"SELECT DISTINCT strftime('%Y-%m', Ngay) as month FROM chamcongcn ORDER BY month DESC"
+);
    _availableMonths = months.map((e) => e['month'] as String).toList();
    
    String currentMonth = DateFormat('yyyy-MM').format(DateTime.now());
@@ -742,14 +742,14 @@ Widget build(BuildContext context) {
         // Debug overlay
         if (_showDebugOverlay)
           Positioned(
-            bottom: 10,
-            left: 10,
-            right: 10,
+            bottom: 20,
+            left: 710,
+            right: 20,
             child: Container(
               height: 60,
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.7),
-                borderRadius: BorderRadius.circular(8),
+                color: Colors.black.withOpacity(0.65),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: ListView.builder(
                 itemCount: _debugLogs.length,
@@ -757,7 +757,7 @@ Widget build(BuildContext context) {
                   padding: const EdgeInsets.all(4.0),
                   child: Text(
                     _debugLogs[index],
-                    style: TextStyle(color: Colors.white, fontSize: 12),
+                    style: TextStyle(color: Colors.white, fontSize: 8),
                   ),
                 ),
               ),

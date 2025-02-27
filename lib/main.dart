@@ -141,7 +141,7 @@ void main() async {
     await dbHelper.database;
     await dbHelper.checkDatabaseStatus();
     final userState = UserState();
-    await checkAppVersion();
+    //await checkAppVersion();
 
     // Run the app with providers
     runApp(
@@ -153,9 +153,13 @@ void main() async {
         child: const MyApp(),
       ),
     );
+    
+    // Check app version after app is initialized
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await checkAppVersion();
+    });
+    
   } catch (e, stackTrace) {
-    print('Initialization error: $e');
-    print('Stack trace: $stackTrace');
     
     // Show error UI if initialization fails
     runApp(
@@ -215,88 +219,101 @@ Future<void> checkAppVersion() async {
     // Get current app version
     PackageInfo packageInfo = await PackageInfo.fromPlatform();
     String currentVersion = packageInfo.version;
+    String latestVersion = 'Unknown';
+    bool fetchSuccess = false;
 
     // Fetch latest version
-    final response = await http.get(
-      Uri.parse('https://yourworldtravel.vn/api/document/versiondesktop.txt')
-    );
-
-    if (response.statusCode == 200) {
-      String latestVersion = response.body.trim();
+    try {
+      final response = await http.get(
+        Uri.parse('https://yourworldtravel.vn/api/document/versiondesktop.txt')
+      ).timeout(const Duration(seconds: 10));
       
-      if (currentVersion != latestVersion) {
-        showDialog(
-          context: navigatorKey.currentContext!,
-          barrierDismissible: false,
-          builder: (BuildContext context) {
-            return AlertDialog(
-              title: const Text('Cập nhật mới'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Phiên bản mới $latestVersion đã có sẵn. Bạn nên cập nhật để có trải nghiệm tốt nhất.'),
-                  const SizedBox(height: 20),
-                  const Text('Chọn phiên bản phù hợp với thiết bị của bạn:'),
-                ],
-              ),
-              actions: <Widget>[
-                Column(
-                  children: [
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.laptop_mac),
-                        label: const Text('Tải bản macOS'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          backgroundColor: Colors.black,
-                        ),
-                        onPressed: () async {
-                          final url = Uri.parse('https://storage.googleapis.com/times1/DocumentApp/HMGROUPmac.zip');
-                          try {
-                            await launchUrl(url, mode: LaunchMode.externalApplication);
-                          } catch (e) {
-                            print('Error launching URL: $e');
-                          }
-                          Navigator.of(context).pop();
-                        },
-                      ),
+      if (response.statusCode == 200) {
+        latestVersion = response.body.trim();
+        fetchSuccess = true;
+      }
+    } catch (e) {
+      print('Error fetching version: $e');
+    }
+
+    // Always show version info dialog
+    await showDialog(
+      context: navigatorKey.currentContext!,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Thông tin phiên bản'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Phiên bản hiện tại: $currentVersion'),
+              Text('Phiên bản mới nhất: $latestVersion'),
+              const SizedBox(height: 10),
+              fetchSuccess 
+                ? (currentVersion != latestVersion 
+                  ? const Text('Cần cập nhật phiên bản mới!', 
+                      style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))
+                  : const Text('Ứng dụng đã là phiên bản mới nhất.', 
+                      style: TextStyle(color: Colors.green)))
+                : const Text('Không thể kiểm tra phiên bản mới nhất.', 
+                    style: TextStyle(color: Colors.orange)),
+            ],
+          ),
+          actions: <Widget>[
+            if (fetchSuccess && currentVersion != latestVersion) Column(
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.laptop_mac),
+                    label: const Text('Tải bản macOS'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      backgroundColor: const Color.fromARGB(255, 227, 255, 255),
                     ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.laptop),
-                        label: const Text('Tải bản Windows'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          backgroundColor: Colors.blue,
-                        ),
-                        onPressed: () async {
-                          final url = Uri.parse('https://storage.googleapis.com/times1/DocumentApp/HMGROUPwin.zip');
-                          try {
-                            await launchUrl(url, mode: LaunchMode.externalApplication);
-                          } catch (e) {
-                            print('Error launching URL: $e');
-                          }
-                          Navigator.of(context).pop();
-                        },
-                      ),
+                    onPressed: () async {
+                      final url = Uri.parse('https://storage.googleapis.com/times1/DocumentApp/HMGROUPmac.zip');
+                      try {
+                        await launchUrl(url, mode: LaunchMode.externalApplication);
+                      } catch (e) {
+                        print('Error launching URL: $e');
+                      }
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.laptop),
+                    label: const Text('Tải bản Windows'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      backgroundColor: const Color.fromARGB(255, 250, 234, 255),
                     ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      child: const Text('Để sau'),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
+                    onPressed: () async {
+                      final url = Uri.parse('https://storage.googleapis.com/times1/DocumentApp/HMGROUPwin.zip');
+                      try {
+                        await launchUrl(url, mode: LaunchMode.externalApplication);
+                      } catch (e) {
+                        print('Error launching URL: $e');
+                      }
+                      Navigator.of(context).pop();
+                    },
+                  ),
                 ),
               ],
-            );
-          },
+            ),
+            TextButton(
+              child: const Text('Đóng'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
         );
-      }
-    }
+      },
+    );
   } catch (e) {
     print('Error checking version: $e');
   }
@@ -1130,7 +1147,7 @@ void _showLoginDialog() {
     ),
     BottomNavigationBarItem(
       icon: Icon(Icons.web),
-      label: 'App khác',
+      label: 'Công việc',
     ),
     BottomNavigationBarItem(
       icon: Icon(Icons.home),
