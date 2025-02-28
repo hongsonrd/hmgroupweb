@@ -1240,6 +1240,54 @@ class OrderMatHangModel {
     );
   }
 }
+class HinhAnhZaloModel {
+  final String uid;
+  DateTime? ngay;
+  String? gio;
+  String? boPhan;
+  String? giamSat;
+  String? nguoiDung;
+  String? hinhAnh;
+  String? khuVuc;
+  String? quanTrong;
+
+  HinhAnhZaloModel({
+    required this.uid,
+    this.ngay,
+    this.gio,
+    this.boPhan,
+    this.giamSat,
+    this.nguoiDung,
+    this.hinhAnh,
+    this.khuVuc,
+    this.quanTrong,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'UID': uid,
+    'Ngay': ngay?.toIso8601String(),
+    'Gio': gio,
+    'BoPhan': boPhan,
+    'GiamSat': giamSat,
+    'NguoiDung': nguoiDung,
+    'HinhAnh': hinhAnh,
+    'KhuVuc': khuVuc,
+    'QuanTrong': quanTrong,
+  };
+
+  factory HinhAnhZaloModel.fromMap(Map<String, dynamic> map) { 
+    return HinhAnhZaloModel(
+    uid: map['UID'],
+    ngay: map['Ngay'] != null ? DateTime.parse(map['Ngay']) : null,
+    gio: map['Gio'],
+    boPhan: map['BoPhan'],
+    giamSat: map['GiamSat'],
+    nguoiDung: map['NguoiDung'],
+    hinhAnh: map['HinhAnh'],
+    khuVuc: map['KhuVuc'],
+    quanTrong: map['QuanTrong'],
+  );
+}}
 // Database Tables
 class DatabaseTables {
   // Table Names
@@ -1259,7 +1307,21 @@ class DatabaseTables {
   static const String orderChiTietTable = 'orderchitiet';
   static const String orderDinhMucTable = 'orderdinhmuc';
   static const String chamCongCNTable = 'chamcongcn';
-
+  static const String hinhAnhZaloTable = 'hinhanhzalo';
+static const String createHinhAnhZaloTable = '''
+  CREATE TABLE $hinhAnhZaloTable (
+    UID VARCHAR(100),
+    Ngay DATE,
+    Gio TIME,
+    BoPhan TEXT,
+    GiamSat TEXT,
+    NguoiDung TEXT,
+    HinhAnh TEXT,
+    KhuVuc TEXT,
+    QuanTrong TEXT,
+    PRIMARY KEY (UID)
+  )
+''';
 // Order table
 static const String createOrderTable = '''
   CREATE TABLE $orderTable (

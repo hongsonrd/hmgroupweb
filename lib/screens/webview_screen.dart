@@ -108,7 +108,7 @@ Widget build(BuildContext context) {
         body: Container(
           decoration: const BoxDecoration(
             image: DecorationImage(
-              image: AssetImage('assets/appbackgrid.png'),
+              image: AssetImage('assets/appbackgrid.jpg'),
               fit: BoxFit.cover,
             ),
           ),

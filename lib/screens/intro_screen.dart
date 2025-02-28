@@ -166,36 +166,41 @@ Widget build(BuildContext context) {
                      ),
                    ),
                    TextButton.icon(
-                     onPressed: () async {
-                       try {
-                         SharedPreferences prefs = await SharedPreferences.getInstance();
-                         await prefs.clear();
-                         final userState = Provider.of<UserState>(context, listen: false);
-                         await userState.clearUser();
-                         await prefs.setBool('is_authenticated', false);
-                         Navigator.of(context).pushAndRemoveUntil(
-                           MaterialPageRoute(builder: (context) => MainScreen()),
-                           (route) => false
-                         );
-                       } catch (e) {
-                         print('Reset error: $e');
-                         if (mounted) {
-                           ScaffoldMessenger.of(context).showSnackBar(
-                             SnackBar(
-                               content: Text('Có lỗi khi đăng xuất'),
-                               backgroundColor: Colors.red,
-                             ),
-                           );
-                         }
-                       }
-                     },
-                     icon: const Icon(Icons.logout, size: 20),
-                     label: const Text('Đăng xuất', style: TextStyle(fontSize: 16)),
-                     style: TextButton.styleFrom(
-                       foregroundColor: Colors.red,
-                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                     ),
-                   ),
+  onPressed: () async {
+    try {
+      // Clear ALL SharedPreferences data
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      // Clear UserState
+      final userState = Provider.of<UserState>(context, listen: false);
+      await userState.clearUser();
+
+      // Force set authentication to false
+      await prefs.setBool('is_authenticated', false);
+      
+      // Exit the app (this will force user to fully restart and re-authenticate)
+      exit(0);  // Import 'dart:io' for this
+
+    } catch (e) {
+      print('Reset error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Có lỗi khi đăng xuất'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  },
+  icon: const Icon(Icons.logout, size: 20),
+  label: const Text('Đăng xuất', style: TextStyle(fontSize: 16)),
+  style: TextButton.styleFrom(
+    foregroundColor: Colors.red,
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+  ),
+),
                  ],
                ),
              const SizedBox(height: 4),

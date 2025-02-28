@@ -18,6 +18,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:intl/intl.dart';
 import 'package:sqflite/sqflite.dart';
 import 'http_client.dart';
+import 'projectimage.dart';
 
 class ProjectManagement extends StatefulWidget {
     ProjectManagement({Key? key}) : super(key: key);
@@ -930,46 +931,79 @@ try {
             Column(
   crossAxisAlignment: CrossAxisAlignment.start,
   children: [
-    Text(
-      '✳️ Chọn lại hoặc',
-      style: TextStyle(fontSize: 16),
+    Row(
+      children: [
+        Text(
+          '✳️ Chọn lại hoặc',
+          style: TextStyle(fontSize: 16),
+        ),
+        SizedBox(width: 8),
+        TextButton(
+          style: ButtonStyle(
+            padding: MaterialStateProperty.all(EdgeInsets.zero),
+            minimumSize: MaterialStateProperty.all(Size(0, 0)),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          onPressed: _selectedProject == null ? null : () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ProjectImageScreen(
+                  boPhan: _selectedProject!,
+                  username: userCredentials.username,
+                ),
+              ),
+            );
+          },
+          child: Text(
+            'Cập nhật ảnh',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: _selectedProject != null 
+                  ? const Color.fromARGB(255, 214, 214, 214)
+                  : Colors.grey,
+            ),
+          ),
+        ),
+      ],
     ),
     SizedBox(height: 8),
     Wrap(
       spacing: 16,
       children: [
         TextButton(
-  style: ButtonStyle(
-    padding: MaterialStateProperty.all(EdgeInsets.zero),
-    minimumSize: MaterialStateProperty.all(Size(0, 0)),
-    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-  ),
-  onPressed: _selectedProject == null ? null : () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ProjectUpdateScreen(
-          boPhan: _selectedProject!,
+          style: ButtonStyle(
+            padding: MaterialStateProperty.all(EdgeInsets.zero),
+            minimumSize: MaterialStateProperty.all(Size(0, 0)),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          onPressed: _selectedProject == null ? null : () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ProjectUpdateScreen(
+                  boPhan: _selectedProject!,
+                ),
+              ),
+            ).then((_) {
+              // Reload staff list when returning from ProjectUpdateScreen
+              if (_selectedProject != null) {
+                _loadStaffForProject(_selectedProject!);
+              }
+            });
+          },
+          child: Text(
+            'Cập nhật dự án',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: _selectedProject != null 
+                  ? const Color.fromARGB(255, 0, 204, 34)
+                  : Colors.grey,
+            ),
+          ),
         ),
-      ),
-    ).then((_) {
-      // Reload staff list when returning from ProjectUpdateScreen
-      if (_selectedProject != null) {
-        _loadStaffForProject(_selectedProject!);
-      }
-    });
-  },
-  child: Text(
-    'Cập nhật dự án',
-    style: TextStyle(
-      fontSize: 16,
-      fontWeight: FontWeight.bold,
-      color: _selectedProject != null 
-          ? const Color.fromARGB(255, 0, 204, 34)
-          : Colors.grey,
-    ),
-  ),
-),
         TextButton(
           style: ButtonStyle(
             padding: MaterialStateProperty.all(EdgeInsets.zero),

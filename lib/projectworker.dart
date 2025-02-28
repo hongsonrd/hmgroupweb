@@ -14,6 +14,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:excel/excel.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ProjectWorker extends StatefulWidget {
  final String selectedBoPhan;
@@ -36,13 +37,119 @@ class _ProjectWorkerState extends State<ProjectWorker> {
   Map<String, String> _staffNames = {};
   List<String> _debugLogs = [];
 bool _showDebugOverlay = true;
+Map<String, Color> _staffColors = {};
+List<Color> _availableColors = [
+  Colors.yellow.shade200,
+  Colors.blue.shade200,
+  Colors.green.shade200,
+  Colors.red.shade200,
+];
+bool _showColorDialog = false;
+String? _staffToColor;
+
   @override
   void initState() {
     super.initState();
     _selectedDepartment = widget.selectedBoPhan;
     _username = Provider.of<UserCredentials>(context, listen: false).username;
     _initializeData();
+      _loadStaffColors();
+
   }
+  Future<void> _loadStaffColors() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final colorData = prefs.getString('staff_colors_${_selectedDepartment}');
+    
+    if (colorData != null) {
+      final Map<String, dynamic> jsonData = json.decode(colorData);
+      
+      setState(() {
+        _staffColors = jsonData.map((key, value) => 
+          MapEntry(key, Color(int.parse(value.toString()))));
+      });
+      
+      debugLog('Loaded staff colors: ${_staffColors.length}');
+    }
+  } catch (e) {
+    debugLog('Error loading staff colors: $e');
+  }
+}
+Widget _buildColorPickerDialog() {
+  return AlertDialog(
+    title: Text('Chọn màu cho ${_staffToColor ?? ''}'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ...List.generate(_availableColors.length, (index) {
+          return InkWell(
+            onTap: () {
+              if (_staffToColor != null) {
+                setState(() {
+                  _staffColors[_staffToColor!] = _availableColors[index];
+                  _showColorDialog = false;
+                });
+                _saveStaffColors();
+              }
+            },
+            child: Container(
+              margin: EdgeInsets.symmetric(vertical: 8),
+              height: 40,
+              decoration: BoxDecoration(
+                color: _availableColors[index],
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Center(child: Text('Màu ${index + 1}')),
+            ),
+          );
+        }),
+        SizedBox(height: 16),
+        ElevatedButton(
+          onPressed: () {
+            if (_staffToColor != null && _staffColors.containsKey(_staffToColor)) {
+              setState(() {
+                _staffColors.remove(_staffToColor);
+                _showColorDialog = false;
+              });
+              _saveStaffColors();
+            }
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+          ),
+          child: Text('Xóa màu', style: TextStyle(color: Colors.white)),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(
+        onPressed: () {
+          setState(() {
+            _showColorDialog = false;
+          });
+        },
+        child: Text('Đóng'),
+      ),
+    ],
+  );
+}
+Future<void> _saveStaffColors() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    
+    final Map<String, int> colorData = 
+      _staffColors.map((key, value) => MapEntry(key, value.value));
+    
+    await prefs.setString(
+      'staff_colors_${_selectedDepartment}',
+      json.encode(colorData)
+    );
+    
+    debugLog('Saved staff colors: ${_staffColors.length}');
+  } catch (e) {
+    debugLog('Error saving staff colors: $e');
+  }
+}
   Future<void> _loadStaffNames(List<String> employeeIds) async {
   final dbHelper = DBHelper();
   final placeholders = List.filled(employeeIds.length, '?').join(',');
@@ -663,37 +770,44 @@ Widget build(BuildContext context) {
     ),
     body: Stack(
       children: [
-        // Main content
         _isLoading 
           ? const Center(child: CircularProgressIndicator()) 
           : Column(
             children: [
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Row(
-                  children: [
-                    ElevatedButton(
-                      onPressed: _addNewEmployee, 
-                      child: Text('Thêm NV mới')
-                    ),
-                    const SizedBox(width: 10),
-      ElevatedButton(
-        onPressed: _addPreviousEmployees,
-        child: Text('Thêm NV như trước')
-      ),
-                    const SizedBox(width: 16),
-                    ElevatedButton(
-                      onPressed: (_modifiedRecords.isNotEmpty || _newRecords.isNotEmpty) 
-                        ? _saveChanges 
-                        : null,
-                      child: Text('Lưu thay đổi'),
-                    ),
-                    const SizedBox(width: 10),
-      ElevatedButton(
-        onPressed: _exportToExcel,
-        child: Text('Xuất file'),
-      ),
-                  ],
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      ElevatedButton(
+                        onPressed: _addNewEmployee, 
+                        child: Text('➕ NV mới')
+                      ),
+                      const SizedBox(width: 10),
+                      ElevatedButton(
+                        onPressed: _addPreviousEmployees,
+                        child: Text('➕ NV như trước')
+                      ),
+                      const SizedBox(width: 10),
+                      ElevatedButton(
+                        onPressed: _copyFromYesterday,
+                        child: Text('Như hôm qua'),
+                      ),
+                      const SizedBox(width: 16),
+                      ElevatedButton(
+                        onPressed: (_modifiedRecords.isNotEmpty || _newRecords.isNotEmpty) 
+                          ? _saveChanges 
+                          : null,
+                        child: Text('Lưu thay đổi'),
+                      ),
+                      const SizedBox(width: 10),
+                      ElevatedButton(
+                        onPressed: _exportToExcel,
+                        child: Text('Xuất file'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               Expanded(
@@ -738,8 +852,27 @@ Widget build(BuildContext context) {
               ),
             ],
           ),
-          
-        // Debug overlay
+        if (_isLoading)
+          Container(
+            color: Colors.black.withOpacity(0.3),
+            child: Center(
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text('Đang xử lý...'),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        if (_showColorDialog)
+          Center(child: _buildColorPickerDialog()),
         if (_showDebugOverlay)
           Positioned(
             bottom: 20,
@@ -767,7 +900,177 @@ Widget build(BuildContext context) {
     ),
   );
 }
-
+Future<void> _copyFromYesterday() async {
+  setState(() => _isLoading = true);
+  try {
+    debugLog('Starting copy from yesterday process...');
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final todayStr = DateFormat('yyyy-MM-dd').format(today);
+    final yesterdayStr = DateFormat('yyyy-MM-dd').format(yesterday);
+    final yesterdayDay = yesterday.day;
+    
+    debugLog('Today: $todayStr, Yesterday: $yesterdayStr (day $yesterdayDay)');
+    debugLog('Selected department: $_selectedDepartment, Month: $_selectedMonth');
+    
+    if (_selectedMonth != DateFormat('yyyy-MM').format(today)) {
+      setState(() => _isLoading = false);
+      _showError('Chỉ có thể sao chép cho ngày hôm nay trong tháng hiện tại');
+      return;
+    }
+    
+    final dbHelper = DBHelper();
+    final dateFormats = await dbHelper.rawQuery(
+      'SELECT MaNV, Ngay FROM chamcongcn WHERE BoPhan = ? ORDER BY Ngay DESC LIMIT 5',
+      [_selectedDepartment]
+    );
+    debugLog('Sample date formats in DB: ${dateFormats.map((r) => "${r['MaNV']}: ${r['Ngay']}")}');
+    
+    final yesterdayRecords = await dbHelper.rawQuery('''
+      SELECT * FROM chamcongcn 
+      WHERE BoPhan = ? 
+      AND strftime('%d', Ngay) = ?
+      AND strftime('%m-%Y', Ngay) = ?
+    ''', [
+      _selectedDepartment, 
+      yesterdayDay.toString().padLeft(2, '0'),
+      DateFormat('MM-yyyy').format(yesterday)
+    ]);
+    
+    debugLog('Found ${yesterdayRecords.length} records for yesterday (day $yesterdayDay)');
+    
+    if (yesterdayRecords.isEmpty) {
+      setState(() => _isLoading = false);
+      _showError('Không có dữ liệu chấm công cho ngày hôm qua (ngày $yesterdayDay)');
+      return;
+    }
+    
+    final todayRecords = await dbHelper.rawQuery('''
+      SELECT MaNV FROM chamcongcn 
+      WHERE BoPhan = ? AND strftime('%d', Ngay) = ?
+      AND strftime('%m-%Y', Ngay) = ?
+    ''', [
+      _selectedDepartment, 
+      today.day.toString().padLeft(2, '0'),
+      DateFormat('MM-yyyy').format(today)
+    ]);
+    
+    final existingEmployeesToday = todayRecords.map((r) => r['MaNV'] as String).toSet();
+    debugLog('Employees already with records today: $existingEmployeesToday');
+    
+    int addedCount = 0;
+    int updatedCount = 0;
+    
+    for (final record in yesterdayRecords) {
+      final empId = record['MaNV'] as String;
+      final currentTime = DateFormat('HH:mm:ss').format(now);
+      
+      final recordData = {
+        'Ngay': todayStr,
+        'Gio': currentTime,
+        'NguoiDung': _username,
+        'BoPhan': _selectedDepartment,
+        'MaBP': _selectedDepartment,
+        'PhanLoai': record['PhanLoai'] ?? '',
+        'MaNV': empId,
+        'CongThuongChu': record['CongThuongChu'] ?? 'Ro',
+        'NgoaiGioThuong': record['NgoaiGioThuong']?.toString() ?? '0',
+        'NgoaiGioKhac': record['NgoaiGioKhac']?.toString() ?? '0',
+        'NgoaiGiox15': record['NgoaiGiox15']?.toString() ?? '0',
+        'NgoaiGiox2': record['NgoaiGiox2']?.toString() ?? '0',
+        'HoTro': record['HoTro']?.toString() ?? '0',
+        'PartTime': record['PartTime']?.toString() ?? '0',
+        'PartTimeSang': record['PartTimeSang']?.toString() ?? '0',
+        'PartTimeChieu': record['PartTimeChieu']?.toString() ?? '0',
+        'CongLe': record['CongLe']?.toString() ?? '0',
+      };
+      
+      if (existingEmployeesToday.contains(empId)) {
+        debugLog('Updating today\'s record for employee: $empId');
+        
+        final uidResult = await dbHelper.rawQuery(
+          'SELECT UID FROM chamcongcn WHERE BoPhan = ? AND strftime("%d", Ngay) = ? AND MaNV = ?',
+          [_selectedDepartment, today.day.toString().padLeft(2, '0'), empId]
+        );
+        
+        if (uidResult.isNotEmpty) {
+          final uid = uidResult.first['UID'] as String;
+          
+          try {
+            final response = await http.put(
+              Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongsua/$uid'),
+              headers: {'Content-Type': 'application/json'},
+              body: json.encode(recordData)
+            ).timeout(const Duration(seconds: 30));
+            
+            if (response.statusCode == 200) {
+              await dbHelper.updateChamCongCN(uid, recordData);
+              updatedCount++;
+              debugLog('Successfully updated record for $empId (UID: $uid)');
+            } else {
+              debugLog('Server returned error for update: ${response.statusCode} - ${response.body}');
+            }
+          } catch (e) {
+            debugLog('Error during update for $empId: $e');
+          }
+        }
+      } else {
+        debugLog('Creating new record for employee: $empId');
+        final uid = Uuid().v4();
+        recordData['UID'] = uid;
+        
+        try {
+          final response = await http.post(
+            Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamconggui'),
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode(recordData)
+          ).timeout(const Duration(seconds: 30));
+          
+          if (response.statusCode == 200) {
+            final chamCongModel = ChamCongCNModel(
+              uid: uid,
+              maNV: empId,
+              ngay: today,
+              boPhan: _selectedDepartment!,
+              nguoiDung: _username,
+              congThuongChu: recordData['CongThuongChu'] as String,
+              ngoaiGioThuong: double.tryParse(recordData['NgoaiGioThuong'].toString()) ?? 0,
+              ngoaiGioKhac: double.tryParse(recordData['NgoaiGioKhac'].toString()) ?? 0,
+              ngoaiGiox15: double.tryParse(recordData['NgoaiGiox15'].toString()) ?? 0,
+              ngoaiGiox2: double.tryParse(recordData['NgoaiGiox2'].toString()) ?? 0,
+              hoTro: int.tryParse(recordData['HoTro'].toString()) ?? 0,
+              partTime: int.tryParse(recordData['PartTime'].toString()) ?? 0,
+              partTimeSang: int.tryParse(recordData['PartTimeSang'].toString()) ?? 0,
+              partTimeChieu: int.tryParse(recordData['PartTimeChieu'].toString()) ?? 0,
+              congLe: double.tryParse(recordData['CongLe'].toString()) ?? 0,
+            );
+            await dbHelper.insertChamCongCN(chamCongModel);
+            addedCount++;
+            debugLog('Successfully created new record for $empId (UID: $uid)');
+          } else {
+            debugLog('Server returned error for creation: ${response.statusCode} - ${response.body}');
+          }
+        } catch (e) {
+          debugLog('Error during creation for $empId: $e');
+        }
+      }
+    }
+    
+    await _loadAttendanceData();
+    
+    setState(() => _isLoading = false);
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Đã sao chép từ hôm qua: ${addedCount + updatedCount} nhân viên (thêm mới: $addedCount, cập nhật: $updatedCount)'))
+    );
+    
+  } catch (e) {
+    setState(() => _isLoading = false);
+    debugLog('Error copying from yesterday: $e');
+    _showError('Không thể sao chép dữ liệu từ hôm qua: ${e.toString()}');
+  }
+}
   Widget _buildAttendanceTable(String columnType) {
   final days = _getDaysInMonth();
   final employees = _getUniqueEmployees();
@@ -777,26 +1080,62 @@ Widget build(BuildContext context) {
     child: SingleChildScrollView(
       child: DataTable(
         columns: [
-          DataColumn(label: Text('Mã NV')),
+          DataColumn(label: Row(
+            children: [
+              Text('Mã NV'),
+              SizedBox(width: 4),
+              InkWell(
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: Text('Đánh dấu nhân viên'),
+                      content: Text('Nhấn vào tên nhân viên để chọn màu đánh dấu.'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: Text('Đóng'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                child: Icon(Icons.color_lens, size: 16),
+              ),
+            ],
+          )),
           ...days.map((day) => DataColumn(label: Text(day.toString()))),
         ],
         rows: employees.map((empId) {
+          final bgColor = _staffColors[empId];
+          
           return DataRow(
+            color: bgColor != null ? 
+              MaterialStateProperty.all(bgColor) : 
+              null,
             cells: [
               DataCell(
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(empId),
-                    Text(
-                      _staffNames[empId] ?? '',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      _staffToColor = empId;
+                      _showColorDialog = true;
+                    });
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(empId),
+                      Text(
+                        _staffNames[empId] ?? '',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               ...days.map((day) {
@@ -945,8 +1284,28 @@ void _updateAttendance(String empId, int day, String columnType, String? value) 
 });
 }
  List<String> _getUniqueEmployees() {
-   return _attendanceData.map((record) => record['MaNV'] as String).toSet().toList()..sort();
- }
+  final employees = _attendanceData
+    .map((record) => record['MaNV'] as String)
+    .toSet()
+    .toList();
+  
+  // Sort by color if coloring is active
+  if (_staffColors.isNotEmpty) {
+    employees.sort((a, b) {
+      final colorA = _staffColors[a]?.value ?? 0;
+      final colorB = _staffColors[b]?.value ?? 0;
+      
+      if (colorA == colorB) {
+        return a.compareTo(b); // If same color, sort alphabetically
+      }
+      return colorB - colorA; // Sort by color (descending)
+    });
+  } else {
+    employees.sort(); // Default alphabetical sort
+  }
+  
+  return employees;
+}
 String? _getAttendanceForDay(String empId, int day, String columnType) {
   final dateStr = '$_selectedMonth-${day.toString().padLeft(2, '0')}';
   final record = _attendanceData.firstWhere(

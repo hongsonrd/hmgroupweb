@@ -36,14 +36,14 @@ class DBHelper {
     }
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool hasReset = prefs.getBool('db_reset_v11') ?? false;
+    bool hasReset = prefs.getBool('db_reset_v12') ?? false;
     
     if (!hasReset) {
-      print('Forcing database reset for version 11...');
+      print('Forcing database reset for version 12...');
       try {
         await deleteDatabase(path);
         await prefs.clear();
-        await prefs.setBool('db_reset_v11', true);
+        await prefs.setBool('db_reset_v12', true);
         print('Database reset successful');
       } catch (e) {
         print('Error during database reset: $e');
@@ -55,7 +55,7 @@ class DBHelper {
     final db = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 11,
+        version: 12,
         onCreate: (Database db, int version) async {
           print('Creating database tables...');
           await db.execute(DatabaseTables.createInteractionTable);
@@ -74,11 +74,12 @@ class DBHelper {
         await db.execute(DatabaseTables.createOrderChiTietTable);
         await db.execute(DatabaseTables.createOrderDinhMucTable);
         await db.execute(DatabaseTables.createChamCongCNTable);
+        await db.execute(DatabaseTables.createHinhAnhZaloTable); 
           await ChecklistInitializer.initializeChecklistTable(db);
           print('Database tables created successfully');
         },
         onUpgrade: (Database db, int oldVersion, int newVersion) async {
-          if (oldVersion < 11) {
+          if (oldVersion < 12) {
             print('Upgrading database: adding baocao table');
           await db.execute(DatabaseTables.createBaocaoTable);
         await db.execute(DatabaseTables.createDongPhucTable);
@@ -88,6 +89,7 @@ class DBHelper {
         await db.execute(DatabaseTables.createOrderChiTietTable);
         await db.execute(DatabaseTables.createOrderDinhMucTable);
         await db.execute(DatabaseTables.createChamCongCNTable);
+        await db.execute(DatabaseTables.createHinhAnhZaloTable); 
           }
         },
         onOpen: (db) async {
@@ -177,7 +179,106 @@ Future<void> batchInsertOrders(List<OrderModel> orders) async {
     await batch.commit(noResult: true);
   });
 }
+Future<void> insertHinhAnhZalo(HinhAnhZaloModel hinhAnh) async {
+  await insert(DatabaseTables.hinhAnhZaloTable, hinhAnh.toMap());
+}
 
+Future<List<HinhAnhZaloModel>> getAllHinhAnhZalo() async {
+  final maps = await query(DatabaseTables.hinhAnhZaloTable);
+  return maps.map((map) => HinhAnhZaloModel.fromMap(map)).toList();
+}
+
+Future<HinhAnhZaloModel?> getHinhAnhZaloByUID(String uid) async {
+  final maps = await query(
+    DatabaseTables.hinhAnhZaloTable,
+    where: 'UID = ?',
+    whereArgs: [uid],
+  );
+  if (maps.isEmpty) return null;
+  return HinhAnhZaloModel.fromMap(maps.first);
+}
+
+Future<List<HinhAnhZaloModel>> getHinhAnhZaloByDepartment(String boPhan) async {
+  final maps = await query(
+    DatabaseTables.hinhAnhZaloTable,
+    where: 'BoPhan = ?',
+    whereArgs: [boPhan],
+  );
+  return maps.map((map) => HinhAnhZaloModel.fromMap(map)).toList();
+}
+
+Future<List<HinhAnhZaloModel>> getHinhAnhZaloByDateRange(
+    DateTime startDate, DateTime endDate) async {
+  final maps = await query(
+    DatabaseTables.hinhAnhZaloTable,
+    where: 'Ngay BETWEEN ? AND ?',
+    whereArgs: [startDate.toIso8601String(), endDate.toIso8601String()],
+  );
+  return maps.map((map) => HinhAnhZaloModel.fromMap(map)).toList();
+}
+
+Future<List<HinhAnhZaloModel>> getHinhAnhZaloByKhuVuc(String khuVuc) async {
+  final maps = await query(
+    DatabaseTables.hinhAnhZaloTable,
+    where: 'KhuVuc = ?',
+    whereArgs: [khuVuc],
+  );
+  return maps.map((map) => HinhAnhZaloModel.fromMap(map)).toList();
+}
+
+Future<List<HinhAnhZaloModel>> getQuanTrongHinhAnhZalo() async {
+  final maps = await query(
+    DatabaseTables.hinhAnhZaloTable,
+    where: 'QuanTrong = ?',
+    whereArgs: ['true'],
+  );
+  return maps.map((map) => HinhAnhZaloModel.fromMap(map)).toList();
+}
+
+Future<void> batchInsertHinhAnhZalo(List<HinhAnhZaloModel> items) async {
+  final db = await database;
+  await db.transaction((txn) async {
+    final batch = txn.batch();
+    for (var item in items) {
+      // Create a modified map with DateTime properly converted
+      final itemMap = {
+        'UID': item.uid,
+        'Ngay': item.ngay?.toIso8601String(),
+        'Gio': item.gio,
+        'BoPhan': item.boPhan,
+        'GiamSat': item.giamSat,
+        'NguoiDung': item.nguoiDung,
+        'HinhAnh': item.hinhAnh,
+        'KhuVuc': item.khuVuc,
+        'QuanTrong': item.quanTrong,
+      };
+      
+      batch.insert(
+        DatabaseTables.hinhAnhZaloTable, 
+        itemMap,
+        conflictAlgorithm: ConflictAlgorithm.replace
+      );
+    }
+    await batch.commit(noResult: true);
+  });
+}
+
+Future<int> updateHinhAnhZalo(String uid, Map<String, dynamic> updates) async {
+  return await update(
+    DatabaseTables.hinhAnhZaloTable,
+    updates,
+    where: 'UID = ?',
+    whereArgs: [uid],
+  );
+}
+
+Future<int> deleteHinhAnhZalo(String uid) async {
+  return await delete(
+    DatabaseTables.hinhAnhZaloTable,
+    where: 'UID = ?',
+    whereArgs: [uid],
+  );
+}
 // ==================== OrderDinhMuc CRUD Operations ====================
 Future<void> insertOrderDinhMuc(OrderDinhMucModel orderDinhMuc) async {
   await insert(DatabaseTables.orderDinhMucTable, orderDinhMuc.toMap());

@@ -243,7 +243,7 @@ class _StaffListTabState extends State<StaffListTab> {
   );
 
     try {
-      final response = await AuthenticatedHttpClient.post(
+      final response = await http.post(
         Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/newstaff'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(newStaff.toMap()),
