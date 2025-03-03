@@ -1,7 +1,7 @@
 name: hmgroupweb
 description: "Ứng dụng công nghệ chuyển đổi số Hoàn Mỹ Group."
 publish_to: 'none'
-version: 0.1.9
+version: 0.2.0
 
 environment:
   sdk: ">=3.2.0 <4.0.0"

@@ -5,6 +5,8 @@ import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import 'user_credentials.dart';
 import 'db_helper.dart';
+import 'projectworkerall.dart';
+
 import 'table_models.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart';
@@ -32,17 +34,17 @@ class _ProjectWorkerState extends State<ProjectWorker> {
   String? _selectedMonth;
   Map<String, Map<String, dynamic>> _modifiedRecords = {};
   Map<String, Map<String, dynamic>> _newRecords = {};
-    final List<String> _congThuongChoices = ['X', 'P', 'XĐ', 'Ro', 'HT', 'NT', 'CĐ', 'NL', 'Ô', 'TS', '2X', '3X', 'HV', '2HV', '3HV', '2XĐ', 'QLDV'];
+    final List<String> _congThuongChoices = ['X', 'P', 'XĐ', 'X/2', 'Ro', 'HT', 'NT', 'CĐ', 'NL', 'Ô', 'TS', '2X', '3X', 'HV', '2HV', '3HV', '2XĐ', 'QLDV'];
   late String _username;
   Map<String, String> _staffNames = {};
   List<String> _debugLogs = [];
 bool _showDebugOverlay = true;
 Map<String, Color> _staffColors = {};
 List<Color> _availableColors = [
-  Colors.yellow.shade200,
-  Colors.blue.shade200,
-  Colors.green.shade200,
-  Colors.red.shade200,
+  Colors.yellow.shade100,
+  Colors.blue.shade100,
+  Colors.green.shade100,
+  Colors.red.shade100,
 ];
 bool _showColorDialog = false;
 String? _staffToColor;
@@ -59,7 +61,8 @@ String? _staffToColor;
   Future<void> _loadStaffColors() async {
   try {
     final prefs = await SharedPreferences.getInstance();
-    final colorData = prefs.getString('staff_colors_${_selectedDepartment}');
+    final colorKey = 'staff_colors_${_selectedDepartment}';
+    final colorData = prefs.getString(colorKey);
     
     if (colorData != null) {
       final Map<String, dynamic> jsonData = json.decode(colorData);
@@ -69,10 +72,30 @@ String? _staffToColor;
           MapEntry(key, Color(int.parse(value.toString()))));
       });
       
-      debugLog('Loaded staff colors: ${_staffColors.length}');
+      debugLog('Loaded staff colors for $_selectedDepartment: ${_staffColors.length}');
+    } else {
+      setState(() {
+        _staffColors = {}; // Reset colors when changing departments
+      });
     }
   } catch (e) {
     debugLog('Error loading staff colors: $e');
+  }
+}
+
+Future<void> _saveStaffColors() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    
+    final Map<String, int> colorData = 
+      _staffColors.map((key, value) => MapEntry(key, value.value));
+    
+    final colorKey = 'staff_colors_${_selectedDepartment}';
+    await prefs.setString(colorKey, json.encode(colorData));
+    
+    debugLog('Saved staff colors for $_selectedDepartment: ${_staffColors.length}');
+  } catch (e) {
+    debugLog('Error saving staff colors: $e');
   }
 }
 Widget _buildColorPickerDialog() {
@@ -133,23 +156,7 @@ Widget _buildColorPickerDialog() {
     ],
   );
 }
-Future<void> _saveStaffColors() async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    
-    final Map<String, int> colorData = 
-      _staffColors.map((key, value) => MapEntry(key, value.value));
-    
-    await prefs.setString(
-      'staff_colors_${_selectedDepartment}',
-      json.encode(colorData)
-    );
-    
-    debugLog('Saved staff colors: ${_staffColors.length}');
-  } catch (e) {
-    debugLog('Error saving staff colors: $e');
-  }
-}
+
   Future<void> _loadStaffNames(List<String> employeeIds) async {
   final dbHelper = DBHelper();
   final placeholders = List.filled(employeeIds.length, '?').join(',');
@@ -780,32 +787,41 @@ Widget build(BuildContext context) {
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      ElevatedButton(
-                        onPressed: _addNewEmployee, 
-                        child: Text('➕ NV mới')
-                      ),
-                      const SizedBox(width: 10),
-                      ElevatedButton(
-                        onPressed: _addPreviousEmployees,
-                        child: Text('➕ NV như trước')
-                      ),
-                      const SizedBox(width: 10),
-                      ElevatedButton(
-                        onPressed: _copyFromYesterday,
-                        child: Text('Như hôm qua'),
-                      ),
-                      const SizedBox(width: 16),
-                      ElevatedButton(
-                        onPressed: (_modifiedRecords.isNotEmpty || _newRecords.isNotEmpty) 
-                          ? _saveChanges 
-                          : null,
-                        child: Text('Lưu thay đổi'),
-                      ),
-                      const SizedBox(width: 10),
-                      ElevatedButton(
-                        onPressed: _exportToExcel,
-                        child: Text('Xuất file'),
-                      ),
+                              ElevatedButton(
+          onPressed: _addNewEmployee, 
+          child: Text('➕ NV mới')
+        ),
+        const SizedBox(width: 10),
+                ElevatedButton(
+          onPressed: (_modifiedRecords.isNotEmpty || _newRecords.isNotEmpty) 
+            ? _saveChanges 
+            : null,
+          child: Text('❤️Lưu thay đổi'),
+        ),
+        ElevatedButton(
+  onPressed: _copyFromYesterday,
+  child: Text('💚Như hôm qua'),
+),
+ElevatedButton(
+  onPressed: () {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => AllProjectsView(),
+      ),
+    );
+  },
+  child: Text('💙Xem tất cả'),
+),
+        const SizedBox(width: 10),
+        ElevatedButton(
+          onPressed: _addPreviousEmployees,
+          child: Text('➕ NV như trước')
+        ),
+        const SizedBox(width: 16),
+        ElevatedButton(
+          onPressed: _exportToExcel,
+          child: Text('💛Xuất file'),
+        ),
                     ],
                   ),
                 ),
@@ -901,6 +917,36 @@ Widget build(BuildContext context) {
   );
 }
 Future<void> _copyFromYesterday() async {
+  // Show warning dialog first
+  final shouldContinue = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('Sao chép từ hôm qua'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Hệ thống sẽ chỉ sao chép giá trị "Công chữ" và "NG thường" từ hôm qua sang ngày hôm nay.'),
+          SizedBox(height: 12),
+          Text('Lưu ý: Vui lòng kiểm tra kỹ thông tin trước khi lưu.', 
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: Text('Hủy'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: Text('Tiếp tục'),
+        ),
+      ],
+    ),
+  );
+
+  if (shouldContinue != true) return;
+
   setState(() => _isLoading = true);
   try {
     debugLog('Starting copy from yesterday process...');
@@ -947,7 +993,7 @@ Future<void> _copyFromYesterday() async {
     }
     
     final todayRecords = await dbHelper.rawQuery('''
-      SELECT MaNV FROM chamcongcn 
+      SELECT MaNV, UID FROM chamcongcn 
       WHERE BoPhan = ? AND strftime('%d', Ngay) = ?
       AND strftime('%m-%Y', Ngay) = ?
     ''', [
@@ -956,8 +1002,11 @@ Future<void> _copyFromYesterday() async {
       DateFormat('MM-yyyy').format(today)
     ]);
     
-    final existingEmployeesToday = todayRecords.map((r) => r['MaNV'] as String).toSet();
-    debugLog('Employees already with records today: $existingEmployeesToday');
+    // Create a map instead of just a set for easier UID lookup
+    final Map<String, String> existingEmployeesToday = {
+      for (var r in todayRecords) r['MaNV'] as String: r['UID'] as String
+    };
+    debugLog('Employees already with records today: ${existingEmployeesToday.keys}');
     
     int addedCount = 0;
     int updatedCount = 0;
@@ -966,59 +1015,64 @@ Future<void> _copyFromYesterday() async {
       final empId = record['MaNV'] as String;
       final currentTime = DateFormat('HH:mm:ss').format(now);
       
-      final recordData = {
-        'Ngay': todayStr,
-        'Gio': currentTime,
-        'NguoiDung': _username,
-        'BoPhan': _selectedDepartment,
-        'MaBP': _selectedDepartment,
-        'PhanLoai': record['PhanLoai'] ?? '',
-        'MaNV': empId,
-        'CongThuongChu': record['CongThuongChu'] ?? 'Ro',
-        'NgoaiGioThuong': record['NgoaiGioThuong']?.toString() ?? '0',
-        'NgoaiGioKhac': record['NgoaiGioKhac']?.toString() ?? '0',
-        'NgoaiGiox15': record['NgoaiGiox15']?.toString() ?? '0',
-        'NgoaiGiox2': record['NgoaiGiox2']?.toString() ?? '0',
-        'HoTro': record['HoTro']?.toString() ?? '0',
-        'PartTime': record['PartTime']?.toString() ?? '0',
-        'PartTimeSang': record['PartTimeSang']?.toString() ?? '0',
-        'PartTimeChieu': record['PartTimeChieu']?.toString() ?? '0',
-        'CongLe': record['CongLe']?.toString() ?? '0',
-      };
+      // Only copy CongThuongChu and NgoaiGioThuong
+      final congThuongChu = record['CongThuongChu'] ?? 'Ro';
+      final ngoaiGioThuong = record['NgoaiGioThuong']?.toString() ?? '0';
       
-      if (existingEmployeesToday.contains(empId)) {
-        debugLog('Updating today\'s record for employee: $empId');
+      if (existingEmployeesToday.containsKey(empId)) {
+        debugLog('Updating only CongThuongChu and NgoaiGioThuong for employee: $empId');
         
-        final uidResult = await dbHelper.rawQuery(
-          'SELECT UID FROM chamcongcn WHERE BoPhan = ? AND strftime("%d", Ngay) = ? AND MaNV = ?',
-          [_selectedDepartment, today.day.toString().padLeft(2, '0'), empId]
-        );
+        final uid = existingEmployeesToday[empId]!;
         
-        if (uidResult.isNotEmpty) {
-          final uid = uidResult.first['UID'] as String;
+        // Only update specific fields
+        final updates = {
+          'Gio': currentTime,
+          'NguoiDung': _username,
+          'CongThuongChu': congThuongChu,
+          'NgoaiGioThuong': ngoaiGioThuong,
+        };
+        
+        try {
+          final response = await http.put(
+            Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongsua/$uid'),
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode(updates)
+          ).timeout(const Duration(seconds: 30));
           
-          try {
-            final response = await http.put(
-              Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongsua/$uid'),
-              headers: {'Content-Type': 'application/json'},
-              body: json.encode(recordData)
-            ).timeout(const Duration(seconds: 30));
-            
-            if (response.statusCode == 200) {
-              await dbHelper.updateChamCongCN(uid, recordData);
-              updatedCount++;
-              debugLog('Successfully updated record for $empId (UID: $uid)');
-            } else {
-              debugLog('Server returned error for update: ${response.statusCode} - ${response.body}');
-            }
-          } catch (e) {
-            debugLog('Error during update for $empId: $e');
+          if (response.statusCode == 200) {
+            await dbHelper.updateChamCongCN(uid, updates);
+            updatedCount++;
+            debugLog('Successfully updated CongThuongChu and NgoaiGioThuong for $empId (UID: $uid)');
+          } else {
+            debugLog('Server returned error for update: ${response.statusCode} - ${response.body}');
           }
+        } catch (e) {
+          debugLog('Error during update for $empId: $e');
         }
       } else {
-        debugLog('Creating new record for employee: $empId');
+        debugLog('Creating new record with only CongThuongChu and NgoaiGioThuong for employee: $empId');
         final uid = Uuid().v4();
-        recordData['UID'] = uid;
+        
+        final recordData = {
+          'UID': uid,
+          'Ngay': todayStr,
+          'Gio': currentTime,
+          'NguoiDung': _username,
+          'BoPhan': _selectedDepartment,
+          'MaBP': _selectedDepartment,
+          'PhanLoai': record['PhanLoai'] ?? '',
+          'MaNV': empId,
+          'CongThuongChu': congThuongChu,
+          'NgoaiGioThuong': ngoaiGioThuong,
+          'NgoaiGioKhac': '0',
+          'NgoaiGiox15': '0',
+          'NgoaiGiox2': '0',
+          'HoTro': '0',
+          'PartTime': '0',
+          'PartTimeSang': '0',
+          'PartTimeChieu': '0',
+          'CongLe': '0',
+        };
         
         try {
           final response = await http.post(
@@ -1034,16 +1088,16 @@ Future<void> _copyFromYesterday() async {
               ngay: today,
               boPhan: _selectedDepartment!,
               nguoiDung: _username,
-              congThuongChu: recordData['CongThuongChu'] as String,
-              ngoaiGioThuong: double.tryParse(recordData['NgoaiGioThuong'].toString()) ?? 0,
-              ngoaiGioKhac: double.tryParse(recordData['NgoaiGioKhac'].toString()) ?? 0,
-              ngoaiGiox15: double.tryParse(recordData['NgoaiGiox15'].toString()) ?? 0,
-              ngoaiGiox2: double.tryParse(recordData['NgoaiGiox2'].toString()) ?? 0,
-              hoTro: int.tryParse(recordData['HoTro'].toString()) ?? 0,
-              partTime: int.tryParse(recordData['PartTime'].toString()) ?? 0,
-              partTimeSang: int.tryParse(recordData['PartTimeSang'].toString()) ?? 0,
-              partTimeChieu: int.tryParse(recordData['PartTimeChieu'].toString()) ?? 0,
-              congLe: double.tryParse(recordData['CongLe'].toString()) ?? 0,
+              congThuongChu: congThuongChu as String,
+              ngoaiGioThuong: double.tryParse(ngoaiGioThuong) ?? 0,
+              ngoaiGioKhac: 0,
+              ngoaiGiox15: 0,
+              ngoaiGiox2: 0,
+              hoTro: 0,
+              partTime: 0,
+              partTimeSang: 0,
+              partTimeChieu: 0,
+              congLe: 0,
             );
             await dbHelper.insertChamCongCN(chamCongModel);
             addedCount++;
@@ -1062,7 +1116,7 @@ Future<void> _copyFromYesterday() async {
     setState(() => _isLoading = false);
     
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Đã sao chép từ hôm qua: ${addedCount + updatedCount} nhân viên (thêm mới: $addedCount, cập nhật: $updatedCount)'))
+      SnackBar(content: Text('Đã sao chép từ hôm qua: ${addedCount + updatedCount} nhân viên (thêm mới: $addedCount, cập nhật: $updatedCount). Vui lòng kiểm tra lại dữ liệu trước khi lưu.'))
     );
     
   } catch (e) {

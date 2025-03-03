@@ -390,6 +390,7 @@ Future<void> _loadProjects() async {
 
     // Step 5: Update Staff Bio (only if never synced before)
 final hasStaffbioSynced = prefs.getBool('hasStaffbioSynced') ?? false;
+          await prefs.setBool('hasStaffbioSynced', false);
 
 if (!hasStaffbioSynced) {
   final shouldSync = await showDialog<bool>(
@@ -397,7 +398,7 @@ if (!hasStaffbioSynced) {
     builder: (BuildContext context) {
       return AlertDialog(
         title: Text('Cập nhật hồ sơ nhân sự'),
-        content: Text('Bạn có muốn cập nhật hồ sơ nhân sự không? Quá trình này có thể mất một chút thời gian.'),
+        content: Text('Bạn có muốn cập nhật hồ sơ nhân sự không? Quá trình này có thể mất một chút thời gian.\n CHỈ CẦN CẬP NHẬT LẦN ĐẦU HOẶC KHI NÀO CẦN THAY ĐỔI'),
         actions: <Widget>[
           TextButton(
             child: Text('Không'),
@@ -2499,7 +2500,7 @@ class _TopicReportDialogState extends State<TopicReportDialog> {
   String details = '';
   switch (taskName) {
     case 'Máy móc':
-    details = '* Số CN sử dụng: \* Diện tích sử dụng (m2): \n* Đã vệ sinh: \n* Thời gian sử dụng (phút): \n* Mô tả tình trạng: ';
+    details = '* Số CN sử dụng: \n* Diện tích sử dụng (m2): \n* Đã vệ sinh: \n* Thời gian sử dụng (phút): \n* Mô tả tình trạng: ';
     break;
     case 'Xe/Giỏ đồ':
     details = '* VT sử dụng:';
