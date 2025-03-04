@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 //import 'dart:io';
 //import 'package:uuid/uuid.dart';
 import 'http_client.dart';
+import 'package:uuid/uuid.dart';
 
 class ProjectPlan extends StatefulWidget {
   final String? userType;
@@ -462,29 +463,32 @@ Widget _buildPlanList(bool isMyPlans) {
 
   filteredPlans.sort((a, b) => b.ngay.compareTo(a.ngay));
 
+  // Wrap in a vertical scroll view first
   return SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    child: DataTable(
-      showCheckboxColumn: false,  // Add this line to hide the default checkbox column
-      columns: [
-        DataColumn(label: Text('')),
-        if (!isMyPlans) DataColumn(label: Text('Người dùng')),
-        DataColumn(label: Text('Ngày')),
-        DataColumn(label: Text('Thời gian')),
-        DataColumn(label: Text('Dự án')),
-        DataColumn(label: Text('Chi tiết')),
-        DataColumn(label: Text('Phát sinh')),
-        DataColumn(label: Text('Trạng thái')),
-        if (!isMyPlans) DataColumn(label: Text('Xét duyệt')),
-      ],
-      rows: filteredPlans.map((plan) {
-        final rowColor = !isMyPlans ? _getStatusColor(plan.xetDuyet ?? '') : null;
-        final isPhatSinh = plan.phatSinh == 'Có';
-        
-        return DataRow(
-          color: MaterialStateProperty.all(rowColor),
-          onSelectChanged: (_) => _showPlanDetailsDialog(plan),
-          cells: [
+    scrollDirection: Axis.vertical,
+    child: SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        showCheckboxColumn: false,
+        columns: [
+          DataColumn(label: Text('')),
+          if (!isMyPlans) DataColumn(label: Text('Người dùng')),
+          DataColumn(label: Text('Ngày')),
+          DataColumn(label: Text('Thời gian')),
+          DataColumn(label: Text('Dự án')),
+          DataColumn(label: Text('Chi tiết')),
+          DataColumn(label: Text('Phát sinh')),
+          DataColumn(label: Text('Trạng thái')),
+          if (!isMyPlans) DataColumn(label: Text('Xét duyệt')),
+        ],
+        rows: filteredPlans.map((plan) {
+          final rowColor = !isMyPlans ? _getStatusColor(plan.xetDuyet ?? '') : null;
+          final isPhatSinh = plan.phatSinh == 'Có';
+          
+          return DataRow(
+            color: MaterialStateProperty.all(rowColor),
+            onSelectChanged: (_) => _showPlanDetailsDialog(plan),
+            cells: [
             DataCell(
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -545,8 +549,9 @@ Widget _buildPlanList(bool isMyPlans) {
                   : Text(''),
               ),
           ],
-        );
-      }).toList(),
+          );
+        }).toList(),
+      ),
     ),
   );
 }
@@ -677,182 +682,16 @@ Widget _buildDetailRow(String label, String value, {bool multiLine = false, bool
   );
 }
 void _showReportDialog(BaocaoModel plan) {
-  final _giaiPhapController = TextEditingController();
-  List<String> _selectedImages = [];
-   void dispose() {
-    _giaiPhapController.dispose();
-  }
   showDialog(
     context: context,
     barrierDismissible: false,
     builder: (BuildContext context) {
-      return WillPopScope(
-        onWillPop: () async {
-          dispose();
-          return true;
-        },
-        child: StatefulBuilder(
-        builder: (context, setState) {
-          return Dialog(
-            insetPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-            child: Container(
-              width: MediaQuery.of(context).size.width * 0.9,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(4),
-                        topRight: Radius.circular(4),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Phản hồi kế hoạch',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Row(
-                          children: [
-                            TextButton(
-                              child: Text('Hủy'),
-                              onPressed: () => Navigator.of(context).pop(),
-                            ),
-                            SizedBox(width: 8),
-                            ElevatedButton(
-  child: Text('Gửi'),
-  onPressed: () async {
-    try {
-      if (_giaiPhapController.text.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Vui lòng nhập giải pháp')),
-        );
-        return;
-      }
-
-      final userCredentials = Provider.of<UserCredentials>(context, listen: false);
-      final username = userCredentials.username;
-      
-      print('GiaiPhap text: ${_giaiPhapController.text}'); // Debug log
-      
-      final reportData = {
-        'nguoiDung': username,
-        'ngay': DateTime.now().toIso8601String(),
-        'boPhan': plan.boPhan,
-        'phanLoai': 'Phản hồi kế hoạch',
-        'moTaChung': 'Báo cáo kế hoạch ngày ${DateFormat('dd/MM/yyyy').format(plan.ngay)} về dự án ${plan.boPhan}: ${plan.moTaChung}',
-        'giaiPhapChung': _giaiPhapController.text.trim(),
-        'chiaSe': plan.chiaSe,
-        'nhom': 'Báo cáo',
-        'phatSinh': 'Có',
-        'xetDuyet': 'Chưa duyệt',
-        'hinhAnh': _selectedImages.join(','),
-      };
-
-      print('Full report data: ${json.encode(reportData)}'); // Debug log
-
-      final response = await http.post(
-        Uri.parse('$baseUrl/submitplan'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: json.encode(reportData),
-      );
-
-      print('Response status: ${response.statusCode}'); // Debug log
-      print('Response body: ${response.body}'); // Debug log
-
-      if (response.statusCode == 200) {
-        await _loadPlans();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Phản hồi đã được gửi thành công')),
-        );
-        Navigator.of(context).pop();
-      } else {
-        throw Exception('Server returned ${response.statusCode}: ${response.body}');
-      }
-    } catch (e) {
-      print('Error submitting report: $e'); // Debug log
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi khi gửi phản hồi: $e')),
-      );
-    }
-  },
-),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  Flexible(
-                    child: SingleChildScrollView(
-                      padding: EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Báo cáo kế hoạch ngày ${DateFormat('dd/MM/yyyy').format(plan.ngay)} về dự án ${plan.boPhan}: ${plan.moTaChung}',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          SizedBox(height: 16),
-                          TextField(
-  controller: _giaiPhapController,
-  decoration: InputDecoration(
-    labelText: 'Giải pháp',
-    border: OutlineInputBorder(),
-    errorText: _giaiPhapController.text.isEmpty ? 'Vui lòng nhập giải pháp' : null,
-  ),
-  maxLines: 5,
-  onChanged: (value) {
-    print('Current text: $value');
-  },
-),
-                          SizedBox(height: 16),
-                          //ElevatedButton.icon(
-                            //icon: Icon(Icons.image),
-                            //label: Text('Thêm hình ảnh'),
-                            //onPressed: () async {
-                              // Add your image picking logic here
-                              // Update _selectedImages list with selected image paths
-                            //},
-                          //),
-                          if (_selectedImages.isNotEmpty)
-                            Column(
-                              children: _selectedImages.map((imagePath) => 
-                                ListTile(
-                                  title: Text(imagePath),
-                                  trailing: IconButton(
-                                    icon: Icon(Icons.delete),
-                                    onPressed: () {
-                                      setState(() {
-                                        _selectedImages.remove(imagePath);
-                                      });
-                                    },
-                                  ),
-                                )
-                              ).toList(),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+      return ReportDialogContent(
+        plan: plan,
+        refreshPlans: _loadPlans,
       );
     },
-  ).then((_) => dispose());
+  );
 }
   Future<void> _updatePlanStatus(BaocaoModel plan, String status) async {
     try {
@@ -970,5 +809,293 @@ void _showReportDialog(BaocaoModel plan) {
         ],
       ),
     );
+  }
+}
+class ReportDialogContent extends StatefulWidget {
+  final BaocaoModel plan;
+  final Function refreshPlans;
+
+  ReportDialogContent({required this.plan, required this.refreshPlans});
+
+  @override
+  _ReportDialogContentState createState() => _ReportDialogContentState();
+}
+
+class _ReportDialogContentState extends State<ReportDialogContent> {
+  late TextEditingController _giaiPhapController;
+  late TextEditingController _taskContentController;
+  List<String> _selectedImages = [];
+  bool _createTask = false;
+  DateTime _taskDate = DateTime.now().add(Duration(days: 1));
+  final baseUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app';
+  
+  @override
+  void initState() {
+    super.initState();
+    _giaiPhapController = TextEditingController();
+    _taskContentController = TextEditingController();
+  }
+  
+  @override
+  void dispose() {
+    _giaiPhapController.dispose();
+    _taskContentController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.9,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Phản hồi kế hoạch',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      TextButton(
+                        child: Text('Hủy'),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                      SizedBox(width: 8),
+                      ElevatedButton(
+                        child: Text('Gửi'),
+                        onPressed: () => _submitReport(context),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Báo cáo kế hoạch ngày ${DateFormat('dd/MM/yyyy').format(widget.plan.ngay)} về dự án ${widget.plan.boPhan}: ${widget.plan.moTaChung}',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 16),
+                    TextField(
+                      controller: _giaiPhapController,
+                      decoration: InputDecoration(
+                        labelText: 'Giải pháp',
+                        border: OutlineInputBorder(),
+                        errorText: _giaiPhapController.text.isEmpty ? 'Vui lòng nhập giải pháp' : null,
+                      ),
+                      maxLines: 5,
+                    ),
+                    SizedBox(height: 16),
+                    // Add option to create follow-up task
+                    Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Switch(
+                                value: _createTask,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _createTask = value;
+                                    
+                                    // Initialize task content with giaiPhap when toggled on
+                                    if (_createTask && _giaiPhapController.text.isNotEmpty) {
+                                      _taskContentController.text = _giaiPhapController.text;
+                                    }
+                                  });
+                                },
+                              ),
+                              Text(
+                                'Tạo hẹn xử lý',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (_createTask) ...[
+                            SizedBox(height: 16),
+                            Text('Ngày xử lý:'),
+                            InkWell(
+                              onTap: () async {
+                                final DateTime? picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: _taskDate,
+                                  firstDate: DateTime.now(),
+                                  lastDate: DateTime(2030),
+                                );
+                                if (picked != null && picked != _taskDate) {
+                                  setState(() {
+                                    _taskDate = picked;
+                                  });
+                                }
+                              },
+                              child: Container(
+                                padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      '${_taskDate.day}/${_taskDate.month}/${_taskDate.year}',
+                                      style: TextStyle(fontSize: 16),
+                                    ),
+                                    Icon(Icons.calendar_today),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: 16),
+                            TextFormField(
+                              controller: _taskContentController,
+                              decoration: InputDecoration(
+                                labelText: 'Nội dung',
+                                border: OutlineInputBorder(),
+                              ),
+                              maxLines: 3,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Future<void> _submitReport(BuildContext context) async {
+    try {
+      if (_giaiPhapController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Vui lòng nhập giải pháp')),
+        );
+        return;
+      }
+
+      final userCredentials = Provider.of<UserCredentials>(context, listen: false);
+      final username = userCredentials.username;
+      
+      // Capture all values
+      final giaiPhapText = _giaiPhapController.text.trim();
+      final taskContentText = _taskContentController.text.trim();
+      final createTaskFlag = _createTask;
+      final taskDateCopy = DateTime(_taskDate.year, _taskDate.month, _taskDate.day);
+      
+      final reportData = {
+        'nguoiDung': username,
+        'ngay': DateTime.now().toIso8601String(),
+        'boPhan': widget.plan.boPhan,
+        'phanLoai': 'Phản hồi kế hoạch',
+        'moTaChung': 'Báo cáo kế hoạch ngày ${DateFormat('dd/MM/yyyy').format(widget.plan.ngay)} về dự án ${widget.plan.boPhan}: ${widget.plan.moTaChung}',
+        'giaiPhapChung': giaiPhapText,
+        'chiaSe': widget.plan.chiaSe,
+        'nhom': 'Báo cáo',
+        'phatSinh': 'Có',
+        'xetDuyet': 'Chưa duyệt',
+        'hinhAnh': _selectedImages.join(','),
+      };
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/submitplan'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: json.encode(reportData),
+      );
+
+      // Now handle task creation if requested
+      if (createTaskFlag) {
+        final taskUuid = Uuid().v4();
+        final taskFormattedDate = taskDateCopy.toIso8601String().split('T')[0];
+        final now = DateTime.now();
+        final formattedTime = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
+        final effectiveTaskContent = taskContentText.isEmpty ? 
+                   giaiPhapText : taskContentText;
+
+        final taskData = {
+          'uid': taskUuid,
+          'ngay': taskFormattedDate,
+          'gio': formattedTime,
+          'nguoiDung': username,
+          'boPhan': widget.plan.boPhan,
+          'chiaSe': widget.plan.chiaSe,
+          'phanLoai': 'Cả ngày',
+          'moTaChung': effectiveTaskContent,
+          'nhom': 'Kế hoạch',
+          'phatSinh': 'Có',
+          'xetDuyet': 'Chưa duyệt',
+        };
+
+        final taskResponse = await http.post(
+          Uri.parse('$baseUrl/submitplan'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode(taskData),
+        );
+
+        if (taskResponse.statusCode == 200) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Phản hồi và hẹn xử lý đã được gửi thành công')),
+          );
+        } else {
+          throw Exception('Phản hồi đã gửi nhưng lỗi tạo hẹn: ${taskResponse.statusCode}');
+        }
+      } else {
+        if (response.statusCode == 200) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Phản hồi đã được gửi thành công')),
+          );
+        } else {
+          throw Exception('Server returned ${response.statusCode}: ${response.body}');
+        }
+      }
+
+      // Close dialog and refresh data
+      Navigator.of(context).pop();
+      widget.refreshPlans();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi khi gửi phản hồi: $e')),
+      );
+    }
   }
 }

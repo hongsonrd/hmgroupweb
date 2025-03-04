@@ -19,6 +19,8 @@ import 'package:intl/intl.dart';
 import 'package:sqflite/sqflite.dart';
 import 'http_client.dart';
 import 'projectimage.dart';
+import 'dart:math';
+import 'projectmachineorder.dart';
 
 class ProjectManagement extends StatefulWidget {
     ProjectManagement({Key? key}) : super(key: key);
@@ -939,6 +941,35 @@ try {
           style: TextStyle(fontSize: 16),
         ),
         SizedBox(width: 8),
+        TextButton(
+      style: ButtonStyle(
+        padding: MaterialStateProperty.all(EdgeInsets.zero),
+        minimumSize: MaterialStateProperty.all(Size(0, 0)),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      onPressed: _selectedProject == null ? null : () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProjectMachineOrder(
+              boPhan: _selectedProject!,
+              username: userCredentials.username,
+            ),
+          ),
+        );
+      },
+      child: Text(
+        'Đặt máy móc',
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          color: _selectedProject != null 
+              ? Colors.deepOrange
+              : Colors.grey,
+        ),
+      ),
+    ),
+            SizedBox(width: 8),
         TextButton(
           style: ButtonStyle(
             padding: MaterialStateProperty.all(EdgeInsets.zero),
@@ -2050,70 +2081,92 @@ class _TaskReportSheetState extends State<TaskReportSheet> {
     }
     return null;
   }
-bool _validateSubmission() {
-  List<String> errors = [];
-  if (widget.username.trim().isEmpty) {
-    errors.add('Không thể xác định người dùng');
-  }
-  if (widget.boPhan.trim().isEmpty) {
-    errors.add('Không thể xác định dự án');
-  }
-  if (_selectedResult == null) {
-    errors.add('Vui lòng chọn kết quả');
-  }
-  if (widget.isTopicReport && 
-      (widget.task.task == 'Máy móc' || widget.task.task == 'Xe/Giỏ đồ')) {
-    
-    if (_imageFile == null) {
-      errors.add('Vui lòng chụp ảnh cho báo cáo này');
+final bool _shouldRequirePhoto = Random().nextDouble() < 0.85;
+  
+  // Modify the validation method
+  bool _validateSubmission() {
+    // Create a list to collect all validation errors
+    List<String> errors = [];
+
+    if (widget.username.trim().isEmpty) {
+      errors.add('Không thể xác định người dùng');
+    }
+
+    if (widget.boPhan.trim().isEmpty) {
+      errors.add('Không thể xác định dự án');
     }
     
-    if (_codeController.text.isEmpty) {
-      errors.add('Vui lòng quét mã QR cho báo cáo này');
+    // Check if ViTri is empty
+    if (widget.vt.trim().isEmpty) {
+      errors.add('Vui lòng cập nhật thông tin vị trí (VT) của nhân viên trước khi báo cáo');
     }
-  }
-  else if (!widget.isTopicReport && (_selectedResult == '⚠️' || _selectedResult == '❌') && _imageFile == null) {
-    errors.add('Vui lòng chụp ảnh');
-  }
-  if ((_selectedResult == '⚠️' || _selectedResult == '❌') && _giaiPhapController.text.isEmpty) {
-    errors.add('Vui lòng nhập giải pháp');
-  }
-  if (errors.isNotEmpty) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Lỗi kiểm tra'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: errors.map((error) => Padding(
-              padding: EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  Icon(Icons.error_outline, color: Colors.red, size: 20),
-                  SizedBox(width: 8),
-                  Expanded(child: Text(error)),
-                ],
-              ),
-            )).toList(),
-          ),
-          actions: [
-            TextButton(
-              child: Text('Đóng'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
+
+    if (_selectedResult == null) {
+      errors.add('Vui lòng chọn kết quả');
+    }
+
+    // Special check for Máy móc and Xe/Giỏ đồ topics - always require image and QR code
+    if (widget.isTopicReport && 
+        (widget.task.task == 'Máy móc' || widget.task.task == 'Xe/Giỏ đồ')) {
+      
+      if (_imageFile == null) {
+        errors.add('Vui lòng chụp ảnh cho báo cáo này');
+      }
+      
+      if (_codeController.text.isEmpty) {
+        errors.add('Vui lòng quét mã QR cho báo cáo này');
+      }
+    }
+    // Modified photo requirement logic to include success result for 70% of users
+    else if ((_selectedResult == '⚠️' || _selectedResult == '❌' || 
+              (_selectedResult == '✔️' && _shouldRequirePhoto)) && 
+             _imageFile == null) {
+      errors.add('Vui lòng chụp ảnh');
+    }
+
+    if ((_selectedResult == '⚠️' || _selectedResult == '❌') && _giaiPhapController.text.isEmpty) {
+      errors.add('Vui lòng nhập giải pháp');
+    }
+
+    // Show all errors if any exist
+    if (errors.isNotEmpty) {
+      // Use a Dialog instead of a SnackBar to ensure it's visible
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text('Lỗi kiểm tra'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: errors.map((error) => Padding(
+                padding: EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.error_outline, color: Colors.red, size: 20),
+                    SizedBox(width: 8),
+                    Expanded(child: Text(error)),
+                  ],
+                ),
+              )).toList(),
             ),
-          ],
-        );
-      },
-    );
-    return false;
+            actions: [
+              TextButton(
+                child: Text('Đóng'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          );
+        },
+      );
+      return false;
+    }
+
+    return true;
   }
-  return true;
-}
 Future<void> _submitReport() async {
   if (!_validateSubmission()) return;
 
@@ -2372,36 +2425,37 @@ Future<void> _submitReport() async {
                        ],
                      ),
                    ],
-                   if (!widget.isTopicReport && (_selectedResult == '⚠️' || _selectedResult == '❌')) ...[
-                     SizedBox(height: 16),
-                     Row(
-                       children: [
-                         Expanded(
-                           child: ElevatedButton.icon(
-                             icon: Icon(Icons.camera_alt),
-                             label: Text(_imageFile == null ? 'Chụp ảnh' : 'Chụp lại'),
-                             onPressed: _captureImage,
-                           ),
-                         ),
-                       ],
-                     ),
-                     if (_imageFile != null) ...[
-                       SizedBox(height: 8),
-                       FutureBuilder<Uint8List>(
-                         future: _imageFile!.readAsBytes(),
-                         builder: (context, snapshot) {
-                           if (snapshot.hasData) {
-                             return Image.memory(
-                               snapshot.data!,
-                               height: 100,
-                               fit: BoxFit.cover,
-                             );
-                           }
-                           return SizedBox(height: 100);
-                         },
-                       ),
-                     ],
-                   ],
+                   if (!widget.isTopicReport && (_selectedResult == '⚠️' || _selectedResult == '❌' || 
+        (_selectedResult == '✔️' && _shouldRequirePhoto))) ...[
+      SizedBox(height: 16),
+      Row(
+        children: [
+          Expanded(
+            child: ElevatedButton.icon(
+              icon: Icon(Icons.camera_alt),
+              label: Text(_imageFile == null ? 'Chụp ảnh' : 'Chụp lại'),
+              onPressed: _captureImage,
+            ),
+          ),
+        ],
+      ),
+      if (_imageFile != null) ...[
+        SizedBox(height: 8),
+        FutureBuilder<Uint8List>(
+          future: _imageFile!.readAsBytes(),
+          builder: (context, snapshot) {
+            if (snapshot.hasData) {
+              return Image.memory(
+                snapshot.data!,
+                height: 100,
+                fit: BoxFit.cover,
+              );
+            }
+            return SizedBox(height: 100);
+          },
+        ),
+      ],
+    ],
                    if (widget.isTopicReport) ...[
                      SizedBox(height: 16),
                      Row(
