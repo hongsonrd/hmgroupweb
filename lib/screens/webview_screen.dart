@@ -6,6 +6,7 @@ import '../user_state.dart';
 import '../main.dart' show MainScreen;
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
+import '../floating_draggable_icon.dart';
 
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
@@ -105,46 +106,56 @@ Widget build(BuildContext context) {
       _filteredItems ??= _getFilteredGridItems(employeeId);
       
       return Scaffold(
-        body: Container(
-          decoration: const BoxDecoration(
-            image: DecorationImage(
-              image: AssetImage('assets/appbackgrid.jpg'),
-              fit: BoxFit.cover,
-            ),
-          ),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1200),
-              child: CustomScrollView(
-                slivers: [
-                  SliverPadding(
-                    padding: const EdgeInsets.all(16.0),
-                    sliver: SliverGrid(
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 6,
-                        mainAxisSpacing: 6.0,
-                        crossAxisSpacing: 6.0,
-                        childAspectRatio: 1 / 0.8,
+        body: Stack(
+          children: [
+            // Background and grid content
+            Container(
+              decoration: const BoxDecoration(
+                image: DecorationImage(
+                  image: AssetImage('assets/appbackgrid.jpg'),
+                  fit: BoxFit.cover,
+                ),
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1200),
+                  child: CustomScrollView(
+                    slivers: [
+                      SliverPadding(
+                        padding: const EdgeInsets.all(16.0),
+                        sliver: SliverGrid(
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 6,
+                            mainAxisSpacing: 6.0,
+                            crossAxisSpacing: 6.0,
+                            childAspectRatio: 1 / 0.8,
+                          ),
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              if (index >= _filteredItems!.length) return null;
+                              return GridItem(
+                                itemData: _filteredItems![index],
+                                onTap: () => _handleUrlOpen(
+                                  _filteredItems![index]['link']!,
+                                  _filteredItems![index]['name']!,
+                                ),
+                              );
+                            },
+                            childCount: _filteredItems!.length,
+                          ),
+                        ),
                       ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          if (index >= _filteredItems!.length) return null;
-                          return GridItem(
-                            itemData: _filteredItems![index],
-                            onTap: () => _handleUrlOpen(
-                              _filteredItems![index]['link']!,
-                              _filteredItems![index]['name']!,
-                            ),
-                          );
-                        },
-                        childCount: _filteredItems!.length,
-                      ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
-          ),
+            
+            // Add FloatingDraggableIcon on top
+            FloatingDraggableIcon(
+              key: FloatingDraggableIcon.globalKey,
+            ),
+          ],
         ),
       );
     },

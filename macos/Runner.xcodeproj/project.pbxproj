@@ -584,6 +584,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 10.15;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hoanmyrd.hmgroup;
 				PRODUCT_NAME = "HM GROUP";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -725,6 +726,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 10.15;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hoanmyrd.hmgroup;
 				PRODUCT_NAME = "HM GROUP";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -750,6 +752,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 10.15;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hoanmyrd.hmgroup;
 				PRODUCT_NAME = "HM GROUP";
 				PROVISIONING_PROFILE_SPECIFIER = "";

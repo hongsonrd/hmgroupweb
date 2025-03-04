@@ -24,7 +24,10 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:media_kit/media_kit.dart';                    
-import 'package:media_kit_video/media_kit_video.dart'; 
+import 'package:media_kit_video/media_kit_video.dart';
+import 'floating_draggable_icon.dart';
+import 'projectdirector.dart';
+
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<bool> checkWebView2Installation() async {
@@ -100,8 +103,8 @@ void main() async {
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       await windowManager.ensureInitialized();
       WindowOptions windowOptions = const WindowOptions(
-        size: Size(1024, 768),
-        minimumSize: Size(800, 600),
+        size: Size(1600, 900),
+        minimumSize: Size(1280, 720),
         center: true,
         backgroundColor: Colors.transparent,
         skipTaskbar: false,
@@ -221,96 +224,144 @@ Future<void> checkAppVersion() async {
     String currentVersion = packageInfo.version;
     String latestVersion = 'Unknown';
     bool fetchSuccess = false;
+    bool isSignificantlyOutdated = false;
 
-    // Fetch latest version
+    // Fetch latest version with 5-second timeout
     try {
       final response = await http.get(
         Uri.parse('https://yourworldtravel.vn/api/document/versiondesktop.txt')
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 5));
       
       if (response.statusCode == 200) {
         latestVersion = response.body.trim();
         fetchSuccess = true;
+        
+        // Check if version is significantly outdated (5+ versions behind)
+        try {
+          List<int> currentParts = currentVersion.split('.').map((part) => int.parse(part)).toList();
+          List<int> latestParts = latestVersion.split('.').map((part) => int.parse(part)).toList();
+          
+          // Compare major, minor, and patch versions
+          if (currentParts.length == 3 && latestParts.length == 3) {
+            if (currentParts[0] < latestParts[0] || 
+               (currentParts[0] == latestParts[0] && currentParts[1] < latestParts[1] - 5) ||
+               (currentParts[0] == latestParts[0] && currentParts[1] == latestParts[1] && currentParts[2] < latestParts[2] - 5)) {
+              isSignificantlyOutdated = true;
+            }
+          }
+        } catch (e) {
+          print('Error comparing versions: $e');
+        }
       }
     } catch (e) {
       print('Error fetching version: $e');
     }
 
-    // Always show version info dialog
+    // Show version info dialog
     await showDialog(
       context: navigatorKey.currentContext!,
-      barrierDismissible: true,
+      barrierDismissible: !isSignificantlyOutdated, // Only dismissible if not significantly outdated
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Thông tin phiên bản'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Phiên bản hiện tại: $currentVersion'),
-              Text('Phiên bản mới nhất: $latestVersion'),
-              const SizedBox(height: 10),
-              fetchSuccess 
-                ? (currentVersion != latestVersion 
-                  ? const Text('Cần cập nhật phiên bản mới!', 
-                      style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))
-                  : const Text('Ứng dụng đã là phiên bản mới nhất.', 
-                      style: TextStyle(color: Colors.green)))
-                : const Text('Không thể kiểm tra phiên bản mới nhất.', 
-                    style: TextStyle(color: Colors.orange)),
-            ],
-          ),
-          actions: <Widget>[
-            if (fetchSuccess && currentVersion != latestVersion) Column(
+        return WillPopScope(
+          onWillPop: () async => !isSignificantlyOutdated, // Prevent back button if significantly outdated
+          child: AlertDialog(
+            title: const Text('Thông tin phiên bản'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.laptop_mac),
-                    label: const Text('Tải bản macOS'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      backgroundColor: const Color.fromARGB(255, 227, 255, 255),
+                Text('Phiên bản hiện tại: $currentVersion'),
+                Text('Phiên bản mới nhất: $latestVersion'),
+                const SizedBox(height: 10),
+                fetchSuccess 
+                  ? (currentVersion != latestVersion 
+                    ? Text(
+                        isSignificantlyOutdated 
+                          ? 'Phiên bản quá cũ! Cần cập nhật ngay!' 
+                          : 'Cần cập nhật phiên bản mới!',
+                        style: TextStyle(
+                          color: isSignificantlyOutdated ? Colors.red[900] : Colors.red, 
+                          fontWeight: FontWeight.bold
+                        )
+                      )
+                    : const Text('Ứng dụng đã là phiên bản mới nhất.', 
+                        style: TextStyle(color: Colors.green)))
+                  : const Text('Không thể kiểm tra phiên bản mới nhất.', 
+                      style: TextStyle(color: Colors.orange)),
+                      
+                if (isSignificantlyOutdated) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.red[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red)
                     ),
-                    onPressed: () async {
-                      final url = Uri.parse('https://storage.googleapis.com/times1/DocumentApp/HMGROUPmac.zip');
-                      try {
-                        await launchUrl(url, mode: LaunchMode.externalApplication);
-                      } catch (e) {
-                        print('Error launching URL: $e');
-                      }
-                      Navigator.of(context).pop();
-                    },
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.laptop),
-                    label: const Text('Tải bản Windows'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      backgroundColor: const Color.fromARGB(255, 250, 234, 255),
+                    child: const Text(
+                      'Phiên bản của bạn quá cũ. Vui lòng cập nhật để tiếp tục sử dụng ứng dụng.',
+                      style: TextStyle(fontSize: 13),
                     ),
-                    onPressed: () async {
-                      final url = Uri.parse('https://storage.googleapis.com/times1/DocumentApp/HMGROUPwin.zip');
-                      try {
-                        await launchUrl(url, mode: LaunchMode.externalApplication);
-                      } catch (e) {
-                        print('Error launching URL: $e');
-                      }
-                      Navigator.of(context).pop();
-                    },
                   ),
-                ),
+                ],
               ],
             ),
-            TextButton(
-              child: const Text('Đóng'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ],
+            actions: <Widget>[
+              if (fetchSuccess && currentVersion != latestVersion) Column(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.laptop_mac),
+                      label: const Text('Tải bản macOS'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        backgroundColor: const Color.fromARGB(255, 227, 255, 255),
+                      ),
+                      onPressed: () async {
+                        final url = Uri.parse('https://storage.googleapis.com/times1/DocumentApp/HMGROUPmac.zip');
+                        try {
+                          await launchUrl(url, mode: LaunchMode.externalApplication);
+                        } catch (e) {
+                          print('Error launching URL: $e');
+                        }
+                        if (!isSignificantlyOutdated) {
+                          Navigator.of(context).pop();
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.laptop),
+                      label: const Text('Tải bản Windows'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        backgroundColor: const Color.fromARGB(255, 250, 234, 255),
+                      ),
+                      onPressed: () async {
+                        final url = Uri.parse('https://storage.googleapis.com/times1/DocumentApp/HMGROUPwin.zip');
+                        try {
+                          await launchUrl(url, mode: LaunchMode.externalApplication);
+                        } catch (e) {
+                          print('Error launching URL: $e');
+                        }
+                        if (!isSignificantlyOutdated) {
+                          Navigator.of(context).pop();
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              if (!isSignificantlyOutdated) TextButton(
+                child: const Text('Đóng'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -335,6 +386,7 @@ class _MainScreenState extends State<MainScreen> {
   List<Widget> get _screens => [
   ProjectRouter(userState: _userState),
   const WebViewScreen(),
+  const HMAIScreen(), 
   IntroScreen(userData: _currentUser),
 ];
 
@@ -954,7 +1006,7 @@ void _showLoginDialog() {
                         ),
                         const SizedBox(height: 8),
                         const Text(
-                          '(Lần đầu đăng nhập trên thiết bị, thời gian chờ có thể hơi lâu.\nVui lòng tắt ứng dụng khi hết ngày, mở lại vào ngày mới .)',
+                          '(Nếu quá 10s mà chưa đăng nhập xong thì bạn đã nhập sai thông tin.\nVui lòng tắt ứng dụng khi hết ngày, mở lại vào ngày mới .)',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 10,
@@ -1121,10 +1173,38 @@ void _showLoginDialog() {
       color: const Color.fromARGB(255, 244, 54, 54),
       child: Scaffold(
         body: _screens[_selectedIndex],
+        floatingActionButton: Container(
+          height: 86,
+          width: 86,
+          margin: const EdgeInsets.only(bottom: 10),
+          child: FloatingActionButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const ProjectDirectorScreen()),
+              );
+            },
+            backgroundColor: Colors.red,
+            elevation: 8,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(25),
+            ),
+            child: const Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.admin_panel_settings, color: Colors.white, size: 35),
+                Text('Quản trị', 
+                  style: TextStyle(fontSize: 16, color: Colors.white),
+                  textAlign: TextAlign.center,
+                )
+              ],
+            ),
+          ),
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
         bottomNavigationBar: Padding(
           padding: EdgeInsets.symmetric(
-            horizontal: MediaQuery.of(context).size.width < 600 ? 8.0 : 16.0,
-            vertical: MediaQuery.of(context).size.width < 600 ? 4.0 : 8.0,
+            horizontal: MediaQuery.of(context).size.width < 600 ? 8.0 : 8.0,
+            vertical: MediaQuery.of(context).size.width < 600 ? 4.0 : 4.0,
           ),
           child: Container(
             decoration: BoxDecoration(
@@ -1140,22 +1220,26 @@ void _showLoginDialog() {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(30),
               child: BottomNavigationBar(
-  items: const [
-    BottomNavigationBarItem(
-      icon: Icon(Icons.folder),
-      label: 'Dự án',
-    ),
-    BottomNavigationBarItem(
-      icon: Icon(Icons.web),
-      label: 'Công việc',
-    ),
-    BottomNavigationBarItem(
-      icon: Icon(Icons.home),
-      label: 'Hướng dẫn',
-    ),
-  ],
-  currentIndex: _selectedIndex,
-  onTap: _onItemTapped,
+                items: const [
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.folder),
+                    label: 'Dự án',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.web),
+                    label: 'Công việc',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.smart_toy),
+                    label: 'HM AI',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.home),
+                    label: 'Hướng dẫn',
+                  ),
+                ],
+                currentIndex: _selectedIndex,
+                onTap: _onItemTapped,
                 backgroundColor: Colors.white,
                 selectedItemColor: const Color.fromARGB(255, 73, 54, 244),
                 unselectedItemColor: Colors.grey,
@@ -1329,5 +1413,46 @@ class AppAuthentication {
     final encrypted = encrypter.encrypt(plainText, iv: iv);
     final concatenated = iv.bytes + encrypted.bytes;
     return base64.encode(concatenated);
+  }
+}
+// Add this class to handle the HM AI screen in navigation
+class HMAIScreen extends StatelessWidget {
+  const HMAIScreen({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        children: [
+          // Background gradient
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color.fromARGB(255, 210, 173, 255)!,
+                  Colors.blue[600]!,
+                ],
+              ),
+            ),
+          ),
+          // Center the FloatingDraggableIcon's ChatWindow directly
+          Center(
+            child: ChatWindow(
+              key: FloatingDraggableIcon.chatWindowKey,
+              onClose: () {
+                // Instead of hiding, navigate back to previous screen
+                Navigator.of(context).pop();
+              },
+              onOpen: () {
+                FloatingDraggableIcon.chatWindowKey.currentState?.scrollToBottom();
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
