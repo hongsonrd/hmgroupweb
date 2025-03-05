@@ -10,8 +10,11 @@ import 'package:intl/intl.dart';
 //import 'package:image_picker/image_picker.dart';
 //import 'dart:io';
 //import 'package:uuid/uuid.dart';
-import 'http_client.dart';
 import 'package:uuid/uuid.dart';
+import 'package:dropdown_search/dropdown_search.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:multi_select_flutter/multi_select_flutter.dart';
+import 'http_client.dart';
 
 class ProjectPlan extends StatefulWidget {
   final String? userType;
@@ -23,6 +26,9 @@ class ProjectPlan extends StatefulWidget {
 }
 
 class _ProjectPlanState extends State<ProjectPlan> with SingleTickerProviderStateMixin {
+  DateTime? _startDate;
+DateTime? _endDate;
+String? _filterByUser;
   late TabController _tabController;
   CalendarFormat _calendarFormat = CalendarFormat.month;
   DateTime _focusedDay = DateTime.now();
@@ -33,7 +39,14 @@ class _ProjectPlanState extends State<ProjectPlan> with SingleTickerProviderStat
   List<String> _projectList = [];
   List<String> _selectedShare = [];
   final dbHelper = DBHelper();
+List<String> _userList = [];
 
+Future<void> _loadSavedUserList() async {
+  final prefs = await SharedPreferences.getInstance();
+  setState(() {
+    _userList = prefs.getStringList('userList') ?? [];
+  });
+}
   final List<String> phanLoaiOptions = ['Sáng', 'Chiều', 'Cả ngày', 'Tối'];
   String? _selectedPhanLoai;
   String? _selectedProject;
@@ -209,6 +222,7 @@ class _ProjectPlanState extends State<ProjectPlan> with SingleTickerProviderStat
     _loadProjects();
     _loadPlans();
     _setDefaultChiaSe(widget.userType);
+    _loadSavedUserList();
   }
 
 Future<void> _loadProjects() async {
@@ -260,6 +274,12 @@ Future<void> _loadProjects() async {
   String? selectedPhanLoai = existingPlan?.phanLoai ?? 'Sáng';
   String? selectedProject = existingPlan?.boPhan ?? _selectedProject;
   String phatSinh = existingPlan?.phatSinh ?? 'Không';
+  
+  // Convert existing plan's chiaSe to a list if it exists
+  List<String> selectedShareUsers = existingPlan?.chiaSe?.split(',')
+      .map((s) => s.trim())
+      .where((s) => s.isNotEmpty)
+      .toList() ?? List.from(_selectedShare);
 
   showDialog(
     context: context,
@@ -303,53 +323,53 @@ Future<void> _loadProjects() async {
                             ElevatedButton(
                               child: Text('Lưu'),
                               onPressed: () async {
-  try {
-    final userCredentials = Provider.of<UserCredentials>(context, listen: false);
-    final username = userCredentials.username;
-    
-    // Format date to ISO string
-    final formattedDate = _selectedDay?.toIso8601String() ?? DateTime.now().toIso8601String();
+                                try {
+                                  final userCredentials = Provider.of<UserCredentials>(context, listen: false);
+                                  final username = userCredentials.username;
+                                  
+                                  // Format date to ISO string
+                                  final formattedDate = _selectedDay?.toIso8601String() ?? DateTime.now().toIso8601String();
 
-    // Prepare data to send
-    final planData = {
-      'nguoiDung': username,
-      'ngay': formattedDate,
-      'boPhan': selectedProject,
-      'phanLoai': selectedPhanLoai,
-      'moTaChung': _detailsController.text,
-      'chiaSe': _selectedShare.join(','),
-      'nhom': 'Kế hoạch',
-      'phatSinh': phatSinh,
-      'xetDuyet': phatSinh == 'Có' ? 'Chưa duyệt' : 'Đồng ý'
-    };
+                                  // Prepare data to send
+                                  final planData = {
+  'nguoiDung': username,
+  'ngay': formattedDate,
+  'boPhan': selectedProject,
+  'phanLoai': selectedPhanLoai,
+  'moTaChung': _detailsController.text,
+  'chiaSe': selectedShareUsers.join(','),
+  'nhom': 'Kế hoạch',
+  'phatSinh': phatSinh,
+  'xetDuyet': phatSinh == 'Có' ? 'Chưa duyệt' : 'Đồng ý'
+};
 
-    // Send request to server
-    final response = await http.post(
-      Uri.parse('$baseUrl/submitplan'),
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode(planData),
-    );
+                                  // Send request to server
+                                  final response = await http.post(
+                                    Uri.parse('$baseUrl/submitplan'),
+                                    headers: {'Content-Type': 'application/json'},
+                                    body: json.encode(planData),
+                                  );
 
-    if (response.statusCode == 200) {
-      // Refresh plans list
-      await _loadPlans();
-      
-      // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Kế hoạch đã được lưu thành công')),
-      );
-      
-      // Close dialog
-      Navigator.of(context).pop();
-    } else {
-      throw Exception('Failed to save plan');
-    }
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Lỗi khi lưu kế hoạch: $e')),
-    );
-  }
-},
+                                  if (response.statusCode == 200) {
+                                    // Refresh plans list
+                                    await _loadPlans();
+                                    
+                                    // Show success message
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Kế hoạch đã được lưu thành công')),
+                                    );
+                                    
+                                    // Close dialog
+                                    Navigator.of(context).pop();
+                                  } else {
+                                    throw Exception('Failed to save plan');
+                                  }
+                                } catch (e) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Lỗi khi lưu kế hoạch: $e')),
+                                  );
+                                }
+                              },
                             ),
                           ],
                         ),
@@ -363,16 +383,27 @@ Future<void> _loadProjects() async {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          DropdownButtonFormField<String>(
-                            value: selectedProject,
-                            decoration: InputDecoration(
-                              labelText: 'Dự án',
-                              border: OutlineInputBorder(),
+                          DropdownSearch<String>(
+                            popupProps: PopupProps.menu(
+                              showSearchBox: true,
+                              searchFieldProps: TextFieldProps(
+                                decoration: InputDecoration(
+                                  hintText: "Tìm kiếm dự án...",
+                                  contentPadding: EdgeInsets.fromLTRB(12, 12, 8, 0),
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                              showSelectedItems: true,
                             ),
-                            items: _projectList.map((project) {
-                              return DropdownMenuItem(value: project, child: Text(project));
-                            }).toList(),
+                            items: _projectList,
+                            selectedItem: selectedProject,
                             onChanged: (value) => selectedProject = value,
+                            dropdownDecoratorProps: DropDownDecoratorProps(
+                              dropdownSearchDecoration: InputDecoration(
+                                labelText: 'Dự án',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
                           ),
                           SizedBox(height: 16),
                           DropdownButtonFormField<String>(
@@ -395,6 +426,48 @@ Future<void> _loadProjects() async {
                             ),
                             maxLines: 5,
                           ),
+                          SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: MultiSelectDialogField<String>(
+                                  items: _userList.map((user) => 
+                                    MultiSelectItem<String>(user, user)).toList(),
+                                  listType: MultiSelectListType.CHIP,
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.grey),
+                                    borderRadius: BorderRadius.circular(5),
+                                  ),
+                                  buttonText: Text("Chia sẻ với"),
+                                  title: Text("Chọn người chia sẻ"),
+                                  initialValue: selectedShareUsers,
+                                  onConfirm: (values) {
+                                    setState(() {
+                                      selectedShareUsers = values;
+                                    });
+                                  },
+                                  chipDisplay: MultiSelectChipDisplay(
+                                    onTap: (value) {
+                                      setState(() {
+                                        selectedShareUsers.remove(value);
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              IconButton(
+                                icon: Icon(Icons.clear),
+                                onPressed: () {
+                                  setState(() {
+                                    selectedShareUsers = [];
+                                  });
+                                },
+                                tooltip: 'Xoá chia sẻ',
+                              ),
+                            ],
+                          ),
+                          
                           SizedBox(height: 16),
                           Text('Công việc có sẵn:', style: TextStyle(fontWeight: FontWeight.bold)),
                           Container(
@@ -446,113 +519,6 @@ Future<void> _loadProjects() async {
         },
       );
     },
-  );
-}
-Widget _buildPlanList(bool isMyPlans) {
-  final userCredentials = Provider.of<UserCredentials>(context, listen: false);
-  final username = userCredentials.username;
-
-  final filteredPlans = _plans.where((plan) {
-    if (isMyPlans) {
-      return plan.nguoiDung == username;
-    } else {
-      return plan.nguoiDung != username && 
-             (plan.chiaSe?.split(',').contains(username) ?? false);
-    }
-  }).toList();
-
-  filteredPlans.sort((a, b) => b.ngay.compareTo(a.ngay));
-
-  // Wrap in a vertical scroll view first
-  return SingleChildScrollView(
-    scrollDirection: Axis.vertical,
-    child: SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        showCheckboxColumn: false,
-        columns: [
-          DataColumn(label: Text('')),
-          if (!isMyPlans) DataColumn(label: Text('Người dùng')),
-          DataColumn(label: Text('Ngày')),
-          DataColumn(label: Text('Thời gian')),
-          DataColumn(label: Text('Dự án')),
-          DataColumn(label: Text('Chi tiết')),
-          DataColumn(label: Text('Phát sinh')),
-          DataColumn(label: Text('Trạng thái')),
-          if (!isMyPlans) DataColumn(label: Text('Xét duyệt')),
-        ],
-        rows: filteredPlans.map((plan) {
-          final rowColor = !isMyPlans ? _getStatusColor(plan.xetDuyet ?? '') : null;
-          final isPhatSinh = plan.phatSinh == 'Có';
-          
-          return DataRow(
-            color: MaterialStateProperty.all(rowColor),
-            onSelectChanged: (_) => _showPlanDetailsDialog(plan),
-            cells: [
-            DataCell(
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Add checkbox that's red if PhatSinh is "Có"
-                  Icon(
-                    Icons.check_box,
-                    color: isPhatSinh ? Colors.red : Colors.grey,
-                    size: 18,
-                  ),
-                  Container(
-                    height: 36,
-                    child: IconButton(
-                      icon: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.reply, size: 14, color: const Color.fromARGB(255, 0, 113, 206)),
-                          SizedBox(width: 4),
-                          Text(
-                            'Trả lời',
-                            style: TextStyle(
-                              color: Color.fromARGB(255, 0, 113, 206),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                      onPressed: () => _showReportDialog(plan),
-                      tooltip: 'Phản hồi kế hoạch',
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (!isMyPlans) DataCell(Text(plan.nguoiDung ?? '')),
-            DataCell(Text(DateFormat('dd/MM/yyyy').format(plan.ngay))),
-            DataCell(Text(plan.phanLoai ?? '')),
-            DataCell(Text(plan.boPhan ?? '')),
-            DataCell(Text(plan.moTaChung ?? '')),
-            DataCell(Text(plan.phatSinh ?? 'Không')),
-            DataCell(Text(plan.xetDuyet ?? 'Chưa duyệt')),
-            if (!isMyPlans)
-              DataCell(
-                plan.phatSinh == 'Có' && plan.xetDuyet == 'Chưa duyệt'
-                  ? Row(
-                      children: [
-                        TextButton(
-                          child: Text('Đồng ý'),
-                          onPressed: () => _updatePlanStatus(plan, 'Đồng ý'),
-                        ),
-                        TextButton(
-                          child: Text('Từ chối'),
-                          onPressed: () => _updatePlanStatus(plan, 'Từ chối'),
-                        ),
-                      ],
-                    )
-                  : Text(''),
-              ),
-          ],
-          );
-        }).toList(),
-      ),
-    ),
   );
 }
 void _showPlanDetailsDialog(BaocaoModel plan) {
@@ -662,7 +628,6 @@ Widget _buildDetailRow(String label, String value, {bool multiLine = false, bool
               )
             : Row(
                 children: [
-                  // Show red checkbox for highlighted values (PhatSinh = 'Có')
                   if (isHighlighted)
                     Padding(
                       padding: const EdgeInsets.only(right: 4),
@@ -678,6 +643,269 @@ Widget _buildDetailRow(String label, String value, {bool multiLine = false, bool
                 ],
               ),
       ],
+    ),
+  );
+}
+Widget _buildPlanList(bool isMyPlans) {
+  final userCredentials = Provider.of<UserCredentials>(context, listen: false);
+  final username = userCredentials.username;
+
+  // Initial filtering - separate shared vs. my plans
+  final initialFilteredPlans = _plans.where((plan) {
+    if (isMyPlans) {
+      return plan.nguoiDung == username;
+    } else {
+      return plan.nguoiDung != username && 
+             (plan.chiaSe?.split(',').contains(username) ?? false);
+    }
+  }).toList();
+
+  initialFilteredPlans.sort((a, b) => b.ngay.compareTo(a.ngay));
+  
+  if (!isMyPlans) {
+    // Get unique users for filter dropdown
+    final uniqueUsers = initialFilteredPlans
+        .map((plan) => plan.nguoiDung)
+        .where((user) => user != null)
+        .toSet()
+        .toList();
+    
+    // Apply secondary filters
+    List<BaocaoModel> finalFilteredPlans = List.from(initialFilteredPlans);
+    
+    if (_filterByUser != null) {
+      finalFilteredPlans = finalFilteredPlans.where((plan) => 
+        plan.nguoiDung == _filterByUser).toList();
+    }
+    
+    if (_startDate != null && _endDate != null) {
+      finalFilteredPlans = finalFilteredPlans.where((plan) {
+        final planDate = DateTime(plan.ngay.year, plan.ngay.month, plan.ngay.day);
+        return !planDate.isBefore(_startDate!) && 
+               !planDate.isAfter(_endDate!.add(Duration(days: 1)));
+      }).toList();
+    }
+        
+    return Column(
+      children: [
+        // Filter row with updated count based on all filters
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          color: Colors.grey.shade100,
+          child: Row(
+            children: [
+              Text(
+                'Tổng số: ${finalFilteredPlans.length}',  // Use count from fully filtered list
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(width: 16),
+              // User filter
+              Expanded(
+                child: Container(
+                  height: 32,
+                  child: DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                      isDense: true,
+                      labelText: 'Người dùng',
+                      labelStyle: TextStyle(fontSize: 12),
+                    ),
+                    value: _filterByUser,
+                    items: [
+                      DropdownMenuItem<String>(
+                        value: null,
+                        child: Text('Tất cả', style: TextStyle(fontSize: 12)),
+                      ),
+                      ...uniqueUsers.map((user) => DropdownMenuItem<String>(
+                        value: user,
+                        child: Text(user ?? '', style: TextStyle(fontSize: 12)),
+                      )).toList(),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        _filterByUser = value;
+                      });
+                    },
+                  ),
+                ),
+              ),
+              SizedBox(width: 8),
+              // Date range
+              InkWell(
+                onTap: () async {
+                  final DateTimeRange? picked = await showDateRangePicker(
+                    context: context,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2030),
+                    initialDateRange: _startDate != null && _endDate != null
+                        ? DateTimeRange(start: _startDate!, end: _endDate!)
+                        : null,
+                  );
+                  if (picked != null) {
+                    setState(() {
+                      _startDate = picked.start;
+                      _endDate = picked.end;
+                    });
+                  }
+                },
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade400),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.date_range, size: 16),
+                      SizedBox(width: 4),
+                      Text(
+                        _startDate != null && _endDate != null
+                            ? '${DateFormat('dd/MM').format(_startDate!)} - ${DateFormat('dd/MM').format(_endDate!)}'
+                            : 'Chọn ngày',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(width: 8),
+              // Clear filters button
+              IconButton(
+                icon: Icon(Icons.clear, size: 16),
+                onPressed: () {
+                  setState(() {
+                    _filterByUser = null;
+                    _startDate = null;
+                    _endDate = null;
+                  });
+                },
+                tooltip: 'Xóa bộ lọc',
+                padding: EdgeInsets.all(4),
+              ),
+            ],
+          ),
+        ),
+        
+        // Use the already filtered list for the data table
+        Expanded(
+          child: _buildFilteredPlanTable(finalFilteredPlans, isMyPlans),
+        ),
+      ],
+    );
+  } else {
+    return _buildFilteredPlanTable(initialFilteredPlans, isMyPlans);
+  }
+}
+Widget _buildFilteredPlanTable(List<BaocaoModel> plans, bool isMyPlans) {
+  // Create columns list to ensure consistency
+  final List<DataColumn> columns = [
+    DataColumn(label: Text('')),
+    if (!isMyPlans) DataColumn(label: Text('Người dùng')),
+    DataColumn(label: Text('Ngày')),
+    DataColumn(label: Text('Thời gian')),
+    DataColumn(label: Text('Dự án')),
+    DataColumn(label: Text('Chi tiết')),
+    DataColumn(label: Text('Phát sinh')),
+    DataColumn(label: Text('Trạng thái')),
+    if (!isMyPlans) DataColumn(label: Text('Xét duyệt')),
+  ];
+
+  return SingleChildScrollView(
+    scrollDirection: Axis.vertical,
+    child: SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        showCheckboxColumn: false,
+        columns: columns,
+        rows: plans.map((plan) {
+          final rowColor = !isMyPlans ? _getStatusColor(plan.xetDuyet ?? '') : null;
+          final isPhatSinh = plan.phatSinh == 'Có';
+          
+          // Create list of cells that matches columns count exactly
+          final List<DataCell> cells = [
+            DataCell(
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.check_box,
+                    color: isPhatSinh ? Colors.red : Colors.grey,
+                    size: 18,
+                  ),
+                  Container(
+                    height: 36,
+                    child: IconButton(
+                      icon: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.reply, size: 14, color: const Color.fromARGB(255, 0, 113, 206)),
+                          SizedBox(width: 4),
+                          Text(
+                            'Trả lời',
+                            style: TextStyle(
+                              color: Color.fromARGB(255, 0, 113, 206),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                      onPressed: () => _showReportDialog(plan),
+                      tooltip: 'Phản hồi kế hoạch',
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ];
+          
+          // Add user cell only for shared plans
+          if (!isMyPlans) {
+            cells.add(DataCell(Text(plan.nguoiDung ?? '')));
+          }
+          
+          // Add the remaining common cells
+          cells.addAll([
+            DataCell(Text(DateFormat('dd/MM/yyyy').format(plan.ngay))),
+            DataCell(Text(plan.phanLoai ?? '')),
+            DataCell(Text(plan.boPhan ?? '')),
+            DataCell(Text(plan.moTaChung ?? '')),
+            DataCell(Text(plan.phatSinh ?? 'Không')),
+            DataCell(Text(plan.xetDuyet ?? 'Chưa duyệt')),
+          ]);
+          
+          // Add approval buttons cell only for shared plans
+          if (!isMyPlans) {
+            cells.add(
+              DataCell(
+                plan.phatSinh == 'Có' && plan.xetDuyet == 'Chưa duyệt'
+                  ? Row(
+                      children: [
+                        TextButton(
+                          child: Text('Đồng ý'),
+                          onPressed: () => _updatePlanStatus(plan, 'Đồng ý'),
+                        ),
+                        TextButton(
+                          child: Text('Từ chối'),
+                          onPressed: () => _updatePlanStatus(plan, 'Từ chối'),
+                        ),
+                      ],
+                    )
+                  : Text(''),
+              ),
+            );
+          }
+          
+          // Double-check that cells count matches columns count
+          assert(cells.length == columns.length, 'Cell count must match column count');
+          
+          return DataRow(
+            color: MaterialStateProperty.all(rowColor),
+            onSelectChanged: (_) => _showPlanDetailsDialog(plan),
+            cells: cells,
+          );
+        }).toList(),
+      ),
     ),
   );
 }
@@ -825,22 +1053,33 @@ class _ReportDialogContentState extends State<ReportDialogContent> {
   late TextEditingController _giaiPhapController;
   late TextEditingController _taskContentController;
   List<String> _selectedImages = [];
+  List<String> _selectedShare = [];
   bool _createTask = false;
   DateTime _taskDate = DateTime.now().add(Duration(days: 1));
   final baseUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app';
+  List<String> _userList = [];
   
   @override
   void initState() {
     super.initState();
     _giaiPhapController = TextEditingController();
     _taskContentController = TextEditingController();
+    
+    if (widget.plan.chiaSe != null && widget.plan.chiaSe!.isNotEmpty) {
+      _selectedShare = widget.plan.chiaSe!.split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+    }
+    
+    _loadSavedUserList();
   }
   
-  @override
-  void dispose() {
-    _giaiPhapController.dispose();
-    _taskContentController.dispose();
-    super.dispose();
+  Future<void> _loadSavedUserList() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _userList = prefs.getStringList('userList') ?? [];
+    });
   }
 
   @override
@@ -893,9 +1132,20 @@ class _ReportDialogContentState extends State<ReportDialogContent> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Báo cáo kế hoạch ngày ${DateFormat('dd/MM/yyyy').format(widget.plan.ngay)} về dự án ${widget.plan.boPhan}: ${widget.plan.moTaChung}',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                    // Project display
+                    Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(4),
+                        color: Colors.grey.shade100,
+                      ),
+                      child: Row(
+                        children: [
+                          Text('Dự án: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text(widget.plan.boPhan ?? 'N/A'),
+                        ],
+                      ),
                     ),
                     SizedBox(height: 16),
                     TextField(
@@ -906,6 +1156,47 @@ class _ReportDialogContentState extends State<ReportDialogContent> {
                         errorText: _giaiPhapController.text.isEmpty ? 'Vui lòng nhập giải pháp' : null,
                       ),
                       maxLines: 5,
+                    ),
+                    SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: MultiSelectDialogField<String>(
+                            items: _userList.map((user) => 
+                              MultiSelectItem<String>(user, user)).toList(),
+                            listType: MultiSelectListType.CHIP,
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey),
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                            buttonText: Text("Chia sẻ với"),
+                            title: Text("Chọn người chia sẻ"),
+                            initialValue: _selectedShare,
+                            onConfirm: (values) {
+                              setState(() {
+                                _selectedShare = values;
+                              });
+                            },
+                            chipDisplay: MultiSelectChipDisplay(
+                              onTap: (value) {
+                                setState(() {
+                                  _selectedShare.remove(value);
+                                });
+                              },
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        IconButton(
+                          icon: Icon(Icons.clear),
+                          onPressed: () {
+                            setState(() {
+                              _selectedShare = [];
+                            });
+                          },
+                          tooltip: 'Xoá chia sẻ',
+                        ),
+                      ],
                     ),
                     SizedBox(height: 16),
                     // Add option to create follow-up task
@@ -944,6 +1235,22 @@ class _ReportDialogContentState extends State<ReportDialogContent> {
                             ],
                           ),
                           if (_createTask) ...[
+                            SizedBox(height: 16),
+                            // Add project display for task (read-only)
+                            Container(
+                              padding: EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey.shade300),
+                                borderRadius: BorderRadius.circular(4),
+                                color: Colors.grey.shade50,
+                              ),
+                              child: Row(
+                                children: [
+                                  Text('Dự án: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  Text(widget.plan.boPhan ?? 'N/A'),
+                                ],
+                              ),
+                            ),
                             SizedBox(height: 16),
                             Text('Ngày xử lý:'),
                             InkWell(
@@ -1013,7 +1320,7 @@ class _ReportDialogContentState extends State<ReportDialogContent> {
       final userCredentials = Provider.of<UserCredentials>(context, listen: false);
       final username = userCredentials.username;
       
-      // Capture all values
+      // Capture values
       final giaiPhapText = _giaiPhapController.text.trim();
       final taskContentText = _taskContentController.text.trim();
       final createTaskFlag = _createTask;
@@ -1022,11 +1329,11 @@ class _ReportDialogContentState extends State<ReportDialogContent> {
       final reportData = {
         'nguoiDung': username,
         'ngay': DateTime.now().toIso8601String(),
-        'boPhan': widget.plan.boPhan,
+        'boPhan': widget.plan.boPhan,  // Use the same project as original plan
         'phanLoai': 'Phản hồi kế hoạch',
         'moTaChung': 'Báo cáo kế hoạch ngày ${DateFormat('dd/MM/yyyy').format(widget.plan.ngay)} về dự án ${widget.plan.boPhan}: ${widget.plan.moTaChung}',
         'giaiPhapChung': giaiPhapText,
-        'chiaSe': widget.plan.chiaSe,
+        'chiaSe': _selectedShare.join(','),  // Use the selected users
         'nhom': 'Báo cáo',
         'phatSinh': 'Có',
         'xetDuyet': 'Chưa duyệt',
@@ -1058,7 +1365,7 @@ class _ReportDialogContentState extends State<ReportDialogContent> {
           'gio': formattedTime,
           'nguoiDung': username,
           'boPhan': widget.plan.boPhan,
-          'chiaSe': widget.plan.chiaSe,
+          'chiaSe': _selectedShare.join(','), 
           'phanLoai': 'Cả ngày',
           'moTaChung': effectiveTaskContent,
           'nhom': 'Kế hoạch',

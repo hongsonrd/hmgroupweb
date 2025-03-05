@@ -17,6 +17,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:collection/collection.dart';
 import 'http_client.dart';
+import 'package:dropdown_search/dropdown_search.dart';
 
 class ProjectWorkReport extends StatefulWidget {
   final String? selectedDate;
@@ -1415,6 +1416,41 @@ void _showDateRangeDialog() {
     },
   );
 }
+Widget _buildProjectDropdown() {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text('Chọn dự án:', style: TextStyle(fontWeight: FontWeight.bold)),
+      SizedBox(height: 4),
+      DropdownSearch<String>(
+        popupProps: PopupProps.menu(
+          showSearchBox: true,
+          searchFieldProps: TextFieldProps(
+            decoration: InputDecoration(
+              hintText: "Tìm kiếm dự án...",
+              contentPadding: EdgeInsets.fromLTRB(12, 12, 8, 0),
+              border: OutlineInputBorder(),
+            ),
+          ),
+          showSelectedItems: true,
+        ),
+        items: _projectList,
+        selectedItem: _selectedProject,
+        onChanged: (String? newValue) {
+          setState(() => _selectedProject = newValue);
+        },
+        dropdownDecoratorProps: DropDownDecoratorProps(
+          dropdownSearchDecoration: InputDecoration(
+            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
+}
 @override
 Widget build(BuildContext context) {
   return Scaffold(
@@ -1475,27 +1511,8 @@ Widget build(BuildContext context) {
                   Row(
                     children: [
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Chọn dự án:', 
-                                style: TextStyle(fontWeight: FontWeight.bold)),
-                            DropdownButton<String>(
-                              isExpanded: true,
-                              value: _selectedProject,
-                              items: _projectList.map((String project) {
-                                return DropdownMenuItem<String>(
-                                  value: project,
-                                  child: Text(project),
-                                );
-                              }).toList(),
-                              onChanged: (String? newValue) {
-                                setState(() => _selectedProject = newValue);
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
+  child: _buildProjectDropdown(),
+),
                       SizedBox(width: 16),
                       Expanded(
                         child: Column(

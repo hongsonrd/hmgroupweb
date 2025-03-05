@@ -1,7 +1,7 @@
 name: hmgroupweb
 description: "Ứng dụng công nghệ chuyển đổi số Hoàn Mỹ Group."
 publish_to: 'none'
-version: 0.2.2
+version: 0.2.3
 
 environment:
   sdk: ">=3.2.0 <4.0.0"
@@ -9,6 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  dropdown_search: ^5.0.6
 
   file_picker: ^5.2.0+1
   desktop_webview_window: ^0.2.3

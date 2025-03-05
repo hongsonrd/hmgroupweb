@@ -48,16 +48,127 @@ List<Color> _availableColors = [
 ];
 bool _showColorDialog = false;
 String? _staffToColor;
-
+DateTime? _lastSyncTime;
+final Duration _syncThreshold = Duration(hours: 6);
+bool _isSyncNeeded() {
+  if (_lastSyncTime == null) return true;
+  final now = DateTime.now();
+  final difference = now.difference(_lastSyncTime!);
+  if (difference > _syncThreshold) return true;
+  final lastSyncHour = _lastSyncTime!.hour;
+  final currentHour = now.hour;
+  if (_lastSyncTime!.day != now.day) return true;
+  if (lastSyncHour < 12 && currentHour >= 12 && currentHour < 17) return true;
+  if (lastSyncHour < 17 && currentHour >= 17) return true;
+  return false;
+}
+Future<void> _syncDataFromServer() async {
+  try {
+    setState(() => _isLoading = true);
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text('Đang đồng bộ dữ liệu'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Vui lòng đợi trong giây lát...'),
+          ],
+        ),
+      ),
+    );
+    
+    debugLog('Starting data synchronization from server...');
+    final dbHelper = DBHelper();
+    
+    // Fetch all attendance data from server
+    final response = await AuthenticatedHttpClient.get(
+      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongcn/$_username'),
+    );
+    
+    if (response.statusCode == 200) {
+      debugLog('Received data from server. Processing...');
+      
+      final List<dynamic> chamCongCNData = json.decode(response.body);
+      
+      // Clear existing table and insert new data
+      await dbHelper.clearTable('chamcongcn');
+      
+      final chamCongCNModels = chamCongCNData.map((data) {
+        try {
+          return ChamCongCNModel.fromMap(data as Map<String, dynamic>);
+        } catch (e) {
+          debugLog('Error converting record: $e');
+          throw e;
+        }
+      }).toList();
+      
+      await dbHelper.batchInsertChamCongCN(chamCongCNModels);
+      
+      // Update last sync time
+      _lastSyncTime = DateTime.now();
+      
+      // Save last sync time to persistent storage
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_sync_time', _lastSyncTime!.toIso8601String());
+      
+      debugLog('Synchronization completed successfully');
+      
+      // Reload attendance data
+      await _loadAttendanceData();
+      
+      // Remove loading dialog
+      if (mounted) Navigator.of(context).pop();
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Đã đồng bộ dữ liệu từ máy chủ thành công'))
+      );
+    } else {
+      throw Exception('Failed to load data from server');
+    }
+  } catch (e) {
+    debugLog('Sync error: $e');
+    if (mounted) Navigator.of(context).pop();
+    _showError('Không thể đồng bộ dữ liệu: ${e.toString()}');
+  } finally {
+    setState(() => _isLoading = false);
+  }
+}
   @override
   void initState() {
     super.initState();
     _selectedDepartment = widget.selectedBoPhan;
     _username = Provider.of<UserCredentials>(context, listen: false).username;
+      _loadLastSyncTime();
     _initializeData();
       _loadStaffColors();
-
   }
+  Future<void> _loadLastSyncTime() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final lastSyncStr = prefs.getString('last_sync_time');
+    
+    if (lastSyncStr != null) {
+      _lastSyncTime = DateTime.parse(lastSyncStr);
+      debugLog('Last sync time loaded: $_lastSyncTime');
+    }
+    
+    // Check if sync is needed and perform it
+    if (_isSyncNeeded()) {
+      debugLog('Sync needed based on time threshold');
+      // Slight delay to ensure UI is built
+      Future.delayed(Duration(milliseconds: 500), () {
+        if (mounted) _syncDataFromServer();
+      });
+    }
+  } catch (e) {
+    debugLog('Error loading last sync time: $e');
+  }
+}
   Future<void> _loadStaffColors() async {
   try {
     final prefs = await SharedPreferences.getInstance();
@@ -774,6 +885,13 @@ Widget build(BuildContext context) {
         icon: Icon(Icons.arrow_back, color: Colors.white),
         onPressed: () => Navigator.of(context).pop(),
       ),
+      actions: [
+        IconButton(
+          icon: Icon(Icons.sync, color: Colors.white),
+          onPressed: _syncDataFromServer,
+          tooltip: 'Đồng bộ dữ liệu',
+        ),
+      ],
     ),
     body: Stack(
       children: [
