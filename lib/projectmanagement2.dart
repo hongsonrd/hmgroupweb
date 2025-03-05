@@ -907,36 +907,58 @@ Future<void> _loadHistory() async {
     final userCredentials = Provider.of<UserCredentials>(context, listen: false);
     final username = userCredentials.username.toLowerCase();
     
-    // Step 1: Try to fetch task history with userType
-    setState(() => _syncStatus = 'Đang lấy lịch sử báo cáo...');
-    final taskHistoryResponse = await AuthenticatedHttpClient.get(
-      Uri.parse('$baseUrl/historybaocao/$username/${userType ?? ''}')
-    );
+  // Step 1: Try to fetch task history with userType
+setState(() => _syncStatus = 'Đang lấy lịch sử báo cáo...');
+final taskHistoryResponse = await AuthenticatedHttpClient.get(
+  Uri.parse('$baseUrl/historybaocao/$username/${userType ?? ''}')
+);
 
-    if (taskHistoryResponse.statusCode != 200) {
-      throw Exception('Failed to load task history: ${taskHistoryResponse.statusCode}');
-    }
+if (taskHistoryResponse.statusCode != 200) {
+  throw Exception('Failed to load task history: ${taskHistoryResponse.statusCode}');
+}
 
-    final List<dynamic> taskHistoryData = json.decode(taskHistoryResponse.body);
-    await dbHelper.clearTable(DatabaseTables.taskHistoryTable);
+// Add debug logging
+print('Task history response: ${taskHistoryResponse.body}');
 
-    final taskHistories = taskHistoryData.map((data) => TaskHistoryModel(
-      uid: data['UID'],
-      taskId: data['TaskID'],
-      ngay: DateTime.parse(data['Ngay']),
-      gio: data['Gio'],
-      nguoiDung: data['NguoiDung'],
-      ketQua: data['KetQua'],
-      chiTiet: data['ChiTiet'],
-      chiTiet2: data['ChiTiet2'],
-      viTri: data['ViTri'],
-      boPhan: data['BoPhan'],
-      phanLoai: data['PhanLoai'],
-      hinhAnh: data['HinhAnh'],
-      giaiPhap: data['GiaiPhap'],
-    )).toList();
+final List<dynamic> taskHistoryData = json.decode(taskHistoryResponse.body);
+await dbHelper.clearTable(DatabaseTables.taskHistoryTable);
 
-    await dbHelper.batchInsertTaskHistory(taskHistories);
+final taskHistories = <TaskHistoryModel>[];
+for (var data in taskHistoryData) {
+  try {
+    // Log the data we're processing
+    print('Processing task history item: $data');
+    
+    // Safely handle potential null values
+    taskHistories.add(TaskHistoryModel(
+      uid: data['UID'] ?? '',
+      taskId: data['TaskID'] ?? '',
+      ngay: data['Ngay'] != null ? DateTime.parse(data['Ngay']) : DateTime.now(),
+      gio: data['Gio'] ?? '',
+      nguoiDung: data['NguoiDung'] ?? '',
+      ketQua: data['KetQua'] ?? '',
+      chiTiet: data['ChiTiet'] ?? '',
+      chiTiet2: data['ChiTiet2'] ?? '',
+      viTri: data['ViTri'] ?? '',
+      boPhan: data['BoPhan'] ?? '',
+      phanLoai: data['PhanLoai'] ?? '',
+      hinhAnh: data['HinhAnh'], // Can be null
+      giaiPhap: data['GiaiPhap'], // Can be null
+    ));
+  } catch (e) {
+    print('Error processing task history item: $e');
+    print('Problematic data: $data');
+    // Continue with next item instead of failing whole process
+  }
+}
+
+// Only proceed if we have valid items
+if (taskHistories.isNotEmpty) {
+  await dbHelper.batchInsertTaskHistory(taskHistories);
+  print('Successfully inserted ${taskHistories.length} task history records');
+} else {
+  print('No valid task history records to insert');
+}
 
     // Step 2: Try to fetch position history
     try {
