@@ -6,11 +6,11 @@ import 'package:uuid/uuid.dart';
 import 'user_credentials.dart';
 import 'db_helper.dart';
 import 'projectworkerall.dart';
+import 'http_client.dart';
 
 import 'table_models.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart';
-import 'http_client.dart';
 import 'dart:io' ;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:excel/excel.dart';
@@ -34,11 +34,11 @@ class _ProjectWorkerState extends State<ProjectWorker> {
   String? _selectedMonth;
   Map<String, Map<String, dynamic>> _modifiedRecords = {};
   Map<String, Map<String, dynamic>> _newRecords = {};
-    final List<String> _congThuongChoices = ['X', 'P', 'XĐ', 'X/2', 'Ro', 'HT', 'NT', 'CĐ', 'NL', 'Ô', 'TS', '2X', '3X', 'HV', '2HV', '3HV', '2XĐ', 'QLDV'];
+  final List<String> _congThuongChoices = ['X', 'P', 'XĐ', 'X/2', 'Ro', 'HT', 'NT', 'CĐ', 'NL', 'Ô', 'TS', '2X', '3X', 'HV', '2HV', '3HV', '2XĐ', 'QLDV'];
   late String _username;
   Map<String, String> _staffNames = {};
   List<String> _debugLogs = [];
-bool _showDebugOverlay = true;
+bool _showDebugOverlay = false;
 Map<String, Color> _staffColors = {};
 List<Color> _availableColors = [
   Colors.yellow.shade100,
@@ -614,6 +614,8 @@ final months = await dbHelper.rawQuery(
  setState(() => _isLoading = false);
 }
 Future<void> _saveChanges() async {
+    FocusScope.of(context).unfocus();
+
   try {
     final dbHelper = DBHelper();
     
@@ -952,8 +954,8 @@ ElevatedButton(
                       TabBar(
                         isScrollable: true,
                         tabs: [
-                          Tab(text: 'Công chữ'),
-                          Tab(text: 'NG thường'),
+                          Tab(text: 'Chữ & Giờ thường'),
+                          //Tab(text: 'NG thường'),
                           Tab(text: 'Hỗ trợ'),
                           Tab(text: 'Part time'),
                           Tab(text: 'PT sáng'),
@@ -968,7 +970,7 @@ ElevatedButton(
                         child: TabBarView(
                           children: [
                             _buildAttendanceTable('CongThuongChu'),
-                            _buildAttendanceTable('NgoaiGioThuong'),
+                            //_buildAttendanceTable('NgoaiGioThuong'),
                             _buildAttendanceTable('HoTro'),
                             _buildAttendanceTable('PartTime'),
                             _buildAttendanceTable('PartTimeSang'),
@@ -1243,7 +1245,230 @@ Future<void> _copyFromYesterday() async {
     _showError('Không thể sao chép dữ liệu từ hôm qua: ${e.toString()}');
   }
 }
+Widget _buildCombinedTable() {
+  final days = _getDaysInMonth();
+  final employees = _getUniqueEmployees();
+  
+  return SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: SingleChildScrollView(
+      child: Table(
+        border: TableBorder.all(color: Colors.grey.shade300),
+        columnWidths: {
+          0: FixedColumnWidth(100), // Width for employee name column
+          for (int i = 0; i < days.length; i++) 
+            i + 1: FixedColumnWidth(70), // Width for day columns
+        },
+        children: [
+          // Header row
+          TableRow(
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+            ),
+            children: [
+              TableCell(
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    children: [
+                      Text('Mã NV', style: TextStyle(fontWeight: FontWeight.bold)),
+                      SizedBox(width: 4),
+                      InkWell(
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: Text('Đánh dấu nhân viên'),
+                              content: Text('Nhấn vào tên nhân viên để chọn màu đánh dấu.'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: Text('Đóng'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                        child: Icon(Icons.color_lens, size: 16),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              for (var day in days)
+                TableCell(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(day.toString(), style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+            ],
+          ),
+          
+          // Data rows - alternating between "Công chữ" and "NG thường" for each employee
+          for (var empId in employees) ...[
+            // "Công chữ" row
+            TableRow(
+              decoration: BoxDecoration(
+                color: _staffColors[empId], // Apply employee background color if set
+              ),
+              children: [
+                TableCell(
+                  verticalAlignment: TableCellVerticalAlignment.middle,
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: InkWell(
+                      onTap: () {
+                        setState(() {
+                          _staffToColor = empId;
+                          _showColorDialog = true;
+                        });
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(empId, style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text(
+                            _staffNames[empId] ?? '',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                          Text('Công chữ', style: TextStyle(fontSize: 10)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                for (var day in days)
+                  TableCell(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                      child: DropdownButton<String>(
+                        value: _congThuongChoices.contains(_getAttendanceForDay(empId, day, 'CongThuongChu')) 
+                            ? _getAttendanceForDay(empId, day, 'CongThuongChu') 
+                            : _congThuongChoices.first,
+                        items: _congThuongChoices.map((choice) =>
+                          DropdownMenuItem(
+                            value: choice, 
+                            child: Text(
+                              choice,
+                              style: TextStyle(
+                                // Add blue color for values other than "Ro"
+                                color: (choice != 'Ro') ? Colors.blue : null,
+                                fontWeight: (choice != 'Ro') ? FontWeight.bold : null,
+                              ),
+                            ),
+                          )
+                        ).toList(),
+                        onChanged: _canEditDay(day) 
+                            ? (value) => _updateAttendance(empId, day, 'CongThuongChu', value) 
+                            : null,
+                        isExpanded: true,
+                        isDense: true,
+                        // Add dropdown style to show blue when value is not "Ro"
+                        style: TextStyle(
+                          color: (_getAttendanceForDay(empId, day, 'CongThuongChu') != 'Ro') 
+                              ? Colors.blue 
+                              : null,
+                          fontWeight: (_getAttendanceForDay(empId, day, 'CongThuongChu') != 'Ro')
+                              ? FontWeight.bold
+                              : null,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            
+            // "NG thường" row (no employee code displayed, darker shade)
+            TableRow(
+              decoration: BoxDecoration(
+                color: _staffColors[empId] != null 
+                    ? _staffColors[empId]!.withOpacity(0.7) // Darker shade of employee color
+                    : Colors.grey.shade100, // Default light gray background
+              ),
+              children: [
+                TableCell(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text('NG thường', 
+                      style: TextStyle(fontSize: 10, color: Colors.grey.shade700)),
+                  ),
+                ),
+                for (var day in days)
+                  TableCell(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                      child: SizedBox(
+                        height: 40,
+                        child: TextFormField(
+                          initialValue: _getAttendanceForDay(empId, day, 'NgoaiGioThuong'),
+                          keyboardType: TextInputType.numberWithOptions(decimal: true),
+                          textAlign: TextAlign.right,
+                          enabled: _canEditDay(day),
+                          style: TextStyle(
+                            // Add blue color for non-zero values
+                            color: (_getAttendanceForDay(empId, day, 'NgoaiGioThuong') != '0') 
+                                ? Colors.blue 
+                                : Colors.grey.shade800,
+                            fontWeight: (_getAttendanceForDay(empId, day, 'NgoaiGioThuong') != '0')
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                          onChanged: (value) {
+                            if (value.isEmpty) {
+                              _updateAttendance(empId, day, 'NgoaiGioThuong', '0');
+                              return;
+                            }
+                            // Remove any non-numeric characters except decimal point
+                            value = value.replaceAll(RegExp(r'[^\d.]'), '');
+                            _updateAttendance(empId, day, 'NgoaiGioThuong', value);
+                          },
+                          decoration: InputDecoration(
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                            border: OutlineInputBorder(),
+                            filled: true,
+                            fillColor: (_getAttendanceForDay(empId, day, 'NgoaiGioThuong') != '0')
+                                ? Colors.blue.withOpacity(0.1) // Light blue background
+                                : Colors.white.withOpacity(0.7),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            
+            // Add a small divider between employees
+            if (empId != employees.last)
+              TableRow(
+                children: [
+                  for (int i = 0; i <= days.length; i++)
+                    TableCell(
+                      child: Container(
+                        height: 4,
+                        color: Colors.grey.shade200,
+                      ),
+                    ),
+                ],
+              ),
+          ],
+        ],
+      ),
+    ),
+  );
+}
   Widget _buildAttendanceTable(String columnType) {
+  // Check if we're in the combined view tab
+  if (columnType == "CongThuongChu") {
+    return _buildCombinedTable();
+  }
+  
+  // Original code for other tabs
   final days = _getDaysInMonth();
   final employees = _getUniqueEmployees();
   
@@ -1413,6 +1638,8 @@ void _updateAttendance(String empId, int day, String columnType, String? value) 
     orElse: () {
       final newUid = Uuid().v4();
       debugLog('Creating new record with UID: $newUid');
+      
+      // Create a new record with proper defaults
       final newRecord = {
         'UID': newUid,
         'MaNV': empId,
@@ -1422,7 +1649,7 @@ void _updateAttendance(String empId, int day, String columnType, String? value) 
         'BoPhan': _selectedDepartment,
         'MaBP': _selectedDepartment,
         'PhanLoai': '',
-        'CongThuongChu': '',
+        'CongThuongChu': 'Ro',  // Always set a default value
         'NgoaiGioThuong': '0',
         'NgoaiGioKhac': '0',
         'NgoaiGiox15': '0',
@@ -1433,27 +1660,44 @@ void _updateAttendance(String empId, int day, String columnType, String? value) 
         'PartTimeChieu': '0',
         'CongLe': '0',
       };
-      _newRecords[newUid] = newRecord;
+      
+      _newRecords[newUid] = Map<String, dynamic>.from(newRecord);
       _attendanceData.add(newRecord);
       return newRecord;
     }
   );
 
+  // Only update the specific field that was changed
   setState(() {
-  record[columnType] = formattedValue;
-  final uid = record['UID'] as String;
-  debugLog('Updated record UID: $uid, field: $columnType, value: $formattedValue');
-  
-  if (_newRecords.containsKey(uid)) {
-    // Update the record in the newRecords collection
-    _newRecords[uid]![columnType] = formattedValue;
-    debugLog('Updated new record (not yet sent to server)');
-  } else {
-    // Add to modified records
-    _modifiedRecords[uid] = Map<String, dynamic>.from(record);
-    debugLog('Added to modified records. Total modified: ${_modifiedRecords.length}');
-  }
-});
+    // Store the original values for debugging
+    final oldValue = record[columnType];
+    final oldCongThuongChu = record['CongThuongChu'];
+    
+    // Update only the specific field
+    record[columnType] = formattedValue;
+    
+    debugLog('Updated field $columnType from $oldValue to $formattedValue');
+    debugLog('CongThuongChu value: ${record['CongThuongChu']}');
+    
+    final uid = record['UID'] as String;
+    
+    if (_newRecords.containsKey(uid)) {
+      // Update the same field in the _newRecords collection
+      _newRecords[uid]![columnType] = formattedValue;
+      debugLog('Updated field in _newRecords');
+    } else {
+      // Create or update in _modifiedRecords
+      if (!_modifiedRecords.containsKey(uid)) {
+        // Create a fresh copy of the whole record
+        _modifiedRecords[uid] = Map<String, dynamic>.from(record);
+        debugLog('Added new entry to _modifiedRecords');
+      } else {
+        // Just update the specific field
+        _modifiedRecords[uid]![columnType] = formattedValue;
+        debugLog('Updated existing entry in _modifiedRecords');
+      }
+    }
+  });
 }
  List<String> _getUniqueEmployees() {
   final employees = _attendanceData

@@ -1069,214 +1069,312 @@ String _formatDateTime(String dateTimeStr) {
   }
 }
 Widget _buildRecentImagesGrid() {
-  if (_isLoadingImages) {
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: 50),
-        child: CircularProgressIndicator(),
-      ),
-    );
-  }
-  
-  if (_recentImages.isEmpty) {
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: 50),
-        child: Text('Không có hình ảnh nào'),
-      ),
-    );
-  }
-  
-  // Calculate statistics
-  final Map<String, Map<String, int>> imageCountsByLocation = {};
-  final Map<String, Set<String>> locationsByUser = {};
-  
-  for (var record in _recentImages) {
-    final nguoiDung = record['NguoiDung'] as String;
-    final viTri = record['ViTri'] as String? ?? '';
-    
-    // Skip empty locations
-    if (viTri.isEmpty) continue;
-    
-    // Track locations by user
-    if (!locationsByUser.containsKey(nguoiDung)) {
-      locationsByUser[nguoiDung] = {};
-    }
-    locationsByUser[nguoiDung]!.add(viTri);
-    
-    // Count images by location
-    if (!imageCountsByLocation.containsKey(viTri)) {
-      imageCountsByLocation[viTri] = {};
-    }
-    
-    // Increment total count for this location
-    imageCountsByLocation[viTri]![nguoiDung] = 
-        (imageCountsByLocation[viTri]![nguoiDung] ?? 0) + 1;
-  }
-  
-  // Group images by project and time interval
-  final now = DateTime.now();
-final Map<String, List<Map<String, dynamic>>> groupedImages = {};
+ if (_isLoadingImages) {
+   return Center(
+     child: Padding(
+       padding: EdgeInsets.symmetric(vertical: 50),
+       child: CircularProgressIndicator(),
+     ),
+   );
+ }
+ 
+ if (_recentImages.isEmpty) {
+   return Center(
+     child: Padding(
+       padding: EdgeInsets.symmetric(vertical: 50),
+       child: Text('Không có hình ảnh nào'),
+     ),
+   );
+ }
+ 
+ Map<String, List<Map<String, dynamic>>> personDateGroups = {};
+ 
+ for (var image in _recentImages) {
+   final nguoiDung = image['NguoiDung'] as String;
+   final ngay = image['Ngay'] as String;
+   final key = '$nguoiDung-$ngay';
+   
+   if (!personDateGroups.containsKey(key)) {
+     personDateGroups[key] = [];
+   }
+   
+   personDateGroups[key]!.add(image);
+ }
+ 
+ personDateGroups.forEach((key, images) {
+   images.sort((a, b) {
+     final String gioA = a['Gio'] as String? ?? '';
+     final String gioB = b['Gio'] as String? ?? '';
+     return gioA.compareTo(gioB);
+   });
+ });
+ 
+ final now = DateTime.now();
+ final Map<String, List<Map<String, dynamic>>> groupedImages = {};
 
-for (var image in _recentImages) {
-  final boPhan = image['BoPhan'] as String;
-  final ngayStr = image['Ngay'] as String;
-  final gioStr = image['Gio'] as String? ?? "00:00";
-  
-  try {
-    // Parse date (format YYYY-MM-DD)
-    final DateTime date = DateTime.parse(ngayStr);
-    
-    // Parse time (format HH:MM)
-    final List<String> timeParts = gioStr.split(':');
-    final int hour = int.parse(timeParts[0]);
-    final int minute = int.parse(timeParts[1]);
-    
-    // Create full timestamp
-    final DateTime timestamp = DateTime(
-      date.year, 
-      date.month, 
-      date.day, 
-      hour, 
-      minute
-    );
-    
-    // Round to nearest 15-min interval
-    final int intervalMinutes = (minute ~/ 15) * 15;
-    final DateTime interval = DateTime(
-      date.year, 
-      date.month, 
-      date.day, 
-      hour, 
-      intervalMinutes
-    );
-    
-    // Create a key that combines project and time interval
-    final String formattedDate = "${interval.year}-${interval.month.toString().padLeft(2, '0')}-${interval.day.toString().padLeft(2, '0')}";
-    final String formattedTime = "${interval.hour.toString().padLeft(2, '0')}:${interval.minute.toString().padLeft(2, '0')}";
-    final String formattedInterval = "$formattedDate $formattedTime";
-    final String intervalKey = "$boPhan - $formattedInterval";
-    
-    if (!groupedImages.containsKey(intervalKey)) {
-      groupedImages[intervalKey] = [];
-    }
-    
-    // Add image to this group
-    groupedImages[intervalKey]!.add(image);
-    
-    // Also attach the timestamp for sorting later
-    image['timestamp'] = timestamp;
-  } catch (e) {
-    print('Error parsing date/time: $e for date: $ngayStr and time: $gioStr');
-  }
+ for (var image in _recentImages) {
+   final boPhan = image['BoPhan'] as String;
+   final ngayStr = image['Ngay'] as String;
+   final gioStr = image['Gio'] as String? ?? "00:00";
+   
+   try {
+     final DateTime date = DateTime.parse(ngayStr);
+     final List<String> timeParts = gioStr.split(':');
+     final int hour = int.parse(timeParts[0]);
+     final int minute = int.parse(timeParts[1]);
+     
+     final DateTime timestamp = DateTime(date.year, date.month, date.day, hour, minute);
+     final int intervalMinutes = (minute ~/ 15) * 15;
+     final DateTime interval = DateTime(date.year, date.month, date.day, hour, intervalMinutes);
+     
+     final String formattedDate = "${interval.year}-${interval.month.toString().padLeft(2, '0')}-${interval.day.toString().padLeft(2, '0')}";
+     final String formattedTime = "${interval.hour.toString().padLeft(2, '0')}:${interval.minute.toString().padLeft(2, '0')}";
+     final String formattedInterval = "$formattedDate $formattedTime";
+     final String intervalKey = "$boPhan - $formattedInterval";
+     
+     if (!groupedImages.containsKey(intervalKey)) {
+       groupedImages[intervalKey] = [];
+     }
+     
+     groupedImages[intervalKey]!.add(image);
+     image['timestamp'] = timestamp;
+   } catch (e) {
+     print('Error parsing date/time: $e for date: $ngayStr and time: $gioStr');
+   }
+ }
+ 
+ final sortedKeys = groupedImages.keys.toList()
+ ..sort((a, b) {
+   final String aDateTimeStr = a.split(' - ')[1];
+   final String bDateTimeStr = b.split(' - ')[1];
+   
+   final DateTime aDateTime = DateTime.parse(aDateTimeStr.replaceAll(' ', 'T'));
+   final DateTime bDateTime = DateTime.parse(bDateTimeStr.replaceAll(' ', 'T'));
+   
+   return bDateTime.compareTo(aDateTime);
+ });
+ 
+ return Column(
+   crossAxisAlignment: CrossAxisAlignment.start,
+   children: sortedKeys.map((key) {
+     final images = groupedImages[key]!;
+     final parts = key.split(' - ');
+     final projectName = parts[0];
+     final dateTimeParts = parts[1].split(' ');
+     final datePart = dateTimeParts[0];
+     final timePart = dateTimeParts[1];
+
+     final intervalDateTime = DateTime.parse("$datePart $timePart:00");
+     final isRecent = now.difference(intervalDateTime).inMinutes <= 30;
+     
+     return Column(
+       crossAxisAlignment: CrossAxisAlignment.start,
+       children: [
+         Container(
+           margin: EdgeInsets.only(top: 16, bottom: 8),
+           padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+           decoration: BoxDecoration(
+             color: Colors.blue[700],
+             borderRadius: BorderRadius.circular(4),
+             boxShadow: [
+               BoxShadow(
+                 color: Colors.grey.withOpacity(0.3),
+                 blurRadius: 3,
+                 offset: Offset(0, 2),
+               ),
+             ],
+           ),
+           child: Row(
+             children: [
+               Icon(Icons.business, color: Colors.white),
+               SizedBox(width: 8),
+               Expanded(
+                 child: Text(
+                   projectName,
+                   style: TextStyle(
+                     color: Colors.white,
+                     fontWeight: FontWeight.bold,
+                   ),
+                 ),
+               ),
+               Text(
+                 _formatDateTime(parts[1]),
+                 style: TextStyle(color: Colors.white),
+               ),
+               if (isRecent) ...[
+                 SizedBox(width: 8),
+                 _buildPulsingDot(),
+               ],
+             ],
+           ),
+         ),
+         
+         ListView.builder(
+           shrinkWrap: true,
+           physics: NeverScrollableScrollPhysics(),
+           itemCount: _getUniquePersonsInGroup(images).length,
+           itemBuilder: (context, personIndex) {
+             final person = _getUniquePersonsInGroup(images)[personIndex];
+             final personImages = images.where((img) => img['NguoiDung'] == person).toList();
+             final date = personImages.first['Ngay'] as String;
+             
+             final personDateKey = '$person-$date';
+             final allPersonImagesForDay = personDateGroups[personDateKey] ?? [];
+             
+             return Column(
+               crossAxisAlignment: CrossAxisAlignment.start,
+               children: [
+                 Padding(
+                   padding: EdgeInsets.only(left: 8, top: 16, bottom: 8),
+                   child: Row(
+                     children: [
+                       Icon(Icons.person, size: 16),
+                       SizedBox(width: 8),
+                       Text(
+                         person,
+                         style: TextStyle(fontWeight: FontWeight.bold),
+                       ),
+                       Spacer(),
+                       Text(
+                         '${_formatDate(date)} - ${allPersonImagesForDay.length} ảnh',
+                         style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                       ),
+                     ],
+                   ),
+                 ),
+                 
+                 Container(
+                   height: 180,
+                   child: ListView.builder(
+                     scrollDirection: Axis.horizontal,
+                     itemCount: allPersonImagesForDay.length,
+                     itemBuilder: (context, imgIndex) {
+                       final item = allPersonImagesForDay[imgIndex];
+                       final viTri = item['ViTri'] as String? ?? '';
+                       final gio = item['Gio'] as String? ?? '';
+                       
+                       final totalImagesAtLocation = allPersonImagesForDay
+                           .where((img) => img['ViTri'] == viTri)
+                           .length;
+                       
+                       return Container(
+                         width: 150,
+                         margin: EdgeInsets.symmetric(horizontal: 4),
+                         child: Card(
+                           elevation: 3,
+                           shape: RoundedRectangleBorder(
+                             borderRadius: BorderRadius.circular(8),
+                           ),
+                           child: Column(
+                             crossAxisAlignment: CrossAxisAlignment.start,
+                             children: [
+                               Expanded(
+                                 child: GestureDetector(
+                                   onTap: () {
+                                     showDialog(
+                                       context: context,
+                                       builder: (context) => Dialog(
+                                         child: Column(
+                                           mainAxisSize: MainAxisSize.min,
+                                           children: [
+                                             AppBar(
+                                               title: Text('$person - $viTri'),
+                                               automaticallyImplyLeading: false,
+                                               actions: [
+                                                 IconButton(
+                                                   icon: Icon(Icons.close),
+                                                   onPressed: () => Navigator.of(context).pop(),
+                                                 ),
+                                               ],
+                                             ),
+                                             InteractiveViewer(
+                                               panEnabled: true,
+                                               boundaryMargin: EdgeInsets.all(20),
+                                               minScale: 0.5,
+                                               maxScale: 4,
+                                               child: _buildNetworkImage(item['HinhAnh'] as String, BoxFit.contain),
+                                             ),
+                                             Padding(
+                                               padding: EdgeInsets.all(16),
+                                               child: Text(item['ChiTiet'] as String? ?? ''),
+                                             ),
+                                           ],
+                                         ),
+                                       ),
+                                     );
+                                   },
+                                   child: ClipRRect(
+                                     borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+                                     child: _buildNetworkImage(item['HinhAnh'] as String, BoxFit.cover),
+                                   ),
+                                 ),
+                               ),
+                               
+                               Padding(
+                                 padding: EdgeInsets.all(8),
+                                 child: Column(
+                                   crossAxisAlignment: CrossAxisAlignment.start,
+                                   children: [
+                                     Text(
+                                       viTri,
+                                       style: TextStyle(
+                                         fontWeight: FontWeight.bold,
+                                         fontSize: 12,
+                                       ),
+                                       maxLines: 1,
+                                       overflow: TextOverflow.ellipsis,
+                                     ),
+                                     SizedBox(height: 4),
+                                     Row(
+                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                       children: [
+                                         Text(
+                                           gio,
+                                           style: TextStyle(fontSize: 10),
+                                         ),
+                                         Text(
+                                           '$totalImagesAtLocation ảnh',
+                                           style: TextStyle(fontSize: 10),
+                                         ),
+                                       ],
+                                     ),
+                                   ],
+                                 ),
+                               ),
+                             ],
+                           ),
+                         ),
+                       );
+                     },
+                   ),
+                 ),
+               ],
+             );
+           },
+         ),
+         
+         Divider(height: 32, thickness: 1),
+       ],
+     );
+   }).toList(),
+ );
 }
-  
-  final sortedKeys = groupedImages.keys.toList()
-  ..sort((a, b) {
-    // Split to get the timestamp parts
-    final String aDateTimeStr = a.split(' - ')[1];
-    final String bDateTimeStr = b.split(' - ')[1];
-    
-    // Parse dates for proper comparison (Format: YYYY-MM-DD HH:MM)
-    final DateTime aDateTime = DateTime.parse(aDateTimeStr.replaceAll(' ', 'T'));
-    final DateTime bDateTime = DateTime.parse(bDateTimeStr.replaceAll(' ', 'T'));
-    
-    // Sort in descending order (most recent first)
-    return bDateTime.compareTo(aDateTime);
-  });
-  
-  // Build the UI with grouped images
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: sortedKeys.map((key) {
-      final images = groupedImages[key]!;
-      final parts = key.split(' - ');
-      final projectName = parts[0];
-final dateTimeParts = parts[1].split(' ');
-final datePart = dateTimeParts[0];
-final timePart = dateTimeParts[1];
 
-final intervalDateTime = DateTime.parse("$datePart $timePart:00");
-final isRecent = now.difference(intervalDateTime).inMinutes <= 30;
-      
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Project header with timestamp
-          Container(
-  margin: EdgeInsets.only(top: 16, bottom: 8),
-  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-  decoration: BoxDecoration(
-    color: Colors.blue[700],
-    borderRadius: BorderRadius.circular(4),
-    boxShadow: [
-      BoxShadow(
-        color: Colors.grey.withOpacity(0.3),
-        blurRadius: 3,
-        offset: Offset(0, 2),
-      ),
-    ],
-  ),
-  child: Row(
-    children: [
-      Icon(Icons.business, color: Colors.white),
-      SizedBox(width: 8),
-      Expanded(
-        child: Text(
-          projectName,
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-      // Format and display date and time nicely
-      Text(
-        _formatDateTime(parts[1]),
-        style: TextStyle(color: Colors.white),
-      ),
-      if (isRecent) ...[
-        SizedBox(width: 8),
-        _buildPulsingDot(),
-      ],
-    ],
-  ),
-),
+List<String> _getUniquePersonsInGroup(List<Map<String, dynamic>> images) {
+ final Set<String> persons = {};
+ for (var img in images) {
+   persons.add(img['NguoiDung'] as String);
+ }
+ return persons.toList();
+}
 
-          // Grid of images for this project/interval
-          GridView.builder(
-            shrinkWrap: true,
-            physics: NeverScrollableScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 6,
-              childAspectRatio: 0.75,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-            ),
-            itemCount: images.length,
-            itemBuilder: (context, index) {
-              final item = images[index];
-              final nguoiDung = item['NguoiDung'] as String;
-              final viTri = item['ViTri'] as String? ?? '';
-              
-              // Get the total image count for this location
-              final totalImagesAtLocation = viTri.isNotEmpty 
-                  ? (imageCountsByLocation[viTri]?[nguoiDung] ?? 0) 
-                  : 0;
-              
-              // Get the number of unique locations for this user
-              final uniqueLocations = locationsByUser[nguoiDung]?.length ?? 0;
-              
-              return _buildImageCard(item, totalImagesAtLocation, uniqueLocations);
-            },
-          ),
-          
-          // Divider between projects
-          Divider(height: 32, thickness: 1),
-        ],
-      );
-    }).toList(),
-  );
+String _formatDate(String dateStr) {
+ try {
+   final date = DateTime.parse(dateStr);
+   return "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
+ } catch (e) {
+   return dateStr;
+ }
 }
 
 // Add this method to create a pulsing dot animation
@@ -1317,6 +1415,9 @@ Widget _buildImageCard(Map<String, dynamic> item, int imagesAtLocation, int uniq
   final String chiTiet = item['ChiTiet'] as String? ?? 'No details';
   final String viTri = item['ViTri'] as String? ?? '';
   
+  // Format time for display
+  final String formattedTime = gio.split(':').take(2).join(':');
+  
   return Card(
     elevation: 3,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -1327,38 +1428,8 @@ Widget _buildImageCard(Map<String, dynamic> item, int imagesAtLocation, int uniq
         Expanded(
           child: GestureDetector(
             onTap: () {
-              // Show full image in dialog
-              showDialog(
-                context: context,
-                builder: (context) => Dialog(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AppBar(
-                        title: Text('$nguoiDung - $viTri'),
-                        automaticallyImplyLeading: false,
-                        actions: [
-                          IconButton(
-                            icon: Icon(Icons.close),
-                            onPressed: () => Navigator.of(context).pop(),
-                          ),
-                        ],
-                      ),
-                      InteractiveViewer(
-                        panEnabled: true,
-                        boundaryMargin: EdgeInsets.all(20),
-                        minScale: 0.5,
-                        maxScale: 4,
-                        child: _buildNetworkImage(imageUrl, BoxFit.contain),
-                      ),
-                      Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Text(chiTiet),
-                      ),
-                    ],
-                  ),
-                ),
-              );
+              // Show full image dialog with horizontal scroll for other images
+              _showImageDetailsDialog(item);
             },
             child: ClipRRect(
               borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
@@ -1367,7 +1438,7 @@ Widget _buildImageCard(Map<String, dynamic> item, int imagesAtLocation, int uniq
           ),
         ),
         
-        // Info - simplified for smaller cards
+        // Info section
         Padding(
           padding: EdgeInsets.all(4),
           child: Column(
@@ -1382,13 +1453,22 @@ Widget _buildImageCard(Map<String, dynamic> item, int imagesAtLocation, int uniq
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              Text(
-                viTri,
-                style: TextStyle(
-                  fontSize: 9,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      viTri,
+                      style: TextStyle(fontSize: 9),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Text(
+                    formattedTime,
+                    style: TextStyle(fontSize: 8, color: Colors.grey[700]),
+                  ),
+                ],
               ),
               Row(
                 children: [
@@ -1398,12 +1478,124 @@ Widget _buildImageCard(Map<String, dynamic> item, int imagesAtLocation, int uniq
                     '$imagesAtLocation ảnh',
                     style: TextStyle(fontSize: 8),
                   ),
+                  Spacer(),
+                  Icon(Icons.arrow_forward, size: 8, color: Colors.blue),
                 ],
               ),
             ],
           ),
         ),
       ],
+    ),
+  );
+}
+void _showImageDetailsDialog(Map<String, dynamic> selectedItem) {
+  final String nguoiDung = selectedItem['NguoiDung'] as String? ?? 'Unknown';
+  final String ngay = selectedItem['Ngay'] as String? ?? '';
+  
+  // Filter images by the same person on the same day
+  final samePersonSameDayImages = _recentImages.where((item) => 
+    item['NguoiDung'] == nguoiDung && item['Ngay'] == ngay
+  ).toList();
+  
+  showDialog(
+    context: context,
+    builder: (context) => Dialog(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AppBar(
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(nguoiDung),
+                Text(
+                  '${_formatDateTime(ngay)} - ${samePersonSameDayImages.length} ảnh',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+            automaticallyImplyLeading: false,
+            actions: [
+              IconButton(
+                icon: Icon(Icons.close),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+          Expanded(
+            child: Column(
+              children: [
+                // Main image with details
+                Expanded(
+                  flex: 3,
+                  child: InteractiveViewer(
+                    panEnabled: true,
+                    boundaryMargin: EdgeInsets.all(20),
+                    minScale: 0.5,
+                    maxScale: 4,
+                    child: _buildNetworkImage(selectedItem['HinhAnh'] as String, BoxFit.contain),
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Text(
+                    selectedItem['ChiTiet'] as String? ?? 'No details',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                
+                // Horizontal scroll of other images by same person on same day
+                Container(
+                  height: 100,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: samePersonSameDayImages.length,
+                    itemBuilder: (context, index) {
+                      final item = samePersonSameDayImages[index];
+                      final isSelected = item['TaskID'] == selectedItem['TaskID'];
+                      
+                      return GestureDetector(
+                        onTap: () {
+                          // Close this dialog and open a new one with the selected image
+                          Navigator.of(context).pop();
+                          _showImageDetailsDialog(item);
+                        },
+                        child: Container(
+                          width: 100,
+                          margin: EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: isSelected ? Colors.blue : Colors.transparent,
+                              width: 2,
+                            ),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Column(
+                            children: [
+                              Expanded(
+                                child: _buildNetworkImage(item['HinhAnh'] as String, BoxFit.cover),
+                              ),
+                              Padding(
+                                padding: EdgeInsets.all(2),
+                                child: Text(
+                                  item['Gio'] as String? ?? '',
+                                  style: TextStyle(fontSize: 10),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }
