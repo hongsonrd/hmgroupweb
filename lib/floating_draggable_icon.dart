@@ -37,7 +37,7 @@ class FloatingDraggableIconState extends State<FloatingDraggableIcon> with Ticke
       final chatState = FloatingDraggableIcon.chatWindowKey.currentState;
       if (mounted && chatState != null) {
         chatState.image = imageFile;
-        chatState.messageText = 'Trả lời ngắn gọn: đánh giá việc chụp hình, chất lượng vệ sinh trong ảnh (nếu chưa tốt thì mô tả vị trí nào trong ảnh) và gợi ý ngắn gọn về việc làm tiếp theo nếu tôi là người quản lý dịch vụ vệ sinh (không phải quản lý toà nhà hay nhân viên kỹ thuật) ở đây. Đánh giá tổng quan trên hệ 10 điểm (nếu có thể thì gợi ý nhanh tôi cách chụp ảnh tốt hơn)';
+        chatState.messageText = 'Trả lời ngắn gọn: đánh giá việc chụp hình, chất lượng vệ sinh trong ảnh (nếu chưa tốt thì mô tả vị trí nào trong ảnh) và gợi ý ngắn gọn về việc làm tiếp theo nếu tôi là người quản lý dịch vụ vệ sinh (không phải quản lý toà nhà hay nhân viên kỹ thuật) ở đây. Đánh giá tổng quan trên hệ 10 điểm (nếu có thể thì gợi ý nhanh tôi cách chụp ảnh tốt hơn) Nếu dưới 7 điểm thì gợi ý cách làm sạch chuyên sâu bằng loại máy hoặc hoá chất phù hợp)';
         chatState.sendMessage();
       }
     });
@@ -480,8 +480,8 @@ void scrollToBottom() {
   });
 }
 final List<String> urlList = [
-  'https://sincere-beacon-432912-e6.as.r.appspot.com/generate',
-  'https://sincere-beacon-432912-e6.as.r.appspot.com/generate',
+  'https://https://splendid-binder-432809-k6.as.r.appspot.com/generate',
+  'https://hmtime.as.r.appspot.com/generate',
   'https://sincere-beacon-432912-e6.as.r.appspot.com/generate',
 ];
 Future<void> _sendMessage() async {
@@ -1030,7 +1030,7 @@ Widget _buildChatControl(double bottomPadding) {
                     onPressed: () {
                       if (_image != null) {
                         // Set analysis prompt
-                        _textController.text = 'Trả lời ngắn gọn: đánh giá việc chụp hình, chất lượng vệ sinh trong ảnh (nếu chưa tốt thì mô tả vị trí nào trong ảnh) và gợi ý ngắn gọn về việc làm tiếp theo nếu tôi là người quản lý dịch vụ vệ sinh (không phải quản lý toà nhà hay nhân viên kỹ thuật) ở đây. Đánh giá tổng quan trên hệ 10 điểm (nếu có thể thì gợi ý nhanh tôi cách chụp ảnh tốt hơn)';
+                        _textController.text = 'Trả lời ngắn gọn: đánh giá việc chụp hình, chất lượng vệ sinh trong ảnh (nếu chưa tốt thì mô tả vị trí nào trong ảnh) và gợi ý ngắn gọn về việc làm tiếp theo nếu tôi là người quản lý dịch vụ vệ sinh (không phải quản lý toà nhà hay nhân viên kỹ thuật) ở đây. Đánh giá tổng quan trên hệ 10 điểm (nếu có thể thì gợi ý nhanh tôi cách chụp ảnh tốt hơn. Nếu dưới 7 điểm thì gợi ý cách làm sạch chuyên sâu bằng loại máy hoặc hoá chất phù hợp)';
                         // Send message
                         _sendMessage();
                       }

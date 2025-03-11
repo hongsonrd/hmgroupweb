@@ -508,6 +508,39 @@ Future<void> batchInsertChamCongLS(List<ChamCongLSModel> items) async {
  });
 }
 // ==================== Order CRUD Operations ====================
+Future<List<OrderModel>> getOrdersByDateRangeAndDetails(
+  DateTime startDate,
+  DateTime endDate,
+  {String? boPhan, String? nguoiDung}
+) async {
+  final Database db = await database;
+  
+  String query = '''
+    SELECT * FROM Orders 
+    WHERE Ngay BETWEEN ? AND ?
+  ''';
+  
+  List<String> whereArgs = [
+    startDate.toIso8601String(),
+    endDate.toIso8601String()
+  ];
+  
+  if (boPhan != null) {
+    query += ' AND BoPhan = ?';
+    whereArgs.add(boPhan);
+  }
+  
+  if (nguoiDung != null) {
+    query += ' AND NguoiDung = ?';
+    whereArgs.add(nguoiDung);
+  }
+  
+  final List<Map<String, dynamic>> maps = await db.rawQuery(query, whereArgs);
+  
+  return List.generate(maps.length, (i) {
+    return OrderModel.fromMap(maps[i]);
+  });
+}
 Future<void> insertOrder(OrderModel order) async {
   await insert(DatabaseTables.orderTable, order.toMap());
 }

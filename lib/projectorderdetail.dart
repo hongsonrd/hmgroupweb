@@ -6,8 +6,6 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:uuid/uuid.dart';
-import 'http_client.dart';
-
 class ProjectOrderDetail extends StatefulWidget {
   final String orderId;
   final String boPhan;
@@ -160,37 +158,63 @@ class _ProjectOrderDetailState extends State<ProjectOrderDetail> {
   );
 }
   Future<void> _sendOrder() async {
-    try {
-      final response = await http.post(
-        Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/ordervtgui'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'OrderID': widget.orderId}),
-      );
-
-      if (response.statusCode == 200) {
-        setState(() {
-          if (_orderDetails != null) {
-            _orderDetails!.trangThai = 'Gửi';
-          }
-        });
-
-        final DBHelper dbHelper = DBHelper();
-        await dbHelper.updateOrder(widget.orderId, {'TrangThai': 'Gửi'});
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Đã gửi đơn hàng thành công')),
-        );
-      }
-    } catch (e) {
-      print('Error sending order: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Lỗi khi gửi đơn hàng'),
-          backgroundColor: Colors.red,
+  // Show confirmation dialog first
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('Xác nhận gửi đơn hàng'),
+      content: Text('Bạn có chắc chắn muốn gửi đơn hàng này? Sau khi gửi, bạn sẽ không thể chỉnh sửa đơn hàng nữa.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: Text('Hủy'),
         ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
+          ),
+          child: Text('Xác nhận gửi'),
+        ),
+      ],
+    ),
+  );
+
+  // If user cancelled, do nothing
+  if (confirm != true) return;
+
+  try {
+    final response = await http.post(
+      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/ordervtgui'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'OrderID': widget.orderId}),
+    );
+
+    if (response.statusCode == 200) {
+      setState(() {
+        if (_orderDetails != null) {
+          _orderDetails!.trangThai = 'Gửi';
+        }
+      });
+
+      final DBHelper dbHelper = DBHelper();
+      await dbHelper.updateOrder(widget.orderId, {'TrangThai': 'Gửi'});
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Đã gửi đơn hàng thành công')),
       );
     }
+  } catch (e) {
+    print('Error sending order: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi khi gửi đơn hàng'),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
+}
   Future<void> _showAddItemDialog() async {
  final List<OrderChiTietModel> newItems = [];
  final selectedItems = Map<String, Map<String, dynamic>>();
@@ -198,10 +222,8 @@ class _ProjectOrderDetailState extends State<ProjectOrderDetail> {
  final Map<String, TextEditingController> soLuongControllers = {};
  final Map<String, TextEditingController> ghiChuControllers = {};
  final Map<String, bool> khachTraValues = {};
- 
- // Add search controller
- final searchController = TextEditingController();
-for (var item in _availableItems) {
+final searchController = TextEditingController();
+ for (var item in _availableItems) {
    final existing = _orderItems.firstWhere(
      (oi) => oi.itemId == item.itemId,
      orElse: () => OrderChiTietModel(uid: ''),
@@ -211,8 +233,7 @@ for (var item in _availableItems) {
    khachTraValues[item.itemId] = existing.khachTra ?? false;
    hasQuantity[item.itemId] = (existing.soLuong ?? 0) > 0;
  }
-
- List<OrderMatHangModel> getSortedItems(List<OrderMatHangModel> items) {
+List<OrderMatHangModel> getSortedItems(List<OrderMatHangModel> items) {
    return List<OrderMatHangModel>.from(items)..sort((a, b) {
      final aQuantity = double.tryParse(soLuongControllers[a.itemId]?.text ?? '0') ?? 0;
      final bQuantity = double.tryParse(soLuongControllers[b.itemId]?.text ?? '0') ?? 0;
@@ -362,8 +383,9 @@ try {
       backgroundColor: Colors.red,
     ),
   );
-}},
-             style: ElevatedButton.styleFrom(
+}
+  },
+  style: ElevatedButton.styleFrom(
                backgroundColor: Colors.green,
                foregroundColor: Colors.white,
              ),
@@ -389,16 +411,12 @@ try {
                  ),
                  onChanged: (value) {
                    setState(() {
-                     filteredItems = _availableItems
+                     // Filter items first
+                     var filtered = _availableItems
                          .where((item) => item.ten?.toLowerCase().contains(value.toLowerCase()) ?? false)
                          .toList();
-                     
-                     // Sort items with quantity > 0 to top
-                     filteredItems.sort((a, b) {
-                       final aQuantity = double.tryParse(soLuongControllers[a.itemId]?.text ?? '0') ?? 0;
-                       final bQuantity = double.tryParse(soLuongControllers[b.itemId]?.text ?? '0') ?? 0;
-                       return bQuantity.compareTo(aQuantity);
-                     });
+                     // Then sort the filtered list
+                     filteredItems = getSortedItems(filtered);
                    });
                  },
                ),
@@ -466,6 +484,8 @@ try {
                                        'ghiChu': ghiChuControllers[item.itemId]?.text,
                                        'item': item,
                                      };
+                                     // Re-sort the list when quantities change
+                                     filteredItems = getSortedItems(filteredItems);
                                    });
                                  },
                                )),
@@ -537,62 +557,195 @@ try {
       });
     }
   }
-Widget _buildItemImage(String? itemId) {
-  if (itemId == null) return Container();
-  
-  // Find the corresponding MatHang item to get the HinhAnh
-  final matchingItem = _availableItems.firstWhere(
-    (item) => item.itemId == itemId,
-    orElse: () => OrderMatHangModel(
-      itemId: '', 
-      ten: '', 
-      donVi: '', // Added required 'donVi' parameter
-    ),
-  );
-  
-  final imageSource = matchingItem.hinhAnh ?? '';
-  
-  if (imageSource.isEmpty) {
-    return Container(
-      color: Colors.grey[200],
-      child: Icon(Icons.image_not_supported, color: Colors.grey),
+Future<void> _addItemsFromPreviousMonth() async {
+  try {
+    setState(() {
+      _isLoading = true;
+    });
+    
+    final DBHelper dbHelper = DBHelper();
+    
+    // Get current order details
+    final currentOrder = await dbHelper.getOrderByOrderId(widget.orderId);
+    if (currentOrder == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Không tìm thấy thông tin đơn hàng hiện tại'))
+      );
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+    
+    // Get the date from current order
+    final currentDate = currentOrder.ngay;
+    if (currentDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Đơn hàng hiện tại không có ngày'))
+      );
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+    
+    // Calculate previous month date range
+    final previousMonthStart = DateTime(currentDate.year, currentDate.month - 1, 1);
+    final previousMonthEnd = DateTime(currentDate.year, currentDate.month, 0);
+    
+    // Find orders from previous month with same BoPhan and NguoiDung
+    final previousOrders = await dbHelper.getOrdersByDateRangeAndDetails(
+      previousMonthStart,
+      previousMonthEnd,
+      boPhan: currentOrder.boPhan,
+      nguoiDung: currentOrder.nguoiDung
     );
-  }
-
-  if (imageSource.startsWith('http')) {
-    // Handle URL images
-    return Image.network(
-      imageSource,
-      fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) {
-        return Container(
-          color: Colors.grey[200],
-          child: Icon(Icons.error, color: Colors.grey),
+    
+    if (previousOrders.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Không tìm thấy đơn hàng tháng trước'))
+      );
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+    
+    // Sort by date to find the closest one
+    previousOrders.sort((a, b) => b.ngay!.compareTo(a.ngay!));
+    final closestPreviousOrder = previousOrders.first;
+    
+    // Get items from the previous order
+    final previousItems = await dbHelper.getOrderChiTietByOrderId(closestPreviousOrder.orderId!);
+    
+    if (previousItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Đơn hàng tháng trước không có vật tư'))
+      );
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+    
+    // Get current items to avoid duplicates
+    final currentItems = await dbHelper.getOrderChiTietByOrderId(widget.orderId);
+    final currentItemIds = currentItems.map((e) => e.itemId).toSet();
+    
+    // Prepare items to add (exclude duplicates)
+    final List<OrderChiTietModel> itemsToAdd = [];
+    final List<Map<String, dynamic>> itemsForApi = [];
+    
+    for (var item in previousItems) {
+      // Skip if item already exists in current order
+      if (currentItemIds.contains(item.itemId)) continue;
+      
+      final uid = Uuid().v4();
+      final orderChiTiet = OrderChiTietModel(
+        uid: uid,
+        orderId: widget.orderId,
+        itemId: item.itemId,
+        ten: item.ten,
+        phanLoai: item.phanLoai,
+        donVi: item.donVi,
+        soLuong: item.soLuong,
+        donGia: item.donGia,
+        khachTra: item.khachTra,
+        thanhTien: item.khachTra == true ? 0 : ((item.soLuong ?? 0) * (item.donGia ?? 0)).round(),
+        ghiChu: item.ghiChu,
+      );
+      
+      itemsToAdd.add(orderChiTiet);
+      itemsForApi.add({
+        ...orderChiTiet.toMap(),
+        'IsUpdate': false,
+      });
+    }
+    
+    if (itemsToAdd.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Không có vật tư mới để thêm từ đơn hàng tháng trước'))
+      );
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+    
+    // Send to API
+    final apiPayload = itemsForApi.map((item) => {
+      'UID': item['UID'],
+      'OrderID': item['OrderID'],
+      'ItemID': item['ItemID'],
+      'Ten': item['Ten'],
+      'PhanLoai': item['PhanLoai'],
+      'GhiChu': item['GhiChu'],
+      'DonVi': item['DonVi'],
+      'SoLuong': item['SoLuong'],
+      'DonGia': item['DonGia'],
+      'KhachTra': item['KhachTra'],
+      'ThanhTien': item['ThanhTien'],
+      'IsUpdate': item['IsUpdate'],
+    }).toList();
+    
+    final response = await http.post(
+      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/ordervtthemct'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(apiPayload),
+    );
+    
+    if (response.statusCode == 200) {
+      // Add items to local database
+      for (var item in itemsToAdd) {
+        await dbHelper.insertOrderChiTiet(item);
+      }
+      
+      // Calculate new total
+      final allItems = await dbHelper.getOrderChiTietByOrderId(widget.orderId);
+      final newTotal = allItems.fold<int>(0, (sum, item) => sum + (item.thanhTien ?? 0));
+      
+      // Update order total on server
+      final updateOrderResponse = await http.post(
+        Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/ordervtsua'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'OrderID': widget.orderId,
+          'TongTien': newTotal,
+        }),
+      );
+      
+      if (updateOrderResponse.statusCode == 200) {
+        // Update order total in local DB
+        await dbHelper.updateOrder(widget.orderId, {'TongTien': newTotal});
+        
+        // Reload order details
+        await _loadOrderDetails();
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Đã thêm ${itemsToAdd.length} vật tư từ đơn hàng tháng trước'))
         );
-      },
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) return child;
-        return Center(child: CircularProgressIndicator());
-      },
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi khi thêm vật tư từ đơn hàng tháng trước'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  } catch (e) {
+    print('Error adding items from previous month: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi: $e'),
+        backgroundColor: Colors.red,
+      ),
     );
-  } else if (imageSource.startsWith('assets/')) {
-    // Handle asset images
-    return Image.asset(
-      imageSource,
-      fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) {
-        return Container(
-          color: Colors.grey[200],
-          child: Icon(Icons.error, color: Colors.grey),
-        );
-      },
-    );
+  } finally {
+    setState(() {
+      _isLoading = false;
+    });
   }
-
-  return Container(
-    color: Colors.grey[200],
-    child: Icon(Icons.image_not_supported, color: Colors.grey),
-  );
 }
   @override
   Widget build(BuildContext context) {
@@ -672,18 +825,28 @@ Widget _buildItemImage(String? itemId) {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Danh sách vật tư',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      if (_orderDetails!.trangThai == 'Nháp')
-                        ElevatedButton.icon(
-                          icon: Icon(Icons.add),
-                          label: Text('Thêm'),
-                          onPressed: _showAddItemDialog,
-                        ),
-                    ],
-                  ),
-                ),
+                        'Danh sách VT:',
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+      if (_orderDetails!.trangThai == 'Nháp')
+        Column(
+          children: [
+            ElevatedButton.icon(
+              icon: Icon(Icons.add),
+              label: Text('Thêm'),
+              onPressed: _showAddItemDialog,
+            ),
+                        SizedBox(width: 8), 
+                       ElevatedButton.icon(
+              icon: Icon(Icons.history),
+              label: Text('+Như tháng trước'),
+              onPressed: _addItemsFromPreviousMonth,
+            ),
+          ],
+        ),
+    ],
+  ),
+),
                 ..._orderItems.map((item) => Card(
   margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
   child: ListTile(
@@ -714,4 +877,59 @@ Widget _buildItemImage(String? itemId) {
           ),
     );
   }
+Widget _buildItemImage(String? itemId) {
+  if (itemId == null) return Container();
+  
+  final matchingItem = _availableItems.firstWhere(
+    (item) => item.itemId == itemId,
+    orElse: () => OrderMatHangModel(
+      itemId: '', 
+      ten: '', 
+      donVi: '',
+    ),
+  );
+  
+  final imageSource = matchingItem.hinhAnh ?? '';
+  
+  if (imageSource.isEmpty) {
+    return Container(
+      color: Colors.grey[200],
+      child: Icon(Icons.image_not_supported, color: Colors.grey),
+    );
+  }
+
+  if (imageSource.startsWith('http')) {
+    // Handle URL images
+    return Image.network(
+      imageSource,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          color: Colors.grey[200],
+          child: Icon(Icons.error, color: Colors.grey),
+        );
+      },
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Center(child: CircularProgressIndicator());
+      },
+    );
+  } else if (imageSource.startsWith('assets/')) {
+    return Image.asset(
+      imageSource,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          color: Colors.grey[200],
+          child: Icon(Icons.error, color: Colors.grey),
+        );
+      },
+    );
+  }
+
+  return Container(
+    color: Colors.grey[200],
+    child: Icon(Icons.image_not_supported, color: Colors.grey),
+  );
+}
 }
