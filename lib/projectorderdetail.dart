@@ -747,6 +747,225 @@ Future<void> _addItemsFromPreviousMonth() async {
     });
   }
 }
+Future<void> _showDeleteItemsDialog() async {
+  // Track which items are selected for deletion
+  final Map<String, bool> selectedItems = {};
+  
+  // Initialize all items as unselected
+  for (var item in _orderItems) {
+    selectedItems[item.uid] = false;
+  }
+
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('Xoá vật tư'),
+      content: StatefulBuilder(
+        builder: (context, setState) => Container(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Chọn vật tư cần xoá:'),
+              SizedBox(height: 8),
+              Container(
+                height: 300,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _orderItems.length,
+                  itemBuilder: (context, index) {
+                    final item = _orderItems[index];
+                    return CheckboxListTile(
+                      title: Text(item.ten ?? 'Không có tên'),
+                      subtitle: Text('SL: ${item.soLuong} ${item.donVi ?? ''} - ${formatter.format(item.thanhTien ?? 0)}'),
+                      value: selectedItems[item.uid],
+                      onChanged: (bool? value) {
+                        setState(() {
+                          selectedItems[item.uid] = value ?? false;
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('Huỷ'),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+          ),
+          onPressed: () async {
+            // Get selected items for deletion
+            final itemsToDelete = selectedItems.entries
+                .where((entry) => entry.value)
+                .map((entry) => entry.key)
+                .toList();
+                
+            if (itemsToDelete.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Vui lòng chọn ít nhất một vật tư để xoá'))
+              );
+              return;
+            }
+            
+            try {
+              // Delete on server first
+              final response = await http.post(
+                Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/ordervtxoact'),
+                headers: {'Content-Type': 'application/json'},
+                body: json.encode({
+                  'ItemUIDs': itemsToDelete,
+                }),
+              );
+              
+              if (response.statusCode == 200) {
+                final DBHelper dbHelper = DBHelper();
+                
+                // Delete locally
+                for (var uid in itemsToDelete) {
+                  await dbHelper.deleteOrderChiTiet(uid);
+                }
+                
+                // Calculate new total
+                final remainingItems = await dbHelper.getOrderChiTietByOrderId(widget.orderId);
+                final newTotal = remainingItems.fold<int>(0, (sum, item) => sum + (item.thanhTien ?? 0));
+                
+                // Update order total on server
+                final updateOrderResponse = await http.post(
+                  Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/ordervtsua'),
+                  headers: {'Content-Type': 'application/json'},
+                  body: json.encode({
+                    'OrderID': widget.orderId,
+                    'TongTien': newTotal,
+                  }),
+                );
+                
+                if (updateOrderResponse.statusCode == 200) {
+                  // Update order total in local DB
+                  await dbHelper.updateOrder(widget.orderId, {'TongTien': newTotal});
+                  
+                  // Reload all details
+                  await _loadOrderDetails();
+                  Navigator.pop(context);
+                  
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Đã xoá ${itemsToDelete.length} vật tư'))
+                  );
+                }
+              }
+            } catch (e) {
+              print('Error deleting items: $e');
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Lỗi khi xoá vật tư'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          },
+          child: Text('Xoá'),
+        ),
+      ],
+    ),
+  );
+}
+Future<void> _deleteOrder() async {
+  // Show confirmation dialog first
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('Xác nhận xoá đơn hàng'),
+      content: Text('Bạn có chắc chắn muốn xoá đơn hàng này? Hành động này không thể hoàn tác và tất cả vật tư trong đơn sẽ bị xoá.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: Text('Huỷ'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+          ),
+          child: Text('Xác nhận xoá'),
+        ),
+      ],
+    ),
+  );
+
+  // If user cancelled, do nothing
+  if (confirm != true) return;
+
+  try {
+    // Delete order on server first
+    final response = await http.post(
+      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/ordervtxoa'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'OrderID': widget.orderId}),
+    );
+
+    if (response.statusCode == 200) {
+      // Then delete from local database
+      final DBHelper dbHelper = DBHelper();
+      
+      try {
+        // Get the actual table name from DatabaseTables
+        final db = await dbHelper.database;
+        
+        // Delete all items first using raw SQL with the correct table name
+        await db.rawDelete(
+          'DELETE FROM ${DatabaseTables.orderChiTietTable} WHERE OrderID = ?',
+          [widget.orderId]
+        );
+        
+        // Then delete the order
+        await db.rawDelete(
+          'DELETE FROM ${DatabaseTables.orderTable} WHERE OrderID = ?',
+          [widget.orderId]
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Đã xoá đơn hàng thành công')),
+        );
+        
+        // Navigate back
+        Navigator.pop(context);
+      } catch (e) {
+        print('Error deleting from local database: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Đơn hàng đã xoá từ máy chủ nhưng lỗi khi xoá cơ sở dữ liệu cục bộ'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi khi xoá đơn hàng từ máy chủ'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  } catch (e) {
+    print('Error deleting order: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi khi xoá đơn hàng: $e'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -793,56 +1012,78 @@ Future<void> _addItemsFromPreviousMonth() async {
                           if (_orderDetails!.ghiChu != null)
                             Text('Ghi chú: ${_orderDetails!.ghiChu}'),
                           if (_orderDetails!.trangThai == 'Nháp')
-                            Padding(
-                              padding: const EdgeInsets.only(top: 16.0),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  ElevatedButton(
-                                    onPressed: _editOrder,
-                                    child: Text('Sửa'),
-                                  ),
-                                  SizedBox(width: 16),
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.blue,
-                                      foregroundColor: Colors.white,
-                                    ),
-                                    onPressed: _sendOrder,
-                                    child: Text('Gửi'),
-                                  ),
-                                ],
-                              ),
-                            ),
+  Padding(
+    padding: const EdgeInsets.only(top: 16.0),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        ElevatedButton(
+          onPressed: _editOrder,
+          child: Text('Sửa'),
+        ),
+        SizedBox(width: 16),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
+          ),
+          onPressed: _sendOrder,
+          child: Text('Gửi'),
+        ),
+        SizedBox(width: 16),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+          ),
+          onPressed: _deleteOrder,
+          child: Text('Xoá'),
+        ),
+      ],
+    ),
+  ),
                         ],
                       ),
                     ),
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Danh sách VT:',
+  padding: const EdgeInsets.all(16.0),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        'Danh sách VT:',
         style: Theme.of(context).textTheme.titleLarge,
       ),
       if (_orderDetails!.trangThai == 'Nháp')
-        Column(
-          children: [
-            ElevatedButton.icon(
-              icon: Icon(Icons.add),
-              label: Text('Thêm'),
-              onPressed: _showAddItemDialog,
-            ),
-                        SizedBox(width: 8), 
-                       ElevatedButton.icon(
-              icon: Icon(Icons.history),
-              label: Text('+Như tháng trước'),
-              onPressed: _addItemsFromPreviousMonth,
-            ),
-          ],
+        Padding(
+          padding: const EdgeInsets.only(top: 8.0),
+          child: Row(
+            children: [
+              ElevatedButton.icon(
+                icon: Icon(Icons.add),
+                label: Text('Thêm'),
+                onPressed: _showAddItemDialog,
+              ),
+              SizedBox(width: 8),
+              ElevatedButton.icon(
+                icon: Icon(Icons.history),
+                label: Text('Như tháng trước'),
+                onPressed: _addItemsFromPreviousMonth,
+              ),
+              SizedBox(width: 8),
+              ElevatedButton.icon(
+                icon: Icon(Icons.delete),
+                label: Text('Xoá'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: _showDeleteItemsDialog,
+              ),
+            ],
+          ),
         ),
     ],
   ),

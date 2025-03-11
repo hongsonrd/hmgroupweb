@@ -293,136 +293,7 @@ Widget _buildColorPickerDialog() {
 
   debugLog('Loaded staff names: $_staffNames');
 }
-Future<void> _exportToExcel() async {
-  try {
-    debugLog('Starting Excel export...');
-    
-    // Create a new Excel document
-    final excel = Excel.createExcel();
-    
-    // Remove the default sheet
-    final defaultSheet = excel.getDefaultSheet();
-    if (defaultSheet != null) {
-      excel.delete(defaultSheet);
-    }
-    
-    // Create sheets for each attendance type
-    final attendanceTypes = [
-      'CongThuongChu', 
-      'NgoaiGioThuong', 
-      'HoTro', 
-      'PartTime', 
-      'PartTimeSang', 
-      'PartTimeChieu',
-      'NgoaiGioKhac', 
-      'NgoaiGiox15', 
-      'NgoaiGiox2', 
-      'CongLe'
-    ];
-    
-    final translatedTypes = {
-      'CongThuongChu': 'Công chữ',
-      'NgoaiGioThuong': 'NG thường',
-      'HoTro': 'Hỗ trợ',
-      'PartTime': 'Part time',
-      'PartTimeSang': 'PT sáng',
-      'PartTimeChieu': 'PT chiều',
-      'NgoaiGioKhac': 'NG khác',
-      'NgoaiGiox15': 'NG x1.5',
-      'NgoaiGiox2': 'NG x2',
-      'CongLe': 'Công lễ'
-    };
-    
-    final days = _getDaysInMonth();
-    final employees = _getUniqueEmployees();
-    
-    // Create a sheet for each attendance type
-    for (String type in attendanceTypes) {
-      final sheetName = translatedTypes[type] ?? type;
-      final sheet = excel[sheetName];
-      
-      // Add header row with days
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0)).value = 'Mã NV';
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 0)).value = 'Tên NV';
-      
-      for (int i = 0; i < days.length; i++) {
-        sheet.cell(CellIndex.indexByColumnRow(
-          columnIndex: i + 2, 
-          rowIndex: 0
-        )).value = days[i].toString();
-      }
-      
-      // Populate data rows
-      for (int i = 0; i < employees.length; i++) {
-        final empId = employees[i];
-        
-        // Employee ID and name
-        sheet.cell(CellIndex.indexByColumnRow(
-          columnIndex: 0, 
-          rowIndex: i + 1
-        )).value = empId;
-        
-        sheet.cell(CellIndex.indexByColumnRow(
-          columnIndex: 1, 
-          rowIndex: i + 1
-        )).value = _staffNames[empId] ?? '';
-        
-        // Attendance values for each day
-        for (int j = 0; j < days.length; j++) {
-          final day = days[j];
-          final value = _getAttendanceForDay(empId, day, type);
-          
-          sheet.cell(CellIndex.indexByColumnRow(
-            columnIndex: j + 2, 
-            rowIndex: i + 1
-          )).value = value ?? '';
-        }
-      }
-      
-      // Auto-size columns
-      for (int i = 0; i < days.length + 2; i++) {
-  //sheet.setColumnWidth(i, 15);
-}
-    }
-    
-    // Create the Excel file
-    final fileBytes = excel.encode();
-    if (fileBytes == null) {
-      throw Exception("Failed to generate Excel file");
-    }
-    
-    // Save the file
-    final fileName = 'BangChamCong_${_selectedDepartment}_${_selectedMonth}.xlsx';
-    
-    if (kIsWeb) {
-      // For web, we need a different approach
-      debugLog('Web platform detected, using different export method');
-      _showError('Xuất file Excel không được hỗ trợ trên web');
-      return;
-    }
-    
-    // Get the directory to save the file
-    final directory = await getApplicationDocumentsDirectory();
-    final filePath = '${directory.path}/$fileName';
-    
-    // Write the file
-    final file = File(filePath);
-    await file.writeAsBytes(fileBytes);
-    
-    // Share the file
-    await Share.shareXFiles(
-      [XFile(filePath)],
-      subject: 'Bảng chấm công $_selectedMonth',
-      text: 'Bảng chấm công $_selectedDepartment tháng $_selectedMonth',
-    );
-    
-    debugLog('Excel file created at: $filePath');
-    
-  } catch (e) {
-    debugLog('Error creating Excel file: $e');
-    _showError('Không thể xuất file Excel: ${e.toString()}');
-  }
-}
+
 // Add this method to your _ProjectWorkerState class
 Future<void> _addPreviousEmployees() async {
   try {
@@ -839,6 +710,173 @@ Future<void> _addNewEmployee() async {
      return List.generate(daysInMonth, (i) => i + 1);
    }
  }
+Future<void> _deleteEmployee() async {
+  try {
+    // Show dialog to select employee to delete
+    final employees = _getUniqueEmployees();
+    
+    if (employees.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không có nhân viên nào để xoá'))
+      );
+      return;
+    }
+    
+    String? selectedEmployee;
+    
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Chọn nhân viên để xoá'),
+        content: Container(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: employees.length,
+            itemBuilder: (context, index) {
+              final empId = employees[index];
+              return ListTile(
+                title: Text(empId),
+                subtitle: Text(_staffNames[empId] ?? ''),
+                onTap: () {
+                  Navigator.of(context).pop(empId);
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Huỷ'),
+          ),
+        ],
+      ),
+    );
+    
+    if (result == null) return;
+    
+    selectedEmployee = result;
+    
+    // Check if employee's total PhanLoai is 0
+    double totalPhanLoai = 0;
+    
+    // Calculate total PhanLoai for this employee in this project and month
+    final employeeRecords = _attendanceData.where((record) => 
+      record['MaNV'] == selectedEmployee
+    ).toList();
+    
+    for (var record in employeeRecords) {
+      double phanLoai = double.tryParse(record['PhanLoai']?.toString() ?? '0') ?? 0;
+      totalPhanLoai += phanLoai;
+    }
+    
+    // Round to handle floating point precision issues
+    totalPhanLoai = double.parse(totalPhanLoai.toStringAsFixed(2));
+    
+    debugLog('Total PhanLoai for $selectedEmployee: $totalPhanLoai');
+    
+    if (totalPhanLoai > 0) {
+      // Cannot delete - show warning
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Không thể xoá nhân viên $selectedEmployee vì có PhanLoai > 0 (${totalPhanLoai.toStringAsFixed(1)}). Vui lòng liên hệ Admin.'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 5),
+        )
+      );
+      return;
+    }
+    
+    // Confirm deletion
+    final confirmDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Xác nhận xoá'),
+        content: Text('Bạn có chắc muốn xoá nhân viên $selectedEmployee (${_staffNames[selectedEmployee] ?? ''}) khỏi dự án này?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('Huỷ'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('Xoá', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirmDelete != true) return;
+    
+    setState(() => _isLoading = true);
+    
+    // Delete all records for this employee
+    final dbHelper = DBHelper();
+    
+    // Get all UIDs for this employee's records
+    final records = _attendanceData.where((record) => 
+      record['MaNV'] == selectedEmployee
+    ).toList();
+    
+    final uids = records.map((r) => r['UID'] as String).toList();
+    
+    debugLog('Deleting ${uids.length} records for employee $selectedEmployee');
+    
+    // Delete from server
+    for (var uid in uids) {
+      try {
+        final response = await http.delete(
+          Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongxoa/$uid'),
+        ).timeout(const Duration(seconds: 30));
+        
+        if (response.statusCode == 200) {
+          debugLog('Successfully deleted record with UID: $uid from server');
+        } else {
+          debugLog('Failed to delete record with UID: $uid from server. Status: ${response.statusCode}');
+          throw Exception('Failed to delete record from server');
+        }
+      } catch (e) {
+        debugLog('Error deleting record from server: $e');
+        throw e;
+      }
+    }
+    
+    // Delete from local database
+    for (var uid in uids) {
+      // Use executeDelete or another appropriate method based on DBHelper implementation
+      await dbHelper.rawQuery(
+        'DELETE FROM chamcongcn WHERE UID = ?',
+        [uid]
+      );
+      debugLog('Deleted record with UID: $uid from local database');
+      
+      // Remove from tracking collections if present
+      _modifiedRecords.remove(uid);
+      _newRecords.remove(uid);
+    }
+    
+    // Remove from attendance data in memory
+    setState(() {
+      _attendanceData.removeWhere((record) => record['MaNV'] == selectedEmployee);
+    });
+    
+    // Reload data
+    await _loadAttendanceData();
+    
+    setState(() => _isLoading = false);
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Đã xoá nhân viên $selectedEmployee khỏi dự án này'))
+    );
+    
+  } catch (e) {
+    setState(() => _isLoading = false);
+    debugLog('Error in _deleteEmployee: $e');
+    _showError('Không thể xoá nhân viên: ${e.toString()}');
+  }
+}
 @override
 Widget build(BuildContext context) {
   return Scaffold(
@@ -903,36 +941,36 @@ Widget build(BuildContext context) {
           : Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                              ElevatedButton(
+  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+  child: SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: Row(
+      children: [
+        ElevatedButton(
           onPressed: _addNewEmployee, 
           child: Text('➕ NV mới')
         ),
         const SizedBox(width: 10),
-                ElevatedButton(
+        ElevatedButton(
           onPressed: (_modifiedRecords.isNotEmpty || _newRecords.isNotEmpty) 
             ? _saveChanges 
             : null,
           child: Text('❤️Lưu thay đổi'),
         ),
         ElevatedButton(
-  onPressed: _copyFromYesterday,
-  child: Text('💚Như hôm qua'),
-),
-ElevatedButton(
-  onPressed: () {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => AllProjectsView(),
-      ),
-    );
-  },
-  child: Text('💙Xem tất cả'),
-),
+          onPressed: _copyFromYesterday,
+          child: Text('💚Như hôm qua'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => AllProjectsView(),
+              ),
+            );
+          },
+          child: Text('💙Xem tất cả'),
+        ),
         const SizedBox(width: 10),
         ElevatedButton(
           onPressed: _addPreviousEmployees,
@@ -940,27 +978,27 @@ ElevatedButton(
         ),
         const SizedBox(width: 16),
         ElevatedButton(
-          onPressed: _exportToExcel,
-          child: Text('💛Xuất file'),
+          onPressed: _deleteEmployee,
+          child: Text('🗑️ Xoá CN'),
         ),
-      const SizedBox(width: 16),
-  ElevatedButton(
-    onPressed: () {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => ProjectWorkerAuto(
-            selectedBoPhan: _selectedDepartment ?? '',
-            username: _username,
-          ),
-        ),
-      );
-    },
-    child: Text('⚙️ TH tháng'),
-  ),
-                    ],
-                  ),
+        const SizedBox(width: 16),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => ProjectWorkerAuto(
+                  selectedBoPhan: _selectedDepartment ?? '',
+                  username: _username,
                 ),
               ),
+            );
+          },
+          child: Text('⚙️ TH tháng'),
+        ),
+      ],
+    ),
+  ),
+),
               Expanded(
                 child: DefaultTabController(
                   length: 10,

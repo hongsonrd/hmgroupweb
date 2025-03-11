@@ -586,9 +586,18 @@ Future<int> updateOrder(String orderId, Map<String, dynamic> updates) async {
   );
 }
 
-Future<int> deleteOrder(String orderId) async {
-  return await delete(
-    DatabaseTables.orderTable,
+Future<void> deleteAllOrderChiTietByOrderId(String orderId) async {
+  final db = await database;
+  await db.delete(
+    'ordervtchitiet',
+    where: 'OrderID = ?',
+    whereArgs: [orderId],
+  );
+}
+Future<void> deleteOrder(String orderId) async {
+  final db = await database;
+  await db.delete(
+    'ordervt',
     where: 'OrderID = ?',
     whereArgs: [orderId],
   );

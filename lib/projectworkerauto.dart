@@ -9,6 +9,9 @@ import 'package:intl/intl.dart';
 import 'package:excel/excel.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:share_plus/share_plus.dart';
+import 'export_helper.dart';
+import 'projectworkerphep.dart';
 import 'http_client.dart';
 
 class ProjectWorkerAuto extends StatefulWidget {
@@ -164,25 +167,106 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
   }
 
   Future<void> _generateAutomaticLeave() async {
-    // Placeholder for automatic leave generation
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Chức năng tạo phép tự động sẽ được phát triển sau'))
+  // Show confirmation dialog before proceeding
+  final bool? proceed = await showDialog<bool>(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Text('Tạo phép tự động'),
+        content: Text(
+          'Quá trình này sẽ tự động tính toán và tạo phép cho nhân viên dựa trên dữ liệu hiện có. Để đảm bảo chính xác vui lòng:\n1. Đồng bộ danh sách công nhân mới nhất (bước 5 chọn Có khi bấm Đồng bộ)\n2.Đảm bảo mã công nhân chính xác\n3.Hiện tại đã chấm xong ngày 28 tháng hiện tại\n4.Chỉ được tạo phép tự động trước ngày mùng 2 của tháng kế tiếp\n5.Thời gian xử lý tự động có thể hơi lâu tuỳ vào số lượng NV '
+          'Tiếp tục?'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text('Tiếp tục'),
+          ),
+        ],
+      );
+    },
+  );
+
+  if (proceed != true) return;
+
+  setState(() => _isLoading = true);
+  
+  try {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProjectWorkerPhep(
+          //selectedBoPhan: _selectedDepartment ?? '',
+          username: widget.username,
+          selectedMonth: _selectedMonth ?? '',
+        ),
+      ),
     );
+    
+    if (result == true) {
+      // If successful, reload the attendance data
+      await _loadAttendanceData();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Đã tạo phép tự động thành công'))
+      );
+    }
+  } catch (e) {
+    print('Error generating automatic leave: $e');
+    _showError('Lỗi khi tạo phép tự động: $e');
+  } finally {
+    setState(() => _isLoading = false);
   }
+}
 
   Future<void> _exportPdf() async {
-    // Placeholder for PDF export
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Chức năng xuất PDF sẽ được phát triển sau'))
+  setState(() => _isLoading = true);
+  
+  try {
+    await ExportHelper.exportToPdf(
+      selectedDepartment: _selectedDepartment ?? '',
+      selectedMonth: _selectedMonth ?? '',
+      allEmployees: _getUniqueEmployees(),
+      staffNames: _staffNames,
+      getEmployeesWithValueInColumn: _getEmployeesWithValueInColumn,
+      getDaysInMonth: _getDaysInMonth,
+      getAttendanceForDay: _getAttendanceForDay,
+      calculateSummary: _calculateSummary,
+      context: context,
     );
+  } catch (e) {
+    print('PDF export error: $e');
+    _showError('Lỗi khi xuất PDF: $e');
   }
+  
+  setState(() => _isLoading = false);
+}
 
-  Future<void> _exportExcel() async {
-    // Placeholder for Excel export
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Chức năng xuất Excel (công lương) sẽ được phát triển sau'))
+Future<void> _exportExcel() async {
+  setState(() => _isLoading = true);
+  
+  try {
+    await ExportHelper.exportToExcel(
+      selectedDepartment: _selectedDepartment ?? '',
+      selectedMonth: _selectedMonth ?? '',
+      allEmployees: _getUniqueEmployees(),
+      staffNames: _staffNames,
+      getEmployeesWithValueInColumn: _getEmployeesWithValueInColumn,
+      getDaysInMonth: _getDaysInMonth,
+      getAttendanceForDay: _getAttendanceForDay,
+      calculateSummary: _calculateSummary,
+      context: context,
     );
+  } catch (e) {
+    print('Excel export error: $e');
+    _showError('Lỗi khi xuất Excel: $e');
   }
+  
+  setState(() => _isLoading = false);
+}
 
   List<String> _getUniqueEmployees() {
     final employees = _attendanceData
@@ -263,41 +347,55 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
   double congChu_permissionDays34 = 0;
   double congChu_htDays34 = 0;
   
+  // Add new variables for days 26+
+  double congChu_regularDays5plus = 0;
+  double congChu_permissionDays5plus = 0;
+  double congChu_htDays5plus = 0;
+  
   // 2. NgoaiGioThuong row
   double ngThuong_days12 = 0; // NgoaiGioThuong/8
   double ngThuong_days34 = 0;
+  double ngThuong_days5plus = 0;
   
   // ====== For Hỗ trợ section ======
   double hoTro_days12 = 0;
   double hoTro_days34 = 0;
+  double hoTro_days5plus = 0;
   
   // ====== For Part time section ======
   double partTime_days12 = 0;
   double partTime_days34 = 0;
+  double partTime_days5plus = 0;
   
   // ====== For PT sáng section ======
   double ptSang_days12 = 0;
   double ptSang_days34 = 0;
+  double ptSang_days5plus = 0;
   
   // ====== For PT chiều section ======
   double ptChieu_days12 = 0;
   double ptChieu_days34 = 0;
+  double ptChieu_days5plus = 0;
   
   // ====== For NG khác section ======
   double ngKhac_days12 = 0;
   double ngKhac_days34 = 0;
+  double ngKhac_days5plus = 0;
   
   // ====== For NG x1.5 section ======
   double ng15_days12 = 0;
   double ng15_days34 = 0;
+  double ng15_days5plus = 0;
   
   // ====== For NG x2 section ======
   double ng2_days12 = 0;
   double ng2_days34 = 0;
+  double ng2_days5plus = 0;
   
   // ====== For Công lễ section ======
   double congLe_days12 = 0;
   double congLe_days34 = 0;
+  double congLe_days5plus = 0;
 
   // Process each day in the month
   for (int day = 1; day <= days.length; day++) {
@@ -347,7 +445,7 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
     if (day <= 15) {
       // ==== Days 1-15 ====
       
-      // ---- Chữ & Giờ thường section ----
+      // Processing for first half (same as original code)
       // 1. CongThuongChu row
       if (phanLoaiValue > 0) {
         congChu_regularDays12 += phanLoaiValue;
@@ -414,10 +512,10 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
         congLe_days12 += congLe / 8;
       }
       
-    } else {
-      // ==== Days 16+ ====
+    } else if (day <= 25) {
+      // ==== Days 16-25 ====
       
-      // ---- Chữ & Giờ thường section ----
+      // Modified to only include days 16-25 in the "Tuan 3+4" calculations
       // 1. CongThuongChu row
       if (phanLoaiValue > 0) {
         congChu_regularDays34 += phanLoaiValue;
@@ -483,30 +581,99 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
       if (congLe > 0) {
         congLe_days34 += congLe / 8;
       }
+    } else {
+      // ==== Days 26+ ====
+      
+      // Add accounting for days 26+
+      // 1. CongThuongChu row
+      if (phanLoaiValue > 0) {
+        congChu_regularDays5plus += phanLoaiValue;
+      }
+      
+      if (baseCongThuongChu == 'P') {
+        congChu_permissionDays5plus += 1.0;
+      } else if (baseCongThuongChu == 'P/2') {
+        congChu_permissionDays5plus += 0.5;
+      }
+      
+      if (hasFullPermission) {
+        congChu_permissionDays5plus += 1.0;
+      } else if (hasHalfPermission) {
+        congChu_permissionDays5plus += 0.5;
+      }
+      
+      if (baseCongThuongChu == 'HT') {
+        congChu_htDays5plus += 1.0;
+      }
+      
+      // 2. NgoaiGioThuong row
+      if (ngoaiGioThuong > 0) {
+        ngThuong_days5plus += ngoaiGioThuong / 8;
+      }
+      
+      // ---- Hỗ trợ section ----
+      if (hoTro > 0) {
+        hoTro_days5plus += hoTro / 8;
+      }
+      
+      // ---- Part time section ----
+      if (partTime > 0) {
+        partTime_days5plus += partTime;
+      }
+      
+      // ---- PT sáng section ----
+      if (partTimeSang > 0) {
+        ptSang_days5plus += partTimeSang;
+      }
+      
+      // ---- PT chiều section ----
+      if (partTimeChieu > 0) {
+        ptChieu_days5plus += partTimeChieu;
+      }
+      
+      // ---- NG khác section ----
+      if (ngoaiGioKhac > 0) {
+        ngKhac_days5plus += ngoaiGioKhac / 8;
+      }
+      
+      // ---- NG x1.5 section ----
+      if (ngoaiGiox15 > 0) {
+        ng15_days5plus += ngoaiGiox15 / 8;
+      }
+      
+      // ---- NG x2 section ----
+      if (ngoaiGiox2 > 0) {
+        ng2_days5plus += ngoaiGiox2 / 8;
+      }
+      
+      // ---- Công lễ section ----
+      if (congLe > 0) {
+        congLe_days5plus += congLe / 8;
+      }
     }
   }
   
-  // Calculate totals for each section
+  // Calculate totals for each section - include all days in total
   
   // Chữ & Giờ thường - CongThuongChu row
-  final double congChu_totalRegular = congChu_regularDays12 + congChu_regularDays34;
-  final double congChu_totalPermission = congChu_permissionDays12 + congChu_permissionDays34;
-  final double congChu_totalHT = congChu_htDays12 + congChu_htDays34;
+  final double congChu_totalRegular = congChu_regularDays12 + congChu_regularDays34 + congChu_regularDays5plus;
+  final double congChu_totalPermission = congChu_permissionDays12 + congChu_permissionDays34 + congChu_permissionDays5plus;
+  final double congChu_totalHT = congChu_htDays12 + congChu_htDays34 + congChu_htDays5plus;
   
   // Chữ & Giờ thường - NgoaiGioThuong row
-  final double ngThuong_total = ngThuong_days12 + ngThuong_days34;
+  final double ngThuong_total = ngThuong_days12 + ngThuong_days34 + ngThuong_days5plus;
   
   // Other sections
-  final double hoTro_total = hoTro_days12 + hoTro_days34;
-  final double partTime_total = partTime_days12 + partTime_days34;
-  final double ptSang_total = ptSang_days12 + ptSang_days34;
-  final double ptChieu_total = ptChieu_days12 + ptChieu_days34;
-  final double ngKhac_total = ngKhac_days12 + ngKhac_days34;
-  final double ng15_total = ng15_days12 + ng15_days34;
-  final double ng2_total = ng2_days12 + ng2_days34;
-  final double congLe_total = congLe_days12 + congLe_days34;
+  final double hoTro_total = hoTro_days12 + hoTro_days34 + hoTro_days5plus;
+  final double partTime_total = partTime_days12 + partTime_days34 + partTime_days5plus;
+  final double ptSang_total = ptSang_days12 + ptSang_days34 + ptSang_days5plus;
+  final double ptChieu_total = ptChieu_days12 + ptChieu_days34 + ptChieu_days5plus;
+  final double ngKhac_total = ngKhac_days12 + ngKhac_days34 + ngKhac_days5plus;
+  final double ng15_total = ng15_days12 + ng15_days34 + ng15_days5plus;
+  final double ng2_total = ng2_days12 + ng2_days34 + ng2_days5plus;
+  final double congLe_total = congLe_days12 + congLe_days34 + congLe_days5plus;
   
-  // Return formatted values
+  // Return formatted values with the same structure as before
   return {
     // ==== Chữ & Giờ thường section - CongThuongChu row ====
     'tuan12': _formatNumberValue(congChu_regularDays12),
@@ -519,6 +686,11 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
     'phep': _formatNumberValue(congChu_totalPermission),
     'ht': _formatNumberValue(congChu_totalHT),
     
+    // Added data for days 26+ if you want to display it
+    'tuan5plus': _formatNumberValue(congChu_regularDays5plus),
+    'p5plus': _formatNumberValue(congChu_permissionDays5plus),
+    'ht5plus': _formatNumberValue(congChu_htDays5plus),
+    
     // ==== Ngày 1-15 for other sections ====
     'ng_days12': _formatNumberValue(ngThuong_days12),
     'hotro_days12': _formatNumberValue(hoTro_days12),
@@ -530,7 +702,7 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
     'ng2_days12': _formatNumberValue(ng2_days12),
     'congle_days12': _formatNumberValue(congLe_days12),
     
-    // ==== Ngày 16+ for other sections ====
+    // ==== Ngày 16-25 for other sections ====
     'ng_days34': _formatNumberValue(ngThuong_days34),
     'hotro_days34': _formatNumberValue(hoTro_days34),
     'pt_days34': _formatNumberValue(partTime_days34),
@@ -540,6 +712,17 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
     'ng15_days34': _formatNumberValue(ng15_days34),
     'ng2_days34': _formatNumberValue(ng2_days34),
     'congle_days34': _formatNumberValue(congLe_days34),
+    
+    // ==== Ngày 26+ for other sections if you need them ====
+    'ng_days5plus': _formatNumberValue(ngThuong_days5plus),
+    'hotro_days5plus': _formatNumberValue(hoTro_days5plus),
+    'pt_days5plus': _formatNumberValue(partTime_days5plus),
+    'pts_days5plus': _formatNumberValue(ptSang_days5plus),
+    'ptc_days5plus': _formatNumberValue(ptChieu_days5plus),
+    'ngk_days5plus': _formatNumberValue(ngKhac_days5plus),
+    'ng15_days5plus': _formatNumberValue(ng15_days5plus),
+    'ng2_days5plus': _formatNumberValue(ng2_days5plus),
+    'congle_days5plus': _formatNumberValue(congLe_days5plus),
     
     // ==== Totals for other sections ====
     'ng_total': _formatNumberValue(ngThuong_total),
@@ -1689,24 +1872,24 @@ String _extractCongThuongChuBase(String? value) {
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
-                    //child: Row(
-                    //  children: [
-                    //    ElevatedButton(
-                    //      onPressed: _generateAutomaticLeave,
-                    //      child: Text('Tạo Phép tự động'),
-                    //    ),
-                    //    SizedBox(width: 10),
-                    //    ElevatedButton(
-                    //      onPressed: _exportPdf,
-                    //      child: Text('Xuất PDF'),
-                    //    ),
-                    //    SizedBox(width: 10),
-                    //    ElevatedButton(
-                    //      onPressed: _exportExcel,
-                    //      child: Text('Xuất Excel (công lương)'),
-                    //    ),
-                    //  ],
-                    //),
+                    child: Row(
+                      children: [
+                        ElevatedButton(
+                         onPressed: _generateAutomaticLeave,
+                          child: Text('Tạo Phép tự động'),
+                        ),
+                        SizedBox(width: 10),
+                        ElevatedButton(
+                          onPressed: _exportPdf,
+                          child: Text('Xuất PDF'),
+                        ),
+                        SizedBox(width: 10),
+                        ElevatedButton(
+                          onPressed: _exportExcel,
+                          child: Text('Xuất Excel'),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 Padding(
