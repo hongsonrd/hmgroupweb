@@ -10,6 +10,11 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'dart:ui';
 import 'package:http_parser/http_parser.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+
 class FloatingDraggableIcon extends StatefulWidget {
   // Add static key for external access
   static final GlobalKey<FloatingDraggableIconState> globalKey = GlobalKey<FloatingDraggableIconState>();
@@ -311,6 +316,23 @@ void initState() {
   _animationController.repeat(reverse: true);
   _initTts();
 }
+String _processTextFormatting(String text) {
+  String displayText = text;
+  RegExp boldPattern = RegExp(r'\*\*(.*?)\*\*');
+  displayText = displayText.replaceAllMapped(boldPattern, (match) {
+    String content = match.group(1) ?? '';
+    return '<b>$content</b>';
+  });
+  RegExp singleAsteriskPattern = RegExp(r'\*(.*?)(?=\s|$)');
+  displayText = displayText.replaceAllMapped(singleAsteriskPattern, (match) {
+    String content = match.group(1) ?? '';
+    return '<b>$content</b>';
+  });
+  return displayText;
+}
+String _stripFormattingForTTS(String text) {
+  return text.replaceAll(RegExp(r'<[^>]*>'), '');
+}
   Future<void> _loadUsername() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -427,14 +449,14 @@ Future<void> _speak(String text) async {
     }
   }
   void _saveChatHistory() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    // Convert the chat history to a format that can be stored
-    List<Map<String, dynamic>> storableHistory = _chatHistory.map((message) {
-      var storable = Map<String, dynamic>.from(message);
-      return storable;
-    }).toList();
-    await prefs.setString('chat_history', jsonEncode(storableHistory));
-  }
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  // Convert the chat history to a format that can be stored
+  List<Map<String, dynamic>> storableHistory = _chatHistory.map((message) {
+    var storable = Map<String, dynamic>.from(message);
+    return storable;
+  }).toList();
+  await prefs.setString('chat_history', jsonEncode(storableHistory));
+}
 void _addUserMessage(String message, {File? image}) {
     setState(() {
       if (image != null) {
@@ -461,13 +483,16 @@ void _addUserMessage(String message, {File? image}) {
     });
   }
   void _addAIMessage(String message) {
-    setState(() {
-      _chatHistory.add({"ai": message});
-      _saveChatHistory();
-    });
-    _scrollToBottom();
-    _speak(message);
-  }
+  setState(() {
+    String ttsText = message;
+    String displayText = _processTextFormatting(message);
+    
+    _chatHistory.add({"ai": displayText, "raw_text": ttsText});
+    _saveChatHistory();
+  });
+  _scrollToBottom();
+  _speak(_stripFormattingForTTS(message));
+}
 void scrollToBottom() {
   WidgetsBinding.instance.addPostFrameCallback((_) {
     if (_scrollController.hasClients) {
@@ -480,7 +505,7 @@ void scrollToBottom() {
   });
 }
 final List<String> urlList = [
-  'https://https://splendid-binder-432809-k6.as.r.appspot.com/generate',
+  'https://splendid-binder-432809-k6.as.r.appspot.com/generate',
   'https://hmtime.as.r.appspot.com/generate',
   'https://sincere-beacon-432912-e6.as.r.appspot.com/generate',
 ];
@@ -509,56 +534,56 @@ Future<void> _sendMessage() async {
       String randomUrl = urlList[randomIndex];
       
       if (currentImage != null) {
-        // Image with text scenario
-        randomUrl = randomUrl.replaceAll('/generate', '/generate_with_image');
-        
-        print('Sending request to: $randomUrl');
-        
-        var request = http.MultipartRequest('POST', Uri.parse(randomUrl));
-        
-        // Add file
-        var stream = http.ByteStream(currentImage.openRead());
-        var length = await currentImage.length();
-        
-        var multipartFile = http.MultipartFile(
-          'file',
-          stream,
-          length,
-          filename: currentImage.path.split('/').last,
-          contentType: MediaType('image', 'jpeg')
-        );
-        
-        request.files.add(multipartFile);
-        request.fields['prompt'] = message;
-        
-        print('Sending image with prompt: $message');
-        
-        try {
-          var response = await request.send();
-          var responseData = await http.Response.fromStream(response);
-          
-          print('Response status: ${responseData.statusCode}');
-          print('Response body: ${responseData.body}');
-          
-          setState(() {
-            _isWaitingForResponse = false;
-          });
-          
-          if (responseData.statusCode == 200) {
-            var data = jsonDecode(responseData.body);
-            _addAIMessage(data['response']);
-          } else {
-            print('Server error: ${responseData.statusCode} - ${responseData.body}');
-            _addAIMessage("Xin lỗi, tôi đang gặp sự cố kỹ thuật. Vui lòng thử lại sau.");
-          }
-        } catch (e) {
-          print('Error sending image: $e');
-          _addAIMessage("Xin lỗi, có lỗi khi gửi ảnh. Vui lòng thử lại sau.");
-          setState(() {
-            _isWaitingForResponse = false;
-          });
-        }
-      } else {
+  // Image with text scenario
+  randomUrl = randomUrl.replaceAll('/generate', '/generate_with_image');
+  
+  print('Sending request to: $randomUrl');
+  
+  var request = http.MultipartRequest('POST', Uri.parse(randomUrl));
+  
+  // Add file
+  var stream = http.ByteStream(currentImage.openRead());
+  var length = await currentImage.length();
+  
+  var multipartFile = http.MultipartFile(
+    'file',
+    stream,
+    length,
+    filename: currentImage.path.split('/').last,
+    contentType: MediaType('image', 'jpeg')
+  );
+  
+  request.files.add(multipartFile);
+  request.fields['prompt'] = message;
+  
+  print('Sending image with prompt: $message');
+  
+  try {
+    var response = await request.send();
+    var responseData = await http.Response.fromStream(response);
+    
+    print('Response status: ${responseData.statusCode}');
+    print('Response body: ${responseData.body}');
+    
+    setState(() {
+      _isWaitingForResponse = false;
+    });
+    
+    if (responseData.statusCode == 200) {
+      var data = jsonDecode(responseData.body);
+      _addAIMessage(data['response']);
+    } else {
+      print('Server error: ${responseData.statusCode} - ${responseData.body}');
+      _addAIMessage("Xin lỗi, tôi đang gặp sự cố kỹ thuật. Vui lòng thử lại sau.");
+    }
+  } catch (e) {
+    print('Error sending image: $e');
+    _addAIMessage("Xin lỗi, có lỗi khi gửi ảnh. Vui lòng thử lại sau.");
+    setState(() {
+      _isWaitingForResponse = false;
+    });
+  }
+} else {
         // Text-only scenario
         var response = await http.post(
           Uri.parse(randomUrl),
@@ -715,32 +740,32 @@ Widget _buildHeader() {
   );
 }
 Widget _buildChatHistory() {
-    return Expanded(
-      child: Container(
-        margin: EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.grey[100]!.withOpacity(0.65),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: ListView.builder(
-          controller: _scrollController,
-          padding: EdgeInsets.all(16),
-          itemCount: _chatHistory.length + (_isWaitingForResponse ? 1 : 0),
-          itemBuilder: (context, index) {
-            if (index == _chatHistory.length && _isWaitingForResponse) {
-              return _buildLoadingIndicator();
-            }
-            final message = _chatHistory[index];
-            if (message.containsKey('user')) {
-              return _buildUserMessage(message);
-            } else {
-              return _buildAIMessage(message['ai']!);
-            }
-          },
-        ),
+  return Expanded(
+    child: Container(
+      margin: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey[100]!.withOpacity(0.65),
+        borderRadius: BorderRadius.circular(12),
       ),
-    );
-  }
+      child: ListView.builder(
+        controller: _scrollController,
+        padding: EdgeInsets.all(16),
+        itemCount: _chatHistory.length + (_isWaitingForResponse ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == _chatHistory.length && _isWaitingForResponse) {
+            return _buildLoadingIndicator();
+          }
+          final message = _chatHistory[index];
+          if (message.containsKey('user')) {
+            return _buildUserMessage(message);
+          } else {
+            return _buildAIMessage(message);
+          }
+        },
+      ),
+    ),
+  );
+}
   Widget _buildLoadingIndicator() {
     return Align(
       alignment: Alignment.centerLeft,
@@ -756,72 +781,238 @@ Widget _buildChatHistory() {
     );
   }
 Widget _buildUserMessage(Map<String, dynamic> message) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Container(
-        margin: EdgeInsets.only(bottom: 8),
-        padding: EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Color(0xFF5E5AEC),
-              Color(0xFF8C52FF),
-            ],
+  return Align(
+    alignment: Alignment.centerRight,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Container(
+          margin: EdgeInsets.only(bottom: 4),
+          padding: EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color(0xFF5E5AEC),
+                Color(0xFF8C52FF),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(16),
           ),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            if (message.containsKey('image'))
-              Container(
-                margin: EdgeInsets.only(bottom: 8),
-                width: 150,
-                height: 150,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  image: DecorationImage(
-                    image: FileImage(File(message['image'])),
-                    fit: BoxFit.cover,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (message.containsKey('image'))
+                Container(
+                  margin: EdgeInsets.only(bottom: 8),
+                  width: 150,
+                  height: 150,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    image: DecorationImage(
+                      image: FileImage(File(message['image'])),
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
+              Text(
+                message['user'],
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                ),
               ),
-          Text(
-            message['user'],
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-            ),
+            ],
           ),
-        ],
-      ),
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextButton(
+              style: TextButton.styleFrom(
+                minimumSize: Size(0, 20),
+                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+              ),
+              child: Text('Copy', style: TextStyle(fontSize: 10)),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: message['user']));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Đã sao chép tin nhắn')),
+                );
+              },
+            ),
+            TextButton(
+              style: TextButton.styleFrom(
+                minimumSize: Size(0, 20),
+                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+              ),
+              child: Text('Lưu', style: TextStyle(fontSize: 10)),
+              onPressed: () => _createAndSharePDF(),
+            ),
+          ],
+        ),
+      ],
     ),
   );
 }
-Widget _buildAIMessage(String message) {
-  return GestureDetector(
-    onLongPress: () => _showCopyDialog(message),
-    child: Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        margin: EdgeInsets.only(bottom: 8),
-        padding: EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Color(0xFFFF9966),
-              Color(0xFFFF6B95),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Text(
-          message,
-          style: TextStyle(color: Colors.white),
-        ),
-      ),
+Future<void> _createAndSharePDF() async {
+  final pdf = pw.Document();
+  
+  // Load a font that supports Vietnamese
+  final fontData = await rootBundle.load("assets/fonts/RobotoCondensed-Regular.ttf");
+  final ttf = pw.Font.ttf(fontData);
+
+  pdf.addPage(
+    pw.Page(
+      build: (pw.Context context) {
+        return pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Header(
+              level: 0, 
+              text: 'HM AI Chat History',
+              textStyle: pw.TextStyle(font: ttf),
+            ),
+            pw.SizedBox(height: 20),
+            ...List.generate(_chatHistory.length, (index) {
+              final message = _chatHistory[index];
+              if (message.containsKey('user')) {
+                return pw.Padding(
+                  padding: pw.EdgeInsets.only(bottom: 10),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('You:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, font: ttf)),
+                      pw.Text(message['user'], style: pw.TextStyle(font: ttf)),
+                    ],
+                  ),
+                );
+              } else {
+                return pw.Padding(
+                  padding: pw.EdgeInsets.only(bottom: 10),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('HM AI:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, font: ttf)),
+                      pw.Text(message['raw_text'] ?? message['ai'], style: pw.TextStyle(font: ttf)),
+                    ],
+                  ),
+                );
+              }
+            }),
+          ],
+        );
+      },
     ),
   );
+
+  // Save the PDF file
+  final output = await getTemporaryDirectory();
+  final file = File('${output.path}/hm_ai_chat_${DateTime.now().millisecondsSinceEpoch}.pdf');
+  await file.writeAsBytes(await pdf.save());
+
+  // Share the PDF file
+  await Share.shareFiles(
+    [file.path],
+    text: 'HM AI Chat History',
+    subject: 'Chat with HM AI',
+  );
+}
+Widget _buildAIMessage(Map<String, dynamic> message) {
+  String displayText = message['ai'];
+  String rawText = message['raw_text'] ?? displayText;
+  
+  return Align(
+    alignment: Alignment.centerLeft,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          margin: EdgeInsets.only(bottom: 4),
+          padding: EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color(0xFFFF9966),
+                Color(0xFFFF6B95),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: RichText(
+            text: TextSpan(
+              children: _buildFormattedText(displayText),
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextButton(
+              style: TextButton.styleFrom(
+                minimumSize: Size(0, 20),
+                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+              ),
+              child: Text('Copy', style: TextStyle(fontSize: 10)),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: rawText));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Đã sao chép tin nhắn')),
+                );
+              },
+            ),
+            TextButton(
+              style: TextButton.styleFrom(
+                minimumSize: Size(0, 20),
+                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+              ),
+              child: Text('Lưu', style: TextStyle(fontSize: 10)),
+              onPressed: () => _createAndSharePDF(),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+List<TextSpan> _buildFormattedText(String text) {
+  List<TextSpan> spans = [];
+  // Check for <b> tags
+  RegExp boldPattern = RegExp(r'<b>(.*?)</b>');
+  int lastIndex = 0;
+  for (Match match in boldPattern.allMatches(text)) {
+    // Add text before the match
+    if (match.start > lastIndex) {
+      spans.add(TextSpan(
+        text: text.substring(lastIndex, match.start),
+        style: TextStyle(fontSize: 14.0),
+      ));
+    }
+    String boldText = match.group(1) ?? '';
+bool hasSingleAsterisk = text.substring(math.max(0, match.start - 1), match.start) == '*';
+    if (hasSingleAsterisk) {
+      spans.add(TextSpan(
+        text: boldText,
+        style: TextStyle(fontWeight: FontWeight.bold),
+      ));
+    } else {
+      spans.add(TextSpan(
+        text: boldText,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 16, // Bigger text
+        ),
+      ));
+    }
+    lastIndex = match.end;
+  }
+  if (lastIndex < text.length) {
+    spans.add(TextSpan(
+      text: text.substring(lastIndex),
+    ));
+  }
+  return spans;
 }
 
   void _showCopyDialog(String message) {
@@ -946,6 +1137,7 @@ Widget _buildChatControl(double bottomPadding) {
               controller: _textController,
               maxLines: 3,
               minLines: 1,
+              style: TextStyle(fontSize: 14.0),
               decoration: InputDecoration(
                 hintText: 'Nhập tin nhắn của bạn...',
                 border: OutlineInputBorder(
@@ -1030,7 +1222,7 @@ Widget _buildChatControl(double bottomPadding) {
                     onPressed: () {
                       if (_image != null) {
                         // Set analysis prompt
-                        _textController.text = 'Trả lời ngắn gọn: đánh giá việc chụp hình, chất lượng vệ sinh trong ảnh (nếu chưa tốt thì mô tả vị trí nào trong ảnh) và gợi ý ngắn gọn về việc làm tiếp theo nếu tôi là người quản lý dịch vụ vệ sinh (không phải quản lý toà nhà hay nhân viên kỹ thuật) ở đây. Đánh giá tổng quan trên hệ 10 điểm (nếu có thể thì gợi ý nhanh tôi cách chụp ảnh tốt hơn. Nếu dưới 7 điểm thì gợi ý cách làm sạch chuyên sâu bằng loại máy hoặc hoá chất phù hợp)';
+                        _textController.text = 'Trả lời ngắn gọn: đánh giá việc chụp hình, chất lượng vệ sinh trong ảnh, tập trung vào đối tượng chính nhất (nếu chưa tốt thì mô tả vị trí nào trong ảnh). Đánh giá tổng quan trên hệ 10 điểm, nếu dưới 7 điểm thì gợi ý loại hoá chất trong danh sách đang có, hoặc máy móc chuyên sâu để xử lý. và gợi ý ngắn gọn về việc làm tiếp theo nếu tôi là người quản lý dịch vụ vệ sinh (không phải quản lý toà nhà hay nhân viên kỹ thuật) ở đây hoặc nếu hình ảnh không rõ ràng được là chụp gì thì mô tả cách chụp tốt hơn.';
                         // Send message
                         _sendMessage();
                       }

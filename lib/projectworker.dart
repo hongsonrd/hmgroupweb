@@ -7,7 +7,6 @@ import 'user_credentials.dart';
 import 'db_helper.dart';
 import 'projectworkerall.dart';
 import 'projectworkerauto.dart';
-import 'http_client.dart';
 
 import 'table_models.dart';
 import 'package:intl/intl.dart';
@@ -39,7 +38,7 @@ class _ProjectWorkerState extends State<ProjectWorker> {
   late String _username;
   Map<String, String> _staffNames = {};
   List<String> _debugLogs = [];
-bool _showDebugOverlay = true;
+bool _showDebugOverlay = false;
 Map<String, Color> _staffColors = {};
 List<Color> _availableColors = [
   Colors.yellow.shade100,
@@ -87,7 +86,7 @@ Future<void> _syncDataFromServer() async {
     final dbHelper = DBHelper();
     
     // Fetch all attendance data from server
-    final response = await AuthenticatedHttpClient.get(
+    final response = await http.get(
       Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongcn/$_username'),
     );
     
@@ -425,7 +424,7 @@ void debugLog(String message) {
 }
   Future<void> _loadProjects() async {
     try {
-      final response = await AuthenticatedHttpClient.get(
+      final response = await http.get(
         Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/$_username'),
       );
       if (response.statusCode == 200) {
@@ -443,7 +442,7 @@ Future<void> _initializeData() async {
  setState(() => _isLoading = true);
  try {
    try {
-     final response = await AuthenticatedHttpClient.get(
+     final response = await http.get(
         Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/$_username'),
         headers: {'Content-Type': 'application/json'},
       );

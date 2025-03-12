@@ -491,9 +491,9 @@ if (newPhanLoai.endsWith('.0')) {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.purple,
+        backgroundColor: Colors.yellow,
         title: Text('Tạo phép tự động'),
-        automaticallyImplyLeading: !_isProcessing, // Disable back button during processing
+        automaticallyImplyLeading: !_isProcessing,
       ),
       body: Stack(
         children: [

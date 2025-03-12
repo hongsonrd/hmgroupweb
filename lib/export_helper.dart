@@ -8,6 +8,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
+
 class ExcelColorHelper {
   final String hexValue;
   
@@ -35,8 +37,16 @@ class ExportHelper {
     required BuildContext context,
   }) async {
     try {
-      final pdf = pw.Document();
-      final days = getDaysInMonth();
+    final fontData = await rootBundle.load('assets/fonts/RobotoCondensed-Regular.ttf');
+    final ttf = pw.Font.ttf(fontData.buffer.asByteData());
+    
+    final pdf = pw.Document(
+      theme: pw.ThemeData.withFont(
+        base: ttf,
+        bold: ttf,
+      ),
+    );
+    final days = getDaysInMonth();
 
       // Add title
        pdf.addPage(

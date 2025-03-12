@@ -125,53 +125,55 @@ Future<void> _initAppBarVideo() async {
   }
 
   Future<void> _loadDateRange() async {
-    try {
-      final db = await dbHelper.database;
-      final List<Map<String, dynamic>> result = await db.rawQuery('''
-        SELECT 
-          MIN(date(Ngay)) as min_date, 
-          MAX(date(Ngay)) as max_date
-        FROM ${DatabaseTables.taskHistoryTable}
-      ''');
-      
-      if (result.isNotEmpty && result[0]['min_date'] != null && result[0]['max_date'] != null) {
-        setState(() {
-          _selectedStartDate = result[0]['max_date'] as String;
-          _selectedEndDate = result[0]['max_date'] as String;
-        });
-        await _loadTaskHistoryData();
-      }
-    } catch (e) {
-      print('Error loading date range: $e');
-      _showError('Error loading date range: $e');
+  try {
+    final db = await dbHelper.database;
+    final List<Map<String, dynamic>> result = await db.rawQuery('''
+      SELECT 
+        MIN(CASE WHEN date(Ngay) IS NULL THEN NULL ELSE date(Ngay) END) as min_date, 
+        MAX(CASE WHEN date(Ngay) IS NULL THEN NULL ELSE date(Ngay) END) as max_date
+      FROM ${DatabaseTables.taskHistoryTable}
+      WHERE date(Ngay) IS NOT NULL
+    ''');
+    
+    if (result.isNotEmpty && result[0]['min_date'] != null && result[0]['max_date'] != null) {
+      setState(() {
+        _selectedStartDate = result[0]['max_date'] as String;
+        _selectedEndDate = result[0]['max_date'] as String;
+      });
+      await _loadTaskHistoryData();
     }
+  } catch (e) {
+    print('Error loading date range: $e');
+    _showError('Error loading date range: $e');
   }
+}
 
   Future<void> _loadTaskHistoryData() async {
-    if (_selectedStartDate == null || _selectedEndDate == null) return;
+  if (_selectedStartDate == null || _selectedEndDate == null) return;
 
-    try {
-      final db = await dbHelper.database;
-      String query = '''
-        SELECT * FROM ${DatabaseTables.taskHistoryTable}
-        WHERE date(Ngay) BETWEEN ? AND ?
-      ''';
-      List<dynamic> args = [_selectedStartDate, _selectedEndDate];
+  try {
+    final db = await dbHelper.database;
+    String query = '''
+      SELECT * FROM ${DatabaseTables.taskHistoryTable}
+      WHERE date(Ngay) IS NOT NULL
+      AND date(Ngay) BETWEEN ? AND ?
+    ''';
+    List<dynamic> args = [_selectedStartDate, _selectedEndDate];
 
-      if (_selectedBoPhan != 'Tất cả') {
-        query += ' AND BoPhan = ?';
-        args.add(_selectedBoPhan);
-      }
-
-      final List<Map<String, dynamic>> results = await db.rawQuery(query, args);
-      setState(() {
-        _filteredTaskHistory = results;
-      });
-    } catch (e) {
-      print('Error loading task history: $e');
-      _showError('Error loading task history data');
+    if (_selectedBoPhan != 'Tất cả') {
+      query += ' AND BoPhan = ?';
+      args.add(_selectedBoPhan);
     }
+
+    final List<Map<String, dynamic>> results = await db.rawQuery(query, args);
+    setState(() {
+      _filteredTaskHistory = results;
+    });
+  } catch (e) {
+    print('Error loading task history: $e');
+    _showError('Error loading task history data');
   }
+}
 
   Future<void> _loadProjects() async {
     if (_isLoadingProjects) return;
@@ -281,7 +283,6 @@ Future<void> _initAppBarVideo() async {
     final userCredentials = Provider.of<UserCredentials>(context, listen: false);
     final username = userCredentials.username.toLowerCase();
     
-    // Try to fetch task history
     setState(() => _syncStatus = 'Đang lấy lịch sử báo cáo...');
     final taskHistoryResponse = await AuthenticatedHttpClient.get(
       Uri.parse('$baseUrl/historybaocao/$username')
@@ -292,64 +293,98 @@ Future<void> _initAppBarVideo() async {
     }
 
     final List<dynamic> taskHistoryData = json.decode(taskHistoryResponse.body);
+    
+    // Create a diagnostic record in the UI
+    setState(() {
+      _syncStatus = 'Analyzing ${taskHistoryData.length} records...';
+    });
+    
     await dbHelper.clearTable(DatabaseTables.taskHistoryTable);
 
-    final taskHistories = taskHistoryData.map((data) => TaskHistoryModel(
-      uid: data['UID'],
-      taskId: data['TaskID'],
-      ngay: DateTime.parse(data['Ngay']),
-      gio: data['Gio'],
-      nguoiDung: data['NguoiDung'],
-      ketQua: data['KetQua'],
-      chiTiet: data['ChiTiet'],
-      chiTiet2: data['ChiTiet2'],
-      viTri: data['ViTri'],
-      boPhan: data['BoPhan'],
-      phanLoai: data['PhanLoai'],
-      hinhAnh: data['HinhAnh'],
-      giaiPhap: data['GiaiPhap'],
-    )).toList();
-
-    await dbHelper.batchInsertTaskHistory(taskHistories);
-
-    // Try to fetch interaction history
-    try {
-      setState(() => _syncStatus = 'Đang lấy lịch sử tương tác...');
-      final interactionResponse = await AuthenticatedHttpClient.get(
-        Uri.parse('$baseUrl/historytuongtac/$username')
-      );
-
-      if (interactionResponse.statusCode == 200) {
-        final List<dynamic> interactionData = json.decode(interactionResponse.body);
-        await dbHelper.clearTable(DatabaseTables.interactionTable);
-
-        final interactions = interactionData.map((data) => InteractionModel(
-          uid: data['UID'],
-          ngay: DateTime.parse(data['Ngay']),
-          gio: data['Gio'],
-          nguoiDung: data['NguoiDung'],
-          boPhan: data['BoPhan'],
-          giamSat: data['GiamSat'],
-          noiDung: data['NoiDung'],
-          chuDe: data['ChuDe'],
-          phanLoai: data['PhanLoai'],
-        )).toList();
-
-        await dbHelper.batchInsertInteraction(interactions);
+    final taskHistories = <TaskHistoryModel>[];
+    List<String> errorMessages = [];
+    
+    for (int i = 0; i < taskHistoryData.length; i++) {
+      try {
+        // Update progress periodically
+        if (i % 50 == 0) {
+          setState(() {
+            _syncStatus = 'Processing record $i of ${taskHistoryData.length}...';
+          });
+          // Give UI time to update
+          await Future.delayed(Duration(milliseconds: 50));
+        }
+        
+        final data = taskHistoryData[i];
+        final ngayStr = data['Ngay'] as String? ?? '';
+        final gioStr = data['Gio'] as String? ?? '';
+        final nguoiDung = data['NguoiDung'] as String? ?? '';
+        
+        // Try to identify problematic records
+        if (nguoiDung.contains('TônTThấtTTùng')) {
+          errorMessages.add('Found record with TônTThấtTTùng: Record #$i, Ngay=$ngayStr');
+          continue;
+        }
+        
+        if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(ngayStr)) {
+          errorMessages.add('Invalid date format: Record #$i, Format="$ngayStr"');
+          continue;
+        }
+        
+        DateTime ngay;
+        try {
+          // Create a new DateTime object directly instead of parsing and modifying
+          final parts = ngayStr.split('-');
+          if (parts.length != 3) throw FormatException('Invalid date parts');
+          
+          final year = int.parse(parts[0]);
+          final month = int.parse(parts[1]);
+          final day = int.parse(parts[2]);
+          
+          ngay = DateTime(year, month, day);
+        } catch (e) {
+          errorMessages.add('Date parse error: Record #$i, Date="$ngayStr", Error: ${e.toString().substring(0, 100)}');
+          continue;
+        }
+        
+        final model = TaskHistoryModel(
+          uid: data['UID'] ?? '',
+          taskId: data['TaskID'] ?? '',
+          ngay: ngay,
+          gio: gioStr,
+          nguoiDung: nguoiDung,
+          ketQua: data['KetQua'] ?? '',
+          chiTiet: data['ChiTiet'] ?? '',
+          chiTiet2: data['ChiTiet2'] ?? '',
+          viTri: data['ViTri'] ?? '',
+          boPhan: data['BoPhan'] ?? '',
+          phanLoai: data['PhanLoai'] ?? '',
+          hinhAnh: data['HinhAnh'] ?? '',
+          giaiPhap: data['GiaiPhap'] ?? '',
+        );
+        
+        taskHistories.add(model);
+      } catch (e) {
+        // Capture the error but don't stop processing
+        final error = e.toString();
+        final recordInfo = json.encode(taskHistoryData[i]).substring(0, 100) + '...';
+        errorMessages.add('Error on record #$i: ${error.substring(0, 100)}\nRecord: $recordInfo');
+        continue;
       }
-    } catch (e) {
-      print('Error fetching interaction history, skipping: $e');
     }
 
-    // Load date range and data after sync
-    await _loadDateRange();
+    // If we found errors, display them
+    if (errorMessages.isNotEmpty) {
+      _showDiagnosticDialog(errorMessages, taskHistoryData);
+    }
     
-    // Refresh the images after history is loaded
+    await dbHelper.batchInsertTaskHistory(taskHistories);
+    
+    await _loadDateRange();
     _loadRecentImages();
     
-    _showSuccess('Đồng bộ lịch sử thành công');
+    _showSuccess('Đồng bộ lịch sử thành công: ${taskHistories.length}/${taskHistoryData.length} records processed');
   } catch (e) {
-    print('Error syncing history: $e');
     _showError('Không thể đồng bộ lịch sử: ${e.toString()}');
   } finally {
     if (mounted) {
@@ -361,6 +396,71 @@ Future<void> _initAppBarVideo() async {
   }
 }
 
+// Add this method to show diagnostic information
+void _showDiagnosticDialog(List<String> errors, List<dynamic> allRecords) {
+  if (mounted) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Diagnostic Information'),
+          content: Container(
+            width: double.maxFinite,
+            height: 400,
+            child: ListView(
+              children: [
+                Text('Found ${errors.length} problematic records:'),
+                Divider(),
+                ...errors.take(10).map((error) => 
+                  Padding(
+                    padding: EdgeInsets.only(bottom: 8),
+                    child: Text(error, style: TextStyle(fontFamily: 'monospace', fontSize: 12)),
+                  )
+                ),
+                if (errors.length > 10)
+                  Text('... and ${errors.length - 10} more errors'),
+                Divider(),
+                ElevatedButton(
+                  child: Text('Export Full Diagnostic Data'),
+                  onPressed: () {
+                    final diagData = {
+                      'errors': errors,
+                      'sampleRecords': allRecords.take(20).toList(),
+                    };
+                    final jsonStr = json.encode(diagData);
+                    // In a real app, you'd save this to a file or share it
+                    //Clipboard.setData(ClipboardData(text: jsonStr));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Diagnostic data copied to clipboard'))
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Close'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+bool _isValidDateFormat(String dateStr) {
+  if (dateStr.isEmpty) return false;
+  
+  // Check for obvious non-date values
+  if (dateStr.contains('TônTThấtTTùng')) return false;
+  
+  // Basic regex to check for YYYY-MM-DD format
+  final dateRegex = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+  return dateRegex.hasMatch(dateStr);
+}
   void _showError(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1033,6 +1133,7 @@ Future<void> _loadRecentImages() async {
     String query = '''
       SELECT * FROM ${DatabaseTables.taskHistoryTable}
       WHERE HinhAnh IS NOT NULL AND HinhAnh != ''
+      AND date(Ngay) IS NOT NULL
     ''';
     List<dynamic> args = [];
 

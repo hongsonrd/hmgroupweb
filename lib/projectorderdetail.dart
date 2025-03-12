@@ -254,146 +254,151 @@ List<OrderMatHangModel> getSortedItems(List<OrderMatHangModel> items) {
          ),
          actions: [
            ElevatedButton(
-             onPressed: () async {
-    List<OrderChiTietModel> itemsToSave = [];
-    List<Map<String, dynamic>> itemsForApi = [];
+ onPressed: () async {
+   showDialog(
+     context: context,
+     barrierDismissible: false,
+     builder: (context) => Center(
+       child: CircularProgressIndicator(),
+     ),
+   );
 
-    // Log initial state
-    print('Current controllers state:');
-    soLuongControllers.forEach((key, controller) {
-      print('ItemID: $key, Quantity: ${controller.text}');
-    });
+   try {
+     List<OrderChiTietModel> itemsToSave = [];
+     List<Map<String, dynamic>> itemsForApi = [];
 
-    // Collect all items that have quantity
-    for (var item in _availableItems) {
-      final soLuong = double.tryParse(soLuongControllers[item.itemId]?.text ?? '') ?? 0;
-      
-      print('Processing item ${item.itemId}: quantity = $soLuong');
-      
-      if (soLuong > 0) {
-        final khachTra = khachTraValues[item.itemId] ?? false;
-        final ghiChu = ghiChuControllers[item.itemId]?.text ?? '';
-        final thanhTien = khachTra ? 0 : (soLuong * (item.donGia ?? 0)).round();
+     print('Current controllers state:');
+     soLuongControllers.forEach((key, controller) {
+       print('ItemID: $key, Quantity: ${controller.text}');
+     });
 
-        final existingItem = _orderItems.firstWhere(
-          (oi) => oi.itemId == item.itemId,
-          orElse: () => OrderChiTietModel(uid: ''),
-        );
+     for (var item in _availableItems) {
+       final soLuong = double.tryParse(soLuongControllers[item.itemId]?.text ?? '') ?? 0;
+       
+       print('Processing item ${item.itemId}: quantity = $soLuong');
+       
+       if (soLuong > 0) {
+         final khachTra = khachTraValues[item.itemId] ?? false;
+         final ghiChu = ghiChuControllers[item.itemId]?.text ?? '';
+         final thanhTien = khachTra ? 0 : (soLuong * (item.donGia ?? 0)).round();
 
-        final uid = existingItem.uid.isNotEmpty ? existingItem.uid : Uuid().v4();
+         final existingItem = _orderItems.firstWhere(
+           (oi) => oi.itemId == item.itemId,
+           orElse: () => OrderChiTietModel(uid: ''),
+         );
 
-        print('Creating/Updating item: ID=${item.itemId}, UID=$uid, Quantity=$soLuong, CustomerReturn=$khachTra');
+         final uid = existingItem.uid.isNotEmpty ? existingItem.uid : Uuid().v4();
 
-        final orderChiTiet = OrderChiTietModel(
-          uid: uid,
-          orderId: widget.orderId,
-          itemId: item.itemId,
-          ten: item.ten,
-          phanLoai: item.phanLoai,
-          donVi: item.donVi,
-          soLuong: soLuong,
-          donGia: item.donGia,
-          khachTra: khachTra,
-          thanhTien: thanhTien,
-          ghiChu: ghiChu,
-        );
+         print('Creating/Updating item: ID=${item.itemId}, UID=$uid, Quantity=$soLuong, CustomerReturn=$khachTra');
 
-        itemsToSave.add(orderChiTiet);
-        itemsForApi.add({
-          ...orderChiTiet.toMap(),
-          'IsUpdate': existingItem.uid.isNotEmpty,
-        });
-      }
-    }
+         final orderChiTiet = OrderChiTietModel(
+           uid: uid,
+           orderId: widget.orderId,
+           itemId: item.itemId,
+           ten: item.ten,
+           phanLoai: item.phanLoai,
+           donVi: item.donVi,
+           soLuong: soLuong,
+           donGia: item.donGia,
+           khachTra: khachTra,
+           thanhTien: thanhTien,
+           ghiChu: ghiChu,
+         );
 
-    print('Items to save: ${itemsToSave.length}');
-    if (itemsToSave.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Vui lòng nhập số lượng cho ít nhất một vật tư'))
-      );
-      return;
-    }
-try {
-  final apiPayload = itemsForApi.map((item) => {
-    'UID': item['UID'],
-    'OrderID': item['OrderID'],
-    'ItemID': item['ItemID'],
-    'Ten': item['Ten'],
-    'PhanLoai': item['PhanLoai'],
-    'GhiChu': item['GhiChu'],
-    'DonVi': item['DonVi'],
-    'SoLuong': item['SoLuong'],
-    'DonGia': item['DonGia'],
-    'KhachTra': item['KhachTra'],
-    'ThanhTien': item['ThanhTien'],
-    'IsUpdate': item['IsUpdate'],
-  }).toList();
+         itemsToSave.add(orderChiTiet);
+         itemsForApi.add({
+           ...orderChiTiet.toMap(),
+           'IsUpdate': existingItem.uid.isNotEmpty,
+         });
+       }
+     }
 
-  final response = await http.post(
-    Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/ordervtthemct'),
-    headers: {'Content-Type': 'application/json'},
-    body: json.encode(apiPayload),
-  );
+     print('Items to save: ${itemsToSave.length}');
+     if (itemsToSave.isEmpty) {
+       Navigator.pop(context);
+       ScaffoldMessenger.of(context).showSnackBar(
+         SnackBar(content: Text('Vui lòng nhập số lượng cho ít nhất một vật tư'))
+       );
+       return;
+     }
+     
+     final apiPayload = itemsForApi.map((item) => {
+       'UID': item['UID'],
+       'OrderID': item['OrderID'],
+       'ItemID': item['ItemID'],
+       'Ten': item['Ten'],
+       'PhanLoai': item['PhanLoai'],
+       'GhiChu': item['GhiChu'],
+       'DonVi': item['DonVi'],
+       'SoLuong': item['SoLuong'],
+       'DonGia': item['DonGia'],
+       'KhachTra': item['KhachTra'],
+       'ThanhTien': item['ThanhTien'],
+       'IsUpdate': item['IsUpdate'],
+     }).toList();
 
-  if (response.statusCode == 200) {
-    final DBHelper dbHelper = DBHelper();
-    
-    // Update items in local DB
-    for (var item in itemsToSave) {
-      final exists = _orderItems.any((oi) => oi.itemId == item.itemId);
-      if (exists) {
-        await dbHelper.updateOrderChiTiet(item.uid, item.toMap());
-      } else {
-        await dbHelper.insertOrderChiTiet(item);
-      }
-    }
+     final response = await http.post(
+       Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/ordervtthemct'),
+       headers: {'Content-Type': 'application/json'},
+       body: json.encode(apiPayload),
+     );
 
-    // Calculate new total
-    final allItems = await dbHelper.getOrderChiTietByOrderId(widget.orderId);
-    final newTotal = allItems.fold<int>(0, (sum, item) => sum + (item.thanhTien ?? 0));
+     if (response.statusCode == 200) {
+       final DBHelper dbHelper = DBHelper();
+       
+       for (var item in itemsToSave) {
+         final exists = _orderItems.any((oi) => oi.itemId == item.itemId);
+         if (exists) {
+           await dbHelper.updateOrderChiTiet(item.uid, item.toMap());
+         } else {
+           await dbHelper.insertOrderChiTiet(item);
+         }
+       }
 
-    // Update order total on server
-    final updateOrderResponse = await http.post(
-      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/ordervtsua'),
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({
-        'OrderID': widget.orderId,
-        'TongTien': newTotal,
-      }),
-    );
+       final allItems = await dbHelper.getOrderChiTietByOrderId(widget.orderId);
+       final newTotal = allItems.fold<int>(0, (sum, item) => sum + (item.thanhTien ?? 0));
 
-    if (updateOrderResponse.statusCode == 200) {
-      // Update order total in local DB
-      await dbHelper.updateOrder(widget.orderId, {'TongTien': newTotal});
-      
-      // Reload all details
-      await _loadOrderDetails();
-      Navigator.pop(context);
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Đã lưu ${itemsToSave.length} vật tư'))
-      );
-    }
-  }
-} catch (e) {
-  print('Error saving items: $e');
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text('Lỗi khi lưu vật tư'),
-      backgroundColor: Colors.red,
-    ),
-  );
-}
-  },
-  style: ElevatedButton.styleFrom(
-               backgroundColor: Colors.green,
-               foregroundColor: Colors.white,
-             ),
-             child: Padding(
-               padding: EdgeInsets.symmetric(horizontal: 16),
-               child: Text('LƯU', style: TextStyle(fontWeight: FontWeight.bold)),
-             ),
-           ),
+       final updateOrderResponse = await http.post(
+         Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/ordervtsua'),
+         headers: {'Content-Type': 'application/json'},
+         body: json.encode({
+           'OrderID': widget.orderId,
+           'TongTien': newTotal,
+         }),
+       );
+
+       if (updateOrderResponse.statusCode == 200) {
+         await dbHelper.updateOrder(widget.orderId, {'TongTien': newTotal});
+         
+         await _loadOrderDetails();
+         Navigator.pop(context);
+         Navigator.pop(context);
+         
+         ScaffoldMessenger.of(context).showSnackBar(
+           SnackBar(content: Text('Đã lưu ${itemsToSave.length} vật tư'))
+         );
+       }
+     }
+   } catch (e) {
+     Navigator.pop(context);
+     print('Error saving items: $e');
+     ScaffoldMessenger.of(context).showSnackBar(
+       SnackBar(
+         content: Text('Lỗi khi lưu vật tư'),
+         backgroundColor: Colors.red,
+       ),
+     );
+   }
+ },
+ style: ElevatedButton.styleFrom(
+   backgroundColor: Colors.green,
+   foregroundColor: Colors.white,
+ ),
+ child: Padding(
+   padding: EdgeInsets.symmetric(horizontal: 16),
+   child: Text('LƯU', style: TextStyle(fontWeight: FontWeight.bold)),
+ ),
+),
            SizedBox(width: 16),
          ],
        ),
