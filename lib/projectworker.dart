@@ -39,7 +39,7 @@ class _ProjectWorkerState extends State<ProjectWorker> {
   late String _username;
   Map<String, String> _staffNames = {};
   List<String> _debugLogs = [];
-bool _showDebugOverlay = false;
+bool _showDebugOverlay = true;
 Map<String, Color> _staffColors = {};
 List<Color> _availableColors = [
   Colors.yellow.shade100,
@@ -486,66 +486,69 @@ final months = await dbHelper.rawQuery(
  setState(() => _isLoading = false);
 }
 Future<void> _saveChanges() async {
-    FocusScope.of(context).unfocus();
+  FocusScope.of(context).unfocus();
+  
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => WillPopScope(
+      onWillPop: () async => false,
+      child: Dialog(
+        child: Container(
+          padding: EdgeInsets.all(12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                height: 24, 
+                width: 24, 
+                child: CircularProgressIndicator(strokeWidth: 2)
+              ),
+              SizedBox(width: 12),
+              Text('Đang lưu...', style: TextStyle(fontSize: 14)),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 
   try {
     final dbHelper = DBHelper();
-    
-    // Desktop-specific debugging
     if (kIsWeb || Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       debugLog('Running on desktop platform');
-      debugLog('Modified records count: ${_modifiedRecords.length}');
-      debugLog('New records count: ${_newRecords.length}');
+      debugLog('Modified: ${_modifiedRecords.length}, New: ${_newRecords.length}');
     }
     
-    // First process existing modified records
     for (var entry in _modifiedRecords.entries) {
       final record = entry.value;
       final uid = record['UID'] as String;
-      
       final updates = Map<String, dynamic>.from(record);
       updates.remove('UID');
-      
-      debugLog('Sending modified record to server with UID: $uid');
-      debugLog('Request body: ${json.encode(updates)}');
-      
+      debugLog('Sending modified record: $uid');
       final response = await http.put(
         Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongsua/$uid'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(updates)
       ).timeout(const Duration(seconds: 30));
-      
-      debugLog('Server response for modified record $uid: ${response.statusCode} - ${response.body}');
-      
       if (response.statusCode != 200) {
-        throw Exception('Failed to update record: ${response.body}');
+        throw Exception('Failed to update: ${response.body}');
       }
-
       await dbHelper.updateChamCongCN(uid, updates);
-      debugLog('Local database updated for modified UID: $uid');
     }
     
-    // Then process new records
     for (var entry in _newRecords.entries) {
       final uid = entry.key;
       final record = entry.value;
-      
-      debugLog('Sending new record to server with UID: $uid');
-      debugLog('Request body: ${json.encode(record)}');
-      
+      debugLog('Sending new record: $uid');
       final response = await http.post(
         Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamconggui'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(record)
       ).timeout(const Duration(seconds: 30));
-      
-      debugLog('Server response for new record $uid: ${response.statusCode} - ${response.body}');
-      
       if (response.statusCode != 200) {
-        throw Exception('Failed to add new record: ${response.body}');
+        throw Exception('Failed to add: ${response.body}');
       }
-      
-      // Convert to model and save to local DB
       final chamCongModel = ChamCongCNModel(
         uid: record['UID'] as String,
         maNV: record['MaNV'] as String,
@@ -564,30 +567,30 @@ Future<void> _saveChanges() async {
         congLe: double.tryParse(record['CongLe'].toString()) ?? 0,
       );
       await dbHelper.insertChamCongCN(chamCongModel);
-      debugLog('Local database updated for new UID: $uid');
     }
 
-    // Add a small delay before refreshing data
-    await Future.delayed(const Duration(milliseconds: 500));
-    
+    await Future.delayed(const Duration(milliseconds: 300));
     setState(() {
       _modifiedRecords.clear();
       _newRecords.clear();
-      debugLog('Cleared records caches');
     });
-
-    debugLog('Loading fresh attendance data...');
     await _loadAttendanceData();
+    
+    if (mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
     
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Đã lưu thay đổi thành công'))
       );
     }
-
   } catch (e) {
-    debugLog('Error in _saveChanges: $e');
-    _showError('Lỗi khi lưu dữ liệu: ${e.toString()}');
+    if (mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+    debugLog('Error: $e');
+    _showError('Lỗi khi lưu: ${e.toString()}');
   }
 }
 Future<void> _addNewEmployee() async {
