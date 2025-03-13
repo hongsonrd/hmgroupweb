@@ -16,6 +16,7 @@ import 'dart:math' as math;
 import 'floating_draggable_icon.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'package:share_plus/share_plus.dart';
 
 class ProjectDirectorScreen extends StatefulWidget {
   const ProjectDirectorScreen({Key? key}) : super(key: key);
@@ -69,70 +70,6 @@ class _ProjectDirectorScreenState extends State<ProjectDirectorScreen> {
     _secondSyncDelayTimer?.cancel();
     super.dispose();
   }
-  Future<void> _sendImageToAI(String imageUrl) async {
-  try {
-    // Show loading dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text("Đang tải hình ảnh...", textAlign: TextAlign.center),
-            ],
-          ),
-        );
-      },
-    );
-    
-    // Download the image from URL
-    final response = await http.get(Uri.parse(imageUrl));
-    
-    // Close the loading dialog
-    if (Navigator.canPop(context)) {
-      Navigator.of(context).pop();
-    }
-    
-    if (response.statusCode == 200) {
-      // Create a temporary file to store the image
-      final tempDir = await getTemporaryDirectory();
-      final tempFile = File('${tempDir.path}/ai_analysis_${DateTime.now().millisecondsSinceEpoch}.jpg');
-      await tempFile.writeAsBytes(response.bodyBytes);
-      
-      // Now use the FloatingDraggableIcon directly - the key approach wasn't working
-      final FloatingDraggableIconState? iconState = 
-          FloatingDraggableIcon.globalKey.currentState;
-          
-      if (iconState != null) {
-        // This method already exists in your code and works correctly
-        iconState.analyzeImageWithAI(tempFile);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Không thể kết nối với AI. Vui lòng thử lại sau.')),
-        );
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Không thể tải hình ảnh: ${response.statusCode}')),
-      );
-    }
-  } catch (e) {
-    // Make sure to close the dialog if there's an error
-    if (Navigator.canPop(context)) {
-      Navigator.of(context).pop();
-    }
-    
-    print('Error sending image to AI: $e');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Lỗi: ${e.toString()}')),
-    );
-  }
-}
 Future<void> _initAppBarVideo() async {
   try {
     // Load video from assets
@@ -1500,18 +1437,75 @@ Widget _buildRecentImagesGrid() {
                                            style: TextStyle(fontSize: 10),
                                          ),
                                          Text(
-                                           '$totalImagesAtLocation ảnh',
-                                           style: TextStyle(fontSize: 10),
-                                         ),
-                                       ],
-                                     ),
-                                   ],
-                                 ),
-                               ),
-                             ],
-                           ),
-                         ),
-                       );
+                    '$totalImagesAtLocation ảnh',
+                    style: TextStyle(fontSize: 10),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        
+        // NEW CODE - Add the buttons
+        Padding(
+          padding: EdgeInsets.only(left: 8, right: 8, bottom: 8),
+          child: Row(
+            children: [
+              // Lưu button
+Expanded(
+  child: ElevatedButton(
+    onPressed: () {
+      // Get the image URL from the item
+      final imageUrl = item['HinhAnh'] as String;
+      _saveImageToDevice(imageUrl);
+    },
+    child: Text('Lưu', style: TextStyle(fontSize: 10)),
+    style: ElevatedButton.styleFrom(
+      backgroundColor: Colors.blue,
+      foregroundColor: Colors.white,
+      padding: EdgeInsets.symmetric(vertical: 4),
+      minimumSize: Size(0, 25),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(4),
+      ),
+    ),
+  ),
+),
+              SizedBox(width: 8),
+              // AI button
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    // Get the image URL
+                    final imageUrl = item['HinhAnh'] as String;
+                    
+                    // Download the image first
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Đang chuẩn bị ảnh cho AI...'))
+                    );
+                    
+                    // Create a temporary file from the URL
+                    _downloadAndProcessImageWithAI(imageUrl);
+                  },
+                  child: Text('AI', style: TextStyle(fontSize: 10)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.purple,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(vertical: 4),
+                    minimumSize: Size(0, 25),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  ),
+);
                      },
                    ),
                  ),
@@ -1526,7 +1520,84 @@ Widget _buildRecentImagesGrid() {
    }).toList(),
  );
 }
-
+Future<void> _downloadAndProcessImageWithAI(String imageUrl) async {
+  try {
+    // Create temporary directory
+    final tempDir = await getTemporaryDirectory();
+    final tempFilePath = '${tempDir.path}/temp_img_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final file = File(tempFilePath);
+    
+    // Download the image
+    final response = await http.get(Uri.parse(imageUrl));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to download image');
+    }
+    
+    // Save to file
+    await file.writeAsBytes(response.bodyBytes);
+    
+    // Get the FloatingDraggableIconState directly
+    final iconState = FloatingDraggableIcon.globalKey.currentState;
+    if (iconState != null) {
+      // Call the public method to open the chat
+      iconState.openChat();
+      
+      // Allow some time for the chat window to initialize
+      await Future.delayed(Duration(milliseconds: 300));
+      
+      // Now analyze the image
+      iconState.analyzeImageWithAI(file);
+    } else {
+      // Fallback message if state can't be found
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Không thể kết nối với AI. Vui lòng thử lại sau.'))
+      );
+    }
+  } catch (e) {
+    print('Error downloading and processing image: $e');
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi: Không thể xử lý ảnh. $e'))
+      );
+    }
+  }
+}
+Future<void> _saveImageToDevice(String imageUrl) async {
+  try {
+    // Show loading indicator
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Đang tải ảnh...'))
+    );
+    
+    // Download the image
+    final response = await http.get(Uri.parse(imageUrl));
+    if (response.statusCode != 200) {
+      throw Exception('Không thể tải ảnh');
+    }
+    
+    // Let's use Share.shareXFiles instead which lets the user choose where to save
+    final tempDir = await getTemporaryDirectory();
+    final tempFile = File('${tempDir.path}/hoanmy_image_${DateTime.now().millisecondsSinceEpoch}.jpg');
+    await tempFile.writeAsBytes(response.bodyBytes);
+    
+    // Share the file which lets the user decide where to save it
+    await Share.shareXFiles(
+      [XFile(tempFile.path)],
+      text: 'Hình ảnh từ Hoàn Mỹ',
+    );
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Đã tải ảnh thành công. Bạn có thể lưu ảnh này vào thiết bị qua tùy chọn chia sẻ.'))
+    );
+  } catch (e) {
+    print('Error saving image: $e');
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi: Không thể lưu ảnh. $e'))
+      );
+    }
+  }
+}
 List<String> _getUniquePersonsInGroup(List<Map<String, dynamic>> images) {
  final Set<String> persons = {};
  for (var img in images) {
@@ -1668,120 +1739,100 @@ void _showImageDetailsDialog(Map<String, dynamic> selectedItem) {
   showDialog(
     context: context,
     builder: (context) => Dialog(
-      // Make sure dialog can be dismissed by tapping outside
-      child: GestureDetector(
-        onTap: () {}, // Prevents taps from passing through to dismiss
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppBar(
-              title: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(nguoiDung),
-                  Text(
-                    '${_formatDateTime(ngay)} - ${samePersonSameDayImages.length} ảnh',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                ],
-              ),
-              // Close button should definitely be visible
-              leading: IconButton(
-                icon: Icon(Icons.arrow_back),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-              automaticallyImplyLeading: true,
-              actions: [
-                IconButton(
-                  icon: Icon(Icons.close),
-                  onPressed: () => Navigator.of(context).pop(),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AppBar(
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(nguoiDung),
+                Text(
+                  '${_formatDateTime(ngay)} - ${samePersonSameDayImages.length} ảnh',
+                  style: TextStyle(fontSize: 12),
                 ),
               ],
             ),
-            // Limit height to prevent overflow
-            Container(
-              height: MediaQuery.of(context).size.height * 0.6,
-              child: Column(
-                children: [
-                  // Main image with details
-                  Expanded(
-                    flex: 3,
-                    child: InteractiveViewer(
-                      panEnabled: true,
-                      boundaryMargin: EdgeInsets.all(20),
-                      minScale: 0.5,
-                      maxScale: 4,
-                      child: _buildNetworkImage(selectedItem['HinhAnh'] as String, BoxFit.contain),
-                    ),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Text(
-                      selectedItem['ChiTiet'] as String? ?? 'No details',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  
-                  // Bottom row with close button
-                  Padding(
-                    padding: EdgeInsets.only(bottom: 8.0),
-                    child: ElevatedButton(
-                      child: Text('Đóng'),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ),
-                  
-                  // Horizontal scroll of other images
-                  Container(
-                    height: 100,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: samePersonSameDayImages.length,
-                      itemBuilder: (context, index) {
-                        final item = samePersonSameDayImages[index];
-                        final isSelected = item['TaskID'] == selectedItem['TaskID'];
-                        
-                        return GestureDetector(
-                          onTap: () {
-                            // Close this dialog and open a new one with the selected image
-                            Navigator.of(context).pop();
-                            _showImageDetailsDialog(item);
-                          },
-                          child: Container(
-                            width: 100,
-                            margin: EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: isSelected ? Colors.blue : Colors.transparent,
-                                width: 2,
-                              ),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Column(
-                              children: [
-                                Expanded(
-                                  child: _buildNetworkImage(item['HinhAnh'] as String, BoxFit.cover),
-                                ),
-                                Padding(
-                                  padding: EdgeInsets.all(2),
-                                  child: Text(
-                                    item['Gio'] as String? ?? '',
-                                    style: TextStyle(fontSize: 10),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
+            automaticallyImplyLeading: false,
+            actions: [
+              IconButton(
+                icon: Icon(Icons.close),
+                onPressed: () => Navigator.of(context).pop(),
               ),
+            ],
+          ),
+          Expanded(
+            child: Column(
+              children: [
+                // Main image with details
+                Expanded(
+                  flex: 3,
+                  child: InteractiveViewer(
+                    panEnabled: true,
+                    boundaryMargin: EdgeInsets.all(20),
+                    minScale: 0.5,
+                    maxScale: 4,
+                    child: _buildNetworkImage(selectedItem['HinhAnh'] as String, BoxFit.contain),
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Text(
+                    selectedItem['ChiTiet'] as String? ?? 'No details',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                
+                // Horizontal scroll of other images by same person on same day
+                Container(
+                  height: 100,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: samePersonSameDayImages.length,
+                    itemBuilder: (context, index) {
+                      final item = samePersonSameDayImages[index];
+                      final isSelected = item['TaskID'] == selectedItem['TaskID'];
+                      
+                      return GestureDetector(
+                        onTap: () {
+                          // Close this dialog and open a new one with the selected image
+                          Navigator.of(context).pop();
+                          _showImageDetailsDialog(item);
+                        },
+                        child: Container(
+                          width: 100,
+                          margin: EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: isSelected ? Colors.blue : Colors.transparent,
+                              width: 2,
+                            ),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Column(
+                            children: [
+                              Expanded(
+                                child: _buildNetworkImage(item['HinhAnh'] as String, BoxFit.cover),
+                              ),
+                              Padding(
+                                padding: EdgeInsets.all(2),
+                                child: Text(
+                                  item['Gio'] as String? ?? '',
+                                  style: TextStyle(fontSize: 10),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     ),
   );
@@ -1790,59 +1841,32 @@ Widget _buildNetworkImage(String url, BoxFit fit) {
   // Clean the URL if needed
   String cleanUrl = url.trim();
   
-  return Column(
-    children: [
-      Expanded(
-        child: Image.network(
-          cleanUrl,
-          fit: fit,
-          errorBuilder: (context, error, stackTrace) {
-            print('Error loading image: $error');
-            return Container(
-              color: Colors.grey[300],
-              child: Center(
-                child: Icon(Icons.broken_image, color: Colors.red[400]),
-              ),
-            );
-          },
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return Container(
-              color: Colors.grey[200],
-              child: Center(
-                child: CircularProgressIndicator(
-                  value: loadingProgress.expectedTotalBytes != null
-                      ? loadingProgress.cumulativeBytesLoaded / 
-                        loadingProgress.expectedTotalBytes!
-                      : null,
-                ),
-              ),
-            );
-          },
+  return Image.network(
+    cleanUrl,
+    fit: fit,
+    errorBuilder: (context, error, stackTrace) {
+      print('Error loading image: $error');
+      return Container(
+        color: Colors.grey[300],
+        child: Center(
+          child: Icon(Icons.broken_image, color: Colors.red[400]),
         ),
-      ),
-      // Add analyze button
-      Container(
-        width: double.infinity,
-        color: Colors.blue.withOpacity(0.1),
-        child: TextButton(
-          onPressed: () => _sendImageToAI(cleanUrl),
-          style: TextButton.styleFrom(
-            padding: EdgeInsets.symmetric(vertical: 4),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            visualDensity: VisualDensity.compact,
-          ),
-          child: Text(
-            'Phân tích',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: Colors.blue[700],
-            ),
+      );
+    },
+    loadingBuilder: (context, child, loadingProgress) {
+      if (loadingProgress == null) return child;
+      return Container(
+        color: Colors.grey[200],
+        child: Center(
+          child: CircularProgressIndicator(
+            value: loadingProgress.expectedTotalBytes != null
+                ? loadingProgress.cumulativeBytesLoaded / 
+                  loadingProgress.expectedTotalBytes!
+                : null,
           ),
         ),
-      ),
-    ],
+      );
+    },
   );
 }
   Widget _buildDatePicker({

@@ -104,6 +104,18 @@ class FloatingDraggableIconState extends State<FloatingDraggableIcon> with Ticke
 
     _checkAndClearHistory();
   }
+  
+// In FloatingDraggableIconState class
+Future<void> updateLoginStatus() async {
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  String username = prefs.getString('username') ?? '';
+  
+  final chatState = FloatingDraggableIcon.chatWindowKey.currentState;
+  if (chatState != null) {
+    // Instead of using updateUsername, directly call the existing _loadUsername method
+    chatState._loadUsername();
+  }
+}
  Future<void> _checkAndClearHistory() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String lastClearDate = prefs.getString('last_clear_date') ?? '';
@@ -1128,7 +1140,7 @@ Widget _buildChatHistory() {
           color: Colors.green[100]!.withOpacity(0.7),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Text('Đang trả lời${'.' * _loadingDots}'),
+        child: Text('✨⚡🌟💫${'.' * _loadingDots}'),
       ),
     );
   }
