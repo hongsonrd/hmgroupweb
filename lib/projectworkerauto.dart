@@ -13,7 +13,7 @@ import 'package:share_plus/share_plus.dart';
 import 'export_helper.dart';
 import 'projectworkerphep.dart';
 import 'http_client.dart';
-
+import 'package:dropdown_search/dropdown_search.dart';
 class ProjectWorkerAuto extends StatefulWidget {
   final String selectedBoPhan;
   final String username;
@@ -1816,52 +1816,95 @@ String _extractCongThuongChuBase(String? value) {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.purple,
-        title: Row(
-          children: [
-            Expanded(
-              child: DropdownButton<String>(
-                value: _selectedDepartment,
-                items: _departments.map((dept) => 
-                  DropdownMenuItem(value: dept, child: Text(dept))
-                ).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedDepartment = value;
-                    _loadAttendanceData();
-                  });
-                },
-                style: TextStyle(color: Colors.white),
-                dropdownColor: Theme.of(context).primaryColor,
-                isExpanded: true,
+  backgroundColor: Colors.purple,
+  title: Row(
+    children: [
+      Expanded(
+        flex: 3, // Give more space to the project dropdown
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          padding: EdgeInsets.symmetric(horizontal: 8),
+          child: DropdownButtonHideUnderline(
+            child: DropdownSearch<String>(
+              items: _departments,
+              selectedItem: _selectedDepartment,
+              onChanged: (value) {
+                setState(() {
+                  _selectedDepartment = value;
+                  _loadAttendanceData();
+                });
+              },
+              dropdownDecoratorProps: DropDownDecoratorProps(
+                dropdownSearchDecoration: InputDecoration(
+                  hintText: "Chọn dự án",
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              popupProps: PopupProps.dialog(
+                showSearchBox: true,
+                searchFieldProps: TextFieldProps(
+                  decoration: InputDecoration(
+                    hintText: "Tìm kiếm dự án...",
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                title: Container(
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(8),
+                      topRight: Radius.circular(8),
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      'Chọn dự án',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
-            SizedBox(width: 16),
-            Expanded(
-              child: DropdownButton<String>(
-                value: _selectedMonth,
-                items: _availableMonths.map((month) => DropdownMenuItem(
-                  value: month,
-                  child: Text(DateFormat('MM/yyyy').format(DateTime.parse('$month-01')))
-                )).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedMonth = value;
-                    _loadAttendanceData();
-                  });
-                },
-                style: TextStyle(color: Colors.white),
-                dropdownColor: Theme.of(context).primaryColor,
-                isExpanded: true,
-              ),
-            ),
-          ],
-        ),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.of(context).pop(),
+          ),
         ),
       ),
+      SizedBox(width: 16),
+      Expanded(
+        flex: 2,
+        child: DropdownButton<String>(
+          value: _selectedMonth,
+          items: _availableMonths.map((month) => DropdownMenuItem(
+            value: month,
+            child: Text(DateFormat('MM/yyyy').format(DateTime.parse('$month-01')))
+          )).toList(),
+          onChanged: (value) {
+            setState(() {
+              _selectedMonth = value;
+              _loadAttendanceData();
+            });
+          },
+          style: TextStyle(color: Colors.white),
+          dropdownColor: Theme.of(context).primaryColor,
+          isExpanded: true,
+        ),
+      ),
+    ],
+  ),
+  leading: IconButton(
+    icon: Icon(Icons.arrow_back, color: Colors.white),
+    onPressed: () => Navigator.of(context).pop(),
+  ),
+),
       body: Stack(
         children: [
           _isLoading 

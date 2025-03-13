@@ -14,6 +14,9 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:image/image.dart' as img;
+import 'dart:typed_data';
+import 'package:clipboard/clipboard.dart';
 
 class FloatingDraggableIcon extends StatefulWidget {
   // Add static key for external access
@@ -47,6 +50,16 @@ class FloatingDraggableIconState extends State<FloatingDraggableIcon> with Ticke
       }
     });
   }
+  void openChat() {
+  setState(() {
+    _isChatOpen = true;
+  });
+  
+  // Also scroll to bottom when opening
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    FloatingDraggableIcon.chatWindowKey.currentState?.scrollToBottom();
+  });
+}
 @override
   void initState() {
     super.initState();
@@ -281,11 +294,16 @@ List<Map<String, dynamic>> _chatHistory = [];
   final ScrollController _scrollController = ScrollController();
   bool _isWaitingForResponse = false;
   int _loadingDots = 0;
+  
+  File? _firstImage;
   set image(File? value) {
-    setState(() {
-      _image = value;
-    });
-  }
+  setState(() {
+    _image = value;
+    if (value != null) {
+      _firstImage = value;
+    }
+  });
+}
 
   set messageText(String value) {
     _textController.text = value;
@@ -315,6 +333,88 @@ void initState() {
   
   _animationController.repeat(reverse: true);
   _initTts();
+}
+
+void setImageFromMemory(Uint8List imageBytes) async {
+  final tempDir = await getTemporaryDirectory();
+  final tempFile = File('${tempDir.path}/memory_image_${DateTime.now().millisecondsSinceEpoch}.jpg');
+  await tempFile.writeAsBytes(imageBytes);
+  setState(() {
+    _image = tempFile;
+  });
+  scrollToBottom();
+}
+static void sendImageToChat(BuildContext context, {
+  required File imageFile,
+  String? prompt,
+}) {
+  // First ensure the chat is open
+  final iconState = FloatingDraggableIcon.globalKey.currentState;
+  if (iconState != null) {
+    iconState.setState(() {
+      iconState._isChatOpen = true;
+    });
+    
+    // After ensuring chat is open, set the image
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final chatState = FloatingDraggableIcon.chatWindowKey.currentState;
+      if (chatState != null) {
+        chatState.setState(() {
+          chatState._image = imageFile;
+        });
+        
+        // If prompt is provided, set it
+        if (prompt != null) {
+          chatState._textController.text = prompt;
+        }
+        
+        chatState.scrollToBottom();
+      }
+    });
+  }
+}
+Future<void> _getImageFromClipboard() async {
+  try {
+    // Show loading indicator
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Kiểm tra clipboard...'))
+    );
+
+    // In Flutter, we can check if clipboard has text
+    final clipboardData = await FlutterClipboard.paste();
+    
+    // Check if it's a file path that might be an image
+    if (clipboardData.isNotEmpty && 
+        (clipboardData.endsWith('.jpg') || 
+         clipboardData.endsWith('.jpeg') || 
+         clipboardData.endsWith('.png'))) {
+      
+      final file = File(clipboardData);
+      if (await file.exists()) {
+        setState(() {
+          _image = file;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Đã tìm thấy ảnh trong clipboard'))
+        );
+        return;
+      }
+    }
+    
+    // If we get here, no image was found
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Không tìm thấy ảnh trong clipboard'))
+    );
+  } catch (e) {
+    print('Error getting image from clipboard: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Không thể truy cập clipboard'))
+    );
+  }
+}
+void _handleImageDragDrop(DragUpdateDetails details) {
+  // This would be implemented in your platform-specific code
+  // For web, you could use a plugin like file_picker_cross
 }
 String _processTextFormatting(String text) {
   String displayText = text;
@@ -457,20 +557,21 @@ Future<void> _speak(String text) async {
   }).toList();
   await prefs.setString('chat_history', jsonEncode(storableHistory));
 }
-void _addUserMessage(String message, {File? image}) {
-    setState(() {
-      if (image != null) {
-        _chatHistory.add({
-          "user": message,
-          "image": image.path  // Store the image path
-        });
-      } else {
-        _chatHistory.add({"user": message});
-      }
-      _saveChatHistory();
-    });
-    _scrollToBottom();
-  }
+void _addUserMessage(String message, {File? image, String? displayMessage}) {
+  setState(() {
+    if (image != null) {
+      _chatHistory.add({
+        "user": displayMessage ?? message, 
+        "image": image.path,
+        "original_message": message 
+      });
+    } else {
+      _chatHistory.add({"user": message});
+    }
+    _saveChatHistory();
+  });
+  _scrollToBottom();
+}
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -545,11 +646,14 @@ Future<void> _sendMessage() async {
   var stream = http.ByteStream(currentImage.openRead());
   var length = await currentImage.length();
   
+  // Log the file size for debugging
+  print('Sending image with size: $length bytes');
+  
   var multipartFile = http.MultipartFile(
     'file',
     stream,
     length,
-    filename: currentImage.path.split('/').last,
+    filename: 'image.jpg', // Use a consistent filename
     contentType: MediaType('image', 'jpeg')
   );
   
@@ -738,6 +842,254 @@ Widget _buildHeader() {
       ],
     ),
   );
+}
+Future<void> _processImageMessage(String message, File currentImage) async {
+  try {
+    final randomIndex = math.Random().nextInt(urlList.length);
+    String randomUrl = urlList[randomIndex];
+    
+    // Image with text scenario
+    randomUrl = randomUrl.replaceAll('/generate', '/generate_with_image');
+    
+    print('Sending request to: $randomUrl');
+    
+    var request = http.MultipartRequest('POST', Uri.parse(randomUrl));
+    
+    // Add file
+    var stream = http.ByteStream(currentImage.openRead());
+    var length = await currentImage.length();
+    
+    // Log the file size for debugging
+    print('Sending image with size: $length bytes');
+    
+    var multipartFile = http.MultipartFile(
+      'file',
+      stream,
+      length,
+      filename: 'image.jpg',
+      contentType: MediaType('image', 'jpeg')
+    );
+    
+    request.files.add(multipartFile);
+    request.fields['prompt'] = message;
+    
+    print('Sending image with prompt: $message');
+    
+    try {
+      var response = await request.send();
+      var responseData = await http.Response.fromStream(response);
+      
+      print('Response status: ${responseData.statusCode}');
+      print('Response body: ${responseData.body}');
+      
+      setState(() {
+        _isWaitingForResponse = false;
+      });
+      
+      if (responseData.statusCode == 200) {
+        var data = jsonDecode(responseData.body);
+        _addAIMessage(data['response']);
+        
+        if (_random.nextDouble() < 0.2) {
+          _addFollowUpQuestion();
+        }
+      } else {
+        print('Server error: ${responseData.statusCode} - ${responseData.body}');
+        _addAIMessage("Xin lỗi, tôi đang gặp sự cố kỹ thuật. Vui lòng thử lại sau.");
+      }
+    } catch (e) {
+      print('Error sending image: $e');
+      _addAIMessage("Xin lỗi, có lỗi khi gửi ảnh. Vui lòng thử lại sau.");
+      setState(() {
+        _isWaitingForResponse = false;
+      });
+    }
+  } catch (e) {
+    print('Error in _processImageMessage: $e');
+    setState(() {
+      _isWaitingForResponse = false;
+    });
+    _addAIMessage("Xin lỗi, có lỗi xảy ra. Vui lòng kiểm tra kết nối mạng và thử lại.");
+  }
+}
+Future<File> _combineImages(File firstImage, File secondImage) async {
+  // Decode images
+  Uint8List firstBytes = await firstImage.readAsBytes();
+  Uint8List secondBytes = await secondImage.readAsBytes();
+  
+  img.Image? image1 = img.decodeImage(firstBytes);
+  img.Image? image2 = img.decodeImage(secondBytes);
+  
+  if (image1 == null || image2 == null) {
+    throw Exception('Failed to decode images');
+  }
+  
+  // Resize images to a more modest size to reduce file size
+  final targetHeight = 300; // Reduced from 400
+  final aspectRatio1 = image1.width / image1.height;
+  final aspectRatio2 = image2.width / image2.height;
+  
+  final newWidth1 = (targetHeight * aspectRatio1).round();
+  final newWidth2 = (targetHeight * aspectRatio2).round();
+  
+  img.Image resized1 = img.copyResize(image1, width: newWidth1, height: targetHeight);
+  img.Image resized2 = img.copyResize(image2, width: newWidth2, height: targetHeight);
+  
+  // Create combined image
+  final combinedWidth = newWidth1 + newWidth2 + 2; // +2 for the divider
+  final combinedImage = img.Image(width: combinedWidth, height: targetHeight);
+  
+  // Fill with white background
+  img.fill(combinedImage, color: img.ColorRgb8(255, 255, 255));
+  
+  // Copy first image to the left
+  img.compositeImage(combinedImage, resized1, dstX: 0, dstY: 0);
+  
+  // Draw black divider line (2px)
+  for (int y = 0; y < targetHeight; y++) {
+    combinedImage.setPixel(newWidth1, y, img.ColorRgb8(0, 0, 0));
+    combinedImage.setPixel(newWidth1 + 1, y, img.ColorRgb8(0, 0, 0));
+  }
+  
+  // Copy second image to the right
+  img.compositeImage(combinedImage, resized2, dstX: newWidth1 + 2, dstY: 0);
+  
+  // Save the combined image with lower quality to reduce file size
+  final directory = await getTemporaryDirectory();
+  final outputFile = File('${directory.path}/combined_${DateTime.now().millisecondsSinceEpoch}.jpg');
+  
+  // Use lower quality (85 instead of default 100) to reduce file size
+  await outputFile.writeAsBytes(img.encodeJpg(combinedImage, quality: 85));
+  
+  print('Combined image created: ${outputFile.path}');
+  print('Combined image size: ${await outputFile.length()} bytes');
+  
+  return outputFile;
+}
+Future<void> _pickSecondImage() async {
+  // First make sure we have a valid first image
+  if (_image == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Vui lòng chọn ảnh đầu tiên trước khi so sánh')),
+    );
+    return;
+  }
+  
+  // Store the first image
+  final File firstImage = _image!;
+  
+  try {
+    // Pick second image
+    final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+    
+    if (pickedFile == null) return; // User canceled
+    
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              SizedBox(
+                width: 24, height: 24,
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8C52FF)),
+                ),
+              ),
+              SizedBox(width: 16),
+              Text("Đang xử lý"),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              LinearProgressIndicator(),
+              SizedBox(height: 16),
+              Text("Đang kết hợp hai hình ảnh...", textAlign: TextAlign.center),
+            ],
+          ),
+        );
+      }
+    );
+    
+    File secondImage = File(pickedFile.path);
+    
+    // Create combined image
+    File combinedImage = await _combineImages(firstImage, secondImage);
+    
+    // Close loading dialog
+    if (context.mounted) Navigator.of(context).pop();
+    
+    // Important - keep a reference to the combinedImage
+    final File finalImage = combinedImage;
+    
+    // Define the prompt
+    final String fullPrompt = 'So sánh chất lượng vệ sinh trước và sau trong ảnh này trên thang điểm 10, nếu dưới 7 điểm thì gợi ý hoá chất/ máy móc từ danh sách để xử lý. Bên trái là trước, bên phải là sau.';
+    
+    // Add user message first
+    _addUserMessage(fullPrompt, image: finalImage, displayMessage: "Đánh giá trước sau");
+    
+    // Set up for the response
+    setState(() {
+      _isWaitingForResponse = true;
+      _image = null; // Clear the image reference
+    });
+    
+    // Send request directly to avoid any state issues
+    try {
+      final randomIndex = math.Random().nextInt(urlList.length);
+      String randomUrl = urlList[randomIndex].replaceAll('/generate', '/generate_with_image');
+      
+      var request = http.MultipartRequest('POST', Uri.parse(randomUrl));
+      
+      var stream = http.ByteStream(finalImage.openRead());
+      var length = await finalImage.length();
+      
+      var multipartFile = http.MultipartFile(
+        'file',
+        stream,
+        length,
+        filename: 'image.jpg',
+        contentType: MediaType('image', 'jpeg')
+      );
+      
+      request.files.add(multipartFile);
+      request.fields['prompt'] = fullPrompt;
+      
+      print('Sending image with prompt: $fullPrompt');
+      
+      var response = await request.send();
+      var responseData = await http.Response.fromStream(response);
+      
+      setState(() {
+        _isWaitingForResponse = false;
+      });
+      
+      if (responseData.statusCode == 200) {
+        var data = jsonDecode(responseData.body);
+        _addAIMessage(data['response']);
+      } else {
+        _addAIMessage("Xin lỗi, tôi đang gặp sự cố kỹ thuật. Vui lòng thử lại sau.");
+      }
+    } catch (e) {
+      setState(() {
+        _isWaitingForResponse = false;
+      });
+      _addAIMessage("Xin lỗi, có lỗi khi gửi ảnh. Vui lòng thử lại sau.");
+    }
+    
+  } catch (e) {
+    // Handle errors
+    if (context.mounted) {
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Có lỗi xảy ra: $e')),
+      );
+    }
+  }
 }
 Widget _buildChatHistory() {
   return Expanded(
@@ -1105,6 +1457,39 @@ bool hasSingleAsterisk = text.substring(math.max(0, match.start - 1), match.star
     });
     _saveChatHistory();
   }
+  void _showImageSourceOptions() {
+  showModalBottomSheet(
+    context: context,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (context) => Container(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: Icon(Icons.photo_library, color: Color(0xFF8C52FF)),
+            title: Text('Chọn từ thư viện'),
+            onTap: () {
+              Navigator.pop(context);
+              _pickImage();
+            },
+          ),
+          Divider(),
+          ListTile(
+            leading: Icon(Icons.content_paste, color: Color(0xFF8C52FF)),
+            title: Text('Dán từ clipboard'),
+            onTap: () {
+              Navigator.pop(context);
+              _getImageFromClipboard();
+            },
+          ),
+        ],
+      ),
+    ),
+  );
+}
 Widget _buildChatControl(double bottomPadding) {
   return Container(
     padding: EdgeInsets.only(
@@ -1149,10 +1534,12 @@ Widget _buildChatControl(double bottomPadding) {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      padding: EdgeInsets.all(4), // Reduced padding
-                      icon: Icon(Icons.attach_file, size: 20), // Smaller icon
-                      onPressed: _pickImage,
-                    ),
+  padding: EdgeInsets.all(4),
+  icon: Icon(Icons.attach_file, size: 20),
+  onPressed: () {
+    _showImageSourceOptions();
+  },
+),
                     IconButton(
                       padding: EdgeInsets.all(4), // Reduced padding
                       icon: Icon(Icons.delete_outline, size: 20), // Smaller icon
@@ -1171,67 +1558,117 @@ Widget _buildChatControl(double bottomPadding) {
 
         // Image preview with reduced spacing
         if (_image != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4.0), // Reduced padding
-            child: Column(
-              children: [
-                // Image preview with close button
-                Stack(
-                  alignment: Alignment.topRight,
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.file(
-                        _image!,
-                        height: 80, // Slightly smaller preview
-                        width: 80,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    IconButton(
-                      padding: EdgeInsets.all(4), // Reduced padding
-                      icon: Icon(Icons.close, color: Colors.white, size: 18),
-                      onPressed: () => setState(() => _image = null),
-                    ),
+  Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4.0),
+    child: Column(
+      children: [
+        // Image preview with close button
+        Stack(
+          alignment: Alignment.topRight,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.file(
+                _image!,
+                height: 80,
+                width: 80,
+                fit: BoxFit.cover,
+              ),
+            ),
+            IconButton(
+              padding: EdgeInsets.all(4),
+              icon: Icon(Icons.close, color: Colors.white, size: 18),
+              onPressed: () => setState(() => _image = null),
+            ),
+          ],
+        ),
+        
+        // Buttons row for image actions
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // AI analysis button
+            Container(
+              margin: EdgeInsets.only(top: 4, right: 4),
+              height: 36,
+              width: 160,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color.fromARGB(255, 154, 71, 255),
+                    Color.fromARGB(255, 255, 110, 110),
                   ],
                 ),
-                
-                // AI analysis button
-                Container(
-                  margin: EdgeInsets.only(top: 4),
-                  height: 36,
-                  width: 200, // Fixed width for button
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Color.fromARGB(255, 154, 71, 255),
-                        Color.fromARGB(255, 255, 110, 110),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: TextButton(
-                    child: Text(
-                      'Gửi ảnh để AI phân tích',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    onPressed: () {
-                      if (_image != null) {
-                        // Set analysis prompt
-                        _textController.text = 'Trả lời ngắn gọn: đánh giá việc chụp hình, chất lượng vệ sinh trong ảnh, tập trung vào đối tượng chính nhất (nếu chưa tốt thì mô tả vị trí nào trong ảnh). Đánh giá tổng quan trên hệ 10 điểm, nếu dưới 7 điểm thì gợi ý loại hoá chất trong danh sách đang có, hoặc máy móc chuyên sâu để xử lý. và gợi ý ngắn gọn về việc làm tiếp theo nếu tôi là người quản lý dịch vụ vệ sinh (không phải quản lý toà nhà hay nhân viên kỹ thuật) ở đây hoặc nếu hình ảnh không rõ ràng được là chụp gì thì mô tả cách chụp tốt hơn.';
-                        // Send message
-                        _sendMessage();
-                      }
-                    },
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: TextButton(
+                child: Text(
+                  'Gửi ảnh để AI phân tích',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-              ],
+                onPressed: () {
+  if (_image != null) {
+    // Store a reference to the current image before it gets nulled
+    final File currentImage = _image!;
+    
+    String fullPrompt = 'Trả lời ngắn gọn: đánh giá việc chụp hình, chất lượng vệ sinh trong ảnh, tập trung vào đối tượng chính nhất (nếu chưa tốt thì mô tả vị trí nào trong ảnh). Đánh giá tổng quan trên hệ 10 điểm, nếu dưới 7 điểm thì gợi ý loại hoá chất trong danh sách đang có, hoặc máy móc chuyên sâu để xử lý. và gợi ý ngắn gọn về việc làm tiếp theo nếu tôi là người quản lý dịch vụ vệ sinh (không phải quản lý toà nhà hay nhân viên kỹ thuật) ở đây hoặc nếu hình ảnh không rõ ràng được là chụp gì thì mô tả cách chụp tốt hơn.';
+    
+    // Add the user message first
+    _addUserMessage(fullPrompt, image: currentImage, displayMessage: "Đánh giá hình ảnh");
+    
+    // Clear the text field
+    _textController.clear();
+    
+    // Update state
+    setState(() {
+      _isWaitingForResponse = true;
+      _image = null;  // Clear the image reference after storing it
+    });
+    
+    _animateLoadingDots();
+    
+    // Process the image with the stored reference
+    _processImageMessage(fullPrompt, currentImage);
+  }
+},
+              ),
             ),
-          ),
+            
+            // Compare before/after button
+            Container(
+              margin: EdgeInsets.only(top: 4, left: 4),
+              height: 36,
+              width: 160,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color.fromARGB(255, 0, 162, 255),
+                    Color.fromARGB(255, 110, 255, 205),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: TextButton(
+                child: Text(
+                  'So sánh trước sau',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                onPressed: _pickSecondImage,
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  ),
 
         // Buttons row with reduced spacing
         SizedBox(height: 4), // Reduced spacing

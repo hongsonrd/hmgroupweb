@@ -38,11 +38,60 @@ void initState() {
   initializeDateFormatting('vi_VN', null).then((_) {
     _username = Provider.of<UserCredentials>(context, listen: false).username;
     _selectedNewOrderProject = widget.selectedBoPhan;
-    _loadProjects();
+    _loadDepartmentsFromDinhMuc();
     _loadOrders();
   });
 }
-
+  Future<void> _loadDepartmentsFromDinhMuc() async {
+  setState(() {
+    _isLoading = true;
+  });
+  
+  try {
+    final DBHelper dbHelper = DBHelper();
+    
+    // Query the orderDinhMucTable to get all records
+    final List<Map<String, dynamic>> dinhMucData = 
+        await dbHelper.query(DatabaseTables.orderDinhMucTable);
+    
+    print('Found ${dinhMucData.length} records in orderDinhMucTable');
+    
+    // Extract unique BoPhan values
+    final Set<String> uniqueDepartments = {};
+    for (var record in dinhMucData) {
+      if (record.containsKey('BoPhan') && record['BoPhan'] != null) {
+        uniqueDepartments.add(record['BoPhan'].toString());
+      }
+    }
+    
+    setState(() {
+      _departments = uniqueDepartments.toList();
+      print('Extracted departments: $_departments');
+      
+      // If the selected department is not in the list, select the first one
+      if (!_departments.contains(_selectedNewOrderProject) && _departments.isNotEmpty) {
+        _selectedNewOrderProject = _departments.first;
+      }
+    });
+    
+  } catch (e) {
+    print('Error loading departments from orderDinhMucTable: $e');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không thể tải danh sách bộ phận'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+}
   Future<void> _loadProjects() async {
     try {
       final response = await http.get(

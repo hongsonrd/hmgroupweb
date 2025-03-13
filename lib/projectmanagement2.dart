@@ -910,7 +910,7 @@ Future<void> _loadHistory() async {
   // Step 1: Try to fetch task history with userType
 setState(() => _syncStatus = 'Đang lấy lịch sử báo cáo...');
 final taskHistoryResponse = await AuthenticatedHttpClient.get(
-  Uri.parse('$baseUrl/historybaocao/$username/${userType ?? ''}')
+  Uri.parse('$baseUrl/historybaocao/$username')
 );
 
 if (taskHistoryResponse.statusCode != 200) {
@@ -924,10 +924,21 @@ final List<dynamic> taskHistoryData = json.decode(taskHistoryResponse.body);
 await dbHelper.clearTable(DatabaseTables.taskHistoryTable);
 
 final taskHistories = <TaskHistoryModel>[];
-for (var data in taskHistoryData) {
+List<String> errorMessages = [];
+
+for (int i = 0; i < taskHistoryData.length; i++) {
   try {
+    final data = taskHistoryData[i];
     // Log the data we're processing
     print('Processing task history item: $data');
+    
+    final ngayStr = data['Ngay'] as String? ?? '';
+    
+    // Only add validation if the date is not null/empty
+    if (ngayStr.isNotEmpty && !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(ngayStr)) {
+      errorMessages.add('Invalid date format: Record #$i, Format="$ngayStr"');
+      continue;
+    }
     
     // Safely handle potential null values
     taskHistories.add(TaskHistoryModel(
@@ -946,8 +957,11 @@ for (var data in taskHistoryData) {
       giaiPhap: data['GiaiPhap'], // Can be null
     ));
   } catch (e) {
+    final error = e.toString();
+    final recordInfo = json.encode(taskHistoryData[i]).substring(0, 100) + '...';
+    errorMessages.add('Error on record #$i: ${error.substring(0, 100)}\nRecord: $recordInfo');
     print('Error processing task history item: $e');
-    print('Problematic data: $data');
+    print('Problematic data: ${taskHistoryData[i]}');
     // Continue with next item instead of failing whole process
   }
 }

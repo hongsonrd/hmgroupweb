@@ -7,6 +7,7 @@ import 'user_credentials.dart';
 import 'db_helper.dart';
 import 'projectworkerall.dart';
 import 'projectworkerauto.dart';
+import 'package:dropdown_search/dropdown_search.dart';
 
 import 'table_models.dart';
 import 'package:intl/intl.dart';
@@ -38,7 +39,7 @@ class _ProjectWorkerState extends State<ProjectWorker> {
   late String _username;
   Map<String, String> _staffNames = {};
   List<String> _debugLogs = [];
-bool _showDebugOverlay = false;
+bool _showDebugOverlay = true;
 Map<String, Color> _staffColors = {};
 List<Color> _availableColors = [
   Colors.yellow.shade100,
@@ -887,22 +888,65 @@ Widget build(BuildContext context) {
       title: Row(
         children: [
           Expanded(
-            child: DropdownButton<String>(
-              value: _selectedDepartment,
-              items: _departments.map((dept) => 
-                DropdownMenuItem(value: dept, child: Text(dept))
-              ).toList(),
-              onChanged: (value) {
-                setState(() {
-                  _selectedDepartment = value;
-                  _loadAttendanceData();
-                });
-              },
-              style: TextStyle(color: Colors.white),
-              dropdownColor: Theme.of(context).primaryColor,
-              isExpanded: true,
+  flex: 3, // Give more space to the project dropdown
+  child: Container(
+    decoration: BoxDecoration(
+      color: Colors.white.withOpacity(0.15),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    padding: EdgeInsets.symmetric(horizontal: 8),
+    child: DropdownButtonHideUnderline(
+      child: DropdownSearch<String>(
+        items: _departments,
+        selectedItem: _selectedDepartment,
+        onChanged: (value) {
+          setState(() {
+            _selectedDepartment = value;
+            _loadAttendanceData();
+            _loadStaffColors();
+          });
+        },
+        dropdownDecoratorProps: DropDownDecoratorProps(
+          dropdownSearchDecoration: InputDecoration(
+            hintText: "Chọn dự án",
+            border: InputBorder.none,
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+        popupProps: PopupProps.dialog(
+          showSearchBox: true,
+          searchFieldProps: TextFieldProps(
+            decoration: InputDecoration(
+              hintText: "Tìm kiếm dự án...",
+              prefixIcon: Icon(Icons.search),
+              border: OutlineInputBorder(),
             ),
           ),
+          title: Container(
+            height: 50,
+            decoration: BoxDecoration(
+              color: Theme.of(context).primaryColor,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(8),
+                topRight: Radius.circular(8),
+              ),
+            ),
+            child: Center(
+              child: Text(
+                'Chọn dự án',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+),
           SizedBox(width: 16),
           Expanded(
             child: DropdownButton<String>(
