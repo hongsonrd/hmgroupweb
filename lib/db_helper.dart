@@ -36,14 +36,14 @@ class DBHelper {
     }
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool hasReset = prefs.getBool('db_reset_v13') ?? false;
+    bool hasReset = prefs.getBool('db_reset_v16') ?? false;
     
     if (!hasReset) {
-      print('Forcing database reset for version 13...');
+      print('Forcing database reset for version 16...');
       try {
         await deleteDatabase(path);
         await prefs.clear();
-        await prefs.setBool('db_reset_v13', true);
+        await prefs.setBool('db_reset_v16', true);
         print('Database reset successful');
       } catch (e) {
         print('Error during database reset: $e');
@@ -55,38 +55,39 @@ class DBHelper {
     final db = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 13,
+        version: 16,
         onCreate: (Database db, int version) async {
           print('Creating database tables...');
           await db.execute(DatabaseTables.createInteractionTable);
-          await db.execute(DatabaseTables.createStaffbioTable);
-          await db.execute(DatabaseTables.createChecklistTable);
-          await db.execute(DatabaseTables.createTaskHistoryTable);
-          await db.execute(DatabaseTables.createVTHistoryTable);
-          await db.execute(DatabaseTables.createStaffListTable);
-          await db.execute(DatabaseTables.createPositionListTable);
-          await db.execute(DatabaseTables.createProjectListTable);
-          await db.execute(DatabaseTables.createBaocaoTable);
-          await db.execute(DatabaseTables.createDongPhucTable);
-          await db.execute(DatabaseTables.createChiTietDPTable);
+        await db.execute(DatabaseTables.createStaffbioTable);
+        await db.execute(DatabaseTables.createChecklistTable);
+        await db.execute(DatabaseTables.createTaskHistoryTable);
+        await db.execute(DatabaseTables.createVTHistoryTable);
+        await db.execute(DatabaseTables.createStaffListTable);
+        await db.execute(DatabaseTables.createPositionListTable);
+        await db.execute(DatabaseTables.createProjectListTable);
+        await db.execute(DatabaseTables.createBaocaoTable);
+        await db.execute(DatabaseTables.createDongPhucTable);
+        await db.execute(DatabaseTables.createChiTietDPTable);
         await db.execute(DatabaseTables.createOrderMatHangTable);
         await db.execute(DatabaseTables.createOrderTable);
         await db.execute(DatabaseTables.createOrderChiTietTable);
         await db.execute(DatabaseTables.createOrderDinhMucTable);
         await db.execute(DatabaseTables.createChamCongCNTable);
-        await db.execute(DatabaseTables.createHinhAnhZaloTable); 
-              await db.execute(DatabaseTables.createHDDuTruTable); 
+        await db.execute(DatabaseTables.createHinhAnhZaloTable);
+        await db.execute(DatabaseTables.createHDDuTruTable); 
         await db.execute(DatabaseTables.createHDChiTietYCMMTable); 
         await db.execute(DatabaseTables.createHDYeuCauMMTable); 
         await db.execute(DatabaseTables.createChamCongTable); 
         await db.execute(DatabaseTables.createChamCongGioTable); 
-        await db.execute(DatabaseTables.createChamCongLSTable); 
-          await ChecklistInitializer.initializeChecklistTable(db);
-          print('Database tables created successfully');
-        },
-        onUpgrade: (Database db, int oldVersion, int newVersion) async {
-          if (oldVersion < 13) {
-            print('Upgrading database: adding baocao table');
+        await db.execute(DatabaseTables.createChamCongLSTable);  
+        await db.execute(DatabaseTables.createChamCongCNThangTable);  
+        await ChecklistInitializer.initializeChecklistTable(db);
+        print('Database tables created successfully');
+      },
+      onUpgrade: (Database db, int oldVersion, int newVersion) async {
+        if (oldVersion < 16) {
+          print('Upgrading database: adding baocao table');
           await db.execute(DatabaseTables.createBaocaoTable);
         await db.execute(DatabaseTables.createDongPhucTable);
         await db.execute(DatabaseTables.createChiTietDPTable);
@@ -96,12 +97,13 @@ class DBHelper {
         await db.execute(DatabaseTables.createOrderDinhMucTable);
         await db.execute(DatabaseTables.createChamCongCNTable);
         await db.execute(DatabaseTables.createHinhAnhZaloTable); 
-                await db.execute(DatabaseTables.createHDDuTruTable); 
+        await db.execute(DatabaseTables.createHDDuTruTable); 
         await db.execute(DatabaseTables.createHDChiTietYCMMTable); 
         await db.execute(DatabaseTables.createHDYeuCauMMTable); 
         await db.execute(DatabaseTables.createChamCongTable); 
         await db.execute(DatabaseTables.createChamCongGioTable); 
-        await db.execute(DatabaseTables.createChamCongLSTable); 
+        await db.execute(DatabaseTables.createChamCongLSTable);
+        await db.execute(DatabaseTables.createChamCongCNThangTable); 
           }
         },
         onOpen: (db) async {
@@ -122,6 +124,75 @@ class DBHelper {
     print('Stack trace: $stackTrace');
     rethrow;
   }
+}
+// ==================== ChamCongCNThang CRUD Operations ====================
+Future<void> insertChamCongCNThang(ChamCongCNThangModel chamCongCNThang) async {
+  await insert(DatabaseTables.chamCongCNThangTable, chamCongCNThang.toMap());
+}
+
+Future<List<ChamCongCNThangModel>> getAllChamCongCNThang() async {
+  final maps = await query(DatabaseTables.chamCongCNThangTable);
+  return maps.map((map) => ChamCongCNThangModel.fromMap(map)).toList();
+}
+
+Future<ChamCongCNThangModel?> getChamCongCNThangByUID(String uid) async {
+  final maps = await query(
+    DatabaseTables.chamCongCNThangTable,
+    where: 'UID = ?',
+    whereArgs: [uid],
+  );
+  if (maps.isEmpty) return null;
+  return ChamCongCNThangModel.fromMap(maps.first);
+}
+
+Future<List<ChamCongCNThangModel>> getChamCongCNThangByGiaiDoan(DateTime giaiDoan) async {
+  final maps = await query(
+    DatabaseTables.chamCongCNThangTable,
+    where: 'GiaiDoan = ?',
+    whereArgs: [giaiDoan.toIso8601String()],
+  );
+  return maps.map((map) => ChamCongCNThangModel.fromMap(map)).toList();
+}
+
+Future<List<ChamCongCNThangModel>> getChamCongCNThangByMaNV(String maNV) async {
+  final maps = await query(
+    DatabaseTables.chamCongCNThangTable,
+    where: 'MaNV = ?',
+    whereArgs: [maNV],
+  );
+  return maps.map((map) => ChamCongCNThangModel.fromMap(map)).toList();
+}
+
+Future<int> updateChamCongCNThang(String uid, Map<String, dynamic> updates) async {
+  return await update(
+    DatabaseTables.chamCongCNThangTable,
+    updates,
+    where: 'UID = ?',
+    whereArgs: [uid],
+  );
+}
+
+Future<int> deleteChamCongCNThang(String uid) async {
+  return await delete(
+    DatabaseTables.chamCongCNThangTable,
+    where: 'UID = ?',
+    whereArgs: [uid],
+  );
+}
+
+Future<void> batchInsertChamCongCNThang(List<ChamCongCNThangModel> items) async {
+  final db = await database;
+  await db.transaction((txn) async {
+    final batch = txn.batch();
+    for (var item in items) {
+      batch.insert(
+        DatabaseTables.chamCongCNThangTable, 
+        item.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace
+      );
+    }
+    await batch.commit(noResult: true);
+  });
 }
 // ==================== HDChiTietYCMM CRUD Operations ====================
 Future<void> insertHDChiTietYCMM(HDChiTietYCMMModel hdChiTietYCMM) async {

@@ -665,16 +665,16 @@ Future<void> _copyFromYesterday() async {
   }
   
   void debugLog(String message) {
-    print(message);
-    setState(() {
-      _debugLogs.add("${DateTime.now().toString().substring(11, 19)}: $message");
-      if (_debugLogs.length > 20) {
-        _debugLogs.removeAt(0);
-      }
-    });
-  }
+  print(message);
+  setState(() {
+    _debugLogs.add("${DateTime.now().toString().substring(11, 19)}: $message");
+    if (_debugLogs.length > 20) {
+      _debugLogs.removeAt(0);
+    }
+  });
+}
 
-  @override
+@override
 Widget build(BuildContext context) {
   return Scaffold(
     appBar: AppBar(
@@ -723,14 +723,13 @@ Widget build(BuildContext context) {
         _isLoading
           ? Center(child: CircularProgressIndicator())
           : DefaultTabController(
-              length: 10,
+              length: 9, // Change this from 10 to 9
               child: Column(
                 children: [
                   TabBar(
                     isScrollable: true,
                     tabs: [
-                      Tab(text: 'Công chữ'),
-                      Tab(text: 'NG thường'),
+                      Tab(text: 'Công chữ & NG thường'),
                       Tab(text: 'Hỗ trợ'),
                       Tab(text: 'Part time'),
                       Tab(text: 'PT sáng'),
@@ -746,7 +745,6 @@ Widget build(BuildContext context) {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        // Add the "Như hôm qua" button here
                         ElevatedButton(
                           onPressed: _copyFromYesterday,
                           child: Text('💚Như hôm qua'),
@@ -780,8 +778,7 @@ Widget build(BuildContext context) {
                   Expanded(
                     child: TabBarView(
                       children: [
-                        _buildAllProjectsTable('CongThuongChu'),
-                        _buildAllProjectsTable('NgoaiGioThuong'),
+                        _buildCombinedTable(),
                         _buildAllProjectsTable('HoTro'),
                         _buildAllProjectsTable('PartTime'),
                         _buildAllProjectsTable('PartTimeSang'),
@@ -818,6 +815,253 @@ Widget build(BuildContext context) {
       ],
     ),
   );
+}
+Widget _buildCombinedTable() {
+  final days = _getDaysInMonth();
+  
+  // Only include departments with actual data
+  final departmentsWithData = _departments
+      .where((dept) => _allProjectsData.containsKey(dept) && _allProjectsData[dept]!.isNotEmpty)
+      .toList();
+  
+  if (departmentsWithData.isEmpty) {
+    return Center(child: Text('Không có dữ liệu cho tháng $_selectedMonth'));
+  }
+  
+  return SingleChildScrollView(
+    child: Column(
+      children: departmentsWithData.map((dept) {
+        final employees = _getUniqueEmployeesForDept(dept);
+        if (employees.isEmpty) {
+          return SizedBox.shrink();
+        }
+        
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Department header
+            Container(
+              color: Colors.purple.shade100,
+              padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              child: Text(
+                dept,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+            ),
+            // Project attendance table
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                columns: [
+                  DataColumn(label: Text('Mã NV')),
+                  DataColumn(label: Text('Loại')),
+                  ...days.map((day) => DataColumn(label: Text(day.toString()))),
+                ],
+                rows: employees.expand((empId) {
+                  // Create two rows for each employee - one for CongThuongChu and one for NgoaiGioThuong
+                  return [
+                    // Row for CongThuongChu
+                    DataRow(
+                      cells: [
+                        DataCell(
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(empId),
+                              Text(
+                                _staffNamesByDept[dept]?[empId] ?? '',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        DataCell(Text('Công chữ', style: TextStyle(fontWeight: FontWeight.bold))),
+                        ...days.map((day) {
+                          final attendance = _getAttendanceForDay(dept, empId, day, 'CongThuongChu') ?? 'Ro';
+                          final canEdit = _canEditDay(day);
+                          
+                          return DataCell(
+                            DropdownButton<String>(
+                              value: _congThuongChoices.contains(_extractCongThuongChuBase(attendance)) 
+                                ? _extractCongThuongChuBase(attendance) 
+                                : 'Ro',
+                              items: _congThuongChoices.map((choice) =>
+                                DropdownMenuItem(value: choice, child: Text(choice))
+                              ).toList(),
+                              onChanged: canEdit ? (value) {
+                                if (value != null) {
+                                  final phanLoaiValue = _calculatePhanLoaiFromCongThuong(value);
+                                  _updateAttendanceWithPhanLoai(dept, empId, day, 'CongThuongChu', value, phanLoaiValue);
+                                }
+                              } : null,
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                    // Row for NgoaiGioThuong
+                    DataRow(
+                      color: MaterialStateProperty.all(Colors.grey.shade100),
+                      cells: [
+                        DataCell(Text('')), // Empty for employee name
+                        DataCell(Text('NG thường', style: TextStyle(fontWeight: FontWeight.bold))),
+                        ...days.map((day) {
+                          final attendance = _getAttendanceForDay(dept, empId, day, 'NgoaiGioThuong') ?? '0';
+                          final canEdit = _canEditDay(day);
+                          
+                          return DataCell(
+                            SizedBox(
+                              width: 60,
+                              child: TextFormField(
+                                initialValue: attendance,
+                                keyboardType: TextInputType.numberWithOptions(decimal: true),
+                                textAlign: TextAlign.right,
+                                enabled: canEdit,
+                                onChanged: (value) {
+                                  if (value.isEmpty) {
+                                    _updateAttendance(dept, empId, day, 'NgoaiGioThuong', '0');
+                                    return;
+                                  }
+                                  
+                                  // Decimal fields - allow digits and one decimal point
+                                  value = value.replaceAll(RegExp(r'[^\d.]'), '');
+                                  // Ensure only one decimal point
+                                  final parts = value.split('.');
+                                  if (parts.length > 2) {
+                                    value = parts[0] + '.' + parts.sublist(1).join('');
+                                  }
+                                  
+                                  _updateAttendance(dept, empId, day, 'NgoaiGioThuong', value);
+                                },
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ];
+                }).toList(),
+              ),
+            ),
+            // Divider between projects
+            Divider(thickness: 2, height: 32),
+          ],
+        );
+      }).toList(),
+    ),
+  );
+}
+String _extractCongThuongChuBase(String value) {
+  if (value.endsWith('+P')) {
+    return value.substring(0, value.length - 2);
+  } else if (value.endsWith('+P/2')) {
+    return value.substring(0, value.length - 4);
+  }
+  return value;
+}
+
+String _calculatePhanLoaiFromCongThuong(String congThuongChu) {
+  bool hasPlusP = congThuongChu.endsWith('+P');
+  bool hasPlusPHalf = congThuongChu.endsWith('+P/2');
+  String baseValue = _extractCongThuongChuBase(congThuongChu);
+  
+  String phanLoaiValue = '0.0';
+  
+  if (baseValue == '3X') {
+    phanLoaiValue = '3.0';
+  } else if (baseValue == '2X' || baseValue == '2XĐ') {
+    phanLoaiValue = '2.0';
+  } else if (['X', 'P', 'XĐ', 'CĐ', 'NL'].contains(baseValue)) {
+    phanLoaiValue = '1.0';
+  } else if (baseValue == '3X/4') {
+    phanLoaiValue = '0.75';
+  } else if (['X/2', 'P/2'].contains(baseValue)) {
+    phanLoaiValue = '0.5';
+  } else if (['Ro', 'HT', 'NT', 'Ô', 'TS', 'QLDV', 'HV', '2HV', '3HV'].contains(baseValue)) {
+    phanLoaiValue = '0.0';
+  }
+  
+  // Adjust for +P and +P/2 suffixes
+  if (hasPlusP || hasPlusPHalf) {
+    double phanLoaiDouble = double.tryParse(phanLoaiValue) ?? 0.0;
+    if (hasPlusP) {
+      phanLoaiDouble += 1.0;
+    } else if (hasPlusPHalf) {
+      phanLoaiDouble += 0.5;
+    }
+    phanLoaiValue = phanLoaiDouble.toStringAsFixed(1);
+  }
+  
+  return phanLoaiValue;
+}
+void _updateAttendanceWithPhanLoai(String dept, String empId, int day, String columnType, String value, String phanLoaiValue) {
+  debugLog('Updating $columnType for $empId on day $day to "$value" with PhanLoai: $phanLoaiValue in dept $dept');
+  
+  final dateStr = '$_selectedMonth-${day.toString().padLeft(2, '0')}';
+
+  // Find or create record
+  var record = _allProjectsData[dept]!.firstWhere(
+    (r) => r['MaNV'] == empId && r['Ngay'].split('T')[0] == dateStr,
+    orElse: () {
+      final newUid = Uuid().v4();
+      final newRecord = {
+        'UID': newUid,
+        'MaNV': empId,
+        'Ngay': dateStr,
+        'Gio': DateFormat('HH:mm:ss').format(DateTime.now()),
+        'NguoiDung': _username,
+        'BoPhan': dept,
+        'MaBP': dept,
+        'PhanLoai': phanLoaiValue,
+        'CongThuongChu': columnType == 'CongThuongChu' ? value : '',
+        'NgoaiGioThuong': '0',
+        'NgoaiGioKhac': '0',
+        'NgoaiGiox15': '0',
+        'NgoaiGiox2': '0',
+        'HoTro': '0',
+        'PartTime': '0',
+        'PartTimeSang': '0',
+        'PartTimeChieu': '0',
+        'CongLe': '0',
+      };
+      _newRecords[newUid] = newRecord;
+      _allProjectsData[dept]!.add(newRecord);
+      debugLog('Created new record for $empId on $dateStr with UID: $newUid and PhanLoai: $phanLoaiValue');
+      return newRecord;
+    }
+  );
+
+  // Check if value actually changed to avoid unnecessary updates
+  if (record[columnType]?.toString() != value || record['PhanLoai']?.toString() != phanLoaiValue) {
+    setState(() {
+      record[columnType] = value;
+      record['PhanLoai'] = phanLoaiValue;
+      
+      final uid = record['UID'] as String;
+      
+      // Add to modified records if it's not a new record
+      if (!_newRecords.containsKey(uid)) {
+        _modifiedRecords[uid] = Map<String, dynamic>.from(record);
+        debugLog('Added to modified records - UID: $uid, $columnType: $value, PhanLoai: $phanLoaiValue');
+      } else {
+        // Update the new record if it already exists
+        _newRecords[uid]![columnType] = value;
+        _newRecords[uid]!['PhanLoai'] = phanLoaiValue;
+        debugLog('Updated new record - UID: $uid, $columnType: $value, PhanLoai: $phanLoaiValue');
+      }
+    });
+  }
 }
 
   Widget _buildAllProjectsTable(String columnType) {

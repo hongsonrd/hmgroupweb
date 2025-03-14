@@ -1720,6 +1720,155 @@ class ChamCongLSModel {
     );
   }
 }
+class ChamCongCNThangModel {
+  final String? uid;
+  final DateTime? ngayCapNhat;
+  final DateTime? giaiDoan;
+  final String? maNV;
+  final String? boPhan;
+  final String? maBP;
+  final String? phanLoaiDacBiet;
+  final String? ghiChu;
+  final int? congChuanToiDa;
+  final String? xepLoaiTuDong;
+  final double? tuan1va2;
+  final double? phep1va2;
+  final double? ht1va2;
+  final double? tuan3va4;
+  final double? phep3va4;
+  final double? ht3va4;
+  final double? tongCong;
+  final double? tongPhep;
+  final double? tongLe;
+  final double? tongNgoaiGio;
+  final double? tongHV;
+  final double? tongDem;
+  final double? tongCD;
+  final double? tongHT;
+  final int? tongLuong;
+  final int? ungLan1;
+  final int? ungLan2;
+  final int? thanhToan3;
+  final int? truyLinh;
+  final int? truyThu;
+  final int? khac;
+  final int? mucLuongThang;
+  final int? mucLuongNgoaiGio;
+  final int? mucLuongNgoaiGio2;
+
+  ChamCongCNThangModel({
+    this.uid,
+    this.ngayCapNhat,
+    this.giaiDoan,
+    this.maNV,
+    this.boPhan,
+    this.maBP,
+    this.phanLoaiDacBiet,
+    this.ghiChu,
+    this.congChuanToiDa,
+    this.xepLoaiTuDong,
+    this.tuan1va2,
+    this.phep1va2,
+    this.ht1va2,
+    this.tuan3va4,
+    this.phep3va4,
+    this.ht3va4,
+    this.tongCong,
+    this.tongPhep,
+    this.tongLe,
+    this.tongNgoaiGio,
+    this.tongHV,
+    this.tongDem,
+    this.tongCD,
+    this.tongHT,
+    this.tongLuong,
+    this.ungLan1,
+    this.ungLan2,
+    this.thanhToan3,
+    this.truyLinh,
+    this.truyThu,
+    this.khac,
+    this.mucLuongThang,
+    this.mucLuongNgoaiGio,
+    this.mucLuongNgoaiGio2,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'UID': uid,
+    'NgayCapNhat': ngayCapNhat?.toIso8601String(),
+    'GiaiDoan': giaiDoan?.toIso8601String(),
+    'MaNV': maNV,
+    'BoPhan': boPhan,
+    'MaBP': maBP,
+    'PhanLoaiDacBiet': phanLoaiDacBiet,
+    'GhiChu': ghiChu,
+    'CongChuanToiDa': congChuanToiDa,
+    'XepLoaiTuDong': xepLoaiTuDong,
+    'Tuan_1va2': tuan1va2,  // Changed from '1va2_Tuan'
+    'Phep_1va2': phep1va2,  // Changed from '1va2_Phep'
+    'HT_1va2': ht1va2,      // Changed from '1va2_HT'
+    'Tuan_3va4': tuan3va4,  // Changed from '3va4_Tuan'
+    'Phep_3va4': phep3va4,  // Changed from '3va4_Phep'
+    'HT_3va4': ht3va4,      // Changed from '3va4_HT'
+    'Tong_Cong': tongCong,
+    'Tong_Phep': tongPhep,
+    'Tong_Le': tongLe,
+    'Tong_NgoaiGio': tongNgoaiGio,
+    'Tong_HV': tongHV,
+    'Tong_Dem': tongDem,
+    'Tong_CD': tongCD,
+    'Tong_HT': tongHT,
+    'TongLuong': tongLuong,
+    'UngLan1': ungLan1,
+    'UngLan2': ungLan2,
+    'ThanhToan3': thanhToan3,
+    'TruyLinh': truyLinh,
+    'TruyThu': truyThu,
+    'Khac': khac,
+    'MucLuongThang': mucLuongThang,
+    'MucLuongNgoaiGio': mucLuongNgoaiGio,
+    'MucLuongNgoaiGio2': mucLuongNgoaiGio2,
+  };
+
+  factory ChamCongCNThangModel.fromMap(Map<String, dynamic> map) {
+    return ChamCongCNThangModel(
+      uid: map['UID'],
+      ngayCapNhat: map['NgayCapNhat'] != null ? DateTime.parse(map['NgayCapNhat']) : null,
+      giaiDoan: map['GiaiDoan'] != null ? DateTime.parse(map['GiaiDoan']) : null,
+      maNV: map['MaNV'],
+      boPhan: map['BoPhan'],
+      maBP: map['MaBP'],
+      phanLoaiDacBiet: map['PhanLoaiDacBiet'],
+      ghiChu: map['GhiChu'],
+      congChuanToiDa: map['CongChuanToiDa'] != null ? int.tryParse(map['CongChuanToiDa'].toString()) : null,
+      xepLoaiTuDong: map['XepLoaiTuDong'],
+      tuan1va2: map['Tuan_1va2'] != null ? double.tryParse(map['Tuan_1va2'].toString()) : null,  // Changed
+      phep1va2: map['Phep_1va2'] != null ? double.tryParse(map['Phep_1va2'].toString()) : null,  // Changed
+      ht1va2: map['HT_1va2'] != null ? double.tryParse(map['HT_1va2'].toString()) : null,        // Changed
+      tuan3va4: map['Tuan_3va4'] != null ? double.tryParse(map['Tuan_3va4'].toString()) : null,  // Changed
+      phep3va4: map['Phep_3va4'] != null ? double.tryParse(map['Phep_3va4'].toString()) : null,  // Changed
+      ht3va4: map['HT_3va4'] != null ? double.tryParse(map['HT_3va4'].toString()) : null,        // Changed
+      tongCong: map['Tong_Cong'] != null ? double.tryParse(map['Tong_Cong'].toString()) : null,
+      tongPhep: map['Tong_Phep'] != null ? double.tryParse(map['Tong_Phep'].toString()) : null,
+      tongLe: map['Tong_Le'] != null ? double.tryParse(map['Tong_Le'].toString()) : null,
+      tongNgoaiGio: map['Tong_NgoaiGio'] != null ? double.tryParse(map['Tong_NgoaiGio'].toString()) : null,
+      tongHV: map['Tong_HV'] != null ? double.tryParse(map['Tong_HV'].toString()) : null,
+      tongDem: map['Tong_Dem'] != null ? double.tryParse(map['Tong_Dem'].toString()) : null,
+      tongCD: map['Tong_CD'] != null ? double.tryParse(map['Tong_CD'].toString()) : null,
+      tongHT: map['Tong_HT'] != null ? double.tryParse(map['Tong_HT'].toString()) : null,
+      tongLuong: map['TongLuong'] != null ? int.tryParse(map['TongLuong'].toString()) : null,
+      ungLan1: map['UngLan1'] != null ? int.tryParse(map['UngLan1'].toString()) : null,
+      ungLan2: map['UngLan2'] != null ? int.tryParse(map['UngLan2'].toString()) : null,
+      thanhToan3: map['ThanhToan3'] != null ? int.tryParse(map['ThanhToan3'].toString()) : null,
+      truyLinh: map['TruyLinh'] != null ? int.tryParse(map['TruyLinh'].toString()) : null,
+      truyThu: map['TruyThu'] != null ? int.tryParse(map['TruyThu'].toString()) : null,
+      khac: map['Khac'] != null ? int.tryParse(map['Khac'].toString()) : null,
+      mucLuongThang: map['MucLuongThang'] != null ? int.tryParse(map['MucLuongThang'].toString()) : null,
+      mucLuongNgoaiGio: map['MucLuongNgoaiGio'] != null ? int.tryParse(map['MucLuongNgoaiGio'].toString()) : null,
+      mucLuongNgoaiGio2: map['MucLuongNgoaiGio2'] != null ? int.tryParse(map['MucLuongNgoaiGio2'].toString()) : null,
+    );
+  }
+}
 // Database Tables
 class DatabaseTables {
   // Table Names
@@ -1746,6 +1895,45 @@ class DatabaseTables {
   static const String chamCongTable = 'ChamCong';
  static const String chamCongGioTable = 'ChamCongGio';
  static const String chamCongLSTable = 'ChamCongLS';
+ static const String chamCongCNThangTable = 'ChamCongCNThang';
+static const String createChamCongCNThangTable = '''
+  CREATE TABLE $chamCongCNThangTable (
+    UID varchar(100),
+    NgayCapNhat date,
+    GiaiDoan date,
+    MaNV varchar(100),
+    BoPhan text,
+    MaBP text,
+    PhanLoaiDacBiet varchar(100),
+    GhiChu text,
+    CongChuanToiDa int,
+    XepLoaiTuDong varchar(100),
+    Tuan_1va2 decimal(10,0),
+    Phep_1va2 decimal(10,0),
+    HT_1va2 decimal(10,0),
+    Tuan_3va4 decimal(10,0),
+    Phep_3va4 decimal(10,0),
+    HT_3va4 decimal(10,0),
+    Tong_Cong decimal(10,0),
+    Tong_Phep decimal(10,0),
+    Tong_Le decimal(10,0),
+    Tong_NgoaiGio decimal(10,0),
+    Tong_HV decimal(10,0),
+    Tong_Dem decimal(10,0),
+    Tong_CD decimal(10,0),
+    Tong_HT decimal(10,0),
+    TongLuong int,
+    UngLan1 int,
+    UngLan2 int,
+    ThanhToan3 int,
+    TruyLinh int,
+    TruyThu int,
+    Khac int,
+    MucLuongThang int,
+    MucLuongNgoaiGio int,
+    MucLuongNgoaiGio2 int
+  )
+''';
  static const String createChamCongTable = '''
     CREATE TABLE $chamCongTable (
       NguoiDung varchar(100),

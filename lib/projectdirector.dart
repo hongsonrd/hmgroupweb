@@ -44,6 +44,9 @@ class _ProjectDirectorScreenState extends State<ProjectDirectorScreen> {
   Timer? _autoSyncTimer;
   Timer? _secondSyncDelayTimer;
   
+  String? _selectedPhanLoai = 'Tất cả';
+  List<String> _phanLoaiList = ['Tất cả'];
+
   final Map<String, GlobalKey> _chartKeys = {
     'phanLoaiChart': GlobalKey(),
     'issueResolutionChart': GlobalKey(),
@@ -57,10 +60,9 @@ class _ProjectDirectorScreenState extends State<ProjectDirectorScreen> {
     super.initState();
     _initScreen();
     _initAppBarVideo();
-    // Set up auto sync timer (every 30 minutes)
     _autoSyncTimer = Timer.periodic(const Duration(minutes: 30), (timer) {
-      _triggerSyncSequence();
-    });
+    _triggerSyncSequence();
+  });
   }
 
   @override
@@ -95,10 +97,12 @@ Future<void> _initAppBarVideo() async {
 }
   Future<void> _initScreen() async {
   await _loadBoPhanList();
+  await _loadPhanLoaiList();
   await _loadDateRange();
   _triggerSyncSequence();
   _loadRecentImages();
 }
+
 
   void _triggerSyncSequence() {
     // First sync
@@ -110,7 +114,41 @@ Future<void> _initAppBarVideo() async {
       _loadHistory();
     });
   }
-
+Future<void> _loadPhanLoaiList() async {
+  try {
+    final db = await dbHelper.database;
+    
+    // First, let's check if there are any values with logging
+    print('Loading PhanLoai list...');
+    
+    final List<Map<String, dynamic>> result = await db.rawQuery('''
+      SELECT DISTINCT PhanLoai FROM ${DatabaseTables.taskHistoryTable}
+      WHERE PhanLoai IS NOT NULL AND PhanLoai != ''
+    ''');
+    
+    print('PhanLoai raw results: $result');
+    
+    // Extract the values and make sure they're strings
+    final List<String> phanLoaiValues = result
+        .map((item) => item['PhanLoai']?.toString() ?? '')
+        .where((value) => value.isNotEmpty)
+        .toList();
+    
+    print('Extracted PhanLoai values: $phanLoaiValues');
+    
+    if (mounted) {
+      setState(() {
+        // Make sure we have unique values and include "Tất cả"
+        final uniquePhanLoaiList = ['Tất cả', ...phanLoaiValues.toSet()];
+        _phanLoaiList = uniquePhanLoaiList;
+        print('Updated _phanLoaiList: $_phanLoaiList');
+      });
+    }
+  } catch (e) {
+    print('Error loading PhanLoai list: $e');
+    _showError('Error loading category list: $e');
+  }
+}
   Future<void> _loadBoPhanList() async {
     try {
       final List<String> boPhanList = await dbHelper.getUserBoPhanList();
@@ -152,31 +190,37 @@ Future<void> _initAppBarVideo() async {
 }
 
   Future<void> _loadTaskHistoryData() async {
-  if (_selectedStartDate == null || _selectedEndDate == null) return;
+    if (_selectedStartDate == null || _selectedEndDate == null) return;
 
-  try {
-    final db = await dbHelper.database;
-    String query = '''
-      SELECT * FROM ${DatabaseTables.taskHistoryTable}
-      WHERE date(Ngay) IS NOT NULL
-      AND date(Ngay) BETWEEN ? AND ?
-    ''';
-    List<dynamic> args = [_selectedStartDate, _selectedEndDate];
+    try {
+      final db = await dbHelper.database;
+      String query = '''
+        SELECT * FROM ${DatabaseTables.taskHistoryTable}
+        WHERE date(Ngay) IS NOT NULL
+        AND date(Ngay) BETWEEN ? AND ?
+      ''';
+      List<dynamic> args = [_selectedStartDate, _selectedEndDate];
 
-    if (_selectedBoPhan != 'Tất cả') {
-      query += ' AND BoPhan = ?';
-      args.add(_selectedBoPhan);
+      if (_selectedBoPhan != 'Tất cả') {
+        query += ' AND BoPhan = ?';
+        args.add(_selectedBoPhan);
+      }
+      
+      // Add PhanLoai filter
+      if (_selectedPhanLoai != 'Tất cả') {
+        query += ' AND PhanLoai = ?';
+        args.add(_selectedPhanLoai);
+      }
+
+      final List<Map<String, dynamic>> results = await db.rawQuery(query, args);
+      setState(() {
+        _filteredTaskHistory = results;
+      });
+    } catch (e) {
+      print('Error loading task history: $e');
+      _showError('Error loading task history data');
     }
-
-    final List<Map<String, dynamic>> results = await db.rawQuery(query, args);
-    setState(() {
-      _filteredTaskHistory = results;
-    });
-  } catch (e) {
-    print('Error loading task history: $e');
-    _showError('Error loading task history data');
   }
-}
 
   Future<void> _loadProjects() async {
     if (_isLoadingProjects) return;
@@ -384,6 +428,7 @@ Future<void> _initAppBarVideo() async {
     await dbHelper.batchInsertTaskHistory(taskHistories);
     
     await _loadDateRange();
+    await _loadPhanLoaiList(); 
     _loadRecentImages();
     
     _showSuccess('Đồng bộ lịch sử thành công: ${taskHistories.length}/${taskHistoryData.length} records processed');
@@ -710,308 +755,420 @@ Widget build(BuildContext context) {
  );
 }
 Widget _buildRecentImagesTab() {
-  return SingleChildScrollView(
-    child: Container(
-      padding: EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Sync Status
-          if (_syncStatus.isNotEmpty)
-            Padding(
-              padding: EdgeInsets.only(bottom: 8),
-              child: Text(
-                _syncStatus,
-                style: TextStyle(
-                  color: Colors.blue,
-                  fontWeight: FontWeight.bold,
+    return SingleChildScrollView(
+      child: Container(
+        padding: EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Sync Status
+            if (_syncStatus.isNotEmpty)
+              Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: Text(
+                  _syncStatus,
+                  style: TextStyle(
+                    color: Colors.blue,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
+            SizedBox(height: 4),
+            Container(
+              margin: EdgeInsets.only(bottom: 4),
+              child: Column(
+                children: [
+                  // First row with date selectors
+                  Row(
+                    children: [
+                      // From Date
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Từ ngày:',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            _buildDatePicker(
+                              selectedDate: _selectedStartDate,
+                              onChanged: (date) {
+                                setState(() {
+                                  _selectedStartDate = date;
+                                });
+                                _loadTaskHistoryData();
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      // To Date
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Đến ngày:',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            _buildDatePicker(
+                              selectedDate: _selectedEndDate,
+                              onChanged: (date) {
+                                setState(() {
+                                  _selectedEndDate = date;
+                                });
+                                _loadTaskHistoryData();
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  // Second row with department and category filters
+                  SizedBox(height: 12),
+                  Row(
+                    children: [
+                      // Department selection
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Bộ phận:',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: DropdownButton<String>(
+                                value: _selectedBoPhan,
+                                isExpanded: true,
+                                underline: SizedBox(),
+                                hint: Text('Chọn bộ phận'),
+                                items: _boPhanList.map((String item) {
+                                  return DropdownMenuItem<String>(
+                                    value: item,
+                                    child: Text(item),
+                                  );
+                                }).toList(),
+                                onChanged: (String? value) {
+                                  setState(() {
+                                    _selectedBoPhan = value;
+                                  });
+                                  _loadTaskHistoryData();
+                                  _loadRecentImages();
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      
+                      // NEW: Category selection
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Chủ đề:',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: DropdownButton<String>(
+                                value: _selectedPhanLoai,
+                                isExpanded: true,
+                                underline: SizedBox(),
+                                hint: Text('Chọn chủ đề'),
+                                items: _phanLoaiList.map((String item) {
+                                  return DropdownMenuItem<String>(
+                                    value: item,
+                                    child: Text(item),
+                                  );
+                                }).toList(),
+                                onChanged: (String? value) {
+                                  setState(() {
+                                    _selectedPhanLoai = value;
+                                  });
+                                  _loadTaskHistoryData();
+                                  _loadRecentImages();
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          SizedBox(height: 4),
-          Container(
-            margin: EdgeInsets.only(bottom: 4),
-            child: Row(
+            
+            // Summary Statistics
+            SizedBox(height: 16),
+            Text(
+              'Tổng quan',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 16),
+            
+            // Stats Cards
+            Row(
               children: [
-                // From Date
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Từ ngày:',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      _buildDatePicker(
-                        selectedDate: _selectedStartDate,
-                        onChanged: (date) {
-                          setState(() {
-                            _selectedStartDate = date;
-                          });
-                          _loadTaskHistoryData();
-                        },
-                      ),
-                    ],
-                  ),
+                _buildStatCard(
+                  'Số báo cáo',
+                  totalReports.toString(),
+                  Icons.assignment,
+                  Colors.blue,
                 ),
-                SizedBox(width: 8),
-                // To Date
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Đến ngày:',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      _buildDatePicker(
-                        selectedDate: _selectedEndDate,
-                        onChanged: (date) {
-                          setState(() {
-                            _selectedEndDate = date;
-                          });
-                          _loadTaskHistoryData();
-                        },
-                      ),
-                    ],
-                  ),
+                SizedBox(width: 12),
+                _buildStatCard(
+                  'Số dự án',
+                  uniqueProjects.toString(),
+                  Icons.business,
+                  Colors.green,
                 ),
-                SizedBox(width: 8),
-                // Department selection
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Bộ phận:',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: DropdownButton<String>(
-                          value: _selectedBoPhan,
-                          isExpanded: true,
-                          underline: SizedBox(),
-                          hint: Text('Chọn bộ phận'),
-                          items: _boPhanList.map((String item) {
-                            return DropdownMenuItem<String>(
-                              value: item,
-                              child: Text(item),
-                            );
-                          }).toList(),
-                          onChanged: (String? value) {
-                            setState(() {
-                              _selectedBoPhan = value;
-                            });
-                            _loadTaskHistoryData();
-                            _loadRecentImages();
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
+                SizedBox(width: 12),
+                _buildStatCard(
+                  'Số vấn đề',
+                  issuesCount.toString(),
+                  Icons.warning,
+                  Colors.orange,
+                ),
+                SizedBox(width: 12),
+                _buildStatCard(
+                  'Tỉ lệ giải quyết',
+                  '${(issueResolutionRate * 100).toStringAsFixed(0)}%',
+                  Icons.check_circle,
+                  Colors.teal,
                 ),
               ],
             ),
-          ),
-          // Summary Statistics
-          SizedBox(height: 4),
-          Text(
-            'Tổng quan',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
+            
+            // Recent Images Display
+            SizedBox(height: 24),
+            Text(
+              'Hình ảnh gần đây',
+              style: TextStyle(
+                fontSize: 20, 
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-          SizedBox(height: 16),
-          
-          // Stats Cards
-          Row(
-            children: [
-              _buildStatCard(
-                'Số báo cáo',
-                totalReports.toString(),
-                Icons.assignment,
-                Colors.blue,
-              ),
-              SizedBox(width: 12),
-              _buildStatCard(
-                'Số dự án',
-                uniqueProjects.toString(),
-                Icons.business,
-                Colors.green,
-              ),
-              SizedBox(width: 12),
-              _buildStatCard(
-                'Số vấn đề',
-                issuesCount.toString(),
-                Icons.warning,
-                Colors.orange,
-              ),
-              SizedBox(width: 12),
-              _buildStatCard(
-                'Tỉ lệ giải quyết',
-                '${(issueResolutionRate * 100).toStringAsFixed(0)}%',
-                Icons.check_circle,
-                Colors.teal,
-              ),
-            ],
-          ),
-          
-          // Recent Images Display
-          SizedBox(height: 24),
-          Text(
-            'Hình ảnh gần đây',
-            style: TextStyle(
-              fontSize: 20, 
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          SizedBox(height: 16),
-          _buildRecentImagesGrid(),
-        ],
+            SizedBox(height: 16),
+            _buildRecentImagesGrid(),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 Widget _buildAnalyticsTab() {
-  return SingleChildScrollView(
-    child: Container(
-      padding: EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Same top section as the first tab - Sync status, date filters, dept selection, stats cards
-          if (_syncStatus.isNotEmpty)
-            Padding(
-              padding: EdgeInsets.only(bottom: 8),
-              child: Text(
-                _syncStatus,
-                style: TextStyle(
-                  color: Colors.blue,
-                  fontWeight: FontWeight.bold,
+    return SingleChildScrollView(
+      child: Container(
+        padding: EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Same top section as the first tab with the new dropdown
+            if (_syncStatus.isNotEmpty)
+              Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: Text(
+                  _syncStatus,
+                  style: TextStyle(
+                    color: Colors.blue,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-            ),
-          SizedBox(height: 4),
-          Container(
-            margin: EdgeInsets.only(bottom: 4),
-            child: Row(
-              children: [
-                // From Date
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            SizedBox(height: 4),
+            Container(
+              margin: EdgeInsets.only(bottom: 4),
+              child: Column(
+                children: [
+                  // First row with date selectors
+                  Row(
                     children: [
-                      Text(
-                        'Từ ngày:',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
+                      // From Date
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Từ ngày:',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            _buildDatePicker(
+                              selectedDate: _selectedStartDate,
+                              onChanged: (date) {
+                                setState(() {
+                                  _selectedStartDate = date;
+                                });
+                                _loadTaskHistoryData();
+                              },
+                            ),
+                          ],
                         ),
                       ),
-                      SizedBox(height: 4),
-                      _buildDatePicker(
-                        selectedDate: _selectedStartDate,
-                        onChanged: (date) {
-                          setState(() {
-                            _selectedStartDate = date;
-                          });
-                          _loadTaskHistoryData();
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(width: 8),
-                // To Date
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Đến ngày:',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      _buildDatePicker(
-                        selectedDate: _selectedEndDate,
-                        onChanged: (date) {
-                          setState(() {
-                            _selectedEndDate = date;
-                          });
-                          _loadTaskHistoryData();
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(width: 8),
-                // Department selection
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Bộ phận:',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: DropdownButton<String>(
-                          value: _selectedBoPhan,
-                          isExpanded: true,
-                          underline: SizedBox(),
-                          hint: Text('Chọn bộ phận'),
-                          items: _boPhanList.map((String item) {
-                            return DropdownMenuItem<String>(
-                              value: item,
-                              child: Text(item),
-                            );
-                          }).toList(),
-                          onChanged: (String? value) {
-                            setState(() {
-                              _selectedBoPhan = value;
-                            });
-                            _loadTaskHistoryData();
-                          },
+                      SizedBox(width: 8),
+                      // To Date
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Đến ngày:',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            _buildDatePicker(
+                              selectedDate: _selectedEndDate,
+                              onChanged: (date) {
+                                setState(() {
+                                  _selectedEndDate = date;
+                                });
+                                _loadTaskHistoryData();
+                              },
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                ),
-              ],
-            ),
+                  
+                  // Second row with department and category filters
+                  SizedBox(height: 12),
+                  Row(
+                    children: [
+                      // Department selection
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Bộ phận:',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: DropdownButton<String>(
+                                value: _selectedBoPhan,
+                                isExpanded: true,
+                                underline: SizedBox(),
+                                hint: Text('Chọn bộ phận'),
+                                items: _boPhanList.map((String item) {
+                                  return DropdownMenuItem<String>(
+                                    value: item,
+                                    child: Text(item),
+                                  );
+                                }).toList(),
+                                onChanged: (String? value) {
+                                  setState(() {
+                                    _selectedBoPhan = value;
+                                  });
+                                  _loadTaskHistoryData();
+                                  _loadRecentImages();
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      
+                      // NEW: Category selection
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Chủ đề:',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: DropdownButton<String>(
+                                value: _selectedPhanLoai,
+                                isExpanded: true,
+                                underline: SizedBox(),
+                                hint: Text('Chọn chủ đề'),
+                                items: _phanLoaiList.map((String item) {
+                                  return DropdownMenuItem<String>(
+                                    value: item,
+                                    child: Text(item),
+                                  );
+                                }).toList(),
+                                onChanged: (String? value) {
+                                  setState(() {
+                                    _selectedPhanLoai = value;
+                                  });
+                                  _loadTaskHistoryData();
+                                  _loadRecentImages();
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
           ),
           // Summary Statistics
-          SizedBox(height: 4),
+          SizedBox(height: 14),
           Text(
             'Tổng quan',
             style: TextStyle(
@@ -1125,42 +1282,48 @@ List<Map<String, dynamic>> _recentImages = [];
 bool _isLoadingImages = false;
 
 Future<void> _loadRecentImages() async {
-  if (_isLoadingImages) return;
-  
-  setState(() {
-    _isLoadingImages = true;
-  });
-  
-  try {
-    final db = await dbHelper.database;
-    String query = '''
-      SELECT * FROM ${DatabaseTables.taskHistoryTable}
-      WHERE HinhAnh IS NOT NULL AND HinhAnh != ''
-      AND date(Ngay) IS NOT NULL
-    ''';
-    List<dynamic> args = [];
-
-    if (_selectedBoPhan != 'Tất cả') {
-      query += ' AND BoPhan = ?';
-      args.add(_selectedBoPhan);
-    }
-
-    query += ' ORDER BY date(Ngay) DESC, Gio DESC LIMIT 50';
-
-    final List<Map<String, dynamic>> results = await db.rawQuery(query, args);
+    if (_isLoadingImages) return;
     
     setState(() {
-      _recentImages = results;
-      _isLoadingImages = false;
+      _isLoadingImages = true;
     });
-  } catch (e) {
-    print('Error loading recent images: $e');
-    _showError('Error loading images: $e');
-    setState(() {
-      _isLoadingImages = false;
-    });
+    
+    try {
+      final db = await dbHelper.database;
+      String query = '''
+        SELECT * FROM ${DatabaseTables.taskHistoryTable}
+        WHERE HinhAnh IS NOT NULL AND HinhAnh != ''
+        AND date(Ngay) IS NOT NULL
+      ''';
+      List<dynamic> args = [];
+
+      if (_selectedBoPhan != 'Tất cả') {
+        query += ' AND BoPhan = ?';
+        args.add(_selectedBoPhan);
+      }
+      
+      // Add PhanLoai filter
+      if (_selectedPhanLoai != 'Tất cả') {
+        query += ' AND PhanLoai = ?';
+        args.add(_selectedPhanLoai);
+      }
+
+      query += ' ORDER BY date(Ngay) DESC, Gio DESC LIMIT 50';
+
+      final List<Map<String, dynamic>> results = await db.rawQuery(query, args);
+      
+      setState(() {
+        _recentImages = results;
+        _isLoadingImages = false;
+      });
+    } catch (e) {
+      print('Error loading recent images: $e');
+      _showError('Error loading images: $e');
+      setState(() {
+        _isLoadingImages = false;
+      });
+    }
   }
-}
 String _formatDateTime(String dateTimeStr) {
   try {
     final parts = dateTimeStr.split(' ');
