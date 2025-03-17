@@ -6,7 +6,6 @@ import 'user_credentials.dart';
 import 'db_helper.dart';
 import 'table_models.dart';
 import 'package:intl/intl.dart';
-import 'http_client.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'dart:math' as math;
 import 'package:uuid/uuid.dart';
@@ -15,6 +14,8 @@ import 'package:excel/excel.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'http_client.dart';
+
 class ProjectWorkerAutoCLThang extends StatefulWidget {
   final String selectedBoPhan;
   final String username;
@@ -41,11 +42,12 @@ class _ProjectWorkerAutoCLThangState extends State<ProjectWorkerAutoCLThang> {
   bool _isEditingAllowed = false;
   final Map<String, TextEditingController> _controllers = {};
   Map<String, bool> _modifiedRows = {};
-
+  Map<String, DateTime> _lastEditTimes = {};
+final _editableGroupFields = ['CongChuanToiDa', 'MucLuongThang', 'MucLuongNgoaiGio', 'MucLuongNgoaiGio2'];
+bool _isBatchUpdating = false;
   // Define editable fields
   final List<String> _editableFields = [
-    'GhiChu', 'Tong_Cong', 'Tong_Phep', 'Tong_Le', 'Tong_NgoaiGio', 
-    'Tong_HV', 'Tong_Dem', 'Tong_CD', 'Tong_HT', 'TongLuong', 
+    'GhiChu', 'CongChuanToiDa',
     'UngLan1', 'UngLan2', 'ThanhToan3', 'TruyLinh', 
     'TruyThu', 'Khac', 'MucLuongThang', 'MucLuongNgoaiGio', 'MucLuongNgoaiGio2'
   ];
@@ -181,20 +183,39 @@ class _ProjectWorkerAutoCLThangState extends State<ProjectWorkerAutoCLThang> {
       
       // Set up text controllers for each editable field
       for (var row in data) {
-        for (var field in _editableFields) {
-          String key = '${row['UID']}_$field';
-          _controllers[key] = TextEditingController(
-            text: row[field]?.toString() ?? ''
-          );
+  for (var field in _editableFields) {
+    String key = '${row['UID']}_$field';
+    _controllers[key] = TextEditingController(
+      text: row[field]?.toString() ?? ''
+    );
+    
+    // Add listener to detect changes
+    _controllers[key]!.addListener(() {
+      setState(() {
+        _modifiedRows[row['UID'].toString()] = true;
+      });
+      
+      // If this is a group field, check if we should show the popup
+      if (_editableGroupFields.contains(field) && !_isBatchUpdating) {
+        // Track edit time to prevent multiple popups
+        final now = DateTime.now();
+        if (_lastEditTimes[key] == null || 
+            now.difference(_lastEditTimes[key]!).inSeconds >= 2) {
+          _lastEditTimes[key] = now;
           
-          // Add listener to detect changes
-          _controllers[key]!.addListener(() {
-            setState(() {
-              _modifiedRows[row['UID'].toString()] = true;
-            });
+          // Use Future.delayed to wait for user to finish typing
+          Future.delayed(Duration(milliseconds: 1000), () {
+            // Only show popup if this was the last edit
+            if (_lastEditTimes[key] != null && 
+                now.isAtSameMomentAs(_lastEditTimes[key]!)) {
+              _showApplyToAllPopup(row, field, _controllers[key]!.text);
+            }
           });
         }
       }
+    });
+  }
+}
       
       setState(() {
         _monthlyData = List<Map<String, dynamic>>.from(data);
@@ -208,7 +229,88 @@ class _ProjectWorkerAutoCLThangState extends State<ProjectWorkerAutoCLThang> {
     
     setState(() => _isLoading = false);
   }
-
+Future<void> _showApplyToAllPopup(Map<String, dynamic> row, String field, String value) async {
+  // Skip if empty value or not a valid number
+  if (value.isEmpty) return;
+  
+  double? numValue;
+  try {
+    numValue = double.parse(value);
+  } catch (e) {
+    return; // Not a valid number
+  }
+  
+  final boPhan = row['BoPhan'];
+  final fieldName = {
+    'CongChuanToiDa': 'Công chuẩn tối đa',
+    'MucLuongThang': 'Mức lương tháng',
+    'MucLuongNgoaiGio': 'Mức lương ngoài giờ',
+    'MucLuongNgoaiGio2': 'Mức lương ngoài giờ 2'
+  }[field] ?? field;
+  
+  final bool? result = await showDialog<bool>(
+    context: context, 
+    builder: (context) => AlertDialog(
+      title: Text('Áp dụng cho tất cả'),
+      content: Text('Bạn có muốn áp dụng giá trị "$value" cho trường "$fieldName" của tất cả nhân viên thuộc bộ phận "$boPhan" không?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: Text('Không'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: Text('Có'),
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.blue,
+            backgroundColor: Colors.blue.withOpacity(0.1),
+          ),
+        ),
+      ],
+    ),
+  );
+  
+  if (result == true) {
+    // User confirmed, apply to all records with same BoPhan
+    await _applyValueToAllInBoPhan(boPhan, field, numValue);
+  }
+}
+Future<void> _applyValueToAllInBoPhan(String boPhan, String field, double value) async {
+  setState(() {
+    _isLoading = true;
+    _isBatchUpdating = true;
+  });
+  
+  try {
+    for (var record in _monthlyData) {
+      if (record['BoPhan'] == boPhan) {
+        final recordId = record['UID'].toString();
+        final controllerKey = '${recordId}_$field';
+        
+        if (_controllers.containsKey(controllerKey)) {
+          _controllers[controllerKey]!.text = value.toString();
+          _modifiedRows[recordId] = true;
+        }
+      }
+    }
+    
+    // Show success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Đã áp dụng giá trị cho tất cả nhân viên thuộc bộ phận "$boPhan"'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  } catch (e) {
+    print('Error applying value to all: $e');
+    _showError('Lỗi khi áp dụng giá trị: $e');
+  } finally {
+    setState(() {
+      _isLoading = false;
+      _isBatchUpdating = false;
+    });
+  }
+}
   Future<void> _saveData() async {
   if (!_isEditingAllowed) {
     _showError('Không thể chỉnh sửa dữ liệu sau ngày 8 của tháng tiếp theo');
@@ -586,36 +688,35 @@ for (var record in chamCongCNRecords) {
         double tongCD = 0;
         double tongHT = 0;
         
-        // Process each day's record
         for (var record in departmentRecords) {
-          final recordDateStr = record['Ngay'] as String;
-          final recordDate = DateTime.parse(recordDateStr.split('T')[0]);
-          final day = recordDate.day;
-          
-          // Extract values
-          final congThuongChu = record['CongThuongChu'] as String? ?? 'Ro';
-          double phanLoaiValue = 0;
-          try {
-            final phanLoai = record['PhanLoai'] as String? ?? '0';
-            phanLoaiValue = double.tryParse(phanLoai) ?? 0;
-          } catch (e) {
-            // Ignore parsing errors
-          }
-          
-          // Calculate Phep values
-          double phepValue = 0;
-          if (congThuongChu.startsWith('P') && !congThuongChu.startsWith('P/2')) {
-            phepValue += 1.0;
-          } else if (congThuongChu.startsWith('P/2')) {
-            phepValue += 0.5;
-          }
-          
-          // Check for +P or +P/2 suffix
-          if (congThuongChu.endsWith('+P')) {
-            phepValue += 1.0;
-          } else if (congThuongChu.endsWith('+P/2')) {
-            phepValue += 0.5;
-          }
+  final recordDateStr = record['Ngay'] as String;
+  final recordDate = DateTime.parse(recordDateStr.split('T')[0]);
+  final day = recordDate.day;
+  
+  // Extract values
+  final congThuongChu = record['CongThuongChu'] as String? ?? 'Ro';
+  double phanLoaiValue = 0;
+  try {
+    final phanLoai = record['PhanLoai'] as String? ?? '0';
+    phanLoaiValue = double.tryParse(phanLoai) ?? 0;
+  } catch (e) {
+    // Ignore parsing errors
+  }
+  
+  // Calculate Phep values
+  double phepValue = 0;
+  if (congThuongChu.startsWith('P') && !congThuongChu.startsWith('P/2')) {
+    phepValue += 1.0;
+  } else if (congThuongChu.startsWith('P/2')) {
+    phepValue += 0.5;
+  }
+  
+  // Check for +P or +P/2 suffix
+  if (congThuongChu.endsWith('+P')) {
+    phepValue += 1.0;
+  } else if (congThuongChu.endsWith('+P/2')) {
+    phepValue += 0.5;
+  }
           
           // Check for HT value
           double htValue = 0;
@@ -656,31 +757,28 @@ for (var record in chamCongCNRecords) {
           }
           
           // Add values to the appropriate period
-          if (day <= 15) {
-            tuan1va2 += phanLoaiValue + ngoaiGioValue;
-            phep1va2 += phepValue;
-            ht1va2 += htValue;
-          } else if (day <= 25) {
-            tuan3va4 += phanLoaiValue + ngoaiGioValue;
-            phep3va4 += phepValue;
-            ht3va4 += htValue;
-          } else {
-            tuan5plus += phanLoaiValue + ngoaiGioValue;
-            phep5plus += phepValue;
-            ht5plus += htValue;
-          }
-          
-          // Add to totals
-          tongCong += phanLoaiValue + ngoaiGioValue;
-          tongPhep += phepValue;
-          tongLe += congLe;
-          tongNgoaiGio += ngoaiGioValue;
-          tongHT += htValue;
-          
-          // Add other values to totals if needed
-          // This is a simplified version, you may need to add more calculations
-        }
-        
+            if (day <= 15) {
+    tuan1va2 += phanLoaiValue + ngoaiGioValue - phep1va2;
+    phep1va2 += phepValue;
+    ht1va2 += htValue;
+  } else if (day <= 25) {
+    tuan3va4 += phanLoaiValue + ngoaiGioValue- phep3va4;
+    phep3va4 += phepValue;
+    ht3va4 += htValue;
+  } else {
+    tuan5plus += phanLoaiValue + ngoaiGioValue-phep5plus;
+    phep5plus += phepValue;
+    ht5plus += htValue;
+  }
+  
+  // Add to totals
+  tongCong += phanLoaiValue + ngoaiGioValue -tongPhep;
+  tongPhep += phepValue;
+  tongLe += congLe;
+  tongNgoaiGio += ngoaiGioValue;
+  tongHT += htValue;
+}
+
         // Get TenNV (employee name) from staffbio
         String tenNV = "";
         final staffResult = await dbHelper.rawQuery(
@@ -695,9 +793,9 @@ for (var record in chamCongCNRecords) {
         // Calculate UngLan1 based on tuan1va2 value
         double ungLan1 = 0;
         if (tuan1va2 >= 10 && tuan1va2 < 13) {
-          ungLan1 = 1000000;
-        } else if (tuan1va2 >= 13) {
           ungLan1 = 1500000;
+        } else if (tuan1va2 >= 13) {
+          ungLan1 = 1700000;
         }
         
         // Calculate UngLan2 based on total for first 25 days
@@ -705,9 +803,9 @@ for (var record in chamCongCNRecords) {
 if (tuan3va4 < 6) {
   ungLan2 = 0;
 } else if (tuan3va4 < 8) {
-  ungLan2 = 1100000;
+  ungLan2 = 1600000;
 } else {
-  ungLan2 = 1300000;
+  ungLan2 = 1800000;
 }
         double totalFirst25 = tuan1va2 + tuan3va4;
         // Add your UngLan2 calculation logic here
@@ -720,7 +818,7 @@ if (tuan3va4 < 6) {
 Map<String, dynamic> recordData = {
   'UID': recordExists ? existingRecordsMap[maNV]![boPhan]!['UID'] : _generateUUID(),
   'GiaiDoan': giaiDoan,
-  'NgayCapNhat': ngayCapNhat,
+  //'NgayCapNhat': ngayCapNhat,
   'MaNV': maNV,
   'BoPhan': boPhan,
   'MaBP': boPhan,
@@ -858,7 +956,7 @@ Future<void> _syncUpdatedRecordsWithServer(List<Map<String, dynamic>> records) a
     List<Map<String, dynamic>> serverRecords = records.map((record) {
       Map<String, dynamic> serverRecord = {
         'UID': record['UID'],
-        'NgayCapNhat': record['NgayCapNhat'],
+        //'NgayCapNhat': record['NgayCapNhat'],
         'GiaiDoan': record['GiaiDoan'],
         'MaNV': record['MaNV'],
         'BoPhan': record['BoPhan'],
@@ -947,7 +1045,7 @@ Future<void> _exportToExcel() async {
       'MaNV': 'Mã NV',
       'TenNV': 'Tên NV',
       'BoPhan': 'Bộ phận',
-      'NgayCapNhat': 'Ngày cập nhật',
+      //'NgayCapNhat': 'Ngày cập nhật',
       'Tuan1va2': 'Tuần 1-2',
       'Phep1va2': 'Phép 1-2',
       'HT1va2': 'HT 1-2',
@@ -977,7 +1075,7 @@ Future<void> _exportToExcel() async {
     
     // Define columns to show (same as in the UI)
     final List<String> columnsToShow = [
-      'MaNV', 'TenNV', 'BoPhan', 'NgayCapNhat',
+      'MaNV', 'TenNV', 'BoPhan', 'CongChuanToiDa',
       'Tuan1va2', 'Phep1va2', 'HT1va2',
       'Tuan3va4', 'Phep3va4', 'HT3va4',
       'Tong_Cong', 'Tong_Phep', 'Tong_Le', 'Tong_NgoaiGio',
@@ -1312,7 +1410,7 @@ Future<void> _exportToExcel() async {
     'MaNV': 'Mã NV',
     'TenNV': 'Tên NV',
     'BoPhan': 'Bộ phận',
-    'NgayCapNhat': 'Ngày cập nhật',
+    //'NgayCapNhat': 'Ngày cập nhật',
     'Tuan1va2': 'Tuần 1-2',
     'Phep1va2': 'Phép 1-2',
     'HT1va2': 'HT 1-2',
@@ -1341,7 +1439,7 @@ Future<void> _exportToExcel() async {
   };
   
   final List<String> columnsToShow = [
-    'MaNV', 'TenNV', 'BoPhan', 'NgayCapNhat',
+    'MaNV', 'TenNV', 'BoPhan', 'CongChuanToiDa',
     'Tuan1va2', 'Phep1va2', 'HT1va2',
     'Tuan3va4', 'Phep3va4', 'HT3va4',
     'Tong_Cong', 'Tong_Phep', 'Tong_Le', 'Tong_NgoaiGio',

@@ -12,7 +12,6 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import 'export_helper.dart';
 import 'projectworkerphep.dart';
-import 'http_client.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'projectworkerautoCLthang.dart';
 import 'package:sqflite/sqflite.dart';
@@ -115,7 +114,7 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
       
       // Load all departments
       try {
-        final response = await AuthenticatedHttpClient.get(
+        final response = await http.get(
           Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/${widget.username}'),
           headers: {'Content-Type': 'application/json'},
         );
@@ -716,10 +715,17 @@ Future<void> _exportExcel() async {
   }
   
   // Calculate totals for each section - include all days in total
-  
+    // For Tuan 1+2 - reduce by P1+2
+congChu_regularDays12 = congChu_regularDays12 - congChu_permissionDays12;
+if (congChu_regularDays12 < 0) congChu_regularDays12 = 0;
+
+// For Tuan 3+4 - reduce by P3+4
+congChu_regularDays34 = congChu_regularDays34 - congChu_permissionDays34;
+if (congChu_regularDays34 < 0) congChu_regularDays34 = 0;
   // Chữ & Giờ thường - CongThuongChu row
-  final double congChu_totalRegular = congChu_regularDays12 + congChu_regularDays34 + congChu_regularDays5plus;
-  final double congChu_totalPermission = congChu_permissionDays12 + congChu_permissionDays34 + congChu_permissionDays5plus;
+    final double congChu_totalPermission = congChu_permissionDays12 + congChu_permissionDays34 + congChu_permissionDays5plus;
+
+  final double congChu_totalRegular = congChu_regularDays12 + congChu_regularDays34 + congChu_regularDays5plus-congChu_totalPermission;
   final double congChu_totalHT = congChu_htDays12 + congChu_htDays34 + congChu_htDays5plus;
   
   // Chữ & Giờ thường - NgoaiGioThuong row
@@ -2342,7 +2348,7 @@ String _extractCongThuongChuBase(String? value) {
     }
     
     try {
-      final response = await AuthenticatedHttpClient.get(
+      final response = await http.get(
         Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongcnthangfull'),
         headers: {'Content-Type': 'application/json'},
       );

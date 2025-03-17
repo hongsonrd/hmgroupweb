@@ -656,8 +656,19 @@ Future<void> _exportExcel() async {
   // Calculate totals for each section - include all days in total
   
   // Chữ & Giờ thường - CongThuongChu row
-  final double congChu_totalRegular = congChu_regularDays12 + congChu_regularDays34 + congChu_regularDays5plus;
+  // For Tuan 1+2 - reduce by P1+2
+congChu_regularDays12 = congChu_regularDays12 - congChu_permissionDays12;
+if (congChu_regularDays12 < 0) congChu_regularDays12 = 0;
+
+// For Tuan 3+4 - reduce by P3+4
+congChu_regularDays34 = congChu_regularDays34 - congChu_permissionDays34;
+if (congChu_regularDays34 < 0) congChu_regularDays34 = 0;
+
+// For Tuan 5+ - reduce by P5+
+congChu_regularDays5plus = congChu_regularDays5plus - congChu_permissionDays5plus;
+if (congChu_regularDays5plus < 0) congChu_regularDays5plus = 0;
   final double congChu_totalPermission = congChu_permissionDays12 + congChu_permissionDays34 + congChu_permissionDays5plus;
+  final double congChu_totalRegular = congChu_regularDays12 + congChu_regularDays34 + congChu_regularDays5plus - congChu_totalPermission;
   final double congChu_totalHT = congChu_htDays12 + congChu_htDays34 + congChu_htDays5plus;
   
   // Chữ & Giờ thường - NgoaiGioThuong row

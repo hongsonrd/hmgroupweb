@@ -547,7 +547,7 @@ showProgress('Đồng bộ dữ liệu đồng phục', 6);
 
 try {
   // First, sync DongPhuc data
-  final dongPhucResponse = await http.get(
+  final dongPhucResponse = await AuthenticatedHttpClient.get(
     Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/dongphuc/$username'),
   );
 
@@ -566,7 +566,7 @@ try {
     await dbHelper.batchInsertDongPhuc(dongPhucModels);
 
     // Next, sync ChiTietDP data
-    final chiTietDPResponse = await http.get(
+    final chiTietDPResponse = await AuthenticatedHttpClient.get(
       Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/dongphuclist'),
     );
 
@@ -882,58 +882,58 @@ try {
   }
 }
   @override
-  Widget build(BuildContext context) {
-    final userCredentials = Provider.of<UserCredentials>(context);
-    String username = userCredentials.username.toUpperCase();
+Widget build(BuildContext context) {
+  final userCredentials = Provider.of<UserCredentials>(context);
+  String username = userCredentials.username.toUpperCase();
 
-    return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 45,
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color.fromARGB(255, 114, 255, 175),
-                Color.fromARGB(255, 201, 255, 225),
-                Color.fromARGB(255, 79, 255, 249),
-                Color.fromARGB(255, 188, 255, 248),
-              ],
-            ),
+  return Scaffold(
+    appBar: AppBar(
+      toolbarHeight: 45,
+      flexibleSpace: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color.fromARGB(255, 114, 255, 175),
+              Color.fromARGB(255, 201, 255, 225),
+              Color.fromARGB(255, 79, 255, 249),
+              Color.fromARGB(255, 188, 255, 248),
+            ],
           ),
         ),
-        title: Text(
-          'Dự án của $username',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: _loadProjects,
-            style: TextButton.styleFrom(
-              backgroundColor: const Color.fromARGB(255, 255, 255, 255),
-            ),
-            child: Text(
-              'Đồng bộ',
-              style: TextStyle(
-                fontSize: 12,
-                color: const Color.fromARGB(255, 0, 204, 34),
-              ),
-            ),
-          ),
-          SizedBox(width: 16)
-        ],
       ),
-      body: Container(
-        padding: EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Column(
-  crossAxisAlignment: CrossAxisAlignment.start,
-  children: [
+      title: Text(
+        'Dự án của $username',
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _loadProjects,
+          style: TextButton.styleFrom(
+            backgroundColor: const Color.fromARGB(255, 255, 255, 255),
+          ),
+          child: Text(
+            'Đồng bộ',
+            style: TextStyle(
+              fontSize: 12,
+              color: const Color.fromARGB(255, 0, 204, 34),
+            ),
+          ),
+        ),
+        SizedBox(width: 16)
+      ],
+    ),
+    body: Container(
+      padding: EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
     Row(
       children: [
         Text(
@@ -993,7 +993,7 @@ try {
               fontSize: 16,
               fontWeight: FontWeight.bold,
               color: _selectedProject != null 
-                  ? const Color.fromARGB(255, 214, 214, 214)
+                  ? Colors.blue
                   : Colors.grey,
             ),
           ),
@@ -1067,63 +1067,89 @@ try {
   ],
 ),
             SizedBox(height: 8),
-            if (_isLoading)
-              Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        const Color.fromARGB(255, 0, 204, 34),
-                      ),
+          if (_isLoading)
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      const Color.fromARGB(255, 0, 204, 34),
                     ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Đang tải dự án...',
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontStyle: FontStyle.italic,
-                      ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Đang tải dự án...',
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontStyle: FontStyle.italic,
                     ),
-                  ],
-                ),
-              )
-            else
-              Container(
-                width: double.infinity,
-                child: _projectList.isEmpty
-                  ? Center(
-                      child: Text(
+                  ),
+                ],
+              ),
+            )
+          else
+            Container(
+              width: double.infinity,
+              child: _projectList.isEmpty
+                ? Column(
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        color: Colors.orange,
+                        size: 48,
+                      ),
+                      SizedBox(height: 8),
+                      Text(
                         'Không có dữ liệu dự án',
                         style: TextStyle(
-                          color: Colors.grey,
-                          fontStyle: FontStyle.italic,
+                          color: Colors.red,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
                         ),
                       ),
-                    )
-                  : DropdownButtonFormField<String>(
-                      value: _selectedProject,
-                      decoration: InputDecoration(
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      SizedBox(height: 8),
+                      Text(
+                        'Vui lòng đăng xuất, đăng nhập lại và nhấn nút "Đồng bộ" để lấy dữ liệu.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.black87,
+                        ),
                       ),
-                      hint: Text('Chọn dự án'),
-                      items: _projectList.map((String project) {
-                        return DropdownMenuItem<String>(
-                          value: project,
-                          child: Text(project),
-                        );
-                      }).toList(),
-                      onChanged: (newValue) {
-                        setState(() {
-                          _selectedProject = newValue;
-                        });
-                        if (newValue != null) {
-                          _loadStaffForProject(newValue);
-                        }
-                      },
+                      SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _loadProjects,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color.fromARGB(255, 0, 204, 34),
+                          foregroundColor: Colors.white,
+                        ),
+                        child: Text('Thử đồng bộ ngay'),
+                      ),
+                    ],
+                  )
+                : DropdownButtonFormField<String>(
+                    value: _selectedProject,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     ),
-              ),
+                    hint: Text('Chọn dự án'),
+                    items: _projectList.map((String project) {
+                      return DropdownMenuItem<String>(
+                        value: project,
+                        child: Text(project),
+                      );
+                    }).toList(),
+                    onChanged: (newValue) {
+                      setState(() {
+                        _selectedProject = newValue;
+                      });
+                      if (newValue != null) {
+                        _loadStaffForProject(newValue);
+                      }
+                    },
+                  ),
+            ),
             if (_selectedProject != null && !_isLoading) ...[
               SizedBox(height: 6),
               Align(
