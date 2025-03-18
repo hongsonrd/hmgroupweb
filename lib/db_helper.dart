@@ -42,7 +42,7 @@ class DBHelper {
       print('Forcing database reset for version 16...');
       try {
         await deleteDatabase(path);
-        await prefs.clear();
+        //await prefs.clear();
         await prefs.setBool('db_reset_v16', true);
         print('Database reset successful');
       } catch (e) {

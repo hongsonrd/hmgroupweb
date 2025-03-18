@@ -2213,7 +2213,8 @@ Future<void> _submitReport() async {
       taskChiTiet2 = '${widget.task.start}-${widget.task.end}-${widget.task.task}';
     }
 
-    if (_imageFile != null && (_selectedResult == '⚠️' || _selectedResult == '❌')) {
+    // Always use MultipartRequest when an image is available
+    if (_imageFile != null) {
       var request = http.MultipartRequest(
         'POST',
         Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/taskhistory'),
@@ -2248,14 +2249,46 @@ Future<void> _submitReport() async {
 
       final response = await request.send();
       final responseData = await response.stream.bytesToString();
+      print('Server response for image upload: $responseData');
+      
       final result = json.decode(responseData);
 
       if (response.statusCode == 200) {
         imageUrl = result['imageUrl'];
+        print('Image uploaded successfully, URL: $imageUrl');
       } else {
         throw Exception('Server returned ${response.statusCode}: ${responseData}');
       }
+    } else {
+      // Only use JSON request when there's no image
+      final taskHistory = TaskHistoryModel(
+        uid: uuid,
+        taskId: widget.task.taskid,
+        ngay: now,
+        gio: timeString,
+        nguoiDung: widget.username.toLowerCase(),
+        ketQua: _selectedResult,
+        chiTiet: _detailController.text,
+        chiTiet2: taskChiTiet2,
+        viTri: widget.vt,
+        boPhan: widget.boPhan,
+        phanLoai: widget.phanLoai ?? 'Kiểm tra chất lượng',
+        hinhAnh: imageUrl,
+        giaiPhap: _giaiPhapController.text.trim(),
+      );
+
+      final response = await http.post(
+        Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/taskhistory'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(taskHistory.toMap()),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Server returned ${response.statusCode}');
+      }
     }
+
+    // Create the model with the received image URL
     final taskHistory = TaskHistoryModel(
       uid: uuid,
       taskId: widget.task.taskid,
@@ -2271,19 +2304,11 @@ Future<void> _submitReport() async {
       hinhAnh: imageUrl,
       giaiPhap: _giaiPhapController.text.trim(),
     );
-    if (_imageFile == null || (_selectedResult != '⚠️' && _selectedResult != '❌')) {
-      final response = await AuthenticatedHttpClient.post(
-        Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/taskhistory'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(taskHistory.toMap()),
-      );
-
-      if (response.statusCode != 200) {
-        throw Exception('Server returned ${response.statusCode}');
-      }
-    }
+    
+    // Save to local DB
     final dbHelper = DBHelper();
     await dbHelper.insertTaskHistory(taskHistory);
+    
     if (mounted) {
       Navigator.of(context).pop();
       Navigator.of(context).pop();

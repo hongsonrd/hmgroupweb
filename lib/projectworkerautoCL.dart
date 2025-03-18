@@ -11,6 +11,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import 'export_helper.dart';
+import 'http_client.dart';
+
 import 'projectworkerphep.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'projectworkerautoCLthang.dart';
@@ -114,7 +116,7 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
       
       // Load all departments
       try {
-        final response = await http.get(
+        final response = await AuthenticatedHttpClient.get(
           Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/${widget.username}'),
           headers: {'Content-Type': 'application/json'},
         );
@@ -810,6 +812,49 @@ if (congChu_regularDays34 < 0) congChu_regularDays34 = 0;
     'cd': '0', // CĐ calculation needs to be added
   };
 }
+double _calculateDailyTotal(int day) {
+  double total = 0.0;
+  
+  // Get all employees
+  final allEmployees = _getUniqueEmployees();
+  
+  for (var empId in allEmployees) {
+    final dateStr = '$_selectedMonth-${day.toString().padLeft(2, '0')}';
+    
+    // Find attendance record for this employee on this day
+    final records = _attendanceData.where(
+      (record) => 
+        record['MaNV'] == empId && 
+        record['Ngay'].split('T')[0] == dateStr
+    ).toList();
+    
+    if (records.isEmpty) continue;
+    final record = records.first;
+    
+    // Get PhanLoai value
+    double phanLoaiValue = 0;
+    if (record['PhanLoai'] != null && record['PhanLoai'].toString().isNotEmpty) {
+      try {
+        phanLoaiValue = double.parse(record['PhanLoai'].toString());
+      } catch (e) {
+        print("Error parsing PhanLoai: $e");
+      }
+    }
+    
+    // Get all NgoaiGio fields and divide by 8
+    final ngoaiGioThuong = double.tryParse(record['NgoaiGioThuong']?.toString() ?? '0') ?? 0;
+    final ngoaiGioKhac = double.tryParse(record['NgoaiGioKhac']?.toString() ?? '0') ?? 0;
+    final ngoaiGiox15 = double.tryParse(record['NgoaiGiox15']?.toString() ?? '0') ?? 0;
+    final ngoaiGiox2 = double.tryParse(record['NgoaiGiox2']?.toString() ?? '0') ?? 0;
+    
+    final ngoaiGioTotal = (ngoaiGioThuong + ngoaiGioKhac + ngoaiGiox15 + ngoaiGiox2) / 8;
+    
+    // Add to total
+    total += phanLoaiValue + ngoaiGioTotal;
+  }
+  
+  return total;
+}
 Widget _buildRegularSection(String columnType, String sectionTitle) {
   final days = _getDaysInMonth();
   final employees = _getEmployeesWithValueInColumn(columnType);
@@ -1156,14 +1201,32 @@ Widget _buildRegularSection(String columnType, String sectionTitle) {
                     child: Center(child: Text('HT', style: TextStyle(fontWeight: FontWeight.bold))),
                   ),
                 ),
-                ...days.map((day) => TableCell(
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Center(child: Text(day.toString(), style: TextStyle(fontWeight: FontWeight.bold))),
-                  ),
-                )),
-              ],
+                 ...days.map((day) => TableCell(
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: Text(
+              _formatNumberValue(_calculateDailyTotal(day)),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.red,
+                fontSize: 12,
+              ),
             ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: Text(
+              day.toString(), 
+              style: TextStyle(fontWeight: FontWeight.bold)
+            ),
+          ),
+        ],
+      ),
+    )),
+  ],
+),
             for (var empId in employees) ...[
               TableRow(
                 decoration: BoxDecoration(
@@ -1399,7 +1462,49 @@ String _extractCongThuongChuBase(String? value) {
       );
     }
   }
-
+double _calculateDailyTotal(int day) {
+  double total = 0.0;
+  
+  // Get all employees
+  final allEmployees = _getUniqueEmployees();
+  
+  for (var empId in allEmployees) {
+    final dateStr = '$_selectedMonth-${day.toString().padLeft(2, '0')}';
+    
+    // Find attendance record for this employee on this day
+    final records = _attendanceData.where(
+      (record) => 
+        record['MaNV'] == empId && 
+        record['Ngay'].split('T')[0] == dateStr
+    ).toList();
+    
+    if (records.isEmpty) continue;
+    final record = records.first;
+    
+    // Get PhanLoai value
+    double phanLoaiValue = 0;
+    if (record['PhanLoai'] != null && record['PhanLoai'].toString().isNotEmpty) {
+      try {
+        phanLoaiValue = double.parse(record['PhanLoai'].toString());
+      } catch (e) {
+        print("Error parsing PhanLoai: $e");
+      }
+    }
+    
+    // Get all NgoaiGio fields and divide by 8
+    final ngoaiGioThuong = double.tryParse(record['NgoaiGioThuong']?.toString() ?? '0') ?? 0;
+    final ngoaiGioKhac = double.tryParse(record['NgoaiGioKhac']?.toString() ?? '0') ?? 0;
+    final ngoaiGiox15 = double.tryParse(record['NgoaiGiox15']?.toString() ?? '0') ?? 0;
+    final ngoaiGiox2 = double.tryParse(record['NgoaiGiox2']?.toString() ?? '0') ?? 0;
+    
+    final ngoaiGioTotal = (ngoaiGioThuong + ngoaiGioKhac + ngoaiGiox15 + ngoaiGiox2) / 8;
+    
+    // Add to total
+    total += phanLoaiValue + ngoaiGioTotal;
+  }
+  
+  return total;
+}
   Widget _buildChuGioThuongSection() {
  final days = _getDaysInMonth();
  final employees = _getEmployeesWithValueInColumn('CongThuongChu');
@@ -1679,13 +1784,31 @@ String _extractCongThuongChuBase(String? value) {
                  ),
                ),
                ...days.map((day) => TableCell(
-                 child: Padding(
-                   padding: const EdgeInsets.all(8.0),
-                   child: Center(child: Text(day.toString(), style: TextStyle(fontWeight: FontWeight.bold))),
-                 ),
-               )),
-             ],
-           ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: Text(
+              _formatNumberValue(_calculateDailyTotal(day)),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.red,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: Text(
+              day.toString(), 
+              style: TextStyle(fontWeight: FontWeight.bold)
+            ),
+          ),
+        ],
+      ),
+    )),
+  ],
+),
            for (var empId in employees) ...[
              TableRow(
                decoration: BoxDecoration(
@@ -2348,7 +2471,7 @@ String _extractCongThuongChuBase(String? value) {
     }
     
     try {
-      final response = await http.get(
+      final response = await AuthenticatedHttpClient.get(
         Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongcnthangfull'),
         headers: {'Content-Type': 'application/json'},
       );
