@@ -12,8 +12,9 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import 'export_helper.dart';
 import 'projectworkerphep.dart';
-import 'http_client.dart';
 import 'package:dropdown_search/dropdown_search.dart';
+import 'http_client.dart';
+
 class ProjectWorkerAuto extends StatefulWidget {
   final String selectedBoPhan;
   final String username;
@@ -1882,49 +1883,7 @@ String _extractCongThuongChuBase(String? value) {
    ],
  );
 }
-double _calculateDailyTotal(int day) {
-  double total = 0.0;
-  
-  // Get all employees
-  final allEmployees = _getUniqueEmployees();
-  
-  for (var empId in allEmployees) {
-    final dateStr = '$_selectedMonth-${day.toString().padLeft(2, '0')}';
-    
-    // Find attendance record for this employee on this day
-    final records = _attendanceData.where(
-      (record) => 
-        record['MaNV'] == empId && 
-        record['Ngay'].split('T')[0] == dateStr
-    ).toList();
-    
-    if (records.isEmpty) continue;
-    final record = records.first;
-    
-    // Get PhanLoai value
-    double phanLoaiValue = 0;
-    if (record['PhanLoai'] != null && record['PhanLoai'].toString().isNotEmpty) {
-      try {
-        phanLoaiValue = double.parse(record['PhanLoai'].toString());
-      } catch (e) {
-        print("Error parsing PhanLoai: $e");
-      }
-    }
-    
-    // Get all NgoaiGio fields and divide by 8
-    final ngoaiGioThuong = double.tryParse(record['NgoaiGioThuong']?.toString() ?? '0') ?? 0;
-    final ngoaiGioKhac = double.tryParse(record['NgoaiGioKhac']?.toString() ?? '0') ?? 0;
-    final ngoaiGiox15 = double.tryParse(record['NgoaiGiox15']?.toString() ?? '0') ?? 0;
-    final ngoaiGiox2 = double.tryParse(record['NgoaiGiox2']?.toString() ?? '0') ?? 0;
-    
-    final ngoaiGioTotal = (ngoaiGioThuong + ngoaiGioKhac + ngoaiGiox15 + ngoaiGiox2) / 8;
-    
-    // Add to total
-    total += phanLoaiValue + ngoaiGioTotal;
-  }
-  
-  return total;
-}
+
   Widget _buildCombinedView() {
     return SingleChildScrollView(
       child: Column(
