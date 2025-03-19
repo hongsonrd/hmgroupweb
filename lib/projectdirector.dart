@@ -320,16 +320,16 @@ Future<void> _loadPhanLoaiList() async {
 
   Future<void> _loadHistory() async {
   if (_isLoadingHistory) return;
-  
+
   setState(() {
     _isLoadingHistory = true;
     _syncStatus = 'Đang đồng bộ lịch sử...';
   });
-  
+
   try {
     final userCredentials = Provider.of<UserCredentials>(context, listen: false);
     final username = userCredentials.username.toLowerCase();
-    
+
     setState(() => _syncStatus = 'Đang lấy lịch sử báo cáo...');
     final taskHistoryResponse = await AuthenticatedHttpClient.get(
       Uri.parse('$baseUrl/historybaocao/$username')
@@ -340,98 +340,77 @@ Future<void> _loadPhanLoaiList() async {
     }
 
     final List<dynamic> taskHistoryData = json.decode(taskHistoryResponse.body);
-    
-    // Create a diagnostic record in the UI
+
     setState(() {
-      _syncStatus = 'Analyzing ${taskHistoryData.length} records...';
+      _syncStatus = 'Processing ${taskHistoryData.length} records...';
     });
-    
+
     await dbHelper.clearTable(DatabaseTables.taskHistoryTable);
 
     final taskHistories = <TaskHistoryModel>[];
-    List<String> errorMessages = [];
-    
+    int processedCount = 0;
+    int errorCount = 0;
+
+    final today = DateTime.now();
+    final fallbackDate = DateTime(today.year, today.month, today.day);
+
     for (int i = 0; i < taskHistoryData.length; i++) {
+      if (i % 50 == 0) {
+        setState(() => _syncStatus = 'Processing record $i of ${taskHistoryData.length}...');
+        await Future.delayed(Duration(milliseconds: 1));
+      }
+
       try {
-        // Update progress periodically
-        if (i % 50 == 0) {
-          setState(() {
-            _syncStatus = 'Processing record $i of ${taskHistoryData.length}...';
-          });
-          // Give UI time to update
-          await Future.delayed(Duration(milliseconds: 50));
-        }
-        
         final data = taskHistoryData[i];
-        final ngayStr = data['Ngay'] as String? ?? '';
-        final gioStr = data['Gio'] as String? ?? '';
-        final nguoiDung = data['NguoiDung'] as String? ?? '';
-        
-        // Try to identify problematic records
-        if (nguoiDung.contains('TônTThấtTTùng')) {
-          errorMessages.add('Found record with TônTThấtTTùng: Record #$i, Ngay=$ngayStr');
+        if (data == null || data is! Map) {
+          errorCount++;
           continue;
         }
-        
-        if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(ngayStr)) {
-          errorMessages.add('Invalid date format: Record #$i, Format="$ngayStr"');
-          continue;
-        }
-        
-        DateTime ngay;
-        try {
-          // Create a new DateTime object directly instead of parsing and modifying
-          final parts = ngayStr.split('-');
-          if (parts.length != 3) throw FormatException('Invalid date parts');
-          
-          final year = int.parse(parts[0]);
-          final month = int.parse(parts[1]);
-          final day = int.parse(parts[2]);
-          
-          ngay = DateTime(year, month, day);
-        } catch (e) {
-          errorMessages.add('Date parse error: Record #$i, Date="$ngayStr", Error: ${e.toString().substring(0, 100)}');
-          continue;
-        }
-        
+
         final model = TaskHistoryModel(
-          uid: data['UID'] ?? '',
-          taskId: data['TaskID'] ?? '',
-          ngay: ngay,
-          gio: gioStr,
-          nguoiDung: nguoiDung,
-          ketQua: data['KetQua'] ?? '',
-          chiTiet: data['ChiTiet'] ?? '',
-          chiTiet2: data['ChiTiet2'] ?? '',
-          viTri: data['ViTri'] ?? '',
-          boPhan: data['BoPhan'] ?? '',
-          phanLoai: data['PhanLoai'] ?? '',
-          hinhAnh: data['HinhAnh'] ?? '',
-          giaiPhap: data['GiaiPhap'] ?? '',
+          uid: data['UID']?.toString() ?? '',
+          taskId: data['TaskID']?.toString() ?? '',
+          ngay: fallbackDate,
+          gio: data['Gio']?.toString() ?? '',
+          nguoiDung: data['NguoiDung']?.toString() ?? '',
+          ketQua: data['KetQua']?.toString() ?? '',
+          chiTiet: data['ChiTiet']?.toString() ?? '',
+          chiTiet2: data['ChiTiet2']?.toString() ?? '',
+          viTri: data['ViTri']?.toString() ?? '',
+          boPhan: data['BoPhan']?.toString() ?? '',
+          phanLoai: data['PhanLoai']?.toString() ?? '',
+          hinhAnh: data['HinhAnh']?.toString() ?? '',
+          giaiPhap: data['GiaiPhap']?.toString() ?? '',
         );
-        
+
         taskHistories.add(model);
+        processedCount++;
       } catch (e) {
-        // Capture the error but don't stop processing
-        final error = e.toString();
-        final recordInfo = json.encode(taskHistoryData[i]).substring(0, 100) + '...';
-        errorMessages.add('Error on record #$i: ${error.substring(0, 100)}\nRecord: $recordInfo');
+        print('Error processing record #$i: ${e.toString()}');
         continue;
       }
     }
 
-    // If we found errors, display them
-    if (errorMessages.isNotEmpty) {
-      _showDiagnosticDialog(errorMessages, taskHistoryData);
+    if (taskHistories.isNotEmpty) {
+      const batchSize = 100;
+      for (int i = 0; i < taskHistories.length; i += batchSize) {
+        final end = (i + batchSize < taskHistories.length) ? i + batchSize : taskHistories.length;
+        final batch = taskHistories.sublist(i, end);
+
+        setState(() => _syncStatus = 'Saving records ${i+1}-$end of ${taskHistories.length}...');
+        await dbHelper.batchInsertTaskHistory(batch);
+        await Future.delayed(Duration(milliseconds: 1));
+
+      }
+
+      await _loadDateRange();
+      await _loadPhanLoaiList(); 
+      _loadRecentImages();
+
+      _showSuccess('Đồng bộ lịch sử thành công: $processedCount/${taskHistoryData.length} records processed');
+    } else {
+      _showError('Không có bản ghi hợp lệ để đồng bộ');
     }
-    
-    await dbHelper.batchInsertTaskHistory(taskHistories);
-    
-    await _loadDateRange();
-    await _loadPhanLoaiList(); 
-    _loadRecentImages();
-    
-    _showSuccess('Đồng bộ lịch sử thành công: ${taskHistories.length}/${taskHistoryData.length} records processed');
   } catch (e) {
     _showError('Không thể đồng bộ lịch sử: ${e.toString()}');
   } finally {
@@ -1282,48 +1261,87 @@ List<Map<String, dynamic>> _recentImages = [];
 bool _isLoadingImages = false;
 
 Future<void> _loadRecentImages() async {
-    if (_isLoadingImages) return;
+  if (_isLoadingImages) return;
+  
+  setState(() {
+    _isLoadingImages = true;
+  });
+  
+  try {
+    final db = await dbHelper.database;
+    String query = '''
+      SELECT * FROM ${DatabaseTables.taskHistoryTable}
+      WHERE HinhAnh IS NOT NULL AND HinhAnh != ''
+      AND HinhAnh NOT LIKE '%yourworldtravel.vn%'
+    ''';
+    List<dynamic> args = [];
+
+    if (_selectedBoPhan != 'Tất cả') {
+      query += ' AND BoPhan = ?';
+      args.add(_selectedBoPhan);
+    }
+    
+    if (_selectedPhanLoai != 'Tất cả') {
+      query += ' AND PhanLoai = ?';
+      args.add(_selectedPhanLoai);
+    }
+
+    query += ' LIMIT 300';
+
+    final List<Map<String, dynamic>> results = await db.rawQuery(query, args);
+    print('Raw query returned ${results.length} records');
+    
+    // Process the results to standardize dates
+    final processedResults = results.map((item) {
+      // Create a copy of the original item that we can modify
+      final newItem = Map<String, dynamic>.from(item);
+      
+      // Handle the date - set invalid dates to yesterday
+      final ngay = item['Ngay'];
+      if (ngay == null || !(ngay is String) || !_isValidDate(ngay.toString())) {
+        // Set to yesterday's date
+        final yesterday = DateTime.now().subtract(Duration(days: 1));
+        newItem['Ngay'] = "${yesterday.year}-${yesterday.month.toString().padLeft(2, '0')}-${yesterday.day.toString().padLeft(2, '0')}";
+      }
+      
+      return newItem;
+    }).toList();
     
     setState(() {
-      _isLoadingImages = true;
+      _recentImages = processedResults;
+      _isLoadingImages = false;
     });
-    
-    try {
-      final db = await dbHelper.database;
-      String query = '''
-        SELECT * FROM ${DatabaseTables.taskHistoryTable}
-        WHERE HinhAnh IS NOT NULL AND HinhAnh != ''
-        AND date(Ngay) IS NOT NULL
-      ''';
-      List<dynamic> args = [];
-
-      if (_selectedBoPhan != 'Tất cả') {
-        query += ' AND BoPhan = ?';
-        args.add(_selectedBoPhan);
-      }
-      
-      // Add PhanLoai filter
-      if (_selectedPhanLoai != 'Tất cả') {
-        query += ' AND PhanLoai = ?';
-        args.add(_selectedPhanLoai);
-      }
-
-      query += ' ORDER BY date(Ngay) DESC, Gio DESC LIMIT 50';
-
-      final List<Map<String, dynamic>> results = await db.rawQuery(query, args);
-      
-      setState(() {
-        _recentImages = results;
-        _isLoadingImages = false;
-      });
-    } catch (e) {
-      print('Error loading recent images: $e');
-      _showError('Error loading images: $e');
-      setState(() {
-        _isLoadingImages = false;
-      });
-    }
+  } catch (e) {
+    print('Error loading recent images: $e');
+    _showError('Error loading images: $e');
+    setState(() {
+      _isLoadingImages = false;
+    });
   }
+}
+bool _isValidDate(String date) {
+  try {
+    // Check for basic YYYY-MM-DD format
+    if (!date.contains('-') || date.length < 10) return false;
+    
+    // Try parsing the date
+    final parts = date.substring(0, 10).split('-');
+    if (parts.length != 3) return false;
+    
+    final year = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    final day = int.tryParse(parts[2]);
+    
+    if (year == null || month == null || day == null) return false;
+    if (year < 2000 || year > 2100) return false;  // Sanity check
+    if (month < 1 || month > 12) return false;
+    if (day < 1 || day > 31) return false;
+    
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
 String _formatDateTime(String dateTimeStr) {
   try {
     final parts = dateTimeStr.split(' ');
@@ -1336,352 +1354,294 @@ String _formatDateTime(String dateTimeStr) {
   }
 }
 Widget _buildRecentImagesGrid() {
- if (_isLoadingImages) {
-   return Center(
-     child: Padding(
-       padding: EdgeInsets.symmetric(vertical: 50),
-       child: CircularProgressIndicator(),
-     ),
-   );
- }
- 
- if (_recentImages.isEmpty) {
-   return Center(
-     child: Padding(
-       padding: EdgeInsets.symmetric(vertical: 50),
-       child: Text('Không có hình ảnh nào'),
-     ),
-   );
- }
- 
- Map<String, List<Map<String, dynamic>>> personDateGroups = {};
- 
- for (var image in _recentImages) {
-   final nguoiDung = image['NguoiDung'] as String;
-   final ngay = image['Ngay'] as String;
-   final key = '$nguoiDung-$ngay';
-   
-   if (!personDateGroups.containsKey(key)) {
-     personDateGroups[key] = [];
-   }
-   
-   personDateGroups[key]!.add(image);
- }
- 
- personDateGroups.forEach((key, images) {
-   images.sort((a, b) {
-     final String gioA = a['Gio'] as String? ?? '';
-     final String gioB = b['Gio'] as String? ?? '';
-     return gioA.compareTo(gioB);
-   });
- });
- 
- final now = DateTime.now();
- final Map<String, List<Map<String, dynamic>>> groupedImages = {};
-
- for (var image in _recentImages) {
-   final boPhan = image['BoPhan'] as String;
-   final ngayStr = image['Ngay'] as String;
-   final gioStr = image['Gio'] as String? ?? "00:00";
-   
-   try {
-     final DateTime date = DateTime.parse(ngayStr);
-     final List<String> timeParts = gioStr.split(':');
-     final int hour = int.parse(timeParts[0]);
-     final int minute = int.parse(timeParts[1]);
-     
-     final DateTime timestamp = DateTime(date.year, date.month, date.day, hour, minute);
-     final int intervalMinutes = (minute ~/ 15) * 15;
-     final DateTime interval = DateTime(date.year, date.month, date.day, hour, intervalMinutes);
-     
-     final String formattedDate = "${interval.year}-${interval.month.toString().padLeft(2, '0')}-${interval.day.toString().padLeft(2, '0')}";
-     final String formattedTime = "${interval.hour.toString().padLeft(2, '0')}:${interval.minute.toString().padLeft(2, '0')}";
-     final String formattedInterval = "$formattedDate $formattedTime";
-     final String intervalKey = "$boPhan - $formattedInterval";
-     
-     if (!groupedImages.containsKey(intervalKey)) {
-       groupedImages[intervalKey] = [];
-     }
-     
-     groupedImages[intervalKey]!.add(image);
-     image['timestamp'] = timestamp;
-   } catch (e) {
-     print('Error parsing date/time: $e for date: $ngayStr and time: $gioStr');
-   }
- }
- 
- final sortedKeys = groupedImages.keys.toList()
- ..sort((a, b) {
-   final String aDateTimeStr = a.split(' - ')[1];
-   final String bDateTimeStr = b.split(' - ')[1];
-   
-   final DateTime aDateTime = DateTime.parse(aDateTimeStr.replaceAll(' ', 'T'));
-   final DateTime bDateTime = DateTime.parse(bDateTimeStr.replaceAll(' ', 'T'));
-   
-   return bDateTime.compareTo(aDateTime);
- });
- 
- return Column(
-   crossAxisAlignment: CrossAxisAlignment.start,
-   children: sortedKeys.map((key) {
-     final images = groupedImages[key]!;
-     final parts = key.split(' - ');
-     final projectName = parts[0];
-     final dateTimeParts = parts[1].split(' ');
-     final datePart = dateTimeParts[0];
-     final timePart = dateTimeParts[1];
-
-     final intervalDateTime = DateTime.parse("$datePart $timePart:00");
-     final isRecent = now.difference(intervalDateTime).inMinutes <= 30;
-     
-     return Column(
-       crossAxisAlignment: CrossAxisAlignment.start,
-       children: [
-         Container(
-           margin: EdgeInsets.only(top: 16, bottom: 8),
-           padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-           decoration: BoxDecoration(
-             color: Colors.blue[700],
-             borderRadius: BorderRadius.circular(4),
-             boxShadow: [
-               BoxShadow(
-                 color: Colors.grey.withOpacity(0.3),
-                 blurRadius: 3,
-                 offset: Offset(0, 2),
-               ),
-             ],
-           ),
-           child: Row(
-             children: [
-               Icon(Icons.business, color: Colors.white),
-               SizedBox(width: 8),
-               Expanded(
-                 child: Text(
-                   projectName,
-                   style: TextStyle(
-                     color: Colors.white,
-                     fontWeight: FontWeight.bold,
-                   ),
-                 ),
-               ),
-               Text(
-                 _formatDateTime(parts[1]),
-                 style: TextStyle(color: Colors.white),
-               ),
-               if (isRecent) ...[
-                 SizedBox(width: 8),
-                 _buildPulsingDot(),
-               ],
-             ],
-           ),
-         ),
-         
-         ListView.builder(
-           shrinkWrap: true,
-           physics: NeverScrollableScrollPhysics(),
-           itemCount: _getUniquePersonsInGroup(images).length,
-           itemBuilder: (context, personIndex) {
-             final person = _getUniquePersonsInGroup(images)[personIndex];
-             final personImages = images.where((img) => img['NguoiDung'] == person).toList();
-             final date = personImages.first['Ngay'] as String;
-             
-             final personDateKey = '$person-$date';
-             final allPersonImagesForDay = personDateGroups[personDateKey] ?? [];
-             
-             return Column(
-               crossAxisAlignment: CrossAxisAlignment.start,
-               children: [
-                 Padding(
-                   padding: EdgeInsets.only(left: 8, top: 16, bottom: 8),
-                   child: Row(
-                     children: [
-                       Icon(Icons.person, size: 16),
-                       SizedBox(width: 8),
-                       Text(
-                         person,
-                         style: TextStyle(fontWeight: FontWeight.bold),
-                       ),
-                       Spacer(),
-                       Text(
-                         '${_formatDate(date)} - ${allPersonImagesForDay.length} ảnh',
-                         style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                       ),
-                     ],
-                   ),
-                 ),
-                 
-                 Container(
-                   height: 180,
-                   child: ListView.builder(
-                     scrollDirection: Axis.horizontal,
-                     itemCount: allPersonImagesForDay.length,
-                     itemBuilder: (context, imgIndex) {
-                       final item = allPersonImagesForDay[imgIndex];
-                       final viTri = item['ViTri'] as String? ?? '';
-                       final gio = item['Gio'] as String? ?? '';
-                       
-                       final totalImagesAtLocation = allPersonImagesForDay
-                           .where((img) => img['ViTri'] == viTri)
-                           .length;
-                       
-                       return Container(
-                         width: 150,
-                         margin: EdgeInsets.symmetric(horizontal: 4),
-                         child: Card(
-                           elevation: 3,
-                           shape: RoundedRectangleBorder(
-                             borderRadius: BorderRadius.circular(8),
-                           ),
-                           child: Column(
-                             crossAxisAlignment: CrossAxisAlignment.start,
-                             children: [
-                               Expanded(
-                                 child: GestureDetector(
-                                   onTap: () {
-                                     showDialog(
-                                       context: context,
-                                       builder: (context) => Dialog(
-                                         child: Column(
-                                           mainAxisSize: MainAxisSize.min,
-                                           children: [
-                                             AppBar(
-                                               title: Text('$person - $viTri'),
-                                               automaticallyImplyLeading: false,
-                                               actions: [
-                                                 IconButton(
-                                                   icon: Icon(Icons.close),
-                                                   onPressed: () => Navigator.of(context).pop(),
-                                                 ),
-                                               ],
-                                             ),
-                                             InteractiveViewer(
-                                               panEnabled: true,
-                                               boundaryMargin: EdgeInsets.all(20),
-                                               minScale: 0.5,
-                                               maxScale: 4,
-                                               child: _buildNetworkImage(item['HinhAnh'] as String, BoxFit.contain),
-                                             ),
-                                             Padding(
-                                               padding: EdgeInsets.all(16),
-                                               child: Text(item['ChiTiet'] as String? ?? ''),
-                                             ),
-                                           ],
-                                         ),
-                                       ),
-                                     );
-                                   },
-                                   child: ClipRRect(
-                                     borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
-                                     child: _buildNetworkImage(item['HinhAnh'] as String, BoxFit.cover),
-                                   ),
-                                 ),
-                               ),
-                               
-                               Padding(
-                                 padding: EdgeInsets.all(8),
-                                 child: Column(
-                                   crossAxisAlignment: CrossAxisAlignment.start,
-                                   children: [
-                                     Text(
-                                       viTri,
-                                       style: TextStyle(
-                                         fontWeight: FontWeight.bold,
-                                         fontSize: 12,
-                                       ),
-                                       maxLines: 1,
-                                       overflow: TextOverflow.ellipsis,
-                                     ),
-                                     SizedBox(height: 4),
-                                     Row(
-                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                       children: [
-                                         Text(
-                                           gio,
-                                           style: TextStyle(fontSize: 10),
-                                         ),
-                                         Text(
-                    '$totalImagesAtLocation ảnh',
-                    style: TextStyle(fontSize: 10),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        
-        // NEW CODE - Add the buttons
-        Padding(
-          padding: EdgeInsets.only(left: 8, right: 8, bottom: 8),
-          child: Row(
-            children: [
-              // Lưu button
-Expanded(
-  child: ElevatedButton(
-    onPressed: () {
-      // Get the image URL from the item
-      final imageUrl = item['HinhAnh'] as String;
-      _saveImageToDevice(imageUrl);
-    },
-    child: Text('Lưu', style: TextStyle(fontSize: 10)),
-    style: ElevatedButton.styleFrom(
-      backgroundColor: Colors.blue,
-      foregroundColor: Colors.white,
-      padding: EdgeInsets.symmetric(vertical: 4),
-      minimumSize: Size(0, 25),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(4),
+  if (_isLoadingImages) {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 50),
+        child: CircularProgressIndicator(),
       ),
-    ),
-  ),
-),
-              SizedBox(width: 8),
-              // AI button
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    // Get the image URL
-                    final imageUrl = item['HinhAnh'] as String;
-                    
-                    // Download the image first
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Đang chuẩn bị ảnh cho AI...'))
-                    );
-                    
-                    // Create a temporary file from the URL
-                    _downloadAndProcessImageWithAI(imageUrl);
-                  },
-                  child: Text('AI', style: TextStyle(fontSize: 10)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.purple,
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(vertical: 4),
-                    minimumSize: Size(0, 25),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4),
+    );
+  }
+  
+  if (_recentImages.isEmpty) {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 50),
+        child: Text('Không có hình ảnh nào'),
+      ),
+    );
+  }
+  
+  // Create a combination key of project + "raw date string" for grouping
+  Map<String, List<Map<String, dynamic>>> projectDateGroups = {};
+  
+  for (var image in _recentImages) {
+    final boPhan = image['BoPhan'] as String? ?? 'Unknown';
+    final ngayRaw = image['Ngay']?.toString() ?? 'Unknown';
+    
+    // Create a simple key without parsing
+    final key = '$boPhan - $ngayRaw';
+    
+    if (!projectDateGroups.containsKey(key)) {
+      projectDateGroups[key] = [];
+    }
+    
+    projectDateGroups[key]!.add(image);
+  }
+  
+  // Sort keys to show newest first (basic string comparison, not perfect but safer)
+  final sortedKeys = projectDateGroups.keys.toList()
+    ..sort((a, b) => b.compareTo(a));
+  
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: sortedKeys.map((key) {
+      final images = projectDateGroups[key]!;
+      final parts = key.split(' - ');
+      final projectName = parts[0];
+      final rawDate = parts.length > 1 ? parts[1] : 'Unknown';
+      
+      // Try to extract a clean date to display, without parsing
+      String displayDate = 'Unknown date';
+      try {
+        if (rawDate.contains('T')) {
+          // Handle ISO format string: "2025-03-19T00:00:00.000"
+          displayDate = rawDate.split('T')[0];
+        } else if (rawDate.length >= 10 && rawDate.contains('-')) {
+          // Handle YYYY-MM-DD format
+          displayDate = rawDate.substring(0, 10);
+        } else {
+          // Use raw value
+          displayDate = rawDate;
+        }
+      } catch (e) {
+        // If anything goes wrong, use the raw value
+        displayDate = rawDate;
+      }
+      
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            margin: EdgeInsets.only(top: 16, bottom: 8),
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.blue[700],
+              borderRadius: BorderRadius.circular(4),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.3),
+                  blurRadius: 3,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.business, color: Colors.white),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    projectName,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
-              ),
-            ],
+                Text(
+                  displayDate,
+                  style: TextStyle(color: Colors.white),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
-    ),
-  ),
-);
-                     },
-                   ),
-                 ),
-               ],
-             );
-           },
-         ),
-         
-         Divider(height: 32, thickness: 1),
-       ],
-     );
-   }).toList(),
- );
+          
+          ListView.builder(
+            shrinkWrap: true,
+            physics: NeverScrollableScrollPhysics(),
+            itemCount: images.map((img) => img['NguoiDung'] as String? ?? 'Unknown').toSet().length,
+            itemBuilder: (context, personIndex) {
+              final persons = images.map((img) => img['NguoiDung'] as String? ?? 'Unknown').toSet().toList();
+              final person = persons[personIndex];
+              final personImages = images.where((img) => 
+                (img['NguoiDung'] as String? ?? 'Unknown') == person).toList();
+              
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.only(left: 8, top: 16, bottom: 8),
+                    child: Row(
+                      children: [
+                        Icon(Icons.person, size: 16),
+                        SizedBox(width: 8),
+                        Text(
+                          person,
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        Spacer(),
+                        Text(
+                          '${personImages.length} ảnh',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  Container(
+                    height: 180,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: personImages.length,
+                      itemBuilder: (context, imgIndex) {
+                        final item = personImages[imgIndex];
+                        final viTri = item['ViTri'] as String? ?? '';
+                        final gio = item['Gio'] as String? ?? '';
+                        
+                        return Container(
+                          width: 150,
+                          margin: EdgeInsets.symmetric(horizontal: 4),
+                          child: Card(
+                            elevation: 3,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      showDialog(
+                                        context: context,
+                                        builder: (context) => Dialog(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              AppBar(
+                                                title: Text('$person - $viTri'),
+                                                automaticallyImplyLeading: false,
+                                                actions: [
+                                                  IconButton(
+                                                    icon: Icon(Icons.close),
+                                                    onPressed: () => Navigator.of(context).pop(),
+                                                  ),
+                                                ],
+                                              ),
+                                              InteractiveViewer(
+                                                panEnabled: true,
+                                                boundaryMargin: EdgeInsets.all(20),
+                                                minScale: 0.5,
+                                                maxScale: 4,
+                                                child: _buildNetworkImage(item['HinhAnh'] as String, BoxFit.contain),
+                                              ),
+                                              Padding(
+                                                padding: EdgeInsets.all(16),
+                                                child: Text(item['ChiTiet'] as String? ?? ''),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+                                      child: _buildNetworkImage(item['HinhAnh'] as String, BoxFit.cover),
+                                    ),
+                                  ),
+                                ),
+                                
+                                Padding(
+                                  padding: EdgeInsets.all(8),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        viTri,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        gio,
+                                        style: TextStyle(fontSize: 10),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                
+                                // Add the buttons
+                                Padding(
+                                  padding: EdgeInsets.only(left: 8, right: 8, bottom: 8),
+                                  child: Row(
+                                    children: [
+                                      // Lưu button
+                                      Expanded(
+                                        child: ElevatedButton(
+                                          onPressed: () {
+                                            final imageUrl = item['HinhAnh'] as String;
+                                            _saveImageToDevice(imageUrl);
+                                          },
+                                          child: Text('Lưu', style: TextStyle(fontSize: 10)),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.blue,
+                                            foregroundColor: Colors.white,
+                                            padding: EdgeInsets.symmetric(vertical: 4),
+                                            minimumSize: Size(0, 25),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      SizedBox(width: 8),
+                                      // AI button
+                                      Expanded(
+                                        child: ElevatedButton(
+                                          onPressed: () {
+                                            final imageUrl = item['HinhAnh'] as String;
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text('Đang chuẩn bị ảnh cho AI...'))
+                                            );
+                                            _downloadAndProcessImageWithAI(imageUrl);
+                                          },
+                                          child: Text('AI', style: TextStyle(fontSize: 10)),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.purple,
+                                            foregroundColor: Colors.white,
+                                            padding: EdgeInsets.symmetric(vertical: 4),
+                                            minimumSize: Size(0, 25),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          
+          Divider(height: 32, thickness: 1),
+        ],
+      );
+    }).toList(),
+  );
 }
 Future<void> _downloadAndProcessImageWithAI(String imageUrl) async {
   try {
@@ -1891,128 +1851,169 @@ Widget _buildImageCard(Map<String, dynamic> item, int imagesAtLocation, int uniq
   );
 }
 void _showImageDetailsDialog(Map<String, dynamic> selectedItem) {
+  final String imageUrl = selectedItem['HinhAnh'] as String;
   final String nguoiDung = selectedItem['NguoiDung'] as String? ?? 'Unknown';
-  final String ngay = selectedItem['Ngay'] as String? ?? '';
-  
-  // Filter images by the same person on the same day
-  final samePersonSameDayImages = _recentImages.where((item) => 
-    item['NguoiDung'] == nguoiDung && item['Ngay'] == ngay
-  ).toList();
+  final String viTri = selectedItem['ViTri'] as String? ?? '';
+  final String chiTiet = selectedItem['ChiTiet'] as String? ?? '';
   
   showDialog(
     context: context,
-    builder: (context) => Dialog(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AppBar(
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(nguoiDung),
-                Text(
-                  '${_formatDateTime(ngay)} - ${samePersonSameDayImages.length} ảnh',
-                  style: TextStyle(fontSize: 12),
+    builder: (BuildContext context) {
+      return AlertDialog(
+        contentPadding: EdgeInsets.zero,
+        backgroundColor: Colors.black87,
+        title: Container(
+          color: Colors.blue.withOpacity(0.7),
+          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          margin: EdgeInsets.all(-24), // Counteract AlertDialog's internal padding
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '$nguoiDung - $viTri',
+                  style: TextStyle(color: Colors.white, fontSize: 16),
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ],
-            ),
-            automaticallyImplyLeading: false,
-            actions: [
+              ),
               IconButton(
-                icon: Icon(Icons.close),
+                icon: Icon(Icons.close, color: Colors.white, size: 20),
+                padding: EdgeInsets.zero,
+                constraints: BoxConstraints(),
                 onPressed: () => Navigator.of(context).pop(),
               ),
             ],
           ),
-          Expanded(
-            child: Column(
-              children: [
-                // Main image with details
-                Expanded(
-                  flex: 3,
-                  child: InteractiveViewer(
-                    panEnabled: true,
-                    boundaryMargin: EdgeInsets.all(20),
-                    minScale: 0.5,
-                    maxScale: 4,
-                    child: _buildNetworkImage(selectedItem['HinhAnh'] as String, BoxFit.contain),
-                  ),
-                ),
-                Padding(
-                  padding: EdgeInsets.all(8),
-                  child: Text(
-                    selectedItem['ChiTiet'] as String? ?? 'No details',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                
-                // Horizontal scroll of other images by same person on same day
-                Container(
-                  height: 100,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: samePersonSameDayImages.length,
-                    itemBuilder: (context, index) {
-                      final item = samePersonSameDayImages[index];
-                      final isSelected = item['TaskID'] == selectedItem['TaskID'];
-                      
-                      return GestureDetector(
-                        onTap: () {
-                          // Close this dialog and open a new one with the selected image
-                          Navigator.of(context).pop();
-                          _showImageDetailsDialog(item);
-                        },
-                        child: Container(
-                          width: 100,
-                          margin: EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: isSelected ? Colors.blue : Colors.transparent,
-                              width: 2,
-                            ),
-                            borderRadius: BorderRadius.circular(4),
+        ),
+        content: Container(
+          width: double.maxFinite,
+          height: 400, // Fixed height that works on most devices
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Scrollable image area
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.contain,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        height: 300,
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded / 
+                                  loadingProgress.expectedTotalBytes!
+                                : null,
+                            color: Colors.white70,
                           ),
-                          child: Column(
-                            children: [
-                              Expanded(
-                                child: _buildNetworkImage(item['HinhAnh'] as String, BoxFit.cover),
-                              ),
-                              Padding(
-                                padding: EdgeInsets.all(2),
-                                child: Text(
-                                  item['Gio'] as String? ?? '',
-                                  style: TextStyle(fontSize: 10),
-                                ),
-                              ),
-                            ],
-                          ),
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        height: 200,
+                        color: Colors.grey[900],
+                        child: Center(
+                          child: Icon(Icons.broken_image, color: Colors.white70, size: 50),
                         ),
                       );
                     },
                   ),
                 ),
-              ],
-            ),
+              ),
+              
+              // Details if any
+              if (chiTiet.isNotEmpty)
+                Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Text(
+                    chiTiet, 
+                    style: TextStyle(color: Colors.white70),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              
+              // Buttons
+              Padding(
+                padding: EdgeInsets.all(8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _saveImageToDevice(imageUrl);
+                        },
+                        child: Text('Lưu'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _downloadAndProcessImageWithAI(imageUrl);
+                        },
+                        child: Text('AI'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.purple,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-    ),
+        ),
+      );
+    },
   );
 }
 Widget _buildNetworkImage(String url, BoxFit fit) {
   // Clean the URL if needed
   String cleanUrl = url.trim();
-  
+  if (cleanUrl.contains('yourworldtravel.vn')) {
+    if (!cleanUrl.startsWith('http')) {
+      cleanUrl = 'https://$cleanUrl';
+    }
+    cleanUrl = cleanUrl.trimRight();
+    print('Modified yourworldtravel URL: $cleanUrl');
+  }
   return Image.network(
     cleanUrl,
     fit: fit,
+    headers: cleanUrl.contains('yourworldtravel.vn') ? 
+      // Add any necessary headers for yourworldtravel.vn
+      {
+        'Referer': 'https://yourworldtravel.vn/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      } : null,
     errorBuilder: (context, error, stackTrace) {
-      print('Error loading image: $error');
+      print('Error loading image: $error for URL: $cleanUrl');
       return Container(
         color: Colors.grey[300],
         child: Center(
-          child: Icon(Icons.broken_image, color: Colors.red[400]),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.broken_image, color: Colors.red[400]),
+              if (cleanUrl.contains('yourworldtravel.vn'))
+                Text(
+                  'Không thể tải ảnh từ Yourworldtravel',
+                  style: TextStyle(fontSize: 10, color: Colors.red[400]),
+                  textAlign: TextAlign.center,
+                )
+            ],
+          ),
         ),
       );
     },

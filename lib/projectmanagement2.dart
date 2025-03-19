@@ -910,7 +910,7 @@ Future<void> _loadHistory() async {
   // Step 1: Try to fetch task history with userType
 setState(() => _syncStatus = 'Đang lấy lịch sử báo cáo...');
 final taskHistoryResponse = await AuthenticatedHttpClient.get(
-  Uri.parse('$baseUrl/historybaocao/$username')
+  Uri.parse('$baseUrl/historybaocao2/$username')
 );
 
 if (taskHistoryResponse.statusCode != 200) {
