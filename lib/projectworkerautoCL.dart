@@ -396,7 +396,10 @@ Future<void> _exportExcel() async {
 
   Map<String, dynamic> _calculateSummary(String empId) {
   if (_selectedMonth == null) return {};
-  
+  double tongHV = 0;
+double tongDem = 0;
+double tongCD = 0;
+
   final days = _getDaysInMonth();
   
   // ====== For Chữ & Giờ thường section ======
@@ -489,6 +492,22 @@ Future<void> _exportExcel() async {
     // Process base CongThuongChu value
     final baseCongThuongChu = _extractCongThuongChuBase(congThuongChu);
     
+double hvValue = 0;
+if (baseCongThuongChu == 'HV') {
+  hvValue = 1.0;
+} else if (baseCongThuongChu == '2HV') {
+  hvValue = 2.0;
+} else if (baseCongThuongChu == '3HV') {
+  hvValue = 3.0;
+}
+tongHV += hvValue;
+if (baseCongThuongChu == 'CĐ') {
+  tongCD += 1.0;
+}
+if (baseCongThuongChu == 'XĐ' || baseCongThuongChu == '2XĐ') {
+  // Count XĐ as 1.0 and 2XĐ as 2.0
+  tongDem += baseCongThuongChu.startsWith('2') ? 2.0 : 1.0;
+}
     // Check if it has +P or +P/2 suffix
     final bool hasFullPermission = congThuongChu.endsWith('+P');
     final bool hasHalfPermission = congThuongChu.endsWith('+P/2');
@@ -806,9 +825,9 @@ if (congChu_regularDays34 < 0) congChu_regularDays34 = 0;
     
     // Placeholder for other values
     'le': _formatNumberValue(congLe_total),
-    'hv': '0', // HV calculation needs to be added
-    'dem': '0', // Đêm calculation needs to be added
-    'cd': '0', // CĐ calculation needs to be added
+    'hv': _formatNumberValue(tongHV),
+    'dem': _formatNumberValue(tongDem),
+'cd': _formatNumberValue(tongCD),
   };
 }
 double _calculateDailyTotal(int day) {

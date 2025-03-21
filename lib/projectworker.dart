@@ -2146,7 +2146,7 @@ Future<void> _loadAttendanceData() async {
     await _loadStaffNames(employeeIds);
     
     // Auto-fix PhanLoai values when loading data
-    await _fixAllPhanLoaiValues();
+    //await _fixAllPhanLoaiValues();
     
   } catch (e) {
     debugLog('Error loading attendance data: $e');

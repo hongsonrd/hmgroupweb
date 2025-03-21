@@ -60,6 +60,650 @@ bool _isBatchUpdating = false;
     _checkEditingPermission();
     _initializeData();
   }
+bool _isProcessingAllProjects = false;
+int _currentProjectIndex = 0;
+int _totalProjectsToProcess = 0;
+String _processingStatus = '';
+
+Future<void> _createAutoDataForAllProjects() async {
+  if (!_isEditingAllowed) {
+    _showError('Không thể tạo dữ liệu sau ngày 8 của tháng tiếp theo');
+    return;
+  }
+  
+  final bool? proceed = await showDialog<bool>(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Text('Tạo dữ liệu tự động cho tất cả dự án'),
+        content: Text(
+          'Chức năng này sẽ tạo và cập nhật dữ liệu tổng hợp tháng cho tất cả dự án lần lượt.\n\n'
+          '⚠️ 1. Phần này sẽ chạy lần lượt cho từng dự án\n'
+          '⚠️ 2. Đảm bảo đã đồng bộ hết dữ liệu chấm công, nhân viên trước khi bắt đầu\n'
+          '⚠️ 3. Quá trình này có thể mất nhiều thời gian'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text('Tiếp tục'),
+          ),
+        ],
+      );
+    },
+  );
+  
+  if (proceed != true) return;
+  
+  // Remember original selection to stay there
+  final String? originalDepartment = _selectedDepartment;
+  
+  setState(() {
+    _isProcessingAllProjects = true;
+    _isLoading = true;
+    
+    // Filter out "Tất cả" from departments to process
+    final List<String> projectsToProcess = _departments.where((dept) => dept != 'Tất cả').toList();
+    
+    _currentProjectIndex = 0;
+    _totalProjectsToProcess = projectsToProcess.length;
+    _processingStatus = 'Đang xử lý dự án 1/${projectsToProcess.length}...';
+  });
+  
+  try {
+    // Filter out "Tất cả" from departments to process
+    final List<String> projectsToProcess = _departments.where((dept) => dept != 'Tất cả').toList();
+    
+    for (int i = 0; i < projectsToProcess.length; i++) {
+      // Update status
+      setState(() {
+        _currentProjectIndex = i;
+        _processingStatus = 'Đang xử lý dự án ${i+1}/${projectsToProcess.length}: ${projectsToProcess[i]}';
+        _selectedDepartment = projectsToProcess[i];
+      });
+      
+      // Process this project
+      await _createAutoDataForSingleProject(projectsToProcess[i]);
+      
+      // Longer delay between projects to avoid overwhelming the system
+      await Future.delayed(Duration(milliseconds: 1000));
+    }
+    
+    // Restore original department (without immediately reloading data)
+    setState(() {
+      _selectedDepartment = originalDepartment;
+    });
+    
+    // Show completion dialog instead of snackbar
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Hoàn thành'),
+          content: Text('Đã xử lý xong tất cả ${projectsToProcess.length} dự án.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                // Only reload data after user acknowledges completion
+                _loadMonthlyData();
+              },
+              child: Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+    
+  } catch (e) {
+    print('Error processing all projects: $e');
+    _showError('Lỗi khi xử lý tất cả dự án: $e');
+  } finally {
+    setState(() {
+      _isProcessingAllProjects = false;
+      _isLoading = false;
+    });
+  }
+}
+Future<void> _createAutoDataForSingleProject(String project) async {
+  try {
+    final dbHelper = DBHelper();
+    final db = await dbHelper.database;
+    
+    if (_selectedMonth == null) {
+      throw Exception('Tháng không được chọn');
+    }
+    
+    // 1. Parse the month information
+    final parts = _selectedMonth!.split('-');
+    final year = int.parse(parts[0]);
+    final month = int.parse(parts[1]);
+    
+    // First date of the month
+    final firstDateOfMonth = DateTime(year, month, 1);
+    final giaiDoan = DateFormat('yyyy-MM-dd').format(firstDateOfMonth);
+    
+    // Last date of the month
+    final lastDateOfMonth = DateTime(year, month + 1, 0);
+    final daysInMonth = lastDateOfMonth.day;
+    
+    // 2. Calculate standard workdays (exclude Sundays)
+    int congChuanToiDa = daysInMonth;
+    // Subtract Sundays
+    for (int day = 1; day <= daysInMonth; day++) {
+      final currentDate = DateTime(year, month, day);
+      if (currentDate.weekday == DateTime.sunday) {
+        congChuanToiDa--;
+      }
+    }
+    
+    // Get the current date for NgayCapNhat
+    final ngayCapNhat = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    
+    // 3. Get all ChamCongCN records for this month and department
+    final startDateStr = DateFormat('yyyy-MM-dd').format(DateTime(year, month, 1));
+    final endDateStr = DateFormat('yyyy-MM-dd').format(DateTime(year, month, daysInMonth));
+    
+    final chamCongCNRecordsQuery = await dbHelper.rawQuery(
+      "SELECT * FROM chamcongcn WHERE Ngay BETWEEN ? AND ? AND BoPhan = ? ORDER BY MaNV, Ngay",
+      [startDateStr, endDateStr, project]
+    );
+    
+    // Convert query result to list of maps
+    final List<Map<String, dynamic>> chamCongCNRecords = List<Map<String, dynamic>>.from(chamCongCNRecordsQuery);
+    
+    // 4. Group records by MaNV
+    Map<String, List<Map<String, dynamic>>> groupedRecords = {};
+
+    for (var record in chamCongCNRecords) {
+      final maNV = record['MaNV'] as String?;
+      
+      // Skip if missing key data
+      if (maNV?.isEmpty ?? true) continue;
+      
+      // Initialize list if needed
+      if (!groupedRecords.containsKey(maNV)) {
+        groupedRecords[maNV!] = [];
+      }
+      
+      groupedRecords[maNV]!.add(record);
+    }
+    
+    // 5. Get existing ChamCongCNThang records for this month and department
+    final existingRecordsQuery = await dbHelper.rawQuery(
+      "SELECT * FROM ChamCongCNThang WHERE GiaiDoan LIKE ? AND BoPhan = ?",
+      ['$_selectedMonth%', project]
+    );
+    
+    final existingRecords = List<Map<String, dynamic>>.from(existingRecordsQuery);
+    
+    // Create a map of existing records for faster lookup
+    Map<String, Map<String, dynamic>> existingRecordsMap = {};
+    
+    for (var record in existingRecords) {
+      final maNV = record['MaNV'] as String;
+      existingRecordsMap[maNV] = record;
+    }
+    
+    // 6. Process each employee
+    List<Map<String, dynamic>> recordsToInsert = [];
+    List<Map<String, dynamic>> recordsToUpdate = [];
+    List<String> recordsToDelete = [];
+    
+    for (var maNV in groupedRecords.keys) {
+      final departmentRecords = groupedRecords[maNV]!;
+      
+      // Calculate values for this employee
+      double tuan1va2 = 0;
+      double phep1va2 = 0;
+      double ht1va2 = 0;
+      
+      double tuan3va4 = 0;
+      double phep3va4 = 0;
+      double ht3va4 = 0;
+      
+      double tuan5plus = 0;
+      double phep5plus = 0;
+      double ht5plus = 0;
+      
+      double tongCong = 0;
+      double tongPhep = 0;
+      double tongLe = 0;
+      double tongNgoaiGio = 0;
+      double tongHV = 0;
+      double tongDem = 0;
+      double tongCD = 0;
+      double tongHT = 0;
+      
+      for (var record in departmentRecords) {
+        final recordDateStr = record['Ngay'] as String;
+        final recordDate = DateTime.parse(recordDateStr.split('T')[0]);
+        final day = recordDate.day;
+        
+        // Extract values
+        final congThuongChu = record['CongThuongChu'] as String? ?? 'Ro';
+        double phanLoaiValue = 0;
+        try {
+          final phanLoai = record['PhanLoai'] as String? ?? '0';
+          phanLoaiValue = double.tryParse(phanLoai) ?? 0;
+        } catch (e) {
+          // Ignore parsing errors
+        }
+        
+        // Calculate Phep values
+        double phepValue = 0;
+        if (congThuongChu.startsWith('P') && !congThuongChu.startsWith('P/2')) {
+          phepValue += 1.0;
+        } else if (congThuongChu.startsWith('P/2')) {
+          phepValue += 0.5;
+        }
+        
+        // Check for +P or +P/2 suffix
+        if (congThuongChu.endsWith('+P')) {
+          phepValue += 1.0;
+        } else if (congThuongChu.endsWith('+P/2')) {
+          phepValue += 0.5;
+        }
+        
+        double hvValue = 0;
+if (congThuongChu == 'HV') {
+  hvValue = 1.0;
+} else if (congThuongChu.startsWith('2HV')) {
+  hvValue = 2.0;
+} else if (congThuongChu.startsWith('3HV')) {
+  hvValue = 3.0;
+}
+tongHV += hvValue;
+
+        // Check for HT value
+        double htValue = 0;
+        if (congThuongChu == 'HT') {
+          htValue = 1.0;
+        }
+        
+        // Calculate ngoai gio values
+        double ngoaiGioValue = 0;
+        try {
+          final ngoaiGioThuong = double.tryParse(record['NgoaiGioThuong']?.toString() ?? '0') ?? 0;
+          final ngoaiGioKhac = double.tryParse(record['NgoaiGioKhac']?.toString() ?? '0') ?? 0;
+          ngoaiGioValue = (ngoaiGioThuong + ngoaiGioKhac) / 8.0;
+        } catch (e) {
+          // Ignore parsing errors
+        }
+        
+        // Calculate other totals
+        double ngoaiGiox15 = 0;
+        try {
+          ngoaiGiox15 = (double.tryParse(record['NgoaiGiox15']?.toString() ?? '0') ?? 0) / 8.0;
+        } catch (e) {
+          // Ignore parsing errors
+        }
+        
+        double ngoaiGiox2 = 0;
+        try {
+          ngoaiGiox2 = (double.tryParse(record['NgoaiGiox2']?.toString() ?? '0') ?? 0) / 8.0;
+        } catch (e) {
+          // Ignore parsing errors
+        }
+        
+        double congLe = 0;
+        try {
+          congLe = (double.tryParse(record['CongLe']?.toString() ?? '0') ?? 0) / 8.0;
+        } catch (e) {
+          // Ignore parsing errors
+        }
+        
+        // Add values to the appropriate period
+        if (day <= 15) {
+          tuan1va2 += phanLoaiValue + ngoaiGioValue - phep1va2;
+          phep1va2 += phepValue;
+          ht1va2 += htValue;
+        } else if (day <= 25) {
+          tuan3va4 += phanLoaiValue + ngoaiGioValue - phep3va4;
+          phep3va4 += phepValue;
+          ht3va4 += htValue;
+        } else {
+          tuan5plus += phanLoaiValue + ngoaiGioValue - phep5plus;
+          phep5plus += phepValue;
+          ht5plus += htValue;
+        }
+        
+        // Add to totals
+        tongCong += phanLoaiValue + ngoaiGioValue - tongPhep;
+        tongPhep += phepValue;
+        tongLe += congLe;
+        tongNgoaiGio += ngoaiGioValue;
+        tongHT += htValue;
+      }
+      
+      // Get TenNV (employee name) from staffbio
+      String tenNV = "";
+      final staffResult = await dbHelper.rawQuery(
+        "SELECT Ho_ten FROM staffbio WHERE MaNV = ?",
+        [maNV]
+      );
+      
+      if (staffResult.isNotEmpty) {
+        tenNV = staffResult.first['Ho_ten'] as String;
+      }
+      
+      // Calculate UngLan1 based on tuan1va2 value
+      double ungLan1 = 0;
+      if (tuan1va2 >= 10 && tuan1va2 < 13) {
+        ungLan1 = 1500000;
+      } else if (tuan1va2 >= 13) {
+        ungLan1 = 1700000;
+      }
+      
+      // Calculate UngLan2 based on tuan3va4
+      double ungLan2 = 0;
+      if (tuan3va4 < 6) {
+        ungLan2 = 0;
+      } else if (tuan3va4 < 8) {
+        ungLan2 = 1600000;
+      } else {
+        ungLan2 = 1800000;
+      }
+      
+      // Check if this employee already exists in ChamCongCNThang
+      bool recordExists = existingRecordsMap.containsKey(maNV);
+      
+      // Create the record object with the correct field names for the local database
+      Map<String, dynamic> recordData = {
+        'UID': recordExists ? existingRecordsMap[maNV]!['UID'] : _generateUUID(),
+        'GiaiDoan': giaiDoan,
+        'MaNV': maNV,
+        'BoPhan': project,
+        'MaBP': project,
+        'CongChuanToiDa': congChuanToiDa,
+        'Tuan_1va2': tuan1va2,
+        'Phep_1va2': phep1va2,
+        'HT_1va2': ht1va2,
+        'Tuan_3va4': tuan3va4,
+        'Phep_3va4': phep3va4,
+        'HT_3va4': ht3va4,
+        'Tong_Cong': tongCong,
+        'Tong_Phep': tongPhep,
+        'Tong_Le': tongLe,
+        'Tong_NgoaiGio': tongNgoaiGio,
+        'Tong_HV': tongHV,
+        'Tong_Dem': tongDem,
+        'Tong_CD': tongCD,
+        'Tong_HT': tongHT,
+        'TongLuong': 0, 
+        'UngLan1': ungLan1,
+        'UngLan2': ungLan2,
+        'ThanhToan3': 0,
+        'TruyLinh': 0,
+        'TruyThu': 0,
+        'Khac': 0,
+        'MucLuongThang': 0,
+        'MucLuongNgoaiGio': 0,
+        'MucLuongNgoaiGio2': 0,
+        'GhiChu': ''
+      };
+      
+      if (recordExists) {
+        // Update existing record
+        recordsToUpdate.add(recordData);
+      } else {
+        // Insert new record
+        recordsToInsert.add(recordData);
+      }
+    }
+    
+    // 7. Find records to delete (entries in ChamCongCNThang that don't have matching ChamCongCN records)
+    for (var maNV in existingRecordsMap.keys) {
+      if (!groupedRecords.containsKey(maNV)) {
+        recordsToDelete.add(existingRecordsMap[maNV]!['UID'] as String);
+      }
+    }
+    
+    // 8. Execute database operations
+    await db.transaction((txn) async {
+      // Insert new records
+      for (var record in recordsToInsert) {
+        await txn.insert('ChamCongCNThang', record);
+      }
+      
+      // Update existing records
+      for (var record in recordsToUpdate) {
+        final uid = record['UID'];
+        Map<String, dynamic> values = Map.from(record);
+        values.remove('UID');
+        
+        await txn.update(
+          'ChamCongCNThang',
+          values,
+          where: 'UID = ?',
+          whereArgs: [uid],
+        );
+      }
+      
+      // Delete records
+      for (var uid in recordsToDelete) {
+        await txn.delete(
+          'ChamCongCNThang',
+          where: 'UID = ?',
+          whereArgs: [uid],
+        );
+      }
+    });
+    
+    // 9. Sync changes with the server
+    List<Map<String, dynamic>> allUpdatedRecords = [...recordsToInsert, ...recordsToUpdate];
+    if (allUpdatedRecords.isNotEmpty) {
+      await _syncUpdatedRecordsWithServer(allUpdatedRecords);
+    }
+    
+    if (recordsToDelete.isNotEmpty) {
+      await _syncDeletedRecordsWithServer(recordsToDelete);
+    }
+    
+  } catch (e) {
+    print('Error creating auto data for project $project: $e');
+    // We don't show error here to continue processing other projects
+  }
+}
+
+Future<void> _exportExcelForAllProjects() async {
+ setState(() => _isLoading = true);
+ final String? originalDepartment = _selectedDepartment;
+ 
+ try {
+   final List<String> allProjects = _departments.where((dept) => dept != 'Tất cả').toList();
+   
+   setState(() {
+     _isProcessingAllProjects = true;
+     _currentProjectIndex = 0;
+     _totalProjectsToProcess = allProjects.length;
+   });
+   
+   final excel = Excel.createExcel();
+   
+   for (int i = 0; i < allProjects.length; i++) {
+     final project = allProjects[i];
+     
+     setState(() {
+       _currentProjectIndex = i;
+       _selectedDepartment = project;
+       _processingStatus = 'Đang xử lý dự án (${i+1}/${allProjects.length}): $project';
+     });
+     
+     await _loadMonthlyData();
+     await Future.delayed(Duration(milliseconds: 300));
+     
+     if (_monthlyData.isEmpty) {
+       continue;
+     }
+     
+     String sheetName = project;
+     if (sheetName.length > 31) {
+       sheetName = sheetName.substring(0, 31);
+     }
+     sheetName = sheetName.replaceAll(RegExp(r'[\\/*?:[\]]'), '_');
+     
+     final sheet = excel[sheetName];
+     
+     final Map<String, String> columnTitles = {
+       'MaNV': 'Mã NV',
+       'TenNV': 'Tên NV',
+       'BoPhan': 'Bộ phận',
+       'CongChuanToiDa': 'Công chuẩn',
+  'Tuan_1va2': 'Tuần 1-2',
+  'Phep_1va2': 'Phép 1-2',
+  'HT_1va2': 'HT 1-2',
+  'Tuan_3va4': 'Tuần 3-4',
+  'Phep_3va4': 'Phép 3-4',
+  'HT_3va4': 'HT 3-4',
+       'Tong_Cong': 'Công',
+       'Tong_Phep': 'Phép',
+       'Tong_Le': 'Lễ',
+       'Tong_NgoaiGio': 'Ngoài giờ',
+       'Tong_HV': 'HV',
+       'Tong_Dem': 'Đêm',
+       'Tong_CD': 'CĐ',
+       'Tong_HT': 'HT',
+       'TongLuong': 'Tổng lương',
+       'UngLan1': 'Ứng lần 1',
+       'UngLan2': 'Ứng lần 2',
+       'ThanhToan3': 'Thanh toán 3',
+       'TruyLinh': 'Truy lĩnh',
+       'TruyThu': 'Truy thu',
+       'Khac': 'Khác',
+       'MucLuongThang': 'Mức lương tháng',
+       'MucLuongNgoaiGio': 'Mức lương ngoài giờ',
+       'MucLuongNgoaiGio2': 'Mức lương ngoài giờ 2',
+       'GhiChu': 'Ghi chú',
+     };
+     
+     final List<String> columnsToShow = [
+       'MaNV', 'TenNV', 'BoPhan', 'CongChuanToiDa',
+       'Tuan_1va2', 'Phep_1va2', 'HT_1va2',
+       'Tuan_3va4', 'Phep_3va4', 'HT_3va4',
+       'Tong_Cong', 'Tong_Phep', 'Tong_Le', 'Tong_NgoaiGio',
+       'Tong_HV', 'Tong_Dem', 'Tong_CD', 'Tong_HT',
+       'TongLuong', 'UngLan1', 'UngLan2', 'ThanhToan3',
+       'TruyLinh', 'TruyThu', 'Khac',
+       'MucLuongThang', 'MucLuongNgoaiGio', 'MucLuongNgoaiGio2',
+       'GhiChu'
+     ];
+
+     List<String> headerRow = columnsToShow.map((col) => columnTitles[col] ?? col).toList();
+     sheet.appendRow(headerRow);
+     
+     for (int i = 0; i < headerRow.length; i++) {
+       final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+       cell.cellStyle = CellStyle(
+         backgroundColorHex: "#CCCCCC",
+         bold: true,
+         horizontalAlign: HorizontalAlign.Center,
+       );
+     }
+     
+     final dbHelper = DBHelper();
+     Map<String, String> employeeNames = {};
+     
+     final List<String> allMaNVs = _monthlyData.map((row) => row['MaNV'].toString()).toList();
+     
+     if (allMaNVs.isNotEmpty) {
+       final staffResults = await dbHelper.rawQuery(
+         "SELECT MaNV, Ho_ten FROM staffbio WHERE MaNV IN (${allMaNVs.map((_) => '?').join(', ')})",
+         allMaNVs
+       );
+       
+       for (var staff in staffResults) {
+         employeeNames[staff['MaNV'].toString()] = staff['Ho_ten'].toString();
+       }
+     }
+     
+     for (int rowIndex = 0; rowIndex < _monthlyData.length; rowIndex++) {
+       final dataRow = _monthlyData[rowIndex];
+       List<dynamic> excelRow = [];
+       
+       for (final column in columnsToShow) {
+         var value = dataRow[column];
+         
+         if (column == 'TenNV') {
+           value = employeeNames[dataRow['MaNV'].toString()] ?? '';
+         }
+         
+         if (column == 'NgayCapNhat' && value != null) {
+           try {
+             value = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(value.toString()));
+           } catch (e) {}
+         }
+         
+         excelRow.add(value ?? '');
+       }
+       
+       sheet.appendRow(excelRow);
+     }
+   }
+   
+   setState(() {
+     _selectedDepartment = originalDepartment;
+     _isProcessingAllProjects = false;
+   });
+   
+   final directory = await getApplicationDocumentsDirectory();
+   final dateStr = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+   final fileName = 'ChamCongThang_${_selectedMonth ?? ""}_TatCaDuAn_$dateStr.xlsx';
+   final filePath = '${directory.path}/$fileName';
+   
+   // Get external storage directory for easier access on Windows
+   Directory? externalDir;
+   try {
+     externalDir = await getExternalStorageDirectory();
+   } catch (e) {
+     print('External directory not available: $e');
+   }
+   
+   final fileBytes = excel.encode();
+   if (fileBytes != null) {
+     final file = File(filePath);
+     await file.writeAsBytes(fileBytes);
+     
+     // Save additional copy to external storage if available
+     if (externalDir != null) {
+       final externalFilePath = '${externalDir.path}/$fileName';
+       final externalFile = File(externalFilePath);
+       await externalFile.writeAsBytes(fileBytes);
+       
+       // Show file location info
+       ScaffoldMessenger.of(context).showSnackBar(
+         SnackBar(
+           content: Text('File đã được lưu tại: ${externalFilePath}'),
+           backgroundColor: Colors.green,
+           duration: Duration(seconds: 5),
+         ),
+       );
+     }
+     
+     // Share the file
+     await Share.shareXFiles(
+       [XFile(filePath)],
+       text: 'Chấm công tháng ${_selectedMonth ?? ""} - Tất cả dự án',
+     );
+   } else {
+     throw Exception('Failed to encode Excel file');
+   }
+   
+   await _loadMonthlyData();
+   
+ } catch (e) {
+   print('Error exporting all projects to Excel: $e');
+   _showError('Lỗi khi xuất file Excel: $e');
+ } finally {
+   setState(() {
+     _isProcessingAllProjects = false;
+     _isLoading = false;
+   });
+ }
+}
 
   void _checkEditingPermission() {
     if (_selectedMonth == null) return;
@@ -717,7 +1361,16 @@ for (var record in chamCongCNRecords) {
   } else if (congThuongChu.endsWith('+P/2')) {
     phepValue += 0.5;
   }
-          
+          double hvValue = 0;
+if (congThuongChu == 'HV') {
+  hvValue = 1.0;
+} else if (congThuongChu.startsWith('2HV')) {
+  hvValue = 2.0;
+} else if (congThuongChu.startsWith('3HV')) {
+  hvValue = 3.0;
+}
+tongHV += hvValue;
+
           // Check for HT value
           double htValue = 0;
           if (congThuongChu == 'HT') {
@@ -1076,8 +1729,8 @@ Future<void> _exportToExcel() async {
     // Define columns to show (same as in the UI)
     final List<String> columnsToShow = [
       'MaNV', 'TenNV', 'BoPhan', 'CongChuanToiDa',
-      'Tuan1va2', 'Phep1va2', 'HT1va2',
-      'Tuan3va4', 'Phep3va4', 'HT3va4',
+  'Tuan_1va2', 'Phep_1va2', 'HT_1va2',
+  'Tuan_3va4', 'Phep_3va4', 'HT_3va4', 
       'Tong_Cong', 'Tong_Phep', 'Tong_Le', 'Tong_NgoaiGio',
       'Tong_HV', 'Tong_Dem', 'Tong_CD', 'Tong_HT',
       'TongLuong', 'UngLan1', 'UngLan2', 'ThanhToan3',
@@ -1182,229 +1835,255 @@ Future<void> _exportToExcel() async {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.blue,
-        title: Row(
-          children: [
-            Expanded(
-              flex: 3,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: EdgeInsets.symmetric(horizontal: 8),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownSearch<String>(
-                    items: _departments,
-                    selectedItem: _selectedDepartment,
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedDepartment = value;
-                        _loadMonthlyData();
-                      });
-                    },
-                    dropdownDecoratorProps: DropDownDecoratorProps(
-                      dropdownSearchDecoration: InputDecoration(
-                        hintText: "Chọn dự án",
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-                    popupProps: PopupProps.dialog(
-                      showSearchBox: true,
-                      searchFieldProps: TextFieldProps(
-                        decoration: InputDecoration(
-                          hintText: "Tìm kiếm dự án...",
-                          prefixIcon: Icon(Icons.search),
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      title: Container(
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).primaryColor,
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(8),
-                            topRight: Radius.circular(8),
-                          ),
-                        ),
-                        child: Center(
-                          child: Text(
-                            'Chọn dự án',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(width: 16),
-            Expanded(
-              flex: 2,
-              child: DropdownButton<String>(
-                value: _selectedMonth,
-                items: _availableMonths.map((month) => DropdownMenuItem(
-                  value: month,
-                  child: Text(DateFormat('MM/yyyy').format(DateTime.parse('$month-01')))
-                )).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedMonth = value;
-                    _loadMonthlyData();
-                  });
-                },
-                style: TextStyle(color: Colors.white),
-                dropdownColor: Theme.of(context).primaryColor,
-                isExpanded: true,
-              ),
-            ),
-          ],
-        ),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-      ),
-      body: Stack(
+Widget build(BuildContext context) {
+  return Scaffold(
+    appBar: AppBar(
+      backgroundColor: Colors.blue,
+      title: Row(
         children: [
-          _isLoading 
-            ? const Center(child: CircularProgressIndicator()) 
-            : Column(
-              children: [
-                // Button Row
-                Padding(
-  padding: const EdgeInsets.all(8.0),
-  child: Row(
-    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-    children: [
-      ElevatedButton.icon(
-        icon: Icon(Icons.save),
-        onPressed: _isEditingAllowed ? _saveData : null,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.green,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: Colors.grey.shade400,
-        ),
-        label: Text('Lưu'),
-      ),
-      ElevatedButton.icon(
-        icon: Icon(Icons.autorenew),
-        onPressed: _isEditingAllowed ? _createAutoData : null,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.blue,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: Colors.grey.shade400,
-        ),
-        label: Text('Tạo tự động'),
-      ),
-      ElevatedButton.icon(
-        icon: Icon(Icons.file_download),
-        onPressed: _monthlyData.isNotEmpty ? _exportToExcel : null,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.orange,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: Colors.grey.shade400,
-        ),
-        label: Text('Xuất Excel'),
-      ),
-    ],
-  ),
-),
-                
-                // Status Message for Editing
-                if (!_isEditingAllowed)
-                  Container(
-                    color: Colors.orange.shade100,
-                    padding: EdgeInsets.all(8),
-                    margin: EdgeInsets.symmetric(horizontal: 8),
-                    child: Row(
-                      children: [
-                        Icon(Icons.warning_amber_rounded, color: Colors.orange),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Chỉnh sửa chỉ được phép đến ngày 8 của tháng tiếp theo',
-                            style: TextStyle(
-                              color: Colors.orange.shade800,
-                              fontWeight: FontWeight.bold,
-                            ),
+          Expanded(
+            flex: 3,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: DropdownButtonHideUnderline(
+                child: DropdownSearch<String>(
+                  items: _departments,
+                  selectedItem: _selectedDepartment,
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedDepartment = value;
+                      _loadMonthlyData();
+                    });
+                  },
+                  dropdownDecoratorProps: DropDownDecoratorProps(
+                    dropdownSearchDecoration: InputDecoration(
+                      hintText: "Chọn dự án",
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  popupProps: PopupProps.dialog(
+                    showSearchBox: true,
+                    searchFieldProps: TextFieldProps(
+                      decoration: InputDecoration(
+                        hintText: "Tìm kiếm dự án...",
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    title: Container(
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).primaryColor,
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(8),
+                          topRight: Radius.circular(8),
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'Chọn dự án',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text(
-                    'Tổng hợp tháng - ${_selectedDepartment ?? ""}',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                
-                Expanded(
-                  child: _monthlyData.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.info_outline, size: 50, color: Colors.grey),
-                            SizedBox(height: 16),
-                            Text(
-                              'Không có dữ liệu cho tháng này',
-                              style: TextStyle(
-                                fontSize: 16, 
-                                color: Colors.grey,
-                              ),
-                            ),
-                            SizedBox(height: 16),
-                            if (_isEditingAllowed)
-                              ElevatedButton(
-                                onPressed: _createAutoData,
-                                child: Text('Tạo dữ liệu mới'),
-                              ),
-                          ],
-                        ),
-                      )
-                    : _buildSimpleDataTable(),
-                ),
-              ],
-            ),
-          if (_isLoading)
-            Container(
-              color: Colors.black.withOpacity(0.3),
-              child: Center(
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text('Đang xử lý...'),
-                      ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
+          ),
+          SizedBox(width: 16),
+          Expanded(
+            flex: 2,
+            child: DropdownButton<String>(
+              value: _selectedMonth,
+              items: _availableMonths.map((month) => DropdownMenuItem(
+                value: month,
+                child: Text(DateFormat('MM/yyyy').format(DateTime.parse('$month-01')))
+              )).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedMonth = value;
+                  _loadMonthlyData();
+                });
+              },
+              style: TextStyle(color: Colors.white),
+              dropdownColor: Theme.of(context).primaryColor,
+              isExpanded: true,
+            ),
+          ),
         ],
       ),
-    );
-  }
+      leading: IconButton(
+        icon: Icon(Icons.arrow_back, color: Colors.white),
+        onPressed: () => Navigator.of(context).pop(),
+      ),
+    ),
+    body: Stack(
+      children: [
+        _isLoading 
+          ? const Center(child: CircularProgressIndicator()) 
+          : Column(
+            children: [
+              // Button Row
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.spaceEvenly,
+                  children: [
+                    ElevatedButton.icon(
+                      icon: Icon(Icons.save),
+                      onPressed: _isEditingAllowed ? _saveData : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: Colors.grey.shade400,
+                      ),
+                      label: Text('Lưu'),
+                    ),
+                    ElevatedButton.icon(
+                      icon: Icon(Icons.autorenew),
+                      onPressed: _isEditingAllowed ? _createAutoData : null,
+                      style: ElevatedButton.styleFrom(
+                       backgroundColor: Colors.blue,
+                       foregroundColor: Colors.white,
+                       disabledBackgroundColor: Colors.grey.shade400,
+                     ),
+                     label: Text('Tạo tự động'),
+                   ),
+                   ElevatedButton.icon(
+                     icon: Icon(Icons.file_download),
+                     onPressed: _monthlyData.isNotEmpty ? _exportToExcel : null,
+                     style: ElevatedButton.styleFrom(
+                       backgroundColor: Colors.orange,
+                       foregroundColor: Colors.white,
+                       disabledBackgroundColor: Colors.grey.shade400,
+                     ),
+                     label: Text('Xuất Excel'),
+                   ),
+                   // New 100% process all projects button
+                   ElevatedButton.icon(
+                     icon: Icon(Icons.all_inclusive),
+                     onPressed: _isEditingAllowed ? _createAutoDataForAllProjects : null,
+                     style: ElevatedButton.styleFrom(
+                       backgroundColor: Colors.purple,
+                       foregroundColor: Colors.white,
+                       disabledBackgroundColor: Colors.grey.shade400,
+                     ),
+                     label: Text('Tạo tự động 100%'),
+                   ),
+                   // New 100% export all projects button
+                   ElevatedButton.icon(
+                     icon: Icon(Icons.file_download),
+                     onPressed: _exportExcelForAllProjects,
+                     style: ElevatedButton.styleFrom(
+                       backgroundColor: Colors.deepOrange,
+                       foregroundColor: Colors.white,
+                       disabledBackgroundColor: Colors.grey.shade400,
+                     ),
+                     label: Text('Xuất Excel 100%'),
+                   ),
+                 ],
+               ),
+             ),
+             
+             // Status Message for Editing
+             if (!_isEditingAllowed)
+               Container(
+                 color: Colors.orange.shade100,
+                 padding: EdgeInsets.all(8),
+                 margin: EdgeInsets.symmetric(horizontal: 8),
+                 child: Row(
+                   children: [
+                     Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                     SizedBox(width: 8),
+                     Expanded(
+                       child: Text(
+                         'Chỉnh sửa chỉ được phép đến ngày 8 của tháng tiếp theo',
+                         style: TextStyle(
+                           color: Colors.orange.shade800,
+                           fontWeight: FontWeight.bold,
+                         ),
+                       ),
+                     ),
+                   ],
+                 ),
+               ),
+             
+             Padding(
+               padding: const EdgeInsets.all(16.0),
+               child: Text(
+                 'Tổng hợp tháng - ${_selectedDepartment ?? ""}',
+                 style: TextStyle(
+                   fontSize: 18,
+                   fontWeight: FontWeight.bold,
+                 ),
+               ),
+             ),
+             
+             Expanded(
+               child: _monthlyData.isEmpty
+                 ? Center(
+                     child: Column(
+                       mainAxisAlignment: MainAxisAlignment.center,
+                       children: [
+                         Icon(Icons.info_outline, size: 50, color: Colors.grey),
+                         SizedBox(height: 16),
+                         Text(
+                           'Không có dữ liệu cho tháng này',
+                           style: TextStyle(
+                             fontSize: 16, 
+                             color: Colors.grey,
+                           ),
+                         ),
+                         SizedBox(height: 16),
+                         if (_isEditingAllowed)
+                           ElevatedButton(
+                             onPressed: _createAutoData,
+                             child: Text('Tạo dữ liệu mới'),
+                           ),
+                       ],
+                     ),
+                   )
+                 : _buildSimpleDataTable(),
+             ),
+           ],
+         ),
+       if (_isLoading)
+         Container(
+           color: Colors.black.withOpacity(0.3),
+           child: Center(
+             child: Card(
+               child: Padding(
+                 padding: const EdgeInsets.all(20.0),
+                 child: Column(
+                   mainAxisSize: MainAxisSize.min,
+                   children: [
+                     CircularProgressIndicator(),
+                     SizedBox(height: 16),
+                     Text(_isProcessingAllProjects 
+                         ? 'Đang xử lý: ${_currentProjectIndex + 1}/${_totalProjectsToProcess}\n${_processingStatus}'
+                         : 'Đang xử lý...'),
+                   ],
+                 ),
+               ),
+             ),
+           ),
+         ),
+     ],
+   ),
+ );
+}
   Widget _buildSimpleDataTable() {
   final Map<String, String> columnTitles = {
     'MaNV': 'Mã NV',
@@ -1440,8 +2119,8 @@ Future<void> _exportToExcel() async {
   
   final List<String> columnsToShow = [
     'MaNV', 'TenNV', 'BoPhan', 'CongChuanToiDa',
-    'Tuan1va2', 'Phep1va2', 'HT1va2',
-    'Tuan3va4', 'Phep3va4', 'HT3va4',
+'Tuan_1va2', 'Phep_1va2', 'HT_1va2',
+  'Tuan_3va4', 'Phep_3va4', 'HT_3va4',
     'Tong_Cong', 'Tong_Phep', 'Tong_Le', 'Tong_NgoaiGio',
     'Tong_HV', 'Tong_Dem', 'Tong_CD', 'Tong_HT',
     'TongLuong', 'UngLan1', 'UngLan2', 'ThanhToan3',

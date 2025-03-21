@@ -1156,8 +1156,8 @@ Widget _buildUserMessage(Map<String, dynamic> message) {
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                Color(0xFF5E5AEC),
-                Color(0xFF8C52FF),
+                Color(0xFF248A3D),
+                Color(0xFF30D158),
               ],
             ),
             borderRadius: BorderRadius.circular(16),
@@ -1296,8 +1296,8 @@ Widget _buildAIMessage(Map<String, dynamic> message) {
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                Color(0xFFFF9966),
-                Color(0xFFFF6B95),
+                Color(0xFF0A84FF),
+                Color(0xFF007AFF),
               ],
             ),
             borderRadius: BorderRadius.circular(16),
