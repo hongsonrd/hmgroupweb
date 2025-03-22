@@ -198,7 +198,7 @@ Future<bool> _showPasswordDialog(BuildContext context) async {
     barrierDismissible: false,
     builder: (BuildContext context) {
       return AlertDialog(
-        title: Text('Nhập mật khẩu'),
+        title: Text('🔐 Nhập mật khẩu'),
         content: TextField(
           controller: passwordController,
           obscureText: true,

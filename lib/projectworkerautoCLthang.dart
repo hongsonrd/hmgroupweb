@@ -278,106 +278,133 @@ Future<void> _createAutoDataForSingleProject(String project) async {
       double tongCD = 0;
       double tongHT = 0;
       
-      for (var record in departmentRecords) {
-        final recordDateStr = record['Ngay'] as String;
-        final recordDate = DateTime.parse(recordDateStr.split('T')[0]);
-        final day = recordDate.day;
-        
-        // Extract values
-        final congThuongChu = record['CongThuongChu'] as String? ?? 'Ro';
-        double phanLoaiValue = 0;
-        try {
-          final phanLoai = record['PhanLoai'] as String? ?? '0';
-          phanLoaiValue = double.tryParse(phanLoai) ?? 0;
-        } catch (e) {
-          // Ignore parsing errors
-        }
-        
-        // Calculate Phep values
-        double phepValue = 0;
-        if (congThuongChu.startsWith('P') && !congThuongChu.startsWith('P/2')) {
-          phepValue += 1.0;
-        } else if (congThuongChu.startsWith('P/2')) {
-          phepValue += 0.5;
-        }
-        
-        // Check for +P or +P/2 suffix
-        if (congThuongChu.endsWith('+P')) {
-          phepValue += 1.0;
-        } else if (congThuongChu.endsWith('+P/2')) {
-          phepValue += 0.5;
-        }
-        
-        double hvValue = 0;
-if (congThuongChu == 'HV') {
-  hvValue = 1.0;
-} else if (congThuongChu.startsWith('2HV')) {
-  hvValue = 2.0;
-} else if (congThuongChu.startsWith('3HV')) {
-  hvValue = 3.0;
+      // First collect all values without subtraction
+for (var record in departmentRecords) {
+  final recordDateStr = record['Ngay'] as String;
+  final recordDate = DateTime.parse(recordDateStr.split('T')[0]);
+  final day = recordDate.day;
+  
+  // Extract values
+  final congThuongChu = record['CongThuongChu'] as String? ?? 'Ro';
+  double phanLoaiValue = 0;
+  try {
+    final phanLoai = record['PhanLoai'] as String? ?? '0';
+    phanLoaiValue = double.tryParse(phanLoai) ?? 0;
+  } catch (e) {
+    // Ignore parsing errors
+  }
+  
+  // Calculate Phep values
+  double phepValue = 0;
+  if (congThuongChu.startsWith('P') && !congThuongChu.startsWith('P/2')) {
+    phepValue += 1.0;
+  } else if (congThuongChu.startsWith('P/2')) {
+    phepValue += 0.5;
+  }
+  
+  // Check for +P or +P/2 suffix
+  if (congThuongChu.endsWith('+P')) {
+    phepValue += 1.0;
+  } else if (congThuongChu.endsWith('+P/2')) {
+    phepValue += 0.5;
+  }
+  
+  // Calculate HV values
+  double hvValue = 0;
+  if (congThuongChu == 'HV') {
+    hvValue = 1.0;
+  } else if (congThuongChu.startsWith('2HV')) {
+    hvValue = 2.0;
+  } else if (congThuongChu.startsWith('3HV')) {
+    hvValue = 3.0;
+  }
+  
+  // Calculate night shift (XĐ) values
+  double demValue = 0;
+  if (congThuongChu == 'XĐ') {
+    demValue = 1.0;
+  } else if (congThuongChu == '2XĐ') {
+    demValue = 2.0;
+  }
+  
+  // Calculate CĐ values
+  double cdValue = 0;
+  if (congThuongChu == 'CĐ') {
+    cdValue = 1.0;
+  }
+  
+  // Check for HT value
+  double htValue = 0;
+  if (congThuongChu == 'HT') {
+    htValue = 1.0;
+  }
+  
+  // Calculate ngoai gio values
+  double ngoaiGioValue = 0;
+  try {
+    final ngoaiGioThuong = double.tryParse(record['NgoaiGioThuong']?.toString() ?? '0') ?? 0;
+    final ngoaiGioKhac = double.tryParse(record['NgoaiGioKhac']?.toString() ?? '0') ?? 0;
+    ngoaiGioValue = (ngoaiGioThuong + ngoaiGioKhac) / 8.0;
+  } catch (e) {
+    // Ignore parsing errors
+  }
+  
+  // Calculate other totals
+  double ngoaiGiox15 = 0;
+  try {
+    ngoaiGiox15 = (double.tryParse(record['NgoaiGiox15']?.toString() ?? '0') ?? 0) / 8.0;
+  } catch (e) {
+    // Ignore parsing errors
+  }
+  
+  double ngoaiGiox2 = 0;
+  try {
+    ngoaiGiox2 = (double.tryParse(record['NgoaiGiox2']?.toString() ?? '0') ?? 0) / 8.0;
+  } catch (e) {
+    // Ignore parsing errors
+  }
+  
+  double congLe = 0;
+  try {
+    congLe = (double.tryParse(record['CongLe']?.toString() ?? '0') ?? 0) / 8.0;
+  } catch (e) {
+    // Ignore parsing errors
+  }
+  
+  // Add values to the appropriate period (without subtraction)
+  if (day <= 15) {
+    tuan1va2 += phanLoaiValue + ngoaiGioValue;
+    phep1va2 += phepValue;
+    ht1va2 += htValue;
+  } else if (day <= 25) {
+    tuan3va4 += phanLoaiValue + ngoaiGioValue;
+    phep3va4 += phepValue;
+    ht3va4 += htValue;
+  } else {
+    tuan5plus += phanLoaiValue + ngoaiGioValue;
+    phep5plus += phepValue;
+    ht5plus += htValue;
+  }
+  
+  // Add to totals
+  tongCong += phanLoaiValue + ngoaiGioValue;
+  tongPhep += phepValue;
+  tongLe += congLe;
+  tongNgoaiGio += ngoaiGioValue;
+  tongHV += hvValue;
+  tongDem += demValue;
+  tongCD += cdValue;
+  tongHT += htValue;
 }
-tongHV += hvValue;
 
-        // Check for HT value
-        double htValue = 0;
-        if (congThuongChu == 'HT') {
-          htValue = 1.0;
-        }
-        
-        // Calculate ngoai gio values
-        double ngoaiGioValue = 0;
-        try {
-          final ngoaiGioThuong = double.tryParse(record['NgoaiGioThuong']?.toString() ?? '0') ?? 0;
-          final ngoaiGioKhac = double.tryParse(record['NgoaiGioKhac']?.toString() ?? '0') ?? 0;
-          ngoaiGioValue = (ngoaiGioThuong + ngoaiGioKhac) / 8.0;
-        } catch (e) {
-          // Ignore parsing errors
-        }
-        
-        // Calculate other totals
-        double ngoaiGiox15 = 0;
-        try {
-          ngoaiGiox15 = (double.tryParse(record['NgoaiGiox15']?.toString() ?? '0') ?? 0) / 8.0;
-        } catch (e) {
-          // Ignore parsing errors
-        }
-        
-        double ngoaiGiox2 = 0;
-        try {
-          ngoaiGiox2 = (double.tryParse(record['NgoaiGiox2']?.toString() ?? '0') ?? 0) / 8.0;
-        } catch (e) {
-          // Ignore parsing errors
-        }
-        
-        double congLe = 0;
-        try {
-          congLe = (double.tryParse(record['CongLe']?.toString() ?? '0') ?? 0) / 8.0;
-        } catch (e) {
-          // Ignore parsing errors
-        }
-        
-        // Add values to the appropriate period
-        if (day <= 15) {
-          tuan1va2 += phanLoaiValue + ngoaiGioValue - phep1va2;
-          phep1va2 += phepValue;
-          ht1va2 += htValue;
-        } else if (day <= 25) {
-          tuan3va4 += phanLoaiValue + ngoaiGioValue - phep3va4;
-          phep3va4 += phepValue;
-          ht3va4 += htValue;
-        } else {
-          tuan5plus += phanLoaiValue + ngoaiGioValue - phep5plus;
-          phep5plus += phepValue;
-          ht5plus += htValue;
-        }
-        
-        // Add to totals
-        tongCong += phanLoaiValue + ngoaiGioValue - tongPhep;
-        tongPhep += phepValue;
-        tongLe += congLe;
-        tongNgoaiGio += ngoaiGioValue;
-        tongHT += htValue;
-      }
+// After all calculations are done, adjust for permissions
+// Reduce regular days by permission days for each period
+tuan1va2 = math.max(0, tuan1va2 - phep1va2);
+tuan3va4 = math.max(0, tuan3va4 - phep3va4);
+tuan5plus = math.max(0, tuan5plus - phep5plus);
+
+// Adjust total work days by total permission days
+tongCong = math.max(0, tongCong - tongPhep);
       
       // Get TenNV (employee name) from staffbio
       String tenNV = "";
@@ -392,21 +419,21 @@ tongHV += hvValue;
       
       // Calculate UngLan1 based on tuan1va2 value
       double ungLan1 = 0;
-      if (tuan1va2 >= 10 && tuan1va2 < 13) {
-        ungLan1 = 1500000;
-      } else if (tuan1va2 >= 13) {
-        ungLan1 = 1700000;
-      }
-      
-      // Calculate UngLan2 based on tuan3va4
-      double ungLan2 = 0;
-      if (tuan3va4 < 6) {
-        ungLan2 = 0;
-      } else if (tuan3va4 < 8) {
-        ungLan2 = 1600000;
-      } else {
-        ungLan2 = 1800000;
-      }
+if (tuan1va2 >= 10 && tuan1va2 < 13) {
+  ungLan1 = 1500000;
+} else if (tuan1va2 >= 13) {
+  ungLan1 = 1700000;
+}
+
+// Calculate UngLan2 based on tuan3va4 value
+double ungLan2 = 0;
+if (tuan3va4 < 6) {
+  ungLan2 = 0;
+} else if (tuan3va4 < 8) {
+  ungLan2 = 1600000;
+} else {
+  ungLan2 = 1800000;
+}
       
       // Check if this employee already exists in ChamCongCNThang
       bool recordExists = existingRecordsMap.containsKey(maNV);
@@ -1332,7 +1359,8 @@ for (var record in chamCongCNRecords) {
         double tongCD = 0;
         double tongHT = 0;
         
-        for (var record in departmentRecords) {
+        // First collect all values without subtraction
+for (var record in departmentRecords) {
   final recordDateStr = record['Ngay'] as String;
   final recordDate = DateTime.parse(recordDateStr.split('T')[0]);
   final day = recordDate.day;
@@ -1361,76 +1389,103 @@ for (var record in chamCongCNRecords) {
   } else if (congThuongChu.endsWith('+P/2')) {
     phepValue += 0.5;
   }
-          double hvValue = 0;
-if (congThuongChu == 'HV') {
-  hvValue = 1.0;
-} else if (congThuongChu.startsWith('2HV')) {
-  hvValue = 2.0;
-} else if (congThuongChu.startsWith('3HV')) {
-  hvValue = 3.0;
-}
-tongHV += hvValue;
-
-          // Check for HT value
-          double htValue = 0;
-          if (congThuongChu == 'HT') {
-            htValue = 1.0;
-          }
-          
-          // Calculate ngoai gio values
-          double ngoaiGioValue = 0;
-          try {
-            final ngoaiGioThuong = double.tryParse(record['NgoaiGioThuong']?.toString() ?? '0') ?? 0;
-            final ngoaiGioKhac = double.tryParse(record['NgoaiGioKhac']?.toString() ?? '0') ?? 0;
-            ngoaiGioValue = (ngoaiGioThuong + ngoaiGioKhac) / 8.0;
-          } catch (e) {
-            // Ignore parsing errors
-          }
-          
-          // Calculate other totals
-          double ngoaiGiox15 = 0;
-          try {
-            ngoaiGiox15 = (double.tryParse(record['NgoaiGiox15']?.toString() ?? '0') ?? 0) / 8.0;
-          } catch (e) {
-            // Ignore parsing errors
-          }
-          
-          double ngoaiGiox2 = 0;
-          try {
-            ngoaiGiox2 = (double.tryParse(record['NgoaiGiox2']?.toString() ?? '0') ?? 0) / 8.0;
-          } catch (e) {
-            // Ignore parsing errors
-          }
-          
-          double congLe = 0;
-          try {
-            congLe = (double.tryParse(record['CongLe']?.toString() ?? '0') ?? 0) / 8.0;
-          } catch (e) {
-            // Ignore parsing errors
-          }
-          
-          // Add values to the appropriate period
-            if (day <= 15) {
-    tuan1va2 += phanLoaiValue + ngoaiGioValue - phep1va2;
+  
+  // Calculate HV values
+  double hvValue = 0;
+  if (congThuongChu == 'HV') {
+    hvValue = 1.0;
+  } else if (congThuongChu.startsWith('2HV')) {
+    hvValue = 2.0;
+  } else if (congThuongChu.startsWith('3HV')) {
+    hvValue = 3.0;
+  }
+  
+  // Calculate night shift (XĐ) values
+  double demValue = 0;
+  if (congThuongChu == 'XĐ') {
+    demValue = 1.0;
+  } else if (congThuongChu == '2XĐ') {
+    demValue = 2.0;
+  }
+  
+  // Calculate CĐ values
+  double cdValue = 0;
+  if (congThuongChu == 'CĐ') {
+    cdValue = 1.0;
+  }
+  
+  // Check for HT value
+  double htValue = 0;
+  if (congThuongChu == 'HT') {
+    htValue = 1.0;
+  }
+  
+  // Calculate ngoai gio values
+  double ngoaiGioValue = 0;
+  try {
+    final ngoaiGioThuong = double.tryParse(record['NgoaiGioThuong']?.toString() ?? '0') ?? 0;
+    final ngoaiGioKhac = double.tryParse(record['NgoaiGioKhac']?.toString() ?? '0') ?? 0;
+    ngoaiGioValue = (ngoaiGioThuong + ngoaiGioKhac) / 8.0;
+  } catch (e) {
+    // Ignore parsing errors
+  }
+  
+  // Calculate other totals
+  double ngoaiGiox15 = 0;
+  try {
+    ngoaiGiox15 = (double.tryParse(record['NgoaiGiox15']?.toString() ?? '0') ?? 0) / 8.0;
+  } catch (e) {
+    // Ignore parsing errors
+  }
+  
+  double ngoaiGiox2 = 0;
+  try {
+    ngoaiGiox2 = (double.tryParse(record['NgoaiGiox2']?.toString() ?? '0') ?? 0) / 8.0;
+  } catch (e) {
+    // Ignore parsing errors
+  }
+  
+  double congLe = 0;
+  try {
+    congLe = (double.tryParse(record['CongLe']?.toString() ?? '0') ?? 0) / 8.0;
+  } catch (e) {
+    // Ignore parsing errors
+  }
+  
+  // Add values to the appropriate period (without subtraction)
+  if (day <= 15) {
+    tuan1va2 += phanLoaiValue + ngoaiGioValue;
     phep1va2 += phepValue;
     ht1va2 += htValue;
   } else if (day <= 25) {
-    tuan3va4 += phanLoaiValue + ngoaiGioValue- phep3va4;
+    tuan3va4 += phanLoaiValue + ngoaiGioValue;
     phep3va4 += phepValue;
     ht3va4 += htValue;
   } else {
-    tuan5plus += phanLoaiValue + ngoaiGioValue-phep5plus;
+    tuan5plus += phanLoaiValue + ngoaiGioValue;
     phep5plus += phepValue;
     ht5plus += htValue;
   }
   
   // Add to totals
-  tongCong += phanLoaiValue + ngoaiGioValue -tongPhep;
+  tongCong += phanLoaiValue + ngoaiGioValue;
   tongPhep += phepValue;
   tongLe += congLe;
   tongNgoaiGio += ngoaiGioValue;
+  tongHV += hvValue;
+  tongDem += demValue;
+  tongCD += cdValue;
   tongHT += htValue;
 }
+
+// After all calculations are done, adjust for permissions
+// Reduce regular days by permission days for each period
+tuan1va2 = math.max(0, tuan1va2 - phep1va2);
+tuan3va4 = math.max(0, tuan3va4 - phep3va4);
+tuan5plus = math.max(0, tuan5plus - phep5plus);
+
+// Adjust total work days by total permission days
+tongCong = math.max(0, tongCong - tongPhep);
 
         // Get TenNV (employee name) from staffbio
         String tenNV = "";
@@ -1445,14 +1500,14 @@ tongHV += hvValue;
         
         // Calculate UngLan1 based on tuan1va2 value
         double ungLan1 = 0;
-        if (tuan1va2 >= 10 && tuan1va2 < 13) {
-          ungLan1 = 1500000;
-        } else if (tuan1va2 >= 13) {
-          ungLan1 = 1700000;
-        }
-        
-        // Calculate UngLan2 based on total for first 25 days
-        double ungLan2 = 0;
+if (tuan1va2 >= 10 && tuan1va2 < 13) {
+  ungLan1 = 1500000;
+} else if (tuan1va2 >= 13) {
+  ungLan1 = 1700000;
+}
+
+// Calculate UngLan2 based on tuan3va4 value
+double ungLan2 = 0;
 if (tuan3va4 < 6) {
   ungLan2 = 0;
 } else if (tuan3va4 < 8) {

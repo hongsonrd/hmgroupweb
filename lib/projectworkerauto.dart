@@ -688,7 +688,7 @@ if (congChu_regularDays34 < 0) congChu_regularDays34 = 0;
 congChu_regularDays5plus = congChu_regularDays5plus - congChu_permissionDays5plus;
 if (congChu_regularDays5plus < 0) congChu_regularDays5plus = 0;
   final double congChu_totalPermission = congChu_permissionDays12 + congChu_permissionDays34 + congChu_permissionDays5plus;
-  final double congChu_totalRegular = congChu_regularDays12 + congChu_regularDays34 + congChu_regularDays5plus - congChu_totalPermission;
+  final double congChu_totalRegular = congChu_regularDays12 + congChu_regularDays34 + congChu_regularDays5plus;
   final double congChu_totalHT = congChu_htDays12 + congChu_htDays34 + congChu_htDays5plus;
   
   // Chữ & Giờ thường - NgoaiGioThuong row
