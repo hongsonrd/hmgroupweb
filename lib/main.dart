@@ -27,6 +27,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'floating_draggable_icon.dart';
 import 'projectdirector.dart';
+import 'projectdirector2.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -1157,103 +1158,135 @@ void _showLoginDialog() {
     });
   }
 @override
-  Widget build(BuildContext context) {
-    if (!_isAuthenticated) {
-      return VideoBackground(
-        child: const Scaffold(
-          backgroundColor: Colors.transparent,
-          body: Center(child: CircularProgressIndicator()),
-        ),
-      );
-    }
+Widget build(BuildContext context) {
+ if (!_isAuthenticated) {
+   return VideoBackground(
+     child: const Scaffold(
+       backgroundColor: Colors.transparent,
+       body: Center(child: CircularProgressIndicator()),
+     ),
+   );
+ }
 
-    return Banner(
-      message: 'HM GROUP',
-      location: BannerLocation.topEnd,
-      color: const Color.fromARGB(255, 244, 54, 54),
-      child: Scaffold(
-        body: _screens[_selectedIndex],
-        floatingActionButton: Container(
-          height: 86,
-          width: 86,
-          margin: const EdgeInsets.only(bottom: 10),
-          child: FloatingActionButton(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) => const ProjectDirectorScreen()),
-              );
-            },
-            backgroundColor: Colors.red,
-            elevation: 8,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(25),
-            ),
-            child: const Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.admin_panel_settings, color: Colors.white, size: 35),
-                Text('Quản trị', 
-                  style: TextStyle(fontSize: 16, color: Colors.white),
-                  textAlign: TextAlign.center,
-                )
-              ],
-            ),
-          ),
-        ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-        bottomNavigationBar: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: MediaQuery.of(context).size.width < 600 ? 8.0 : 8.0,
-            vertical: MediaQuery.of(context).size.width < 600 ? 4.0 : 4.0,
-          ),
-          child: Container(
-            decoration: BoxDecoration(
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.white.withOpacity(0.1),
-                  blurRadius: 20,
-                  spreadRadius: -5,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(30),
-              child: BottomNavigationBar(
-                items: const [
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.folder),
-                    label: 'Dự án',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.web),
-                    label: 'Công việc',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.smart_toy),
-                    label: 'HM AI',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.home),
-                    label: 'Hướng dẫn',
-                  ),
-                ],
-                currentIndex: _selectedIndex,
-                onTap: _onItemTapped,
-                backgroundColor: Colors.white,
-                selectedItemColor: const Color.fromARGB(255, 73, 54, 244),
-                unselectedItemColor: Colors.grey,
-                showSelectedLabels: true,
-                showUnselectedLabels: true,
-                type: BottomNavigationBarType.fixed,
-                elevation: 0,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+ return Banner(
+   message: 'HM GROUP',
+   location: BannerLocation.topEnd,
+   color: const Color.fromARGB(255, 244, 54, 54),
+   child: Scaffold(
+     body: _screens[_selectedIndex],
+     floatingActionButton: Row(
+       mainAxisAlignment: MainAxisAlignment.center,
+       children: [
+         Container(
+           height: 86,
+           width: 86,
+           margin: const EdgeInsets.only(bottom: 10, right: 10),
+           child: FloatingActionButton(
+             onPressed: () {
+               Navigator.of(context).push(
+                 MaterialPageRoute(builder: (context) => const ProjectDirectorScreen()),
+               );
+             },
+             backgroundColor: Colors.red,
+             elevation: 8,
+             shape: RoundedRectangleBorder(
+               borderRadius: BorderRadius.circular(25),
+             ),
+             child: const Column(
+               mainAxisAlignment: MainAxisAlignment.center,
+               children: [
+                 Icon(Icons.admin_panel_settings, color: Colors.white, size: 35),
+                 Text('Quản trị', 
+                   style: TextStyle(fontSize: 16, color: Colors.white),
+                   textAlign: TextAlign.center,
+                 )
+               ],
+             ),
+           ),
+         ),
+         Container(
+           height: 86,
+           width: 86,
+           margin: const EdgeInsets.only(bottom: 10, left: 10),
+           child: FloatingActionButton(
+             onPressed: () {
+               Navigator.of(context).push(
+                 MaterialPageRoute(builder: (context) => const ProjectDirector2Screen()),
+               );
+             },
+             backgroundColor: const Color.fromARGB(255, 0, 99, 179),
+             elevation: 8,
+             shape: RoundedRectangleBorder(
+               borderRadius: BorderRadius.circular(25),
+             ),
+             child: const Column(
+               mainAxisAlignment: MainAxisAlignment.center,
+               children: [
+                 Icon(Icons.flight, color: Colors.white, size: 35),
+                 Text('Sân bay\nT1', 
+                   style: TextStyle(fontSize: 16, color: Colors.white),
+                   textAlign: TextAlign.center,
+                 )
+               ],
+             ),
+           ),
+         ),
+       ],
+     ),
+     floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+     bottomNavigationBar: Padding(
+       padding: EdgeInsets.symmetric(
+         horizontal: MediaQuery.of(context).size.width < 600 ? 8.0 : 8.0,
+         vertical: MediaQuery.of(context).size.width < 600 ? 4.0 : 4.0,
+       ),
+       child: Container(
+         decoration: BoxDecoration(
+           boxShadow: [
+             BoxShadow(
+               color: Colors.white.withOpacity(0.1),
+               blurRadius: 20,
+               spreadRadius: -5,
+               offset: const Offset(0, 4),
+             ),
+           ],
+         ),
+         child: ClipRRect(
+           borderRadius: BorderRadius.circular(30),
+           child: BottomNavigationBar(
+             items: const [
+               BottomNavigationBarItem(
+                 icon: Icon(Icons.folder),
+                 label: 'Dự án',
+               ),
+               BottomNavigationBarItem(
+                 icon: Icon(Icons.web),
+                 label: 'Công việc',
+               ),
+               BottomNavigationBarItem(
+                 icon: Icon(Icons.smart_toy),
+                 label: 'HM AI',
+               ),
+               BottomNavigationBarItem(
+                 icon: Icon(Icons.home),
+                 label: 'Hướng dẫn',
+               ),
+             ],
+             currentIndex: _selectedIndex,
+             onTap: _onItemTapped,
+             backgroundColor: Colors.white,
+             selectedItemColor: const Color.fromARGB(255, 73, 54, 244),
+             unselectedItemColor: Colors.grey,
+             showSelectedLabels: true,
+             showUnselectedLabels: true,
+             type: BottomNavigationBarType.fixed,
+             elevation: 0,
+           ),
+         ),
+       ),
+     ),
+   ),
+ );
+}
 }
 
 class VideoBackground extends StatefulWidget {

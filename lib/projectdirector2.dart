@@ -18,14 +18,14 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:share_plus/share_plus.dart';
 
-class ProjectDirectorScreen extends StatefulWidget {
-  const ProjectDirectorScreen({Key? key}) : super(key: key);
+class ProjectDirector2Screen extends StatefulWidget {
+  const ProjectDirector2Screen({Key? key}) : super(key: key);
 
   @override
-  _ProjectDirectorScreenState createState() => _ProjectDirectorScreenState();
+  _ProjectDirector2ScreenState createState() => _ProjectDirector2ScreenState();
 }
 
-class _ProjectDirectorScreenState extends State<ProjectDirectorScreen> {
+class _ProjectDirector2ScreenState extends State<ProjectDirector2Screen> {
   late final appBarPlayer = Player();
   late final appBarVideoController = VideoController(appBarPlayer);
   bool _appBarVideoInitialized = false;
@@ -150,20 +150,42 @@ Future<void> _loadPhanLoaiList() async {
   }
 }
   Future<void> _loadBoPhanList() async {
-    try {
-      final List<String> boPhanList = await dbHelper.getUserBoPhanList();
-      if (mounted) {
-        setState(() {
-          // Make sure we have unique values
-          final uniqueBoPhanList = {'Tất cả', ...boPhanList.toSet()}.toList();
-          _boPhanList = uniqueBoPhanList;
-        });
-      }
-    } catch (e) {
-      print('Error loading BoPhan list: $e');
-      _showError('Error loading department list: $e');
+  try {
+    final List<String> boPhanList = await dbHelper.getUserBoPhanList();
+    if (mounted) {
+      setState(() {
+        // Make sure we have unique values
+        final uniqueBoPhanList = {'Tất cả', ...boPhanList.toSet()}.toList();
+        _boPhanList = uniqueBoPhanList;
+        
+        // Set a default value from the list if it's not already set
+        if (_selectedBoPhan == null || _selectedBoPhan == 'Tất cả') {
+          // Check if 'BP Kinh Doanh' exists in the list, use it as default
+          if (_boPhanList.contains('Sân bay nội bài Ga T1')) {
+            _selectedBoPhan = 'Sân bay nội bài Ga T1';
+          } 
+          // Otherwise, use the first department other than 'Tất cả' if available
+          else if (_boPhanList.length > 1) {
+            // Find first item that's not 'Tất cả'
+            for (String boPhan in _boPhanList) {
+              if (boPhan != 'Tất cả') {
+                _selectedBoPhan = boPhan;
+                break;
+              }
+            }
+          }
+          // If all else fails, keep 'Tất cả'
+          else {
+            _selectedBoPhan = 'Tất cả';
+          }
+        }
+      });
     }
+  } catch (e) {
+    print('Error loading BoPhan list: $e');
+    _showError('Error loading department list: $e');
   }
+}
 
   Future<void> _loadDateRange() async {
   try {
@@ -332,7 +354,7 @@ Future<void> _loadPhanLoaiList() async {
 
     setState(() => _syncStatus = 'Đang lấy lịch sử báo cáo...');
     final taskHistoryResponse = await AuthenticatedHttpClient.get(
-      Uri.parse('$baseUrl/historybaocao2/$username')
+      Uri.parse('$baseUrl/historybaocao3/$username')
     );
 
     if (taskHistoryResponse.statusCode != 200) {
