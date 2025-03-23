@@ -17,6 +17,7 @@ import 'floating_draggable_icon.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:share_plus/share_plus.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class ProjectDirectorScreen extends StatefulWidget {
   const ProjectDirectorScreen({Key? key}) : super(key: key);
@@ -25,7 +26,7 @@ class ProjectDirectorScreen extends StatefulWidget {
   _ProjectDirectorScreenState createState() => _ProjectDirectorScreenState();
 }
 
-class _ProjectDirectorScreenState extends State<ProjectDirectorScreen> {
+class _ProjectDirectorScreenState extends State<ProjectDirectorScreen> with AutomaticKeepAliveClientMixin {
   late final appBarPlayer = Player();
   late final appBarVideoController = VideoController(appBarPlayer);
   bool _appBarVideoInitialized = false;
@@ -54,7 +55,8 @@ class _ProjectDirectorScreenState extends State<ProjectDirectorScreen> {
     'projectPerformanceChart': GlobalKey(),
     'dailyReportChart': GlobalKey(),
   };
-
+  @override
+  bool get wantKeepAlive => true;
   @override
   void initState() {
     super.initState();
@@ -224,7 +226,8 @@ Future<void> _loadPhanLoaiList() async {
 
   Future<void> _loadProjects() async {
     if (_isLoadingProjects) return;
-    
+    _shouldReloadImages = true;
+
     setState(() {
       _isLoadingProjects = true;
       _syncStatus = 'Đang đồng bộ dự án...';
@@ -317,9 +320,17 @@ Future<void> _loadPhanLoaiList() async {
       }
     }
   }
-
+void onBoPhanChanged(String? value) {
+  setState(() {
+    _selectedBoPhan = value;
+    _shouldReloadImages = true;
+  });
+  _loadTaskHistoryData();
+  _loadRecentImages();
+}
   Future<void> _loadHistory() async {
   if (_isLoadingHistory) return;
+_shouldReloadImages = true;
 
   setState(() {
     _isLoadingHistory = true;
@@ -635,6 +646,7 @@ bool _isValidDateFormat(String dateStr) {
 
   @override
 Widget build(BuildContext context) {
+  super.build(context);
  final userCredentials = Provider.of<UserCredentials>(context);
  final username = userCredentials.username.toUpperCase();
 
@@ -1259,8 +1271,21 @@ Widget _buildAnalyticsTab() {
 }
 List<Map<String, dynamic>> _recentImages = [];
 bool _isLoadingImages = false;
-
+List<Map<String, dynamic>> _cachedRecentImages = [];
+DateTime _lastImageLoadTime = DateTime.now();
+bool _shouldReloadImages = true;
 Future<void> _loadRecentImages() async {
+  // Don't reload if the cache is less than 5 minutes old, unless forced
+  if (!_shouldReloadImages && 
+      !_isLoadingImages && 
+      _cachedRecentImages.isNotEmpty &&
+      DateTime.now().difference(_lastImageLoadTime).inMinutes < 5) {
+    setState(() {
+      _recentImages = _cachedRecentImages;
+    });
+    return;
+  }
+
   if (_isLoadingImages) return;
   
   setState(() {
@@ -1309,7 +1334,10 @@ Future<void> _loadRecentImages() async {
     
     setState(() {
       _recentImages = processedResults;
+      _cachedRecentImages = processedResults;
+      _lastImageLoadTime = DateTime.now();
       _isLoadingImages = false;
+      _shouldReloadImages = false;
     });
   } catch (e) {
     print('Error loading recent images: $e');
@@ -1512,39 +1540,9 @@ Widget _buildRecentImagesGrid() {
                               children: [
                                 Expanded(
                                   child: GestureDetector(
-                                    onTap: () {
-                                      showDialog(
-                                        context: context,
-                                        builder: (context) => Dialog(
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              AppBar(
-                                                title: Text('$person - $viTri'),
-                                                automaticallyImplyLeading: false,
-                                                actions: [
-                                                  IconButton(
-                                                    icon: Icon(Icons.close),
-                                                    onPressed: () => Navigator.of(context).pop(),
-                                                  ),
-                                                ],
-                                              ),
-                                              InteractiveViewer(
-                                                panEnabled: true,
-                                                boundaryMargin: EdgeInsets.all(20),
-                                                minScale: 0.5,
-                                                maxScale: 4,
-                                                child: _buildNetworkImage(item['HinhAnh'] as String, BoxFit.contain),
-                                              ),
-                                              Padding(
-                                                padding: EdgeInsets.all(16),
-                                                child: Text(item['ChiTiet'] as String? ?? ''),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      );
-                                    },
+                                     onTap: () {
+    _showImageDetailsDialog(item);
+  },
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
                                       child: _buildNetworkImage(item['HinhAnh'] as String, BoxFit.cover),
@@ -1859,86 +1857,118 @@ void _showImageDetailsDialog(Map<String, dynamic> selectedItem) {
   showDialog(
     context: context,
     builder: (BuildContext context) {
-      return AlertDialog(
-        contentPadding: EdgeInsets.zero,
-        backgroundColor: Colors.black87,
-        title: Container(
-          color: Colors.blue.withOpacity(0.7),
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          margin: EdgeInsets.all(-24), // Counteract AlertDialog's internal padding
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '$nguoiDung - $viTri',
-                  style: TextStyle(color: Colors.white, fontSize: 16),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              IconButton(
-                icon: Icon(Icons.close, color: Colors.white, size: 20),
-                padding: EdgeInsets.zero,
-                constraints: BoxConstraints(),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
-          ),
-        ),
-        content: Container(
-          width: double.maxFinite,
-          height: 400, // Fixed height that works on most devices
+      return Dialog(
+        insetPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Container(
+          width: double.infinity,
+          height: MediaQuery.of(context).size.height * 0.8,
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              // Scrollable image area
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Image.network(
-                    imageUrl,
-                    fit: BoxFit.contain,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Container(
-                        height: 300,
-                        child: Center(
-                          child: CircularProgressIndicator(
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded / 
-                                  loadingProgress.expectedTotalBytes!
-                                : null,
-                            color: Colors.white70,
-                          ),
-                        ),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        height: 200,
-                        color: Colors.grey[900],
-                        child: Center(
-                          child: Icon(Icons.broken_image, color: Colors.white70, size: 50),
-                        ),
-                      );
-                    },
-                  ),
+              // Header
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                color: Colors.blue,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '$nguoiDung - $viTri',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
                 ),
               ),
               
-              // Details if any
-              if (chiTiet.isNotEmpty)
-                Padding(
-                  padding: EdgeInsets.all(8),
-                  child: Text(
-                    chiTiet, 
-                    style: TextStyle(color: Colors.white70),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+              // Scrollable content - NO ZOOM
+              Expanded(
+                child: ListView(
+                  children: [
+                    // Image - NO INTERACTIVE VIEWER
+                    Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Image.network(
+                        imageUrl,
+                        fit: BoxFit.contain,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Center(
+                            child: CircularProgressIndicator(
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded / 
+                                    loadingProgress.expectedTotalBytes!
+                                  : null,
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            height: 200,
+                            color: Colors.grey[300],
+                            child: Center(
+                              child: Icon(Icons.broken_image, size: 50),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    
+                    // Details section
+                    if (chiTiet.isNotEmpty)
+                      Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Chi tiết:',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            Text(chiTiet),
+                          ],
+                        ),
+                      ),
+                    
+                    // Additional info
+                    Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Thông tin:',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Text('Người dùng: $nguoiDung'),
+                          Text('Vị trí: $viTri'),
+                          Text('Thời gian: ${selectedItem['Gio'] as String? ?? ''}'),
+                          Text('Bộ phận: ${selectedItem['BoPhan'] as String? ?? ''}'),
+                          Text('Phân loại: ${selectedItem['PhanLoai'] as String? ?? ''}'),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
+              ),
               
               // Buttons
-              Padding(
-                padding: EdgeInsets.all(8),
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: Colors.grey.shade300)),
+                ),
                 child: Row(
                   children: [
                     Expanded(
@@ -1954,7 +1984,7 @@ void _showImageDetailsDialog(Map<String, dynamic> selectedItem) {
                         ),
                       ),
                     ),
-                    SizedBox(width: 8),
+                    SizedBox(width: 16),
                     Expanded(
                       child: ElevatedButton(
                         onPressed: () {
@@ -1979,58 +2009,45 @@ void _showImageDetailsDialog(Map<String, dynamic> selectedItem) {
   );
 }
 Widget _buildNetworkImage(String url, BoxFit fit) {
-  // Clean the URL if needed
   String cleanUrl = url.trim();
   if (cleanUrl.contains('yourworldtravel.vn')) {
     if (!cleanUrl.startsWith('http')) {
       cleanUrl = 'https://$cleanUrl';
     }
     cleanUrl = cleanUrl.trimRight();
-    print('Modified yourworldtravel URL: $cleanUrl');
   }
-  return Image.network(
-    cleanUrl,
+  
+  return CachedNetworkImage(
+    imageUrl: cleanUrl,
     fit: fit,
-    headers: cleanUrl.contains('yourworldtravel.vn') ? 
-      // Add any necessary headers for yourworldtravel.vn
+    httpHeaders: cleanUrl.contains('yourworldtravel.vn') ? 
       {
         'Referer': 'https://yourworldtravel.vn/',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
       } : null,
-    errorBuilder: (context, error, stackTrace) {
-      print('Error loading image: $error for URL: $cleanUrl');
-      return Container(
-        color: Colors.grey[300],
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.broken_image, color: Colors.red[400]),
-              if (cleanUrl.contains('yourworldtravel.vn'))
-                Text(
-                  'Không thể tải ảnh từ Yourworldtravel',
-                  style: TextStyle(fontSize: 10, color: Colors.red[400]),
-                  textAlign: TextAlign.center,
-                )
-            ],
-          ),
+    placeholder: (context, url) => Container(
+      color: Colors.grey[200],
+      child: Center(
+        child: CircularProgressIndicator(),
+      ),
+    ),
+    errorWidget: (context, url, error) => Container(
+      color: Colors.grey[300],
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.broken_image, color: Colors.red[400]),
+            if (cleanUrl.contains('yourworldtravel.vn'))
+              Text(
+                'Không thể tải ảnh từ Yourworldtravel',
+                style: TextStyle(fontSize: 10, color: Colors.red[400]),
+                textAlign: TextAlign.center,
+              )
+          ],
         ),
-      );
-    },
-    loadingBuilder: (context, child, loadingProgress) {
-      if (loadingProgress == null) return child;
-      return Container(
-        color: Colors.grey[200],
-        child: Center(
-          child: CircularProgressIndicator(
-            value: loadingProgress.expectedTotalBytes != null
-                ? loadingProgress.cumulativeBytesLoaded / 
-                  loadingProgress.expectedTotalBytes!
-                : null,
-          ),
-        ),
-      );
-    },
+      ),
+    ),
   );
 }
   Widget _buildDatePicker({
@@ -2072,7 +2089,11 @@ Widget _buildNetworkImage(String url, BoxFit fit) {
   }
 
   Widget _buildStatCard(String title, String value, IconData icon, Color color) {
-    return Expanded(
+  return Expanded(
+    child: GestureDetector(
+      onTap: () {
+        _showStatDetails(title, color);
+      },
       child: Container(
         padding: EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -2112,9 +2133,259 @@ Widget _buildNetworkImage(String url, BoxFit fit) {
           ],
         ),
       ),
-    );
+    ),
+  );
+}
+void _showStatDetails(String statType, Color color) {
+  List<Map<String, dynamic>> records = [];
+  String title = '';
+  
+  // Lấy dữ liệu tương ứng với loại thống kê
+  switch (statType) {
+    case 'Số báo cáo':
+      records = _filteredTaskHistory;
+      title = 'Danh sách báo cáo';
+      break;
+    case 'Số dự án':
+      // Lấy danh sách dự án duy nhất
+      final projectSet = <String, Map<String, dynamic>>{};
+      for (var item in _filteredTaskHistory) {
+        final boPhan = item['BoPhan'] as String;
+        if (!projectSet.containsKey(boPhan)) {
+          projectSet[boPhan] = {'BoPhan': boPhan, 'Count': 1};
+        } else {
+          projectSet[boPhan]!['Count'] = (projectSet[boPhan]!['Count'] as int) + 1;
+        }
+      }
+      records = projectSet.values.toList();
+      title = 'Danh sách dự án';
+      break;
+    case 'Số vấn đề':
+      records = _filteredTaskHistory.where((item) => item['KetQua'] != '✔️').toList();
+      title = 'Danh sách vấn đề';
+      break;
+    case 'Tỉ lệ giải quyết':
+      final resolvedIssues = _filteredTaskHistory.where((item) => 
+        item['KetQua'] != '✔️' && 
+        item['GiaiPhap'] != null && 
+        item['GiaiPhap'].toString().trim().isNotEmpty).toList();
+      records = resolvedIssues;
+      title = 'Vấn đề đã giải quyết';
+      break;
   }
-
+  
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return Dialog(
+        insetPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Container(
+          width: double.infinity,
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: Column(
+            children: [
+              // Header
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                color: color,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // List of records
+              Expanded(
+                child: records.isEmpty 
+                ? Center(child: Text('Không có dữ liệu'))
+                : ListView.builder(
+                  itemCount: records.length,
+                  itemBuilder: (context, index) {
+                    final item = records[index];
+                    
+                    if (statType == 'Số dự án') {
+                      // Hiển thị thông tin dự án
+                      return ListTile(
+                        title: Text(item['BoPhan'] as String),
+                        trailing: Text('${item['Count']} báo cáo'),
+                        onTap: () {
+                          // Có thể thêm hành động khi nhấp vào từng dự án
+                          Navigator.of(context).pop();
+                          setState(() {
+                            _selectedBoPhan = item['BoPhan'] as String;
+                          });
+                          _loadTaskHistoryData();
+                          _loadRecentImages();
+                        },
+                      );
+                    } else {
+                      // Lấy thông tin chi tiết
+                      final chiTiet = item['ChiTiet'] as String? ?? 'Không có nội dung';
+                      final chiTiet2 = item['ChiTiet2'] as String? ?? 'Không có mã';
+                      
+                      return Card(
+                        margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        child: ExpansionTile(
+                          title: Text(
+                            item['ViTri'] as String? ?? 'Không có tiêu đề',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Bộ phận: ${item['BoPhan'] as String? ?? ''}',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                              Text(
+                                'Mã: ${chiTiet2}',
+                                style: TextStyle(fontSize: 12),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (item['Ngay'] != null && item['Gio'] != null)
+                                Text(
+                                  'Thời gian: ${item['Ngay']} ${item['Gio']}',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                            ],
+                          ),
+                          leading: (item['HinhAnh'] != null && (item['HinhAnh'] as String).isNotEmpty)
+                            ? Container(
+                                width: 50,
+                                height: 50,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: _buildNetworkImage(item['HinhAnh'] as String, BoxFit.cover),
+                                ),
+                              )
+                            : Icon(Icons.description, color: color),
+                          children: [
+                            Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Mã chi tiết
+                                  Text(
+                                    'Mã chi tiết:',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  Container(
+                                    width: double.infinity,
+                                    padding: EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[100],
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(chiTiet2),
+                                  ),
+                                  SizedBox(height: 12),
+                                  
+                                  // Nội dung chi tiết
+                                  Text(
+                                    'Nội dung:',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  Container(
+                                    width: double.infinity,
+                                    padding: EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[100],
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(chiTiet),
+                                  ),
+                                  
+                                  // Người báo cáo
+                                  SizedBox(height: 12),
+                                  Text(
+                                    'Người báo cáo:',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  Text(item['NguoiDung'] as String? ?? ''),
+                                  
+                                  // Giải pháp nếu có
+                                  if (item['GiaiPhap'] != null && (item['GiaiPhap'] as String).isNotEmpty) ...[
+                                    SizedBox(height: 12),
+                                    Text(
+                                      'Giải pháp:',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    Container(
+                                      width: double.infinity,
+                                      padding: EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green[50],
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: Colors.green[100]!),
+                                      ),
+                                      child: Text(item['GiaiPhap'] as String),
+                                    ),
+                                  ],
+                                  
+                                  // Buttons
+                                  SizedBox(height: 16),
+                                  if (item['HinhAnh'] != null && (item['HinhAnh'] as String).isNotEmpty)
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
+                                        ElevatedButton.icon(
+                                          onPressed: () {
+                                            Navigator.of(context).pop();
+                                            _showImageDetailsDialog(item);
+                                          },
+                                          icon: Icon(Icons.image),
+                                          label: Text('Xem hình ảnh'),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: color,
+                                            foregroundColor: Colors.white,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          //onTap: () {
+                            // Không cần xử lý ở đây vì đã có ExpansionTile
+                          //},
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
   Widget _buildPieChart(String title, List<Map<String, dynamic>> data, String chartId) {
     if (data.isEmpty) return SizedBox();
     

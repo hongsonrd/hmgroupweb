@@ -16,7 +16,7 @@ class UserState extends ChangeNotifier {
   Map<String, dynamic>? _currentUser;
   String _defaultScreen = 'Chụp ảnh';
   String? _loginResponse;
-  String _queryType = '1';
+  String _queryType = '0';
 
   // Getters
   bool get isAuthenticated => _isAuthenticated;
@@ -83,7 +83,7 @@ Future<bool> verifyStoredToken() async {
     
     if (userData != null) {
       _currentUser = json.decode(userData);
-      _queryType = _currentUser?['queryType'] ?? '1';
+      _queryType = _currentUser?['queryType'] ?? '0';
       _chamCong = prefs.getString('cham_cong');
       _updateResponse1 = prefs.getString('update_response1') ?? '';
       _updateResponse2 = prefs.getString('update_response2') ?? '';
@@ -97,7 +97,7 @@ Future<bool> verifyStoredToken() async {
   Future<void> setUser(Map<String, dynamic> user) async {
     _currentUser = user;
     _isAuthenticated = true;
-    _queryType = user['queryType'] ?? '1';
+    _queryType = user['queryType'] ?? '0';
     SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setString('current_user', json.encode(user));
     await prefs.setBool('is_authenticated', true);

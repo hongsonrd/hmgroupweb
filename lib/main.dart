@@ -1159,133 +1159,193 @@ void _showLoginDialog() {
   }
 @override
 Widget build(BuildContext context) {
- if (!_isAuthenticated) {
-   return VideoBackground(
-     child: const Scaffold(
-       backgroundColor: Colors.transparent,
-       body: Center(child: CircularProgressIndicator()),
-     ),
-   );
- }
+  if (!_isAuthenticated) {
+    return VideoBackground(
+      child: const Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Center(child: CircularProgressIndicator()),
+      ),
+    );
+  }
 
- return Banner(
-   message: 'HM GROUP',
-   location: BannerLocation.topEnd,
-   color: const Color.fromARGB(255, 244, 54, 54),
-   child: Scaffold(
-     body: _screens[_selectedIndex],
-     floatingActionButton: Row(
-       mainAxisAlignment: MainAxisAlignment.center,
-       children: [
-         Container(
-           height: 86,
-           width: 86,
-           margin: const EdgeInsets.only(bottom: 10, right: 10),
-           child: FloatingActionButton(
-             onPressed: () {
-               Navigator.of(context).push(
-                 MaterialPageRoute(builder: (context) => const ProjectDirectorScreen()),
-               );
-             },
-             backgroundColor: Colors.red,
-             elevation: 8,
-             shape: RoundedRectangleBorder(
-               borderRadius: BorderRadius.circular(25),
-             ),
-             child: const Column(
-               mainAxisAlignment: MainAxisAlignment.center,
-               children: [
-                 Icon(Icons.admin_panel_settings, color: Colors.white, size: 35),
-                 Text('Quản trị', 
-                   style: TextStyle(fontSize: 16, color: Colors.white),
-                   textAlign: TextAlign.center,
-                 )
-               ],
-             ),
-           ),
-         ),
-         Container(
-           height: 86,
-           width: 86,
-           margin: const EdgeInsets.only(bottom: 10, left: 10),
-           child: FloatingActionButton(
-             onPressed: () {
-               Navigator.of(context).push(
-                 MaterialPageRoute(builder: (context) => const ProjectDirector2Screen()),
-               );
-             },
-             backgroundColor: const Color.fromARGB(255, 0, 99, 179),
-             elevation: 8,
-             shape: RoundedRectangleBorder(
-               borderRadius: BorderRadius.circular(25),
-             ),
-             child: const Column(
-               mainAxisAlignment: MainAxisAlignment.center,
-               children: [
-                 Icon(Icons.flight, color: Colors.white, size: 35),
-                 Text('Sân bay\nT1', 
-                   style: TextStyle(fontSize: 16, color: Colors.white),
-                   textAlign: TextAlign.center,
-                 )
-               ],
-             ),
-           ),
-         ),
-       ],
-     ),
-     floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-     bottomNavigationBar: Padding(
-       padding: EdgeInsets.symmetric(
-         horizontal: MediaQuery.of(context).size.width < 600 ? 8.0 : 8.0,
-         vertical: MediaQuery.of(context).size.width < 600 ? 4.0 : 4.0,
-       ),
-       child: Container(
-         decoration: BoxDecoration(
-           boxShadow: [
-             BoxShadow(
-               color: Colors.white.withOpacity(0.1),
-               blurRadius: 20,
-               spreadRadius: -5,
-               offset: const Offset(0, 4),
-             ),
-           ],
-         ),
-         child: ClipRRect(
-           borderRadius: BorderRadius.circular(30),
-           child: BottomNavigationBar(
-             items: const [
-               BottomNavigationBarItem(
-                 icon: Icon(Icons.folder),
-                 label: 'Dự án',
-               ),
-               BottomNavigationBarItem(
-                 icon: Icon(Icons.web),
-                 label: 'Công việc',
-               ),
-               BottomNavigationBarItem(
-                 icon: Icon(Icons.smart_toy),
-                 label: 'HM AI',
-               ),
-               BottomNavigationBarItem(
-                 icon: Icon(Icons.home),
-                 label: 'Hướng dẫn',
-               ),
-             ],
-             currentIndex: _selectedIndex,
-             onTap: _onItemTapped,
-             backgroundColor: Colors.white,
-             selectedItemColor: const Color.fromARGB(255, 73, 54, 244),
-             unselectedItemColor: Colors.grey,
-             showSelectedLabels: true,
-             showUnselectedLabels: true,
-             type: BottomNavigationBarType.fixed,
-             elevation: 0,
-           ),
-         ),
-       ),
-     ),
-   ),
- );
+  // Get the current user's queryType
+  final userState = Provider.of<UserState>(context, listen: false);
+  final userQueryType = userState.queryType;
+  
+  // Define which queryTypes can access each tab
+  final Map<int, List<String>> allowedQueryTypes = {
+    0: [], // Projects tab
+    1: ['1','2'], // Work tab
+    2: ['1','2'], // HM AI tab
+    3: ['1','2'], // Guide tab
+  };
+  
+  // Define permissions for floating action buttons
+  final Map<String, List<String>> allowedActionButtons = {
+    'admin': ['2'], // Quản trị button
+    'airport': ['2'], // Sân bay T1 button
+  };
+  
+  final List<Widget> visibleScreens = [];
+  final List<BottomNavigationBarItem> visibleNavItems = [];
+  
+  final allScreens = _screens;
+  final allNavItems = const [
+    BottomNavigationBarItem(
+      icon: Icon(Icons.folder),
+      label: 'Dự án',
+    ),
+    BottomNavigationBarItem(
+      icon: Icon(Icons.web),
+      label: 'Công việc',
+    ),
+    BottomNavigationBarItem(
+      icon: Icon(Icons.smart_toy),
+      label: 'HM AI',
+    ),
+    BottomNavigationBarItem(
+      icon: Icon(Icons.home),
+      label: 'Hướng dẫn',
+    ),
+  ];
+  
+  // Create mapping of visible indexes to original indexes
+  Map<int, int> visibleToOriginalIndex = {};
+  int visibleIndex = 0;
+  for (int i = 0; i < allScreens.length; i++) {
+    List<String> allowed = allowedQueryTypes[i] ?? [];
+    // Show if list is empty (all allowed) or user's queryType is in the allowed list
+    if (allowed.isEmpty || allowed.contains(userQueryType)) {
+      visibleScreens.add(allScreens[i]);
+      visibleNavItems.add(allNavItems[i]);
+      visibleToOriginalIndex[visibleIndex] = i;
+      visibleIndex++;
+    }
+  }  
+  // Adjust selected index if needed
+  int visibleSelectedIndex = 0;
+  for (int i = 0; i < visibleToOriginalIndex.length; i++) {
+    if (visibleToOriginalIndex[i] == _selectedIndex) {
+      visibleSelectedIndex = i;
+      break;
+    }
+  }
+
+  // Determine which action buttons to show based on permissions
+  final adminPermissions = allowedActionButtons['admin'] ?? [];
+  final airportPermissions = allowedActionButtons['airport'] ?? [];
+  
+  bool showAdminButton = adminPermissions.isEmpty || adminPermissions.contains(userQueryType);
+  bool showAirportButton = airportPermissions.isEmpty || airportPermissions.contains(userQueryType);
+  
+  // Calculate left margin for airport button (can't use dynamic values in const constructor)
+  final airportLeftMargin = showAdminButton ? 10.0 : 0.0;
+
+  return Banner(
+    message: 'HM GROUP',
+    location: BannerLocation.topEnd,
+    color: const Color.fromARGB(255, 244, 54, 54),
+    child: Scaffold(
+      body: visibleScreens[visibleSelectedIndex],
+      floatingActionButton: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (showAdminButton) Container(
+            height: 86,
+            width: 86,
+            margin: const EdgeInsets.only(bottom: 10, right: 10),
+            child: FloatingActionButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => const ProjectDirectorScreen()),
+                );
+              },
+              backgroundColor: Colors.red,
+              elevation: 8,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(25),
+              ),
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.admin_panel_settings, color: Colors.white, size: 35),
+                  Text('Quản trị', 
+                    style: TextStyle(fontSize: 16, color: Colors.white),
+                    textAlign: TextAlign.center,
+                  )
+                ],
+              ),
+            ),
+          ),
+          if (showAirportButton) Container(
+            height: 86,
+            width: 86,
+            margin: EdgeInsets.only(bottom: 10, left: airportLeftMargin),
+            child: FloatingActionButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => const ProjectDirector2Screen()),
+                );
+              },
+              backgroundColor: const Color.fromARGB(255, 0, 99, 179),
+              elevation: 8,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(25),
+              ),
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.flight, color: Colors.white, size: 35),
+                  Text('Sân bay\nT1', 
+                    style: TextStyle(fontSize: 16, color: Colors.white),
+                    textAlign: TextAlign.center,
+                  )
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      bottomNavigationBar: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: MediaQuery.of(context).size.width < 600 ? 8.0 : 8.0,
+          vertical: MediaQuery.of(context).size.width < 600 ? 4.0 : 4.0,
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            boxShadow: [
+              BoxShadow(
+                color: Colors.white.withOpacity(0.1),
+                blurRadius: 20,
+                spreadRadius: -5,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(30),
+            child: BottomNavigationBar(
+              items: visibleNavItems,
+              currentIndex: visibleSelectedIndex,
+              onTap: (index) {
+                setState(() {
+                  _selectedIndex = visibleToOriginalIndex[index]!;
+                });
+              },
+              backgroundColor: Colors.white,
+              selectedItemColor: const Color.fromARGB(255, 73, 54, 244),
+              unselectedItemColor: Colors.grey,
+              showSelectedLabels: true,
+              showUnselectedLabels: true,
+              type: BottomNavigationBarType.fixed,
+              elevation: 0,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 }
 
