@@ -89,7 +89,7 @@ Future<void> _syncDataFromServer() async {
     
     // Fetch all attendance data from server
     final response = await AuthenticatedHttpClient.get(
-      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongcn/$_username'),
+      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongcn/hm.tason'),
     );
     
     if (response.statusCode == 200) {
@@ -432,7 +432,7 @@ void debugLog(String message) {
   Future<void> _loadProjects() async {
     try {
       final response = await http.get(
-        Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/$_username'),
+        Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/hm.tason'),
       );
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
@@ -450,7 +450,7 @@ Future<void> _initializeData() async {
  try {
    try {
      final response = await http.get(
-        Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/$_username'),
+        Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/hm.tason'),
         headers: {'Content-Type': 'application/json'},
       );
      debugLog('Project API Response: ${response.statusCode} - ${response.body}');
@@ -2042,14 +2042,13 @@ String? _getAttendanceForDay(String empId, int day, String columnType) {
 bool _canEditDay(int day) {
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
-  final yesterday = today.subtract(Duration(days: 1));
   final checkDate = DateTime.parse('$_selectedMonth-${day.toString().padLeft(2, '0')}');
-  // Allow editing current date
-  if (checkDate.isAtSameMomentAs(today)) return true;
-  // Allow editing yesterday if before 9am
-  if (checkDate.isAtSameMomentAs(yesterday) && now.hour < 9) return true;
   
-  return false;
+  // Calculate difference in days between check date and today
+  final difference = today.difference(checkDate).inDays;
+  
+  // Allow editing if within 31 days (including today)
+  return difference <= 31 && difference >= 0;
 }
 Future<void> _fixAllPhanLoaiValues() async {
   debugLog('Starting to fix all PhanLoai values...');

@@ -9,6 +9,7 @@ import 'projectmanagement.dart';
 import 'projectplan.dart';
 import 'projectmachine.dart';
 import 'projectworkerautoCL.dart';
+import 'projectworkeradmin.dart';
 
 class ProjectManager extends StatelessWidget {
   @override
@@ -124,6 +125,21 @@ class ProjectManager extends StatelessWidget {
   ),
   requiresPassword: true,
 ),
+_buildGridItem(
+  context,
+  'Admin',
+  Icons.admin_panel_settings,
+  () => Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => ProjectWorker( 
+        selectedBoPhan: '01/2022',
+      ),
+    ),
+  ),
+  requiresPassword: true,
+  customPassword: 'admin2025', 
+),
             ],
           ),
         ),
@@ -131,14 +147,15 @@ class ProjectManager extends StatelessWidget {
     );
   }
 
-  Widget _buildGridItem(BuildContext context, String title, IconData icon, VoidCallback onTap, {bool requiresPassword = false}) {
+Widget _buildGridItem(BuildContext context, String title, IconData icon, VoidCallback onTap, 
+    {bool requiresPassword = false, String? customPassword}) {
   double screenWidth = MediaQuery.of(context).size.width;
   bool isDesktop = screenWidth > 800;
 
   return InkWell(
     onTap: () async {
       if (requiresPassword) {
-        bool isAuthenticated = await _showPasswordDialog(context);
+        bool isAuthenticated = await _showPasswordDialog(context, customPassword: customPassword);
         if (!isAuthenticated) return;
       }
 
@@ -190,7 +207,7 @@ class ProjectManager extends StatelessWidget {
   );
 }
 
-Future<bool> _showPasswordDialog(BuildContext context) async {
+Future<bool> _showPasswordDialog(BuildContext context, {String? customPassword}) async {
   TextEditingController passwordController = TextEditingController();
 
   return await showDialog<bool>(
@@ -212,7 +229,8 @@ Future<bool> _showPasswordDialog(BuildContext context) async {
           TextButton(
             child: Text('Xác nhận'),
             onPressed: () {
-              if (passwordController.text == '2025') {
+              String correctPassword = customPassword ?? '2025';
+              if (passwordController.text == correctPassword) {
                 Navigator.pop(context, true);
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(

@@ -7,6 +7,7 @@ import 'user_credentials.dart';
 import 'db_helper.dart';
 import 'table_models.dart';
 import 'package:intl/intl.dart';
+import 'http_client.dart';
 
 class AllProjectsView extends StatefulWidget {
   const AllProjectsView({Key? key}) : super(key: key);
@@ -42,7 +43,7 @@ class _AllProjectsViewState extends State<AllProjectsView> {
     try {
       // Load departments
       try {
-        final response = await http.get(
+        final response = await AuthenticatedHttpClient.get(
           Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/$_username'),
           headers: {'Content-Type': 'application/json'},
         );
@@ -857,9 +858,14 @@ Widget _buildCombinedTable() {
               child: DataTable(
                 columns: [
                   DataColumn(label: Text('Mã NV')),
-                  DataColumn(label: Text('Loại')),
-                  ...days.map((day) => DataColumn(label: Text(day.toString()))),
-                ],
+                  DataColumn(
+      label: Container(
+        width: 60,
+        child: Text('Loại', overflow: TextOverflow.ellipsis),
+      )
+    ),
+    ...days.map((day) => DataColumn(label: Text(day.toString()))),
+  ],
                 rows: employees.expand((empId) {
                   // Create two rows for each employee - one for CongThuongChu and one for NgoaiGioThuong
                   return [
@@ -867,21 +873,22 @@ Widget _buildCombinedTable() {
                     DataRow(
                       cells: [
                         DataCell(
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(empId),
-                              Text(
-                                _staffNamesByDept[dept]?[empId] ?? '',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+  Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text(empId, style: TextStyle(color: Colors.black)), 
+      Text(
+        _staffNamesByDept[dept]?[empId] ?? '',
+        style: TextStyle(
+          fontSize: 12,
+          color: Colors.black, 
+          fontWeight: FontWeight.bold, 
+        ),
+      ),
+    ],
+  ),
+),
                         DataCell(Text('Công chữ', style: TextStyle(fontWeight: FontWeight.bold))),
                         ...days.map((day) {
                           final attendance = _getAttendanceForDay(dept, empId, day, 'CongThuongChu') ?? 'Ro';
@@ -1111,21 +1118,22 @@ void _updateAttendanceWithPhanLoai(String dept, String empId, int day, String co
                     return DataRow(
                       cells: [
                         DataCell(
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(empId),
-                              Text(
-                                _staffNamesByDept[dept]?[empId] ?? '',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+  Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text(empId, style: TextStyle(color: Colors.black)),
+      Text(
+        _staffNamesByDept[dept]?[empId] ?? '',
+        style: TextStyle(
+          fontSize: 12,
+          color: Colors.black,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    ],
+  ),
+),
                         ...days.map((day) {
                           final attendance = _getAttendanceForDay(dept, empId, day, columnType) ?? 
                             (columnType == 'CongThuongChu' ? 'Ro' : '0');
