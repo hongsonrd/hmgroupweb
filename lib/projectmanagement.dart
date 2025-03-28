@@ -1,3 +1,4 @@
+// project_management.dart
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
@@ -8,6 +9,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'db_helper.dart';
 import 'projectupdatescreen.dart';
+import 'http_client.dart';
+
 import 'table_models.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:io';
@@ -17,13 +20,12 @@ import 'dart:typed_data' show Uint8List;
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:intl/intl.dart';
 import 'package:sqflite/sqflite.dart';
-import 'http_client.dart';
-import 'projectimage.dart';
 import 'dart:math';
-import 'projectmachineorder.dart';
+
+import 'package:flutter/rendering.dart';
+import 'package:image/image.dart' as img;
 
 class ProjectManagement extends StatefulWidget {
-    ProjectManagement({Key? key}) : super(key: key);
   @override
   _ProjectManagementState createState() => _ProjectManagementState();
 }
@@ -35,6 +37,7 @@ class _ProjectManagementState extends State<ProjectManagement> {
   bool _isLoading = false;
   DateTime? _lastSyncTime;
   List<Map<String, dynamic>> _staffList = [];
+  bool _isGridView = false;
 
   @override
   void initState() {
@@ -119,13 +122,9 @@ Future<void> _loadStaffForProject(String project) async {
   Future<void> _loadProjectsFromPrefs() async {
   try {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    // Change this line from updateResponse4 to update_response4
     String response4 = prefs.getString('update_response4') ?? '';
     
-    print('Loading projects from prefs. Data: $response4'); // Add debug print
-    
     if (response4.isEmpty) {
-      print('No project data found in SharedPreferences');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Không có dữ liệu dự án. Vui lòng đồng bộ.')),
@@ -143,14 +142,13 @@ Future<void> _loadStaffForProject(String project) async {
     }
   }
 }
+
 void _processProjectData(String response4) {
   try {
     if (response4.isEmpty) {
       print('Empty project data received');
       return;
     }
-    
-    print('Processing project data: $response4');
     
     // Parse JSON array string to List<dynamic>
     List<dynamic> jsonData = json.decode(response4);
@@ -164,8 +162,6 @@ void _processProjectData(String response4) {
     
     // Sort the list
     projectNames.sort();
-    
-    print('Processed project names: $projectNames');
     
     setState(() {
       _projectList = projectNames;
@@ -236,31 +232,37 @@ Future<void> _loadProjects() async {
 
     // Step 1: Update Project List
     showProgress('Cập nhật danh sách dự án', 1);
+
+try {
+  // Make actual API call to get project data
+  final projectResponse = await AuthenticatedHttpClient.get(
+    Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/$username'),
+  );
+
+  if (projectResponse.statusCode == 200) {
+    final response4 = projectResponse.body;
     
-    // Make actual API call to get project data
-    final projectResponse = await AuthenticatedHttpClient.get(
-      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/$username'),
-    );
+    // Save to SharedPreferences
+    await prefs.setString('update_response4', response4);
+    
+    // Process the data
+    _processProjectData(response4);
+    
+    // Update last sync time
+    await prefs.setString('lastProjectSync', DateTime.now().toIso8601String());
+    _lastSyncTime = DateTime.now();
 
-    if (projectResponse.statusCode == 200) {
-      final response4 = projectResponse.body;
-      
-      // Save to SharedPreferences
-      await prefs.setString('update_response4', response4);
-      
-      // Process the data
-      _processProjectData(response4);
-      
-      // Update last sync time
-      await prefs.setString('lastProjectSync', DateTime.now().toIso8601String());
-      _lastSyncTime = DateTime.now();
-
-      if (mounted) {
-        Navigator.of(context).pop(); // Close progress dialog
-      }
-    } else {
-      throw Exception('Failed to load project data');
+    if (mounted) {
+      Navigator.of(context).pop(); // Close progress dialog
     }
+  } else {
+    throw Exception('Failed to load project data');
+  }
+} catch (e) {
+  // Handle error
+  print('Error loading project data: $e');
+  throw e; // Re-throw to be caught by the outer try-catch
+}
 
     // Step 2: Update Staff List
     showProgress('Cập nhật danh sách công nhân', 2);
@@ -480,69 +482,6 @@ if (!hasStaffbioSynced) {
   }
 }
   // Step 6: Update DongPhuc and ChiTietDP
-showProgress('Đồng bộ dữ liệu đồng phục', 6);
-
-try {
-  // First, sync DongPhuc data
-  final dongPhucResponse = await AuthenticatedHttpClient.get(
-    Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/dongphuc/$username'),
-  );
-
-  if (dongPhucResponse.statusCode == 200) {
-    final List<dynamic> dongPhucData = json.decode(dongPhucResponse.body);
-    final dbHelper = DBHelper();
-    
-    // Clear existing dongphuc data
-    await dbHelper.clearTable(DatabaseTables.dongPhucTable);
-    
-    // Convert and insert dongphuc data
-    final dongPhucModels = dongPhucData.map((data) => 
-      DongPhucModel.fromMap(data as Map<String, dynamic>)
-    ).toList();
-
-    await dbHelper.batchInsertDongPhuc(dongPhucModels);
-
-    // Next, sync ChiTietDP data
-    final chiTietDPResponse = await AuthenticatedHttpClient.get(
-      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/dongphuclist'),
-    );
-
-    if (chiTietDPResponse.statusCode == 200) {
-      final List<dynamic> chiTietDPData = json.decode(chiTietDPResponse.body);
-      
-      // Clear existing chitietdp data
-      await dbHelper.clearTable(DatabaseTables.chiTietDPTable);
-      
-      // Convert and insert chitietdp data
-      final chiTietDPModels = chiTietDPData.map((data) => 
-        ChiTietDPModel.fromMap(data as Map<String, dynamic>)
-      ).toList();
-
-      await dbHelper.batchInsertChiTietDP(chiTietDPModels);
-      
-      // Close Step 6 dialog
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
-    } else {
-      throw Exception('Failed to load ChiTietDP data');
-    }
-  } else {
-    throw Exception('Failed to load DongPhuc data');
-  }
-} catch (e) {
-  print('Error updating uniform data: $e');
-  if (mounted) {
-    Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Không thể cập nhật dữ liệu đồng phục: ${e.toString()}'),
-        backgroundColor: Colors.red,
-      ),
-    );
-  }
-}
-// Step 6: Update DongPhuc and ChiTietDP
 showProgress('Đồng bộ dữ liệu đồng phục', 6);
 
 try {
@@ -935,71 +874,34 @@ Widget build(BuildContext context) {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
     Row(
-      children: [
-        Text(
-          '✳️ Chọn lại hoặc',
-          style: TextStyle(fontSize: 16),
-        ),
-        SizedBox(width: 8),
-        TextButton(
+  children: [
+    Text(
+      '✳️ Chọn lại hoặc  ',
+      style: TextStyle(fontSize: 16),
+    ),
+        SizedBox(height: 8),
+    TextButton(
       style: ButtonStyle(
         padding: MaterialStateProperty.all(EdgeInsets.zero),
         minimumSize: MaterialStateProperty.all(Size(0, 0)),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
-      onPressed: _selectedProject == null ? null : () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ProjectMachineOrder(
-              boPhan: _selectedProject!,
-              username: userCredentials.username,
-            ),
-          ),
-        );
+      onPressed: () {
+        setState(() {
+          _isGridView = !_isGridView;
+        });
       },
       child: Text(
-        'Đặt máy móc',
+        _isGridView ? 'Xếp dạng thường' : 'Xếp dạng ô 𖣯',
         style: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.bold,
-          color: _selectedProject != null 
-              ? Colors.deepOrange
-              : Colors.grey,
+          color: Colors.blue,
         ),
       ),
     ),
-            SizedBox(width: 8),
-        TextButton(
-          style: ButtonStyle(
-            padding: MaterialStateProperty.all(EdgeInsets.zero),
-            minimumSize: MaterialStateProperty.all(Size(0, 0)),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          onPressed: _selectedProject == null ? null : () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ProjectImageScreen(
-                  boPhan: _selectedProject!,
-                  username: userCredentials.username,
-                ),
-              ),
-            );
-          },
-          child: Text(
-            'Cập nhật ảnh',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: _selectedProject != null 
-                  ? Colors.blue
-                  : Colors.grey,
-            ),
-          ),
-        ),
-      ],
-    ),
+  ],
+),
     SizedBox(height: 8),
     Wrap(
       spacing: 16,
@@ -1110,7 +1012,7 @@ Widget build(BuildContext context) {
                       ),
                       SizedBox(height: 8),
                       Text(
-                        'Vui lòng đăng xuất, đăng nhập lại và nhấn nút "Đồng bộ" để lấy dữ liệu.',
+                        '⚠️Vui lòng đăng xuất, đăng nhập lại và nhấn nút "Đồng bộ" để lấy dữ liệu.\n⚠️Nếu đã đăng nhập mà khi đồng bộ hiện dòng màu đỏ ở dưới thì phải:\n⚠️quay lại trang cá nhân (nút đỏ) bấm Cập nhật ở trên rồi quay lại⚠️',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.black87,
@@ -1174,130 +1076,353 @@ Widget build(BuildContext context) {
               ),
             ),
               SizedBox(height: 16),
-              Expanded(
-                child: _staffList.isEmpty
-                  ? Center(
-                      child: Text(
-                        'Không có nhân viên trong dự án này',
-                        style: TextStyle(
-                          color: Colors.grey,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    )
-                  : ListView.builder(
-  itemCount: _staffList.length,
-  itemBuilder: (context, index) {
-    final staff = _staffList[index];
-    final vtStatus = staff['vt_status'] as Map<String, dynamic>?;
-    
-    // Format the date if it exists
-    String formattedDate = '';
-    if (vtStatus != null && vtStatus['Ngay'] != null) {
-      final date = DateTime.parse(vtStatus['Ngay']);
-      formattedDate = DateFormat('dd/MM/yy').format(date);
-    }
-    
-    return InkWell(
-      onTap: () async {
-        final result = await showDialog<bool>(
-          context: context,
-          builder: (BuildContext context) {
-            return StaffDetailDialog(
-              staff: staff,
-              boPhan: _selectedProject ?? '',
-              username: userCredentials.username,
-            );
-          },
-        );
-        if (result == true) {
-          // Reload staff list if position was updated
-          _loadStaffForProject(_selectedProject!);
-        }
-      },
-      child: Card(
-        margin: EdgeInsets.only(bottom: 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: CircleAvatar(
-                backgroundColor: Color.fromARGB(255, 25, 138, 0),
-                child: Text(
-                  (staff['VT'] ?? 'NA').toString().toUpperCase(),
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-              title: Text(
-                staff['Ho_ten'] ?? '❓❓❓',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Mã NV: ${staff['MaNV']}'),
-                  if (vtStatus != null) Text(
-                    '${vtStatus['TrangThai'] ?? ''} từ $formattedDate bởi ${vtStatus['HoTro'] ?? ''}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontStyle: FontStyle.italic,
-                      color: Color.fromARGB(255, 0, 204, 34),
-                    ),
-                  ),
-                ],
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.person_outline),
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (BuildContext context) => StaffStatusDialog(
-                          manv: staff['MaNV'],
-                          vt: staff['VT'] ?? '',
-                          boPhan: _selectedProject ?? '',
-                          username: userCredentials.username,
-                        ),
-                      );
-                    },
-                    color: Color.fromARGB(255, 0, 204, 34),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.check_circle_outline),
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (BuildContext context) => TaskReportDialog(
-                          vt: staff['VT'] ?? '',
-                          boPhan: _selectedProject ?? '',
-                          username: userCredentials.username,
-                        ),
-                      );
-                    },
-                    color: Color.fromARGB(255, 0, 204, 34),
-                  ),
-                ],
-              ),
-            ),
-          ],
+             Expanded(
+  child: _staffList.isEmpty
+    ? Center(
+        child: Text(
+          'Không có nhân viên trong dự án này',
+          style: TextStyle(
+            color: Colors.grey,
+            fontStyle: FontStyle.italic,
+          ),
         ),
-      ),
-    );
-  },
-)
-              ),
+      )
+    : _isGridView ? _buildGridView(userCredentials) : _buildListView(userCredentials),
+),
             ],
           ],
         ),
       ),
     );
   }
+  Widget _buildListView(UserCredentials userCredentials) {
+
+  return ListView.builder(
+    itemCount: _staffList.length,
+    itemBuilder: (context, index) {
+      final staff = _staffList[index];
+      final vtStatus = staff['vt_status'] as Map<String, dynamic>?;
+      
+      // Format the date if it exists
+      String formattedDate = '';
+      if (vtStatus != null && vtStatus['Ngay'] != null) {
+        final date = DateTime.parse(vtStatus['Ngay']);
+        formattedDate = DateFormat('dd/MM/yy').format(date);
+      }
+      
+      return InkWell(
+        onTap: () async {
+          final result = await showDialog<bool>(
+            context: context,
+            builder: (BuildContext context) {
+              return StaffDetailDialog(
+                staff: staff,
+                boPhan: _selectedProject ?? '',
+                username: userCredentials.username,
+              );
+            },
+          );
+          if (result == true) {
+            // Reload staff list if position was updated
+            _loadStaffForProject(_selectedProject!);
+          }
+        },
+        child: Card(
+          margin: EdgeInsets.only(bottom: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Color.fromARGB(255, 25, 138, 0),
+                  child: Text(
+                    (staff['VT'] ?? 'NA').toString().toUpperCase(),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                title: Text(
+                  staff['Ho_ten'] ?? '❓❓❓',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Mã NV: ${staff['MaNV']}'),
+                    if (vtStatus != null) Text(
+                      '${vtStatus['TrangThai'] ?? ''} từ $formattedDate bởi ${vtStatus['HoTro'] ?? ''}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
+                        color: Color.fromARGB(255, 0, 204, 34),
+                      ),
+                    ),
+                  ],
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.person_outline),
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (BuildContext context) => StaffStatusDialog(
+                            manv: staff['MaNV'],
+                            vt: staff['VT'] ?? '',
+                            boPhan: _selectedProject ?? '',
+                            username: userCredentials.username,
+                          ),
+                        );
+                      },
+                      color: Color.fromARGB(255, 0, 204, 34),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.check_circle_outline),
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (BuildContext context) => TaskReportDialog(
+                            vt: staff['VT'] ?? '',
+                            boPhan: _selectedProject ?? '',
+                            username: userCredentials.username,
+                          ),
+                        );
+                      },
+                      color: Color.fromARGB(255, 0, 204, 34),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+Widget _buildGridView(UserCredentials userCredentials) {
+    final screenSize = MediaQuery.of(context).size;
+  final isLandscape = screenSize.width > screenSize.height;
+  final crossAxisCount = isLandscape ? 6 : 3;
+  final childAspectRatio = isLandscape ? 1.2 : 1.0;
+
+  return GridView.builder(
+    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+  crossAxisCount: crossAxisCount,
+      childAspectRatio: childAspectRatio,
+      crossAxisSpacing: 8,
+      mainAxisSpacing: 8,
+    ),
+    itemCount: _staffList.length,
+    itemBuilder: (context, index) {
+      final staff = _staffList[index];
+      final vtStatus = staff['vt_status'] as Map<String, dynamic>?;
+      final currentStatus = vtStatus?['TrangThai'] ?? 'Đang làm việc';
+      
+      // Get status color
+      Color statusColor = Colors.grey;
+      if (vtStatus != null) {
+        switch (vtStatus['TrangThai']) {
+          case 'Đang làm việc':
+            statusColor = Colors.green;
+            break;
+          case 'Nghỉ':
+            statusColor = Colors.indigo;
+            break;
+          case 'Đi hỗ trợ':
+            statusColor = Colors.lightBlue;
+            break;
+          case 'Thiếu':
+            statusColor = Colors.deepOrange;
+            break;
+        }
+      }
+      
+      return InkWell(
+        onTap: () {
+          // Quick status change
+          showDialog(
+            context: context,
+            builder: (context) {
+              return SimpleDialog(
+                title: Text('Chọn trạng thái cho ${staff['Ho_ten']}'),
+                children: [
+                  'Đang làm việc',
+                  'Nghỉ',
+                  'Đi hỗ trợ',
+                  'Thiếu'
+                ].map((status) => SimpleDialogOption(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    
+                    final now = DateTime.now();
+                    final timeString = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+                    
+                    final vtHistory = VTHistoryModel(
+                      uid: const Uuid().v4(),
+                      ngay: now,
+                      gio: timeString,
+                      nguoiDung: userCredentials.username.toLowerCase(),
+                      boPhan: _selectedProject ?? '',
+                      viTri: staff['VT'] ?? '',
+                      nhanVien: staff['MaNV'],
+                      trangThai: status,
+                      hoTro: '',
+                      phuongAn: 'Cập nhật nhanh từ chế độ lưới',
+                    );
+
+                    try {
+                      // Send to server
+                      final response = await http.post(
+                        Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/vthistory'),
+                        headers: {'Content-Type': 'application/json'},
+                        body: json.encode(vtHistory.toMap()),
+                      );
+
+                      if (response.statusCode == 200) {
+                        // Add to local database
+                        final dbHelper = DBHelper();
+                        await dbHelper.insertVTHistory(vtHistory);
+                        
+                        // Reload staff list
+                        if (_selectedProject != null) {
+                          _loadStaffForProject(_selectedProject!);
+                        }
+                        
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Đã cập nhật trạng thái thành công'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      } else {
+                        throw Exception('Server returned ${response.statusCode}');
+                      }
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Lỗi khi cập nhật: ${e.toString()}'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  },
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: status == 'Đang làm việc' ? Colors.green :
+                                  status == 'Nghỉ' ? Colors.red :
+                                  status == 'Đi hỗ trợ' ? Colors.orange : 
+                                  Colors.purple,
+                            shape: BoxShape.circle,
+                          ),
+                          margin: EdgeInsets.only(right: 10),
+                        ),
+                        Text(
+                          status,
+                          style: TextStyle(
+                            fontWeight: status == currentStatus ? 
+                              FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                        if (status == currentStatus)
+                          Padding(
+                            padding: EdgeInsets.only(left: 5),
+                            child: Icon(Icons.check, size: 16, color: Colors.green),
+                          )
+                      ],
+                    ),
+                  ),
+                )).toList(),
+              );
+            },
+          );
+        },
+        child: Card(
+          color: Colors.white,
+          elevation: 2, // Add subtle shadow
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(30.0),
+            side: BorderSide(color: statusColor, width: 2),
+          ),
+          child: Stack(
+            children: [
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircleAvatar(
+                    backgroundColor: statusColor, // Match the status color
+                    radius: 24,
+                    child: Text(
+                      (staff['VT'] ?? 'NA').toString().toUpperCase(),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(
+                      staff['Ho_ten'] ?? '❓❓❓',
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      currentStatus,
+                      style: TextStyle(
+                        color: statusColor,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: statusColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
 }
 class SyncProgressDialog extends StatelessWidget {
   final String currentStep;
@@ -1474,7 +1599,7 @@ class _StaffStatusDialogState extends State<StaffStatusDialog> {
       print('Sending data to server: ${json.encode(requestData)}');
 
       // Send to server
-      final response = await AuthenticatedHttpClient.post(
+      final response = await http.post(
         Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/vthistory'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(requestData),
@@ -1731,7 +1856,7 @@ Future<void> _quickSubmitTask(ChecklistModel task) async {
     );
 
     // Send to server
-    final response = await AuthenticatedHttpClient.post(
+    final response = await http.post(
       Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/taskhistory'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode(taskHistory.toMap()),
@@ -1971,6 +2096,9 @@ class TaskReportSheet extends StatefulWidget {
   _TaskReportSheetState createState() => _TaskReportSheetState();
 }
 class _TaskReportSheetState extends State<TaskReportSheet> {
+  XFile? _secondImageFile;
+bool _showCombinedImage = false;
+Uint8List? _combinedImageBytes;
   @override
   void initState() {
     super.initState();
@@ -2050,33 +2178,169 @@ class _TaskReportSheetState extends State<TaskReportSheet> {
   }
 
   Future<void> _captureImage() async {
-    final ImagePicker picker = ImagePicker();
-    try {
-      final XFile? image = await picker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 1800,
-        maxHeight: 1800,
-        imageQuality: 85,
-      );
+  final ImagePicker picker = ImagePicker();
+  try {
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.camera,
+      maxWidth: 1800,
+      maxHeight: 1800,
+      imageQuality: 70,
+    );
 
-      if (image != null) {
-        setState(() {
+    if (image != null) {
+      setState(() {
+        if (_imageFile == null) {
           _imageFile = image;
-        });
-      }
-    } catch (e) {
-      print('Error capturing image: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Không thể chụp ảnh'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+          // Show camera again for second image
+          _captureSecondImage();
+        } else {
+          _secondImageFile = image;
+          // Combine images
+          _combineImages();
+        }
+      });
+    }
+  } catch (e) {
+    print('Error capturing image: $e');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Không thể chụp ảnh'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
+}
+Future<void> _captureSecondImage() async {
+  final ImagePicker picker = ImagePicker();
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Text('Thêm ảnh góc nhìn khác?'),
+        content: Text('Đối với WC bắt buộc phải chụp ảnh từ ngoài nhìn vào trong và từ trong nhìn ra ngoài Hai ảnh sẽ được ghép cạnh nhau.'),
+        actions: [
+          TextButton(
+            child: Text('Bỏ qua'),
+            onPressed: () {
+              Navigator.of(context).pop();
+              // Skip second image, continue with just the first one
+              setState(() {
+                _showCombinedImage = false;
+              });
+            },
+          ),
+          TextButton(
+            child: Text('Chụp thêm'),
+            onPressed: () async {
+              Navigator.of(context).pop();
+              try {
+                final XFile? image = await picker.pickImage(
+                  source: ImageSource.camera,
+                  maxWidth: 1800,
+                  maxHeight: 1800,
+                  imageQuality: 70,
+                );
 
+                if (image != null) {
+                  setState(() {
+                    _secondImageFile = image;
+                    // Combine images
+                    _combineImages();
+                  });
+                }
+              } catch (e) {
+                print('Error capturing second image: $e');
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Không thể chụp ảnh thứ hai'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+          ),
+        ],
+      );
+    },
+  );
+}
+
+Future<void> _combineImages() async {
+  if (_imageFile == null || _secondImageFile == null) return;
+  
+  try {
+    // Read both images
+    final Uint8List firstImageBytes = await _imageFile!.readAsBytes();
+    final Uint8List secondImageBytes = await _secondImageFile!.readAsBytes();
+    
+    // Decode images
+    final img.Image? firstImage = img.decodeImage(firstImageBytes);
+    final img.Image? secondImage = img.decodeImage(secondImageBytes);
+    
+    if (firstImage == null || secondImage == null) {
+      throw Exception('Failed to decode images');
+    }
+    
+    // Determine the output size (width will be sum of widths, height will be max of heights)
+    final int outputWidth = firstImage.width + secondImage.width + 3; // +3 for the separator line
+    final int outputHeight = max(firstImage.height, secondImage.height);
+    
+    // Create a new image with the combined dimensions
+    final img.Image combinedImage = img.Image(width: outputWidth, height: outputHeight);
+    
+    // Fill with white background
+    img.fill(combinedImage, color: img.ColorRgb8(255, 255, 255));
+    
+    // Copy the first image to the left side
+    for (int y = 0; y < firstImage.height; y++) {
+      for (int x = 0; x < firstImage.width; x++) {
+        int destY = (outputHeight - firstImage.height) ~/ 2 + y;
+        if (destY >= 0 && destY < outputHeight && x < outputWidth) {
+          combinedImage.setPixel(x, destY, firstImage.getPixel(x, y));
+        }
+      }
+    }
+    
+    // Draw a black vertical line separator (3 pixels wide)
+    for (int y = 0; y < outputHeight; y++) {
+      for (int x = 0; x < 3; x++) {
+        combinedImage.setPixel(firstImage.width + x, y, img.ColorRgb8(0, 0, 0));
+      }
+    }
+    
+    // Copy the second image to the right side
+    for (int y = 0; y < secondImage.height; y++) {
+      for (int x = 0; x < secondImage.width; x++) {
+        int destX = firstImage.width + 3 + x; // +3 for the separator line
+        int destY = (outputHeight - secondImage.height) ~/ 2 + y;
+        if (destY >= 0 && destY < outputHeight && destX < outputWidth) {
+          combinedImage.setPixel(destX, destY, secondImage.getPixel(x, y));
+        }
+      }
+    }
+    
+    // Encode the combined image to PNG
+    final Uint8List combinedBytes = Uint8List.fromList(img.encodePng(combinedImage));
+    
+    setState(() {
+      _combinedImageBytes = combinedBytes;
+      _showCombinedImage = true;
+    });
+  } catch (e) {
+    print('Error combining images: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Không thể kết hợp ảnh: ${e.toString()}'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+}
   Future<String?> _uploadImage(XFile imageFile) async {
     try {
       final bytes = await imageFile.readAsBytes();
@@ -2108,9 +2372,7 @@ class _TaskReportSheetState extends State<TaskReportSheet> {
     return null;
   }
 final bool _shouldRequirePhoto = Random().nextDouble() < 0.85;
-  
-  // Modify the validation method
-  bool _validateSubmission() {
+bool _validateSubmission() {
     // Create a list to collect all validation errors
     List<String> errors = [];
 
@@ -2213,20 +2475,38 @@ Future<void> _submitReport() async {
       taskChiTiet2 = '${widget.task.start}-${widget.task.end}-${widget.task.task}';
     }
 
+    // Use the combined image if available, otherwise use the single image
+    final imageToUpload = _combinedImageBytes != null ? _combinedImageBytes : 
+                     (_imageFile != null ? await _imageFile!.readAsBytes() : null);
     // Always use MultipartRequest when an image is available
-    if (_imageFile != null) {
+    if (imageToUpload != null) {
       var request = http.MultipartRequest(
         'POST',
         Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/taskhistory'),
       );
 
-      request.files.add(
-        await http.MultipartFile.fromBytes(
-          'HinhAnh',
-          await _imageFile!.readAsBytes(),
-          filename: path.basename(_imageFile!.path),
-        ),
-      );
+      // Create a temporary file with the combined image bytes if using combined image
+      if (_combinedImageBytes != null) {
+        final tempDir = await Directory.systemTemp.createTemp();
+        final tempFile = File('${tempDir.path}/combined_image.png');
+        await tempFile.writeAsBytes(_combinedImageBytes!);
+        
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'HinhAnh',
+            tempFile.path,
+            filename: 'combined_image.png',
+          ),
+        );
+      } else {
+        request.files.add(
+          await http.MultipartFile.fromBytes(
+            'HinhAnh',
+            imageToUpload!,
+            filename: path.basename(_imageFile!.path),
+          ),
+        );
+      }
 
       final taskData = {
         'UID': uuid,
@@ -2338,235 +2618,301 @@ Future<void> _submitReport() async {
   }
 }
 @override
- Widget build(BuildContext context) {
-   final screenSize = MediaQuery.of(context).size;
-   final isTablet = screenSize.width > 600;
-   
-   return Container(
-     width: isTablet ? screenSize.width * 0.7 : screenSize.width,
-     constraints: BoxConstraints(
-       maxHeight: screenSize.height * 0.8,
-       maxWidth: 800,
-     ),
-     child: Padding(
-       padding: EdgeInsets.all(24),
-       child: Column(
-         mainAxisSize: MainAxisSize.min,
-         crossAxisAlignment: CrossAxisAlignment.start,
-         children: [
-           Row(
-             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-             children: [
-               Text(
-                 'Báo cáo kết quả',
-                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-               ),
-               IconButton(
-                 icon: Icon(Icons.close),
-                 onPressed: () => Navigator.of(context).pop(),
-               ),
-             ],
-           ),
-           SizedBox(height: 16),
-           Expanded(
-             child: SingleChildScrollView(
-               child: Column(
-                 crossAxisAlignment: CrossAxisAlignment.start,
-                 children: [
-                   isTablet 
-                     ? GridView.count(
-                         shrinkWrap: true,
-                         crossAxisCount: 3,
-                         childAspectRatio: 3,
-                         mainAxisSpacing: 8,
-                         crossAxisSpacing: 8,
-                         children: _resultOptions.map((option) {
-                           return ElevatedButton(
-                             style: ElevatedButton.styleFrom(
-                               backgroundColor: _selectedResult == option['value']
-                                   ? const Color.fromARGB(255, 0, 204, 34)
-                                   : Colors.grey[200],
-                               foregroundColor: _selectedResult == option['value']
-                                   ? Colors.white
-                                   : Colors.black,
-                             ),
-                             onPressed: () {
-                               setState(() {
-                                 _selectedResult = option['value'];
-                               });
-                             },
-                             child: Text(
-                               '${option['value']} ${option['label']}',
-                               textAlign: TextAlign.center,
-                             ),
-                           );
-                         }).toList(),
-                       )
-                     : Row(
-                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                         children: _resultOptions.map((option) {
-                           return Expanded(
-                             child: Padding(
-                               padding: EdgeInsets.symmetric(horizontal: 4),
-                               child: ElevatedButton(
-                                 style: ElevatedButton.styleFrom(
-                                   backgroundColor: _selectedResult == option['value']
-                                       ? const Color.fromARGB(255, 0, 204, 34)
-                                       : Colors.grey[200],
-                                   foregroundColor: _selectedResult == option['value']
-                                       ? Colors.white
-                                       : Colors.black,
-                                 ),
-                                 onPressed: () {
-                                   setState(() {
-                                     _selectedResult = option['value'];
-                                   });
-                                 },
-                                 child: Text(
-                                   '${option['value']}\n${option['label']}',
-                                   textAlign: TextAlign.center,
-                                   style: TextStyle(fontSize: 12),
-                                 ),
-                               ),
-                             ),
-                           );
-                         }).toList(),
-                       ),
-                   SizedBox(height: 16),
-                   TextField(
-                     controller: _detailController,
-                     decoration: InputDecoration(
-                       labelText: 'Chi tiết hiện trạng / vấn đề',
-                       border: OutlineInputBorder(),
-                     ),
-                     maxLines: null,
-                     minLines: 3,
-                   ),
-                   if (_selectedResult != null && _selectedResult != '✔️') ...[
-                     SizedBox(height: 16),
-                     TextField(
-                       controller: _giaiPhapController,
-                       decoration: InputDecoration(
-                         labelText: 'Giải pháp',
-                         border: OutlineInputBorder(),
-                       ),
-                       maxLines: null,
-                       minLines: 3,
-                     ),
-                   ],
-                   if (widget.isTopicReport) ...[
-                     SizedBox(height: 16),
-                     Row(
-                       children: [
-                         Expanded(
-                           child: TextField(
-                             controller: _codeController,
-                             decoration: InputDecoration(
-                               labelText: 'Mã QR',
-                               border: OutlineInputBorder(),
-                             ),
-                           ),
-                         ),
-                         SizedBox(width: 8),
-                         IconButton(
-                           icon: Icon(Icons.qr_code_scanner),
-                           onPressed: _startScanning,
-                           color: const Color.fromARGB(255, 0, 204, 34),
-                         ),
-                       ],
-                     ),
-                   ],
-                   if (!widget.isTopicReport && (_selectedResult == '⚠️' || _selectedResult == '❌' || 
-        (_selectedResult == '✔️' && _shouldRequirePhoto))) ...[
-      SizedBox(height: 16),
-      Row(
+Widget build(BuildContext context) {
+  final screenSize = MediaQuery.of(context).size;
+  final isTablet = screenSize.width > 600;
+  
+  return Container(
+    width: isTablet ? screenSize.width * 0.7 : screenSize.width,
+    constraints: BoxConstraints(
+      maxHeight: screenSize.height * 0.8,
+      maxWidth: 800,
+    ),
+    child: Padding(
+      padding: EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Báo cáo kết quả',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              IconButton(
+                icon: Icon(Icons.close),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+          SizedBox(height: 16),
           Expanded(
-            child: ElevatedButton.icon(
-              icon: Icon(Icons.camera_alt),
-              label: Text(_imageFile == null ? 'Chụp ảnh' : 'Chụp lại'),
-              onPressed: _captureImage,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  isTablet 
+                    ? GridView.count(
+                        shrinkWrap: true,
+                        crossAxisCount: 3,
+                        childAspectRatio: 3,
+                        mainAxisSpacing: 8,
+                        crossAxisSpacing: 8,
+                        children: _resultOptions.map((option) {
+                          return ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _selectedResult == option['value']
+                                  ? const Color.fromARGB(255, 0, 204, 34)
+                                  : Colors.grey[200],
+                              foregroundColor: _selectedResult == option['value']
+                                  ? Colors.white
+                                  : Colors.black,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _selectedResult = option['value'];
+                              });
+                            },
+                            child: Text(
+                              '${option['value']} ${option['label']}',
+                              textAlign: TextAlign.center,
+                            ),
+                          );
+                        }).toList(),
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: _resultOptions.map((option) {
+                          return Expanded(
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 4),
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _selectedResult == option['value']
+                                      ? const Color.fromARGB(255, 0, 204, 34)
+                                      : Colors.grey[200],
+                                  foregroundColor: _selectedResult == option['value']
+                                      ? Colors.white
+                                      : Colors.black,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _selectedResult = option['value'];
+                                  });
+                                },
+                                child: Text(
+                                  '${option['value']}\n${option['label']}',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                  SizedBox(height: 16),
+                  TextField(
+                    controller: _detailController,
+                    decoration: InputDecoration(
+                      labelText: 'Chi tiết hiện trạng / vấn đề',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: null,
+                    minLines: 3,
+                  ),
+                  if (_selectedResult != null && _selectedResult != '✔️') ...[
+                    SizedBox(height: 16),
+                    TextField(
+                      controller: _giaiPhapController,
+                      decoration: InputDecoration(
+                        labelText: 'Giải pháp',
+                        border: OutlineInputBorder(),
+                      ),
+                      maxLines: null,
+                      minLines: 3,
+                    ),
+                  ],
+                  if (widget.isTopicReport) ...[
+                    SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _codeController,
+                            decoration: InputDecoration(
+                              labelText: 'Mã QR',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        IconButton(
+                          icon: Icon(Icons.qr_code_scanner),
+                          onPressed: _startScanning,
+                          color: const Color.fromARGB(255, 0, 204, 34),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (!widget.isTopicReport && (_selectedResult == '⚠️' || _selectedResult == '❌' || 
+                      (_selectedResult == '✔️' && _shouldRequirePhoto))) ...[
+                    SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            icon: Icon(Icons.camera_alt),
+                            label: Text(_imageFile == null ? 'Chụp ảnh' : 'Chụp lại'),
+                            onPressed: _captureImage,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_imageFile != null) ...[
+                      SizedBox(height: 8),
+                      if (_showCombinedImage && _combinedImageBytes != null) ...[
+                        Text(
+                          'Ảnh ghép:',
+                          style: TextStyle(
+                            fontSize: 14, 
+                            fontWeight: FontWeight.bold
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Image.memory(
+                          _combinedImageBytes!,
+                          height: 150,
+                          fit: BoxFit.contain,
+                        ),
+                      ] else ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  if (_imageFile != null) ...[
+                                    Text('Ảnh 1', style: TextStyle(fontSize: 12)),
+                                    SizedBox(height: 4),
+                                    FutureBuilder<Uint8List>(
+                                      future: _imageFile!.readAsBytes(),
+                                      builder: (context, snapshot) {
+                                        if (snapshot.hasData) {
+                                          return Image.memory(
+                                            snapshot.data!,
+                                            height: 100,
+                                            fit: BoxFit.cover,
+                                          );
+                                        }
+                                        return SizedBox(height: 100);
+                                      },
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  if (_secondImageFile != null) ...[
+                                    Text('Ảnh 2', style: TextStyle(fontSize: 12)),
+                                    SizedBox(height: 4),
+                                    FutureBuilder<Uint8List>(
+                                      future: _secondImageFile!.readAsBytes(),
+                                      builder: (context, snapshot) {
+                                        if (snapshot.hasData) {
+                                          return Image.memory(
+                                            snapshot.data!,
+                                            height: 100,
+                                            fit: BoxFit.cover,
+                                          );
+                                        }
+                                        return SizedBox(height: 100);
+                                      },
+                                    ),
+                                  ] else if (_imageFile != null) ...[
+                                    Text('Ảnh 2', style: TextStyle(fontSize: 12)),
+                                    SizedBox(height: 4),
+                                    Container(
+                                      height: 100,
+                                      color: Colors.grey[200],
+                                      child: Center(
+                                        child: Icon(Icons.camera_alt, color: Colors.grey),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ],
+                  if (widget.isTopicReport) ...[
+                    SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            icon: Icon(Icons.camera_alt),
+                            label: Text(_imageFile == null ? 'Chụp ảnh' : 'Chụp lại'),
+                            onPressed: _captureImage,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_imageFile != null) ...[
+                      SizedBox(height: 8),
+                      FutureBuilder<Uint8List>(
+                        future: _imageFile!.readAsBytes(),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasData) {
+                            return Image.memory(
+                              snapshot.data!,
+                              height: 100,
+                              fit: BoxFit.cover,
+                            );
+                          }
+                          return SizedBox(height: 100);
+                        },
+                      ),
+                    ],
+                  ],
+                ],
+              ),
+            ),
+          ),
+          SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color.fromARGB(255, 0, 204, 34),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: _isSubmitting ? null : _submitReport,
+              child: _isSubmitting
+                  ? SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : Text('Gửi'),
             ),
           ),
         ],
       ),
-      if (_imageFile != null) ...[
-        SizedBox(height: 8),
-        FutureBuilder<Uint8List>(
-          future: _imageFile!.readAsBytes(),
-          builder: (context, snapshot) {
-            if (snapshot.hasData) {
-              return Image.memory(
-                snapshot.data!,
-                height: 100,
-                fit: BoxFit.cover,
-              );
-            }
-            return SizedBox(height: 100);
-          },
-        ),
-      ],
-    ],
-                   if (widget.isTopicReport) ...[
-                     SizedBox(height: 16),
-                     Row(
-                       children: [
-                         Expanded(
-                           child: ElevatedButton.icon(
-                             icon: Icon(Icons.camera_alt),
-                             label: Text(_imageFile == null ? 'Chụp ảnh' : 'Chụp lại'),
-                             onPressed: _captureImage,
-                           ),
-                         ),
-                       ],
-                     ),
-                     if (_imageFile != null) ...[
-                       SizedBox(height: 8),
-                       FutureBuilder<Uint8List>(
-                         future: _imageFile!.readAsBytes(),
-                         builder: (context, snapshot) {
-                           if (snapshot.hasData) {
-                             return Image.memory(
-                               snapshot.data!,
-                               height: 100,
-                               fit: BoxFit.cover,
-                             );
-                           }
-                           return SizedBox(height: 100);
-                         },
-                       ),
-                     ],
-                   ],
-                 ],
-               ),
-             ),
-           ),
-           SizedBox(height: 16),
-           SizedBox(
-             width: double.infinity,
-             child: ElevatedButton(
-               style: ElevatedButton.styleFrom(
-                 backgroundColor: const Color.fromARGB(255, 0, 204, 34),
-                 foregroundColor: Colors.white,
-               ),
-               onPressed: _isSubmitting ? null : _submitReport,
-               child: _isSubmitting
-                   ? SizedBox(
-                       height: 20,
-                       width: 20,
-                       child: CircularProgressIndicator(
-                         strokeWidth: 2,
-                         valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                       ),
-                     )
-                   : Text('Gửi'),
-             ),
-           ),
-         ],
-       ),
-     ),
-   );
- }
+    ),
+  );
+}
 }
 class TopicReportDialog extends StatefulWidget {
   final String boPhan;
@@ -2591,7 +2937,7 @@ class _TopicReportDialogState extends State<TopicReportDialog> {
     {'name': 'Ý kiến khách hàng', 'id': 'YKienKH'},
     {'name': 'Phát sinh', 'id': 'PhatSinh'},
     {'name': 'Nhân sự', 'id': 'NhanSu'},
-    //{'name': 'Chất lượng', 'id': 'ChatLuong'},
+  //  {'name': 'Chất lượng', 'id': 'ChatLuong'},
     {'name': 'Khác', 'id': 'Khac'},
   ];
 
@@ -2880,7 +3226,7 @@ class _StaffDetailDialogState extends State<StaffDetailDialog> {
         if (_selectedDate != null) 'NgayCapDP': _selectedDate!.toIso8601String(),
       };
 
-      final response = await AuthenticatedHttpClient.post(
+      final response = await http.post(
         Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/updatebio'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(updateData),
@@ -3035,7 +3381,7 @@ Widget _buildEditableBioFields() {
         'VT': _selectedVT,
       };
 
-      final response = await AuthenticatedHttpClient.post(
+      final response = await http.post(
         Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/stafflist/update'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(updatedStaff),

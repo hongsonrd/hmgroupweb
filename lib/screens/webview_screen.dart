@@ -7,6 +7,9 @@ import '../main.dart' show MainScreen;
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
 import '../floating_draggable_icon.dart';
+import '../chamcong.dart';
+import '../location_provider.dart';
+import '../user_credentials.dart';
 
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
@@ -37,9 +40,26 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
 {'icon': 'assets/iglogo.png', 'name': 'Instagram Hoàn Mỹ', 'link': 'https://www.instagram.com/hoanmykleanco/','userAccess':[]},
   ];
 Future<void> _handleUrlOpen(String url, String title) async {
+  // Special case for HM Time - navigate to ChamCongScreen
+  if (title == 'HM Time') {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => MultiProvider(
+          providers: [
+            ChangeNotifierProvider<LocationProvider>(
+              create: (_) => LocationProvider(),
+            ),
+          ],
+          child: const ChamCongScreen(),
+        ),
+      ),
+    );
+    return;
+  }
+  
+  // Rest of your existing code
   final Uri uri = Uri.parse(url);
   
-  // List of domains that should open in system browser
   final browserDomains = [
     'zalo.me',
     'facebook.com',

@@ -1869,6 +1869,59 @@ class ChamCongCNThangModel {
     );
   }
 }
+class ChamCongVangNghiTcaModel {
+  final String? uid;
+  final String? nguoiDung;
+  final String? phanLoai;
+  final DateTime? ngayBatDau;
+  final DateTime? ngayKetThuc;
+  final String? ghiChu;
+  final String? truongHop;
+  final String? nguoiDuyet;
+  final String? trangThai;
+  final double? giaTriNgay;
+
+  ChamCongVangNghiTcaModel({
+    this.uid,
+    this.nguoiDung,
+    this.phanLoai,
+    this.ngayBatDau,
+    this.ngayKetThuc,
+    this.ghiChu,
+    this.truongHop,
+    this.nguoiDuyet,
+    this.trangThai,
+    this.giaTriNgay,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'UID': uid,
+    'NguoiDung': nguoiDung,
+    'PhanLoai': phanLoai,
+    'NgayBatDau': ngayBatDau?.toIso8601String(),
+    'NgayKetThuc': ngayKetThuc?.toIso8601String(),
+    'GhiChu': ghiChu,
+    'TruongHop': truongHop,
+    'NguoiDuyet': nguoiDuyet,
+    'TrangThai': trangThai,
+    'GiaTriNgay': giaTriNgay,
+  };
+
+  factory ChamCongVangNghiTcaModel.fromMap(Map<String, dynamic> map) {
+    return ChamCongVangNghiTcaModel(
+      uid: map['UID'],
+      nguoiDung: map['NguoiDung'],
+      phanLoai: map['PhanLoai'],
+      ngayBatDau: map['NgayBatDau'] != null ? DateTime.parse(map['NgayBatDau']) : null,
+      ngayKetThuc: map['NgayKetThuc'] != null ? DateTime.parse(map['NgayKetThuc']) : null,
+      ghiChu: map['GhiChu'],
+      truongHop: map['TruongHop'],
+      nguoiDuyet: map['NguoiDuyet'],
+      trangThai: map['TrangThai'],
+      giaTriNgay: map['GiaTriNgay'] != null ? double.tryParse(map['GiaTriNgay'].toString()) : null,
+    );
+  }
+}
 // Database Tables
 class DatabaseTables {
   // Table Names
@@ -1889,13 +1942,28 @@ class DatabaseTables {
   static const String orderDinhMucTable = 'orderdinhmuc';
   static const String chamCongCNTable = 'chamcongcn';
   static const String hinhAnhZaloTable = 'hinhanhzalo';
-  static const String hdChiTietYCMMTable = 'HDChiTietYCMM';
+ static const String hdChiTietYCMMTable = 'HDChiTietYCMM';
  static const String hdDuTruTable = 'HDDuTru';
  static const String hdYeuCauMMTable = 'HDYeuCauMM';
   static const String chamCongTable = 'ChamCong';
  static const String chamCongGioTable = 'ChamCongGio';
  static const String chamCongLSTable = 'ChamCongLS';
  static const String chamCongCNThangTable = 'ChamCongCNThang';
+   static const String chamCongVangNghiTcaTable = 'ChamCongVangNghiTca';
+ static const String createChamCongVangNghiTcaTable = '''
+    CREATE TABLE $chamCongVangNghiTcaTable (
+      UID varchar(100),
+      NguoiDung varchar(100),
+      PhanLoai varchar(100),
+      NgayBatDau date,
+      NgayKetThuc date,
+      GhiChu text,
+      TruongHop varchar(100),
+      NguoiDuyet varchar(100),
+      TrangThai varchar(100),
+      GiaTriNgay decimal(10,2)
+    )
+  ''';
 static const String createChamCongCNThangTable = '''
   CREATE TABLE $chamCongCNThangTable (
     UID varchar(100),

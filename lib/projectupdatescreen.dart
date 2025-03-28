@@ -11,6 +11,8 @@ import 'projectplan2.dart';
 import 'http_client.dart';
 import 'projectworker.dart';
 import 'projectorder.dart';
+import 'projectimage.dart';
+import 'projectmachineorder.dart';
 class ProjectUpdateScreen extends StatefulWidget {
   final String boPhan;
 
@@ -141,20 +143,47 @@ MenuCard(
                 ),
               ),
             ),
-            MenuCard(
-  title: 'Đặt\nvật tư',
-  icon: Icons.inventory,
-  color: Colors.amber,
-  onTap: () => Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => ProjectOrder(
-        selectedBoPhan: widget.boPhan,
+             MenuCard(
+      title: 'Đặt\nvật tư',
+      icon: Icons.inventory,
+      color: Colors.amber,
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProjectOrder(
+            selectedBoPhan: widget.boPhan,
+          ),
+        ),
       ),
     ),
-  ),
-),
-          
+    MenuCard(
+      title: 'Kiểm tra\nảnh',
+      icon: Icons.photo,
+      color: Colors.red,
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProjectImageScreen(
+            boPhan: 'Tất cả',
+            username: userCredentials.username,
+          ),
+        ),
+      ),
+    ),
+    MenuCard(
+      title: 'Đặt máy\nmóc',
+      icon: Icons.beach_access,
+      color: Colors.pink,
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProjectMachineOrder(
+            boPhan: 'Tất cả',
+            username: userCredentials.username,
+          ),
+        ),
+      ),
+    ),   
          ],
           );
         },

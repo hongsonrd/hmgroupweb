@@ -32,59 +32,52 @@ class _AllProjectsViewState extends State<AllProjectsView> {
   final List<String> _congThuongChoices = ['X', 'P', 'XĐ', 'X/2', 'Ro', 'HT', 'NT', 'CĐ', 'NL', 'Ô', 'TS', '2X', '3X', 'HV', '2HV', '3HV', '2XĐ', 'QLDV'];
   
   @override
-  void initState() {
-    super.initState();
-    _username = Provider.of<UserCredentials>(context, listen: false).username;
-    _initializeData();
-  }
+void initState() {
+  super.initState();
+  _username = Provider.of<UserCredentials>(context, listen: false).username;
+  _initializeData();
+}
 
-  Future<void> _initializeData() async {
-    setState(() => _isLoading = true);
+Future<void> _initializeData() async {
+  setState(() => _isLoading = true);
+  try {
+    // Load departments
     try {
-      // Load departments
-      try {
-        final response = await AuthenticatedHttpClient.get(
-          Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/$_username'),
-          headers: {'Content-Type': 'application/json'},
-        );
-        if (response.statusCode == 200) {
-          final List<dynamic> apiDepts = json.decode(response.body);
-          setState(() {
-            _departments = apiDepts.map((e) => e.toString()).toList();
-          });
-        }
-      } catch (e) {
-        debugLog('Project API error: $e');
-      }
-
-      // Also get departments from local DB
-      final dbHelper = DBHelper();
-      final existingDepts = await dbHelper.rawQuery(
-        'SELECT DISTINCT BoPhan FROM chamcongcn ORDER BY BoPhan'
+      final response = await AuthenticatedHttpClient.get(
+        Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/$_username'),
+        headers: {'Content-Type': 'application/json'},
       );
-      _departments.addAll(existingDepts.map((e) => e['BoPhan'] as String));
-      _departments = _departments.toSet().toList()..sort();
-      
-      // Get available months
-      final months = await dbHelper.rawQuery(
-        'SELECT DISTINCT strftime("%Y-%m", Ngay) as month FROM chamcongcn ORDER BY month DESC'
-      );
-      _availableMonths = months.map((e) => e['month'] as String).toList();
-      
-      String currentMonth = DateFormat('yyyy-MM').format(DateTime.now());
-      if (!_availableMonths.contains(currentMonth)) {
-        _availableMonths.insert(0, currentMonth);
+      if (response.statusCode == 200) {
+        final List<dynamic> apiDepts = json.decode(response.body);
+        setState(() {
+          _departments = apiDepts.map((e) => e.toString()).toList();
+        });
       }
-      _selectedMonth = _availableMonths.first;
-      
-      // Load data for all departments
-      await _loadAllProjectsData();
     } catch (e) {
-      debugLog('Init error: $e');
-      _showError('Không thể tải dữ liệu');
+      debugLog('Project API error: $e');
     }
-    setState(() => _isLoading = false);
+
+    // Also get departments from local DB
+    final dbHelper = DBHelper();
+    final existingDepts = await dbHelper.rawQuery(
+      'SELECT DISTINCT BoPhan FROM chamcongcn ORDER BY BoPhan'
+    );
+    _departments.addAll(existingDepts.map((e) => e['BoPhan'] as String));
+    _departments = _departments.toSet().toList()..sort();
+    
+    // Always use current month since we're only showing recent days
+    String currentMonth = DateFormat('yyyy-MM').format(DateTime.now());
+    _availableMonths = [currentMonth];
+    _selectedMonth = currentMonth;
+    
+    // Load data for all departments
+    await _loadAllProjectsData();
+  } catch (e) {
+    debugLog('Init error: $e');
+    _showError('Không thể tải dữ liệu');
   }
+  setState(() => _isLoading = false);
+}
 Future<void> _copyFromYesterday() async {
   try {
     final result = await showDialog<bool>(
@@ -313,24 +306,53 @@ Future<void> _copyFromYesterday() async {
   }
 }
   Future<void> _loadAllProjectsData() async {
-    if (_selectedMonth == null || _departments.isEmpty) return;
-    
-    setState(() {
-      _modifiedRecords.clear();
-      _newRecords.clear();
-    });
-    
-    final dbHelper = DBHelper();
-    Map<String, List<Map<String, dynamic>>> allData = {};
-    Map<String, Map<String, String>> allStaffNames = {};
+  if (_selectedMonth == null || _departments.isEmpty) return;
+  
+  setState(() {
+    _modifiedRecords.clear();
+    _newRecords.clear();
+  });
+  
+  final dbHelper = DBHelper();
+  Map<String, List<Map<String, dynamic>>> allData = {};
+  Map<String, Map<String, String>> allStaffNames = {};
+  
+  // Get the three most recent days
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final yesterday = today.subtract(const Duration(days: 1));
+  final dayBeforeYesterday = today.subtract(const Duration(days: 2));
+  
+  // Format dates for SQL query
+  final todayStr = DateFormat('yyyy-MM-dd').format(today);
+  final yesterdayStr = DateFormat('yyyy-MM-dd').format(yesterday);
+  final dayBeforeYesterdayStr = DateFormat('yyyy-MM-dd').format(dayBeforeYesterday);
+  
+  debugLog('Loading data for dates: $todayStr, $yesterdayStr, $dayBeforeYesterdayStr');
+  
+  // Check if all three dates are in the selected month
+  final List<String> datesToQuery = [];
+  if (_selectedMonth == DateFormat('yyyy-MM').format(today)) {
+    datesToQuery.add(todayStr);
+  }
+  if (_selectedMonth == DateFormat('yyyy-MM').format(yesterday)) {
+    datesToQuery.add(yesterdayStr);
+  }
+  if (_selectedMonth == DateFormat('yyyy-MM').format(dayBeforeYesterday)) {
+    datesToQuery.add(dayBeforeYesterdayStr);
+  }
+  
+  // If no dates match the selected month, load all data for that month
+  if (datesToQuery.isEmpty) {
+    debugLog('No recent dates match the selected month, loading entire month data');
     
     for (String dept in _departments) {
       try {
-        // Get attendance data for this department
+        // Get all data for this department in the selected month
         final data = await dbHelper.rawQuery('''
           SELECT * FROM chamcongcn 
           WHERE BoPhan = ? AND strftime('%Y-%m', Ngay) = ?
-          ORDER BY MaNV, Ngay
+          ORDER BY MaNV, Ngay DESC
         ''', [dept, _selectedMonth]);
         
         if (data.isNotEmpty) {
@@ -354,142 +376,357 @@ Future<void> _copyFromYesterday() async {
             'PartTimeChieu': record['PartTimeChieu']?.toString() ?? '0',
             'CongLe': record['CongLe']?.toString() ?? '0',
           }));
-          
-          // Load staff names for this department
-          final employeeIds = allData[dept]!
-              .map((record) => record['MaNV'] as String)
-              .toSet()
-              .toList();
-          
-          if (employeeIds.isNotEmpty) {
-            final staffNames = await _loadStaffNamesForDept(employeeIds);
-            allStaffNames[dept] = staffNames;
-          }
         }
       } catch (e) {
         debugLog('Error loading data for $dept: $e');
       }
     }
+  } else {
+    // Build query for specific dates
+    final placeholders = List.filled(datesToQuery.length, '?').join(',');
     
-    setState(() {
-      _allProjectsData = allData;
-      _staffNamesByDept = allStaffNames;
-    });
+    debugLog('Loading data for specific dates: ${datesToQuery.join(", ")}');
+    
+    for (String dept in _departments) {
+      try {
+        // Get attendance data for this department - only for the specified dates
+        final data = await dbHelper.rawQuery('''
+          SELECT * FROM chamcongcn 
+          WHERE BoPhan = ? AND date(Ngay) IN ($placeholders)
+          ORDER BY MaNV, Ngay DESC
+        ''', [dept, ...datesToQuery]);
+        
+        if (data.isNotEmpty) {
+          allData[dept] = List<Map<String, dynamic>>.from(data.map((record) => {
+            'UID': record['UID'] ?? '',
+            'Ngay': record['Ngay'] ?? '',
+            'Gio': record['Gio'] ?? DateFormat('HH:mm:ss').format(DateTime.now()),
+            'NguoiDung': record['NguoiDung'] ?? _username,
+            'BoPhan': record['BoPhan'] ?? dept,
+            'MaBP': record['MaBP'] ?? dept,
+            'PhanLoai': record['PhanLoai'] ?? '',
+            'MaNV': record['MaNV'] ?? '',
+            'CongThuongChu': record['CongThuongChu'] ?? '',
+            'NgoaiGioThuong': record['NgoaiGioThuong']?.toString() ?? '0',
+            'NgoaiGioKhac': record['NgoaiGioKhac']?.toString() ?? '0',
+            'NgoaiGiox15': record['NgoaiGiox15']?.toString() ?? '0',
+            'NgoaiGiox2': record['NgoaiGiox2']?.toString() ?? '0',
+            'HoTro': record['HoTro']?.toString() ?? '0',
+            'PartTime': record['PartTime']?.toString() ?? '0',
+            'PartTimeSang': record['PartTimeSang']?.toString() ?? '0',
+            'PartTimeChieu': record['PartTimeChieu']?.toString() ?? '0',
+            'CongLe': record['CongLe']?.toString() ?? '0',
+          }));
+        }
+      } catch (e) {
+        debugLog('Error loading data for $dept: $e');
+      }
+    }
   }
   
+  // Load staff names for all departments with data
+  for (String dept in allData.keys) {
+    final employeeIds = allData[dept]!
+        .map((record) => record['MaNV'] as String)
+        .toSet()
+        .toList();
+    
+    if (employeeIds.isNotEmpty) {
+      final staffNames = await _loadStaffNamesForDept(employeeIds);
+      allStaffNames[dept] = staffNames;
+    }
+  }
+  
+  setState(() {
+    _allProjectsData = allData;
+    _staffNamesByDept = allStaffNames;
+  });
+}
+  
   Future<void> _saveChanges() async {
-    try {
-      setState(() => _isLoading = true);
-      final dbHelper = DBHelper();
+  FocusScope.of(context).unfocus();
+  
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => WillPopScope(
+      onWillPop: () async => false,
+      child: Dialog(
+        child: Container(
+          padding: EdgeInsets.all(12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+              SizedBox(width: 12),
+              Text('Đang lưu...', style: TextStyle(fontSize: 14)),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  try {
+    setState(() => _isLoading = true);
+    final dbHelper = DBHelper();
+    
+    // Prepare batch data
+    final modifiedList = _modifiedRecords.values.toList();
+    final newList = _newRecords.values.toList();
+    
+    debugLog('Sending batch request with ${modifiedList.length} updates and ${newList.length} additions');
+    
+    // Use the batch endpoint
+    final response = await http.post(
+      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongbatch'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({
+        'updates': modifiedList,
+        'additions': newList,
+      }),
+    ).timeout(const Duration(seconds: 30));
+    
+    if (response.statusCode == 200 || response.statusCode == 400) {
+      final result = json.decode(response.body);
+      final resultString = result.toString();
+      debugLog('Batch response: ${resultString.substring(0, resultString.length > 100 ? 100 : resultString.length)}...');
       
-      // Process modified records
-      for (var entry in _modifiedRecords.entries) {
-        final uid = entry.key;
-        final record = entry.value;
-        
-        // Create a clean updates object with explicit type conversion
-        final updates = {
-          'Ngay': record['Ngay'],
-          'Gio': record['Gio'],
-          'NguoiDung': record['NguoiDung'],
-          'BoPhan': record['BoPhan'],
-          'MaBP': record['MaBP'],
-          'PhanLoai': record['PhanLoai'],
-          'MaNV': record['MaNV'],
-          'CongThuongChu': record['CongThuongChu'] ?? '',
-          'NgoaiGioThuong': record['NgoaiGioThuong'] ?? '0',
-          'NgoaiGioKhac': record['NgoaiGioKhac'] ?? '0',
-          'NgoaiGiox15': record['NgoaiGiox15'] ?? '0',
-          'NgoaiGiox2': record['NgoaiGiox2'] ?? '0',
-          'HoTro': record['HoTro'] ?? '0',
-          'PartTime': record['PartTime'] ?? '0',
-          'PartTimeSang': record['PartTimeSang'] ?? '0',
-          'PartTimeChieu': record['PartTimeChieu'] ?? '0',
-          'CongLe': record['CongLe'] ?? '0',
-        };
-        
-        debugLog('Saving record with UID: $uid');
-        
-        final jsonData = json.encode(updates);
-        
-        final response = await http.put(
-          Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongsua/$uid'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonData
-        ).timeout(const Duration(seconds: 30));
-        
-        if (response.statusCode != 200) {
-          throw Exception('Failed to update record: ${response.body}');
-        }
-
-        // Update local database with the same data we sent to server
-        await dbHelper.updateChamCongCN(uid, updates);
-      }
-
-      // Process new records if there are any
-      for (var entry in _newRecords.entries) {
-        final uid = entry.key;
-        final record = entry.value;
-        
-        // Add to database if not already there
-        final existingRecord = await dbHelper.rawQuery(
-          'SELECT * FROM chamcongcn WHERE UID = ?', [uid]
-        );
-        
-        if (existingRecord.isEmpty) {
-          // Send to server first
-          final response = await http.post(
-            Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamconggui'),
-            headers: {'Content-Type': 'application/json'},
-            body: json.encode(record)
-          ).timeout(const Duration(seconds: 30));
+      // Process successful updates in local database
+      if ((result['updated'] ?? 0) > 0 || (result['added'] ?? 0) > 0) {
+        // Start parallel updates for the local database
+        await Future.wait([
+          // Process updates
+          Future(() async {
+            for (var record in modifiedList) {
+              final uid = record['UID'] as String;
+              final updates = Map<String, dynamic>.from(record);
+              updates.remove('UID');
+              await dbHelper.updateChamCongCN(uid, updates);
+              debugLog('Updated local record with UID: $uid');
+            }
+          }),
           
-          if (response.statusCode != 200) {
-            throw Exception('Failed to add new record: ${response.body}');
-          }
-          
-          // Then add to local DB
-          final chamCongModel = ChamCongCNModel(
-            uid: uid,
-            maNV: record['MaNV'] as String,
-            ngay: DateTime.parse(record['Ngay'] as String),
-            boPhan: record['BoPhan'] as String,
-            nguoiDung: record['NguoiDung'] as String,
-            congThuongChu: record['CongThuongChu'] as String? ?? '',
-            ngoaiGioThuong: double.tryParse(record['NgoaiGioThuong']?.toString() ?? '0') ?? 0,
-            ngoaiGioKhac: double.tryParse(record['NgoaiGioKhac']?.toString() ?? '0') ?? 0,
-            ngoaiGiox15: double.tryParse(record['NgoaiGiox15']?.toString() ?? '0') ?? 0,
-            ngoaiGiox2: double.tryParse(record['NgoaiGiox2']?.toString() ?? '0') ?? 0,
-            hoTro: int.tryParse(record['HoTro']?.toString() ?? '0') ?? 0,
-            partTime: int.tryParse(record['PartTime']?.toString() ?? '0') ?? 0,
-            partTimeSang: int.tryParse(record['PartTimeSang']?.toString() ?? '0') ?? 0,
-            partTimeChieu: int.tryParse(record['PartTimeChieu']?.toString() ?? '0') ?? 0,
-            congLe: double.tryParse(record['CongLe']?.toString() ?? '0') ?? 0,
-          );
-          await dbHelper.insertChamCongCN(chamCongModel);
-        }
+          // Process additions
+          Future(() async {
+            for (var record in newList) {
+              final chamCongModel = ChamCongCNModel(
+                uid: record['UID'] as String,
+                maNV: record['MaNV'] as String,
+                ngay: DateTime.parse(record['Ngay'] as String),
+                boPhan: record['BoPhan'] as String,
+                nguoiDung: record['NguoiDung'] as String,
+                congThuongChu: record['CongThuongChu'] as String? ?? '',
+                ngoaiGioThuong: double.tryParse(record['NgoaiGioThuong']?.toString() ?? '0') ?? 0,
+                ngoaiGioKhac: double.tryParse(record['NgoaiGioKhac']?.toString() ?? '0') ?? 0,
+                ngoaiGiox15: double.tryParse(record['NgoaiGiox15']?.toString() ?? '0') ?? 0,
+                ngoaiGiox2: double.tryParse(record['NgoaiGiox2']?.toString() ?? '0') ?? 0,
+                hoTro: int.tryParse(record['HoTro']?.toString() ?? '0') ?? 0,
+                partTime: int.tryParse(record['PartTime']?.toString() ?? '0') ?? 0,
+                partTimeSang: int.tryParse(record['PartTimeSang']?.toString() ?? '0') ?? 0,
+                partTimeChieu: int.tryParse(record['PartTimeChieu']?.toString() ?? '0') ?? 0,
+                congLe: double.tryParse(record['CongLe']?.toString() ?? '0') ?? 0,
+              );
+              await dbHelper.insertChamCongCN(chamCongModel);
+              debugLog('Inserted local record with UID: ${record['UID']}');
+            }
+          }),
+        ]);
       }
-
+      
+      // Check for any errors
+      if (result['errors'] != null && (result['errors'] as List).isNotEmpty) {
+        debugLog('Batch had ${(result['errors'] as List).length} errors: ${result['errors']}');
+      }
+      
+      // Clear tracking collections
       setState(() {
         _modifiedRecords.clear();
         _newRecords.clear();
       });
-
+      
+      // Refresh the UI to reflect changes
       await _loadAllProjectsData();
       
+      // Close loading dialog
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      
+      // Show success message
       if (mounted) {
+        final updatedCount = result['updated'] ?? 0;
+        final addedCount = result['added'] ?? 0;
+        final errorCount = result['errors'] != null ? (result['errors'] as List).length : 0;
+        
+        String message = 'Đã lưu ${updatedCount + addedCount} thay đổi thành công';
+        if (errorCount > 0) {
+          message += ' (${errorCount} lỗi)';
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Đã lưu thay đổi thành công'))
+          SnackBar(
+            content: Text(message),
+            backgroundColor: errorCount > 0 ? Colors.orange : null,
+          )
         );
       }
-
-    } catch (e) {
-      debugLog('Error in _saveChanges: $e');
-      _showError('Lỗi khi lưu dữ liệu: ${e.toString()}');
-    } finally {
-      setState(() => _isLoading = false);
+    } else {
+      throw Exception('Failed to save changes: ${response.body}');
     }
+  } catch (e) {
+    // Close loading dialog on error
+    if (mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+    
+    debugLog('Error in batch save: $e');
+    _showError('Lỗi khi lưu: ${e.toString()}');
+    
+    // If the batch save failed completely, fall back to individual saves
+    if (_modifiedRecords.isNotEmpty || _newRecords.isNotEmpty) {
+      final shouldFallback = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Lưu không thành công'),
+          content: Text('Bạn có muốn thử lưu từng bản ghi riêng biệt không?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text('Không'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text('Có'),
+            ),
+          ],
+        ),
+      ) ?? false;
+      
+      if (shouldFallback) {
+        debugLog('Falling back to individual saves');
+        await _saveChangesIndividually();
+      }
+    }
+  } finally {
+    setState(() => _isLoading = false);
   }
+}
+
+// Add this method as a fallback for individual record saving
+Future<void> _saveChangesIndividually() async {
+  try {
+    setState(() => _isLoading = true);
+    final dbHelper = DBHelper();
+    
+    // Process modified records
+    for (var entry in _modifiedRecords.entries) {
+      final uid = entry.key;
+      final record = entry.value;
+      
+      // Create a clean updates object with explicit type conversion
+      final updates = {
+        'Ngay': record['Ngay'],
+        'Gio': record['Gio'],
+        'NguoiDung': record['NguoiDung'],
+        'BoPhan': record['BoPhan'],
+        'MaBP': record['MaBP'],
+        'PhanLoai': record['PhanLoai'],
+        'MaNV': record['MaNV'],
+        'CongThuongChu': record['CongThuongChu'] ?? '',
+        'NgoaiGioThuong': record['NgoaiGioThuong'] ?? '0',
+        'NgoaiGioKhac': record['NgoaiGioKhac'] ?? '0',
+        'NgoaiGiox15': record['NgoaiGiox15'] ?? '0',
+        'NgoaiGiox2': record['NgoaiGiox2'] ?? '0',
+        'HoTro': record['HoTro'] ?? '0',
+        'PartTime': record['PartTime'] ?? '0',
+        'PartTimeSang': record['PartTimeSang'] ?? '0',
+        'PartTimeChieu': record['PartTimeChieu'] ?? '0',
+        'CongLe': record['CongLe'] ?? '0',
+      };
+      
+      debugLog('Saving record with UID: $uid (individual)');
+      
+      final jsonData = json.encode(updates);
+      
+      final response = await http.put(
+        Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongsua/$uid'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonData
+      ).timeout(const Duration(seconds: 30));
+      
+      if (response.statusCode != 200) {
+        throw Exception('Failed to update record: ${response.body}');
+      }
+
+      // Update local database with the same data we sent to server
+      await dbHelper.updateChamCongCN(uid, updates);
+    }
+
+    // Process new records if there are any
+    for (var entry in _newRecords.entries) {
+      final uid = entry.key;
+      final record = entry.value;
+      
+      // Add to database if not already there
+      final existingRecord = await dbHelper.rawQuery(
+        'SELECT * FROM chamcongcn WHERE UID = ?', [uid]
+      );
+      
+      if (existingRecord.isEmpty) {
+        // Send to server first
+        final response = await http.post(
+          Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamconggui'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode(record)
+        ).timeout(const Duration(seconds: 30));
+        
+        if (response.statusCode != 200) {
+          throw Exception('Failed to add new record: ${response.body}');
+        }
+        
+        // Then add to local DB
+        final chamCongModel = ChamCongCNModel(
+          uid: uid,
+          maNV: record['MaNV'] as String,
+          ngay: DateTime.parse(record['Ngay'] as String),
+          boPhan: record['BoPhan'] as String,
+          nguoiDung: record['NguoiDung'] as String,
+          congThuongChu: record['CongThuongChu'] as String? ?? '',
+          ngoaiGioThuong: double.tryParse(record['NgoaiGioThuong']?.toString() ?? '0') ?? 0,
+          ngoaiGioKhac: double.tryParse(record['NgoaiGioKhac']?.toString() ?? '0') ?? 0,
+          ngoaiGiox15: double.tryParse(record['NgoaiGiox15']?.toString() ?? '0') ?? 0,
+          ngoaiGiox2: double.tryParse(record['NgoaiGiox2']?.toString() ?? '0') ?? 0,
+          hoTro: int.tryParse(record['HoTro']?.toString() ?? '0') ?? 0,
+          partTime: int.tryParse(record['PartTime']?.toString() ?? '0') ?? 0,
+          partTimeSang: int.tryParse(record['PartTimeSang']?.toString() ?? '0') ?? 0,
+          partTimeChieu: int.tryParse(record['PartTimeChieu']?.toString() ?? '0') ?? 0,
+          congLe: double.tryParse(record['CongLe']?.toString() ?? '0') ?? 0,
+        );
+        await dbHelper.insertChamCongCN(chamCongModel);
+      }
+    }
+
+    setState(() {
+      _modifiedRecords.clear();
+      _newRecords.clear();
+    });
+
+    await _loadAllProjectsData();
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đã lưu thay đổi thành công (cách thủ công)'))
+      );
+    }
+
+  } catch (e) {
+    debugLog('Error in individual save: $e');
+    _showError('Lỗi khi lưu dữ liệu từng bản ghi: ${e.toString()}');
+  } finally {
+    setState(() => _isLoading = false);
+  }
+}
   
   Future<Map<String, String>> _loadStaffNamesForDept(List<String> employeeIds) async {
     final dbHelper = DBHelper();
@@ -513,18 +750,43 @@ Future<void> _copyFromYesterday() async {
   }
   
   List<int> _getDaysInMonth() {
-    if (_selectedMonth == null) return [];
-    final parts = _selectedMonth!.split('-');
-    final year = int.parse(parts[0]);
-    final month = int.parse(parts[1]);
-    if (_selectedMonth == DateFormat('yyyy-MM').format(DateTime.now())) {
-      final today = DateTime.now().day;
-      return List.generate(today, (i) => today - i); // Latest date first
-    } else {
-      final daysInMonth = DateTime(year, month + 1, 0).day;
-      return List.generate(daysInMonth, (i) => daysInMonth - i); // Latest date first
+  if (_selectedMonth == null) return [];
+  
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final yesterday = today.subtract(const Duration(days: 1));
+  final dayBeforeYesterday = today.subtract(const Duration(days: 2));
+  
+  final parts = _selectedMonth!.split('-');
+  final year = int.parse(parts[0]);
+  final month = int.parse(parts[1]);
+  
+  // If current month, only show the three most recent days
+  if (_selectedMonth == DateFormat('yyyy-MM').format(today)) {
+    final recentDays = <int>[];
+    
+    // Only add days that are within the current month
+    if (today.month == month && today.year == year) {
+      recentDays.add(today.day);
+    }
+    if (yesterday.month == month && yesterday.year == year) {
+      recentDays.add(yesterday.day);
+    }
+    if (dayBeforeYesterday.month == month && dayBeforeYesterday.year == year) {
+      recentDays.add(dayBeforeYesterday.day);
+    }
+    
+    // If we have recent days, return them sorted in descending order
+    if (recentDays.isNotEmpty) {
+      recentDays.sort((a, b) => b.compareTo(a)); // Sort descending
+      return recentDays;
     }
   }
+  
+  // Otherwise, show all days in the selected month
+  final daysInMonth = DateTime(year, month + 1, 0).day;
+  return List.generate(daysInMonth, (i) => daysInMonth - i); // Latest date first
+}
 
   List<String> _getUniqueEmployeesForDept(String dept) {
     if (!_allProjectsData.containsKey(dept)) return [];
@@ -857,17 +1119,21 @@ Widget _buildCombinedTable() {
               scrollDirection: Axis.horizontal,
               child: DataTable(
                 columns: [
-                  DataColumn(label: Text('Mã NV')),
+                  DataColumn(
+  label: Container(
+    width: 50,
+    child: Text('Mã NV'),
+  )
+),
                   DataColumn(
       label: Container(
-        width: 60,
+        width: 50,
         child: Text('Loại', overflow: TextOverflow.ellipsis),
       )
     ),
     ...days.map((day) => DataColumn(label: Text(day.toString()))),
   ],
                 rows: employees.expand((empId) {
-                  // Create two rows for each employee - one for CongThuongChu and one for NgoaiGioThuong
                   return [
                     // Row for CongThuongChu
                     DataRow(
@@ -925,7 +1191,7 @@ Widget _buildCombinedTable() {
                           
                           return DataCell(
                             SizedBox(
-                              width: 60,
+                              width: 50,
                               child: TextFormField(
                                 initialValue: attendance,
                                 keyboardType: TextInputType.numberWithOptions(decimal: true),
@@ -1118,20 +1384,28 @@ void _updateAttendanceWithPhanLoai(String dept, String empId, int day, String co
                     return DataRow(
                       cells: [
                         DataCell(
-  Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Text(empId, style: TextStyle(color: Colors.black)),
-      Text(
-        _staffNamesByDept[dept]?[empId] ?? '',
-        style: TextStyle(
-          fontSize: 12,
-          color: Colors.black,
-          fontWeight: FontWeight.bold,
+  Container(
+    width: 50,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          empId, 
+          style: TextStyle(color: Colors.black),
+          overflow: TextOverflow.ellipsis,
+        ), 
+        Text(
+          _staffNamesByDept[dept]?[empId] ?? '',
+          style: TextStyle(
+            fontSize: 11,
+            color: Colors.black, 
+            fontWeight: FontWeight.bold,
+          ),
+          overflow: TextOverflow.ellipsis,
         ),
-      ),
-    ],
+      ],
+    ),
   ),
 ),
                         ...days.map((day) {
@@ -1153,7 +1427,7 @@ void _updateAttendanceWithPhanLoai(String dept, String empId, int day, String co
                                   } : null,
                                 )
                               : SizedBox(
-                                  width: 60,
+                                  width:50,
                                   child: TextFormField(
                                     initialValue: attendance,
                                     keyboardType: columnType == 'HoTro' || 

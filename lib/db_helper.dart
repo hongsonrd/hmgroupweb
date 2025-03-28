@@ -36,14 +36,14 @@ class DBHelper {
     }
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool hasReset = prefs.getBool('db_reset_v16') ?? false;
+    bool hasReset = prefs.getBool('db_reset_v17') ?? false;
     
     if (!hasReset) {
-      print('Forcing database reset for version 16...');
+      print('Forcing database reset for version 17...');
       try {
         await deleteDatabase(path);
         //await prefs.clear();
-        await prefs.setBool('db_reset_v16', true);
+        await prefs.setBool('db_reset_v17', true);
         print('Database reset successful');
       } catch (e) {
         print('Error during database reset: $e');
@@ -55,7 +55,7 @@ class DBHelper {
     final db = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 16,
+        version: 17,
         onCreate: (Database db, int version) async {
           print('Creating database tables...');
           await db.execute(DatabaseTables.createInteractionTable);
@@ -81,12 +81,13 @@ class DBHelper {
         await db.execute(DatabaseTables.createChamCongTable); 
         await db.execute(DatabaseTables.createChamCongGioTable); 
         await db.execute(DatabaseTables.createChamCongLSTable);  
-        await db.execute(DatabaseTables.createChamCongCNThangTable);  
+        await db.execute(DatabaseTables.createChamCongCNThangTable); 
+        await db.execute(DatabaseTables.createChamCongVangNghiTcaTable); 
         await ChecklistInitializer.initializeChecklistTable(db);
         print('Database tables created successfully');
       },
       onUpgrade: (Database db, int oldVersion, int newVersion) async {
-        if (oldVersion < 16) {
+        if (oldVersion < 17) {
           print('Upgrading database: adding baocao table');
           await db.execute(DatabaseTables.createBaocaoTable);
         await db.execute(DatabaseTables.createDongPhucTable);
@@ -104,6 +105,7 @@ class DBHelper {
         await db.execute(DatabaseTables.createChamCongGioTable); 
         await db.execute(DatabaseTables.createChamCongLSTable);
         await db.execute(DatabaseTables.createChamCongCNThangTable); 
+        await db.execute(DatabaseTables.createChamCongVangNghiTcaTable);
           }
         },
         onOpen: (db) async {
@@ -124,6 +126,92 @@ class DBHelper {
     print('Stack trace: $stackTrace');
     rethrow;
   }
+}
+// ==================== ChamCongVangNghiTca CRUD Operations ====================
+Future<List<ChamCongVangNghiTcaModel>> getChamCongVangNghiTcaByNguoiDuyet(String nguoiDuyet) async {
+ final maps = await query(
+   DatabaseTables.chamCongVangNghiTcaTable,
+   where: 'NguoiDuyet = ?',
+   whereArgs: [nguoiDuyet],
+ );
+ return maps.map((map) => ChamCongVangNghiTcaModel.fromMap(map)).toList();
+}
+Future<void> insertChamCongVangNghiTca(ChamCongVangNghiTcaModel chamCongVangNghiTca) async {
+ await insert(DatabaseTables.chamCongVangNghiTcaTable, chamCongVangNghiTca.toMap());
+}
+
+Future<List<ChamCongVangNghiTcaModel>> getAllChamCongVangNghiTca() async {
+ final maps = await query(DatabaseTables.chamCongVangNghiTcaTable);
+ return maps.map((map) => ChamCongVangNghiTcaModel.fromMap(map)).toList();
+}
+
+Future<ChamCongVangNghiTcaModel?> getChamCongVangNghiTcaByUID(String uid) async {
+ final maps = await query(
+   DatabaseTables.chamCongVangNghiTcaTable,
+   where: 'UID = ?',
+   whereArgs: [uid],
+ );
+ if (maps.isEmpty) return null;
+ return ChamCongVangNghiTcaModel.fromMap(maps.first);
+}
+
+Future<List<ChamCongVangNghiTcaModel>> getChamCongVangNghiTcaByNguoiDung(String nguoiDung) async {
+ final maps = await query(
+   DatabaseTables.chamCongVangNghiTcaTable,
+   where: 'NguoiDung = ?',
+   whereArgs: [nguoiDung],
+ );
+ return maps.map((map) => ChamCongVangNghiTcaModel.fromMap(map)).toList();
+}
+
+Future<List<ChamCongVangNghiTcaModel>> getChamCongVangNghiTcaByDateRange(DateTime startDate, DateTime endDate) async {
+ final maps = await query(
+   DatabaseTables.chamCongVangNghiTcaTable,
+   where: 'NgayBatDau >= ? AND NgayKetThuc <= ?',
+   whereArgs: [startDate.toIso8601String(), endDate.toIso8601String()],
+ );
+ return maps.map((map) => ChamCongVangNghiTcaModel.fromMap(map)).toList();
+}
+
+Future<List<ChamCongVangNghiTcaModel>> getChamCongVangNghiTcaByTrangThai(String trangThai) async {
+ final maps = await query(
+   DatabaseTables.chamCongVangNghiTcaTable,
+   where: 'TrangThai = ?',
+   whereArgs: [trangThai],
+ );
+ return maps.map((map) => ChamCongVangNghiTcaModel.fromMap(map)).toList();
+}
+
+Future<int> updateChamCongVangNghiTca(String uid, Map<String, dynamic> updates) async {
+ return await update(
+   DatabaseTables.chamCongVangNghiTcaTable,
+   updates,
+   where: 'UID = ?',
+   whereArgs: [uid],
+ );
+}
+
+Future<int> deleteChamCongVangNghiTca(String uid) async {
+ return await delete(
+   DatabaseTables.chamCongVangNghiTcaTable,
+   where: 'UID = ?',
+   whereArgs: [uid],
+ );
+}
+
+Future<void> batchInsertChamCongVangNghiTca(List<ChamCongVangNghiTcaModel> items) async {
+ final db = await database;
+ await db.transaction((txn) async {
+   final batch = txn.batch();
+   for (var item in items) {
+     batch.insert(
+       DatabaseTables.chamCongVangNghiTcaTable, 
+       item.toMap(),
+       conflictAlgorithm: ConflictAlgorithm.replace
+     );
+   }
+   await batch.commit(noResult: true);
+ });
 }
 // ==================== ChamCongCNThang CRUD Operations ====================
 Future<void> insertChamCongCNThang(ChamCongCNThangModel chamCongCNThang) async {
@@ -509,6 +597,17 @@ Future<void> batchInsertChamCongGio(List<ChamCongGioModel> items) async {
 }
 
 // ==================== ChamCongLS CRUD Operations ====================
+Future<int> getUnapprovedChamCongLSCount(String nguoiDung) async {
+  final db = await database;
+  
+  final result = await db.rawQuery('''
+    SELECT COUNT(*) as count 
+    FROM ${DatabaseTables.chamCongLSTable} 
+    WHERE NguoiDung = ? AND (TrangThaiBatDau = 'Chưa xem' OR TrangThaiKetThuc = 'Chưa xem')
+  ''', [nguoiDung]);
+  
+  return Sqflite.firstIntValue(result) ?? 0;
+}
 Future<void> insertChamCongLS(ChamCongLSModel chamCongLS) async {
  await insert(DatabaseTables.chamCongLSTable, chamCongLS.toMap());
 }

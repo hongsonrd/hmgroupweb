@@ -1000,16 +1000,22 @@ Future<void> _deleteOrder() async {
                           Text('Ngày tạo: ${_orderDetails!.ngay != null ? DateFormat('dd/MM/yyyy').format(_orderDetails!.ngay!) : ''}'),
                           Text('Tổng tiền: ${formatter.format(_orderDetails!.tongTien ?? 0)}'),
                           Text(
-          'Định mức: ${formatter.format(_orderDetails!.dinhMuc ?? 0)}',
-          style: TextStyle(
-            color: (_orderDetails!.tongTien ?? 0) > (_orderDetails!.dinhMuc ?? 0)
-                ? Colors.red
-                : Colors.green,
-            fontWeight: (_orderDetails!.tongTien ?? 0) > (_orderDetails!.dinhMuc ?? 0)
-                ? FontWeight.bold
-                : FontWeight.normal,
-          ),
-        ),
+  'Tổng tiền: ${formatter.format(_orderDetails!.tongTien ?? 0)}',
+  style: TextStyle(
+    fontSize: 18,
+    fontWeight: FontWeight.bold,
+  ),
+),
+Text(
+  'Định mức: ${formatter.format(_orderDetails!.dinhMuc ?? 0)}',
+  style: TextStyle(
+    fontSize: 18,
+    fontWeight: FontWeight.bold,
+    color: (_orderDetails!.tongTien ?? 0) > (_orderDetails!.dinhMuc ?? 0)
+        ? Colors.red
+        : Colors.green,
+  ),
+),
                           if (_orderDetails!.phanLoai != null)
                             Text('Phân loại: ${_orderDetails!.phanLoai}'),
                           if (_orderDetails!.vanDe != null)

@@ -431,7 +431,7 @@ void debugLog(String message) {
 }
   Future<void> _loadProjects() async {
     try {
-      final response = await http.get(
+      final response = await AuthenticatedHttpClient.get(
         Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/$_username'),
       );
       if (response.statusCode == 200) {
@@ -449,7 +449,7 @@ Future<void> _initializeData() async {
  setState(() => _isLoading = true);
  try {
    try {
-     final response = await http.get(
+     final response = await AuthenticatedHttpClient.get(
         Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/$_username'),
         headers: {'Content-Type': 'application/json'},
       );
@@ -492,6 +492,174 @@ final months = await dbHelper.rawQuery(
  setState(() => _isLoading = false);
 }
 Future<void> _saveChanges() async {
+  FocusScope.of(context).unfocus();
+  
+  // Show loading dialog
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => WillPopScope(
+      onWillPop: () async => false,
+      child: Dialog(
+        child: Container(
+          padding: EdgeInsets.all(12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+              SizedBox(width: 12),
+              Text('Đang lưu...', style: TextStyle(fontSize: 14)),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  try {
+    final dbHelper = DBHelper();
+    
+    // Prepare data for batch request
+    final modifiedList = _modifiedRecords.values.toList();
+    final newList = _newRecords.values.toList();
+    
+    debugLog('Sending batch request with ${modifiedList.length} updates and ${newList.length} additions');
+    
+    // Use the new batch endpoint
+    final response = await http.post(
+      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongbatch'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({
+        'updates': modifiedList,
+        'additions': newList,
+      }),
+    ).timeout(const Duration(seconds: 30));
+    
+    if (response.statusCode == 200 || response.statusCode == 400) {
+      final result = json.decode(response.body);
+debugLog('Batch response: ${result.toString().substring(0, result.toString().length > 100 ? 100 : result.toString().length)}...');
+      
+      // Process successful updates in local database
+      if (result['updated'] > 0 || result['added'] > 0) {
+        // Start a batch update for the local database
+        await Future.wait([
+          // Process updates
+          Future(() async {
+            for (var record in modifiedList) {
+              final uid = record['UID'] as String;
+              final updates = Map<String, dynamic>.from(record);
+              updates.remove('UID');
+              await dbHelper.updateChamCongCN(uid, updates);
+              debugLog('Updated local record with UID: $uid');
+            }
+          }),
+          
+          // Process additions
+          Future(() async {
+            for (var record in newList) {
+              final chamCongModel = ChamCongCNModel(
+                uid: record['UID'] as String,
+                maNV: record['MaNV'] as String,
+                ngay: DateTime.parse(record['Ngay'] as String),
+                boPhan: record['BoPhan'] as String,
+                nguoiDung: record['NguoiDung'] as String,
+                congThuongChu: record['CongThuongChu'] as String,
+                ngoaiGioThuong: double.tryParse(record['NgoaiGioThuong'].toString()) ?? 0,
+                ngoaiGioKhac: double.tryParse(record['NgoaiGioKhac'].toString()) ?? 0,
+                ngoaiGiox15: double.tryParse(record['NgoaiGiox15'].toString()) ?? 0,
+                ngoaiGiox2: double.tryParse(record['NgoaiGiox2'].toString()) ?? 0,
+                hoTro: int.tryParse(record['HoTro'].toString()) ?? 0,
+                partTime: int.tryParse(record['PartTime'].toString()) ?? 0,
+                partTimeSang: int.tryParse(record['PartTimeSang'].toString()) ?? 0,
+                partTimeChieu: int.tryParse(record['PartTimeChieu'].toString()) ?? 0,
+                congLe: double.tryParse(record['CongLe'].toString()) ?? 0,
+              );
+              await dbHelper.insertChamCongCN(chamCongModel);
+              debugLog('Inserted local record with UID: ${record['UID']}');
+            }
+          }),
+        ]);
+      }
+      
+      // Check for any errors
+      if (result['errors'] != null && (result['errors'] as List).isNotEmpty) {
+        debugLog('Batch had ${(result['errors'] as List).length} errors: ${result['errors']}');
+      }
+      
+      // Clear tracking collections
+      setState(() {
+        _modifiedRecords.clear();
+        _newRecords.clear();
+      });
+      
+      // Refresh the UI to reflect changes
+      await _loadAttendanceData();
+      
+      // Close loading dialog
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      
+      // Show success message
+      if (mounted) {
+        final updatedCount = result['updated'] ?? 0;
+        final addedCount = result['added'] ?? 0;
+        final errorCount = result['errors'] != null ? (result['errors'] as List).length : 0;
+        
+        String message = 'Đã lưu ${updatedCount + addedCount} thay đổi thành công';
+        if (errorCount > 0) {
+          message += ' (${errorCount} lỗi)';
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: errorCount > 0 ? Colors.orange : null,
+          )
+        );
+      }
+    } else {
+      throw Exception('Failed to save changes: ${response.body}');
+    }
+  } catch (e) {
+    // Close loading dialog on error
+    if (mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+    
+    debugLog('Error in batch save: $e');
+    _showError('Lỗi khi lưu: ${e.toString()}');
+    
+    // If the batch save failed completely, fall back to individual saves
+    if (_modifiedRecords.isNotEmpty || _newRecords.isNotEmpty) {
+      final shouldFallback = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Lưu không thành công'),
+          content: Text('Bạn có muốn thử lưu từng bản ghi riêng biệt không?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text('Không'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text('Có'),
+            ),
+          ],
+        ),
+      ) ?? false;
+      
+      if (shouldFallback) {
+        debugLog('Falling back to individual saves');
+        // Call the original save method (which you would need to rename)
+        await _saveChangesIndividually();
+      }
+    }
+  }
+}
+
+Future<void> _saveChangesIndividually() async {
   FocusScope.of(context).unfocus();
   
   showDialog(
@@ -1023,7 +1191,7 @@ Widget build(BuildContext context) {
               ),
             );
           },
-          child: Text('💙Xem tất cả'),
+          child: Text('💙Chấm tất cả'),
         ),
         const SizedBox(width: 10),
         ElevatedButton(
