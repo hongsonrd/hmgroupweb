@@ -89,7 +89,7 @@ Future<void> _syncDataFromServer() async {
     
     // Fetch all attendance data from server
     final response = await AuthenticatedHttpClient.get(
-      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongcn/hm.tason'),
+      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongqldv/hm.tason'),
     );
     
     if (response.statusCode == 200) {
