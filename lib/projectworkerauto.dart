@@ -13,6 +13,7 @@ import 'package:share_plus/share_plus.dart';
 import 'export_helper.dart';
 import 'projectworkerphep.dart';
 import 'package:dropdown_search/dropdown_search.dart';
+import 'projectworkerpc.dart';
 import 'http_client.dart';
 
 class ProjectWorkerAuto extends StatefulWidget {
@@ -2022,29 +2023,43 @@ String _extractCongThuongChuBase(String? value) {
             : Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        ElevatedButton(
-                         onPressed: _generateAutomaticLeave,
-                          child: Text('Tạo Phép tự động'),
-                        ),
-                        SizedBox(width: 10),
-                        ElevatedButton(
-                          onPressed: _exportPdf,
-                          child: Text('Xuất PDF'),
-                        ),
-                        SizedBox(width: 10),
-                        ElevatedButton(
-                          onPressed: _exportExcel,
-                          child: Text('Xuất Excel'),
-                        ),
-                      ],
-                    ),
-                  ),
+  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+  child: SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: Row(
+      children: [
+        ElevatedButton(
+          onPressed: _generateAutomaticLeave,
+          child: Text('Tạo Phép tự động'),
+        ),
+        SizedBox(width: 10),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ProjectWorkerPC(
+                  username: widget.username,
                 ),
+              ),
+            );
+          },
+          child: Text('Tạo phụ cấp'),
+        ),
+        SizedBox(width: 10),
+        ElevatedButton(
+          onPressed: _exportPdf,
+          child: Text('Xuất PDF'),
+        ),
+        SizedBox(width: 10),
+        ElevatedButton(
+          onPressed: _exportExcel,
+          child: Text('Xuất Excel'),
+        ),
+      ],
+    ),
+  ),
+),
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Text(
