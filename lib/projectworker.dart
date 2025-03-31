@@ -367,7 +367,7 @@ Future<void> _addPreviousEmployees() async {
           Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamconggui'),
           headers: {'Content-Type': 'application/json'},
           body: json.encode(newRecord)
-        ).timeout(const Duration(seconds: 30));
+        ).timeout(const Duration(seconds: 300));
 
         if (response.statusCode == 200) {
           // Add to local database
@@ -533,7 +533,7 @@ Future<void> _saveChanges() async {
         'updates': modifiedList,
         'additions': newList,
       }),
-    ).timeout(const Duration(seconds: 30));
+    ).timeout(const Duration(seconds: 300));
     
     if (response.statusCode == 200 || response.statusCode == 400) {
       final result = json.decode(response.body);
@@ -704,7 +704,7 @@ Future<void> _saveChangesIndividually() async {
         Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongsua/$uid'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(updates)
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 300));
       if (response.statusCode != 200) {
         throw Exception('Failed to update: ${response.body}');
       }
@@ -721,7 +721,7 @@ Future<void> _saveChangesIndividually() async {
         Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamconggui'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(record)
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 300));
       if (response.statusCode != 200) {
         throw Exception('Failed to add: ${response.body}');
       }
@@ -1008,7 +1008,7 @@ Future<void> _deleteEmployee() async {
       try {
         final response = await http.delete(
           Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongxoa/$uid'),
-        ).timeout(const Duration(seconds: 30));
+        ).timeout(const Duration(seconds: 300));
         
         if (response.statusCode == 200) {
           debugLog('Successfully deleted record with UID: $uid from server');
@@ -1432,7 +1432,7 @@ Future<void> _copyFromYesterday() async {
             Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongsua/$uid'),
             headers: {'Content-Type': 'application/json'},
             body: json.encode(updates)
-          ).timeout(const Duration(seconds: 30));
+          ).timeout(const Duration(seconds: 300));
           
           if (response.statusCode == 200) {
             await dbHelper.updateChamCongCN(uid, updates);
@@ -1474,7 +1474,7 @@ Future<void> _copyFromYesterday() async {
             Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamconggui'),
             headers: {'Content-Type': 'application/json'},
             body: json.encode(recordData)
-          ).timeout(const Duration(seconds: 30));
+          ).timeout(const Duration(seconds: 300));
           
           if (response.statusCode == 200) {
             final chamCongModel = ChamCongCNModel(

@@ -202,7 +202,7 @@ Future<void> _copyFromYesterday() async {
               Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongsua/$uid'),
               headers: {'Content-Type': 'application/json'},
               body: json.encode(updates)
-            ).timeout(const Duration(seconds: 30));
+            ).timeout(const Duration(seconds: 300));
             
             if (response.statusCode == 200) {
               await dbHelper.updateChamCongCN(uid, updates);
@@ -248,7 +248,7 @@ Future<void> _copyFromYesterday() async {
               Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamconggui'),
               headers: {'Content-Type': 'application/json'},
               body: json.encode(newRecord)
-            ).timeout(const Duration(seconds: 30));
+            ).timeout(const Duration(seconds: 300));
             
             if (response.statusCode == 200) {
               final chamCongModel = ChamCongCNModel(
@@ -485,7 +485,7 @@ Future<void> _copyFromYesterday() async {
         'updates': modifiedList,
         'additions': newList,
       }),
-    ).timeout(const Duration(seconds: 30));
+    ).timeout(const Duration(seconds: 300));
     
     if (response.statusCode == 200 || response.statusCode == 400) {
       final result = json.decode(response.body);
@@ -653,7 +653,7 @@ Future<void> _saveChangesIndividually() async {
         Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongsua/$uid'),
         headers: {'Content-Type': 'application/json'},
         body: jsonData
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 300));
       
       if (response.statusCode != 200) {
         throw Exception('Failed to update record: ${response.body}');
@@ -679,7 +679,7 @@ Future<void> _saveChangesIndividually() async {
           Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamconggui'),
           headers: {'Content-Type': 'application/json'},
           body: json.encode(record)
-        ).timeout(const Duration(seconds: 30));
+        ).timeout(const Duration(seconds: 300));
         
         if (response.statusCode != 200) {
           throw Exception('Failed to add new record: ${response.body}');
