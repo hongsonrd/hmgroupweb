@@ -21,7 +21,8 @@ import 'package:video_player/video_player.dart';
 import 'http_client.dart';
 
 class ChamCongScreen extends StatefulWidget {
-  const ChamCongScreen({Key? key}) : super(key: key);
+  final Map<String, dynamic>? userData;
+  const ChamCongScreen({Key? key, this.userData}) : super(key: key);
 
   @override
   _ChamCongScreenState createState() => _ChamCongScreenState();
@@ -91,6 +92,14 @@ bool _isBatThuongMode = false;
 @override
 void initState() {
   super.initState();
+  if (widget.userData != null) {
+    setState(() {
+      _username = widget.userData!['username'];
+    });
+    _loadUserRole();
+    _loadCheckInLocations();
+    }
+
   _videoController = VideoPlayerController.asset('assets/appvideorobot.mp4')
     ..setVolume(0.0)
     ..initialize().then((_) {

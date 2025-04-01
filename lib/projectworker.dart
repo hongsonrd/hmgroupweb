@@ -2174,25 +2174,22 @@ void _updateAttendance(String empId, int day, String columnType, String? value) 
     }
   });
 }
- List<String> _getUniqueEmployees() {
-  final employees = _attendanceData
+List<String> _getUniqueEmployees() {
+  final Set<String> uniqueEmpIds = _attendanceData
     .map((record) => record['MaNV'] as String)
-    .toSet()
-    .toList();
+    .toSet();
   
-  // Sort by color if coloring is active
+  final employees = List<String>.from(uniqueEmpIds);
   if (_staffColors.isNotEmpty) {
     employees.sort((a, b) {
       final colorA = _staffColors[a]?.value ?? 0;
       final colorB = _staffColors[b]?.value ?? 0;
       
       if (colorA == colorB) {
-        return a.compareTo(b); // If same color, sort alphabetically
+        return a.compareTo(b); 
       }
-      return colorB - colorA; // Sort by color (descending)
+      return colorB - colorA; 
     });
-  } else {
-    employees.sort(); // Default alphabetical sort
   }
   
   return employees;
@@ -2299,7 +2296,7 @@ Future<void> _loadAttendanceData() async {
     final data = await dbHelper.rawQuery('''
       SELECT * FROM chamcongcn 
       WHERE BoPhan = ? AND strftime('%Y-%m', Ngay) = ?
-      ORDER BY MaNV, Ngay
+      ORDER BY Ngay
     ''', [_selectedDepartment, _selectedMonth]);
     
     setState(() {
