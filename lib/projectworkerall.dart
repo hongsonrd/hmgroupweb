@@ -88,7 +88,7 @@ Future<void> _copyFromYesterday() async {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Hệ thống sẽ sao chép giá trị "Công chữ" và "NG thường" từ hôm qua sang ngày hôm nay.'),
+            Text('Hệ thống sẽ sao chép giá trị "Công chữ", "NG thường" và "Part time" từ hôm qua sang ngày hôm nay.'),
             SizedBox(height: 12),
             Text('Lưu ý: Chức năng này sẽ thực hiện cho tất cả các dự án hiển thị. Vui lòng kiểm tra kỹ thông tin trước khi lưu.', 
                 style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
@@ -174,9 +174,10 @@ Future<void> _copyFromYesterday() async {
         final empId = record['MaNV'] as String;
         final currentTime = DateFormat('HH:mm:ss').format(now);
         
-        // Only copy specific fields
+        // Copy CongThuongChu, NgoaiGioThuong, and PartTime
         final congThuongChu = record['CongThuongChu'] ?? 'Ro';
         final ngoaiGioThuong = record['NgoaiGioThuong']?.toString() ?? '0';
+        final partTime = record['PartTime']?.toString() ?? '0';
         
         // Check if employee already has a record for today
         if (existingEmployeesToday.containsKey(empId)) {
@@ -195,6 +196,7 @@ Future<void> _copyFromYesterday() async {
             'NguoiDung': _username,
             'CongThuongChu': congThuongChu,
             'NgoaiGioThuong': ngoaiGioThuong,
+            'PartTime': partTime,
           };
           
           try {
@@ -214,6 +216,7 @@ Future<void> _copyFromYesterday() async {
               if (idx >= 0) {
                 _allProjectsData[dept]![idx]['CongThuongChu'] = congThuongChu;
                 _allProjectsData[dept]![idx]['NgoaiGioThuong'] = ngoaiGioThuong;
+                _allProjectsData[dept]![idx]['PartTime'] = partTime;
               }
             }
           } catch (e) {
@@ -237,7 +240,7 @@ Future<void> _copyFromYesterday() async {
             'NgoaiGiox15': '0',
             'NgoaiGiox2': '0',
             'HoTro': '0',
-            'PartTime': '0',
+            'PartTime': partTime,
             'PartTimeSang': '0',
             'PartTimeChieu': '0',
             'CongLe': '0',
@@ -263,7 +266,7 @@ Future<void> _copyFromYesterday() async {
                 ngoaiGiox15: 0,
                 ngoaiGiox2: 0,
                 hoTro: 0,
-                partTime: 0,
+                partTime: int.tryParse(partTime.toString()) ?? 0,
                 partTimeSang: 0,
                 partTimeChieu: 0,
                 congLe: 0,
@@ -986,15 +989,15 @@ Widget build(BuildContext context) {
         _isLoading
           ? Center(child: CircularProgressIndicator())
           : DefaultTabController(
-              length: 9, // Change this from 10 to 9
+              length: 8,
               child: Column(
                 children: [
                   TabBar(
                     isScrollable: true,
                     tabs: [
-                      Tab(text: 'Công chữ & NG thường'),
+                      Tab(text: 'Công chữ & NG thường& PT'),
                       Tab(text: 'Hỗ trợ'),
-                      Tab(text: 'Part time'),
+                      //Tab(text: 'Part time'),
                       Tab(text: 'PT sáng'),
                       Tab(text: 'PT chiều'),
                       Tab(text: 'NG khác'),
@@ -1043,7 +1046,7 @@ Widget build(BuildContext context) {
                       children: [
                         _buildCombinedTable(),
                         _buildAllProjectsTable('HoTro'),
-                        _buildAllProjectsTable('PartTime'),
+                        //_buildAllProjectsTable('PartTime'),
                         _buildAllProjectsTable('PartTimeSang'),
                         _buildAllProjectsTable('PartTimeChieu'),
                         _buildAllProjectsTable('NgoaiGioKhac'),
@@ -1120,41 +1123,41 @@ Widget _buildCombinedTable() {
               child: DataTable(
                 columns: [
                   DataColumn(
-  label: Container(
-    width: 50,
-    child: Text('Mã NV'),
-  )
-),
+                    label: Container(
+                      width: 50,
+                      child: Text('Mã NV'),
+                    )
+                  ),
                   DataColumn(
-      label: Container(
-        width: 50,
-        child: Text('Loại', overflow: TextOverflow.ellipsis),
-      )
-    ),
-    ...days.map((day) => DataColumn(label: Text(day.toString()))),
-  ],
+                    label: Container(
+                      width: 50,
+                      child: Text('Loại', overflow: TextOverflow.ellipsis),
+                    )
+                  ),
+                  ...days.map((day) => DataColumn(label: Text(day.toString()))),
+                ],
                 rows: employees.expand((empId) {
                   return [
                     // Row for CongThuongChu
                     DataRow(
                       cells: [
                         DataCell(
-  Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Text(empId, style: TextStyle(color: Colors.black)), 
-      Text(
-        _staffNamesByDept[dept]?[empId] ?? '',
-        style: TextStyle(
-          fontSize: 12,
-          color: Colors.black, 
-          fontWeight: FontWeight.bold, 
-        ),
-      ),
-    ],
-  ),
-),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(empId, style: TextStyle(color: Colors.black)), 
+                              Text(
+                                _staffNamesByDept[dept]?[empId] ?? '',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black, 
+                                  fontWeight: FontWeight.bold, 
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                         DataCell(Text('Công chữ', style: TextStyle(fontWeight: FontWeight.bold))),
                         ...days.map((day) {
                           final attendance = _getAttendanceForDay(dept, empId, day, 'CongThuongChu') ?? 'Ro';
@@ -1212,6 +1215,45 @@ Widget _buildCombinedTable() {
                                   }
                                   
                                   _updateAttendance(dept, empId, day, 'NgoaiGioThuong', value);
+                                },
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                    // Add Part Time Row
+                    DataRow(
+                      color: MaterialStateProperty.all(Colors.grey.shade50),
+                      cells: [
+                        DataCell(Text('')), // Empty for employee name
+                        DataCell(Text('Part time', style: TextStyle(fontWeight: FontWeight.bold))),
+                        ...days.map((day) {
+                          final attendance = _getAttendanceForDay(dept, empId, day, 'PartTime') ?? '0';
+                          final canEdit = _canEditDay(day);
+                          
+                          return DataCell(
+                            SizedBox(
+                              width: 50,
+                              child: TextFormField(
+                                initialValue: attendance,
+                                keyboardType: TextInputType.number,
+                                textAlign: TextAlign.right,
+                                enabled: canEdit,
+                                onChanged: (value) {
+                                  if (value.isEmpty) {
+                                    _updateAttendance(dept, empId, day, 'PartTime', '0');
+                                    return;
+                                  }
+                                  
+                                  // Integer-only fields - remove non-digits
+                                  value = value.replaceAll(RegExp(r'[^\d]'), '');
+                                  
+                                  _updateAttendance(dept, empId, day, 'PartTime', value);
                                 },
                                 decoration: InputDecoration(
                                   isDense: true,

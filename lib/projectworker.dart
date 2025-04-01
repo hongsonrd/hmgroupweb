@@ -1229,10 +1229,10 @@ Widget build(BuildContext context) {
                       TabBar(
                         isScrollable: true,
                         tabs: [
-                          Tab(text: 'Chữ & Giờ thường'),
+                          Tab(text: 'Chữ & Giờ thường& PT'),
                           //Tab(text: 'NG thường'),
                           Tab(text: 'Hỗ trợ'),
-                          Tab(text: 'Part time'),
+                          //Tab(text: 'Part time'),
                           Tab(text: 'PT sáng'),
                           Tab(text: 'PT chiều'),
                           Tab(text: 'NG khác'),
@@ -1247,7 +1247,7 @@ Widget build(BuildContext context) {
                             _buildAttendanceTable('CongThuongChu'),
                             //_buildAttendanceTable('NgoaiGioThuong'),
                             _buildAttendanceTable('HoTro'),
-                            _buildAttendanceTable('PartTime'),
+                            //_buildAttendanceTable('PartTime'),
                             _buildAttendanceTable('PartTimeSang'),
                             _buildAttendanceTable('PartTimeChieu'),
                             _buildAttendanceTable('NgoaiGioKhac'),
@@ -1321,7 +1321,7 @@ Future<void> _copyFromYesterday() async {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Hệ thống sẽ chỉ sao chép giá trị "Công chữ" và "NG thường" từ hôm qua sang ngày hôm nay.'),
+          Text('Hệ thống sẽ sao chép giá trị "Công chữ", "NG thường" và "Part time" từ hôm qua sang ngày hôm nay.'),
           SizedBox(height: 12),
           Text('Lưu ý: Vui lòng kiểm tra kỹ thông tin trước khi lưu.', 
               style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
@@ -1410,21 +1410,23 @@ Future<void> _copyFromYesterday() async {
       final empId = record['MaNV'] as String;
       final currentTime = DateFormat('HH:mm:ss').format(now);
       
-      // Only copy CongThuongChu and NgoaiGioThuong
+      // Copy CongThuongChu, NgoaiGioThuong, and PartTime
       final congThuongChu = record['CongThuongChu'] ?? 'Ro';
       final ngoaiGioThuong = record['NgoaiGioThuong']?.toString() ?? '0';
+      final partTime = record['PartTime']?.toString() ?? '0';
       
       if (existingEmployeesToday.containsKey(empId)) {
-        debugLog('Updating only CongThuongChu and NgoaiGioThuong for employee: $empId');
+        debugLog('Updating CongThuongChu, NgoaiGioThuong, and PartTime for employee: $empId');
         
         final uid = existingEmployeesToday[empId]!;
         
-        // Only update specific fields
+        // Update specific fields including PartTime
         final updates = {
           'Gio': currentTime,
           'NguoiDung': _username,
           'CongThuongChu': congThuongChu,
           'NgoaiGioThuong': ngoaiGioThuong,
+          'PartTime': partTime,
         };
         
         try {
@@ -1437,7 +1439,7 @@ Future<void> _copyFromYesterday() async {
           if (response.statusCode == 200) {
             await dbHelper.updateChamCongCN(uid, updates);
             updatedCount++;
-            debugLog('Successfully updated CongThuongChu and NgoaiGioThuong for $empId (UID: $uid)');
+            debugLog('Successfully updated CongThuongChu, NgoaiGioThuong, and PartTime for $empId (UID: $uid)');
           } else {
             debugLog('Server returned error for update: ${response.statusCode} - ${response.body}');
           }
@@ -1445,7 +1447,7 @@ Future<void> _copyFromYesterday() async {
           debugLog('Error during update for $empId: $e');
         }
       } else {
-        debugLog('Creating new record with only CongThuongChu and NgoaiGioThuong for employee: $empId');
+        debugLog('Creating new record with CongThuongChu, NgoaiGioThuong, and PartTime for employee: $empId');
         final uid = Uuid().v4();
         
         final recordData = {
@@ -1463,7 +1465,7 @@ Future<void> _copyFromYesterday() async {
           'NgoaiGiox15': '0',
           'NgoaiGiox2': '0',
           'HoTro': '0',
-          'PartTime': '0',
+          'PartTime': partTime,
           'PartTimeSang': '0',
           'PartTimeChieu': '0',
           'CongLe': '0',
@@ -1489,7 +1491,7 @@ Future<void> _copyFromYesterday() async {
               ngoaiGiox15: 0,
               ngoaiGiox2: 0,
               hoTro: 0,
-              partTime: 0,
+              partTime: int.tryParse(partTime.toString()) ?? 0,
               partTimeSang: 0,
               partTimeChieu: 0,
               congLe: 0,
@@ -1595,35 +1597,35 @@ Widget _buildCombinedTable() {
              ),
              children: [
                TableCell(
-  verticalAlignment: TableCellVerticalAlignment.middle,
-  child: Padding(
-    padding: const EdgeInsets.all(8.0),
-    child: InkWell(
-      onTap: () {
-        setState(() {
-          _staffToColor = empId;
-          _showColorDialog = true;
-        });
-      },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(empId, style: TextStyle(color: Colors.black)),
-          Text(
-            _staffNames[empId] ?? '',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.black,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          Text('Công chữ', style: TextStyle(fontSize: 10)),
-        ],
-      ),
-    ),
-  ),
-),
+                 verticalAlignment: TableCellVerticalAlignment.middle,
+                 child: Padding(
+                   padding: const EdgeInsets.all(8.0),
+                   child: InkWell(
+                     onTap: () {
+                       setState(() {
+                         _staffToColor = empId;
+                         _showColorDialog = true;
+                       });
+                     },
+                     child: Column(
+                       crossAxisAlignment: CrossAxisAlignment.start,
+                       mainAxisSize: MainAxisSize.min,
+                       children: [
+                         Text(empId, style: TextStyle(color: Colors.black)),
+                         Text(
+                           _staffNames[empId] ?? '',
+                           style: TextStyle(
+                             fontSize: 12,
+                             color: Colors.black,
+                             fontWeight: FontWeight.bold,
+                           ),
+                         ),
+                         Text('Công chữ', style: TextStyle(fontSize: 10)),
+                       ],
+                     ),
+                   ),
+                 ),
+               ),
                for (var day in days)
                  TableCell(
                    child: Padding(
@@ -1633,8 +1635,8 @@ Widget _buildCombinedTable() {
                        children: [
                          DropdownButton<String>(
                            value: _congThuongChoices.contains(_extractCongThuongChuBase(_getAttendanceForDay(empId, day, 'CongThuongChu'))) 
-    ? _extractCongThuongChuBase(_getAttendanceForDay(empId, day, 'CongThuongChu')) 
-    : _congThuongChoices.first,
+                             ? _extractCongThuongChuBase(_getAttendanceForDay(empId, day, 'CongThuongChu')) 
+                             : _congThuongChoices.first,
                            items: _congThuongChoices.map((choice) =>
                              DropdownMenuItem(
                                value: choice, 
@@ -1648,17 +1650,17 @@ Widget _buildCombinedTable() {
                              )
                            ).toList(),
                            onChanged: _canEditDay(day) 
-    ? (value) {
-        final currentValue = _getAttendanceForDay(empId, day, 'CongThuongChu') ?? 'Ro';
-        if (currentValue.endsWith('+P')) {
-          _updateAttendance(empId, day, 'CongThuongChu', value! + '+P');
-        } else if (currentValue.endsWith('+P/2')) {
-          _updateAttendance(empId, day, 'CongThuongChu', value! + '+P/2');
-        } else {
-          _updateAttendance(empId, day, 'CongThuongChu', value);
-        }
-      }
-    : null,
+                             ? (value) {
+                                 final currentValue = _getAttendanceForDay(empId, day, 'CongThuongChu') ?? 'Ro';
+                                 if (currentValue.endsWith('+P')) {
+                                   _updateAttendance(empId, day, 'CongThuongChu', value! + '+P');
+                                 } else if (currentValue.endsWith('+P/2')) {
+                                   _updateAttendance(empId, day, 'CongThuongChu', value! + '+P/2');
+                                 } else {
+                                   _updateAttendance(empId, day, 'CongThuongChu', value);
+                                 }
+                               }
+                             : null,
                            isExpanded: true,
                            isDense: true,
                            style: TextStyle(
@@ -1671,18 +1673,18 @@ Widget _buildCombinedTable() {
                            ),
                          ),
                          if ((_getAttendanceForDay(empId, day, 'CongThuongChu') ?? 'Ro').endsWith('+P') || 
-    (_getAttendanceForDay(empId, day, 'CongThuongChu') ?? 'Ro').endsWith('+P/2'))
-  Padding(
-    padding: const EdgeInsets.only(top: 2.0),
-    child: Text(
-      _getAttendanceForDay(empId, day, 'CongThuongChu') ?? 'Ro',
-      style: TextStyle(
-        fontSize: 10,
-        color: Colors.purple,
-        fontWeight: FontWeight.bold,
-      ),
-    ),
-  ),
+                             (_getAttendanceForDay(empId, day, 'CongThuongChu') ?? 'Ro').endsWith('+P/2'))
+                           Padding(
+                             padding: const EdgeInsets.only(top: 2.0),
+                             child: Text(
+                               _getAttendanceForDay(empId, day, 'CongThuongChu') ?? 'Ro',
+                               style: TextStyle(
+                                 fontSize: 10,
+                                 color: Colors.purple,
+                                 fontWeight: FontWeight.bold,
+                               ),
+                             ),
+                           ),
                        ],
                      ),
                    ),
@@ -1738,6 +1740,64 @@ Widget _buildCombinedTable() {
                            filled: true,
                            fillColor: (_getAttendanceForDay(empId, day, 'NgoaiGioThuong') != '0')
                                ? Colors.blue.withOpacity(0.1)
+                               : Colors.white.withOpacity(0.7),
+                         ),
+                       ),
+                     ),
+                   ),
+                 ),
+             ],
+           ),
+           
+           // Add Part Time row here
+           TableRow(
+             decoration: BoxDecoration(
+               color: _staffColors[empId] != null 
+                   ? _staffColors[empId]!.withOpacity(0.85)
+                   : Colors.grey.shade50,
+             ),
+             children: [
+               TableCell(
+                 child: Padding(
+                   padding: const EdgeInsets.all(8.0),
+                   child: Text('Part time', 
+                     style: TextStyle(fontSize: 10, color: Colors.grey.shade700)),
+                 ),
+               ),
+               for (var day in days)
+                 TableCell(
+                   child: Padding(
+                     padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                     child: SizedBox(
+                       height: 40,
+                       child: TextFormField(
+                         initialValue: _getAttendanceForDay(empId, day, 'PartTime'),
+                         keyboardType: TextInputType.number,
+                         textAlign: TextAlign.right,
+                         enabled: _canEditDay(day),
+                         style: TextStyle(
+                           color: (_getAttendanceForDay(empId, day, 'PartTime') != '0') 
+                               ? Colors.green 
+                               : Colors.grey.shade800,
+                           fontWeight: (_getAttendanceForDay(empId, day, 'PartTime') != '0')
+                               ? FontWeight.bold
+                               : FontWeight.normal,
+                         ),
+                         onChanged: (value) {
+                           if (value.isEmpty) {
+                             _updateAttendance(empId, day, 'PartTime', '0');
+                             return;
+                           }
+                           value = value.replaceAll(RegExp(r'[^\d]'), '');
+                           _updateAttendance(empId, day, 'PartTime', value);
+                         },
+                         decoration: InputDecoration(
+                           isDense: true,
+                           contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                           border: OutlineInputBorder(),
+                           filled: true,
+                           fillColor: (_getAttendanceForDay(empId, day, 'PartTime') != '0')
+                               ? Colors.green.withOpacity(0.1)
                                : Colors.white.withOpacity(0.7),
                          ),
                        ),
