@@ -434,7 +434,13 @@ if (tuan3va4 < 6) {
 } else {
   ungLan2 = 1800000;
 }
-      
+      double adjustedTongCong = tongCong;
+double adjustedTongNgoaiGio = tongNgoaiGio;
+if (congChuanToiDa > 0 && tongCong > congChuanToiDa) {
+  double excess = tongCong - congChuanToiDa;
+  adjustedTongCong = congChuanToiDa.toDouble();
+  adjustedTongNgoaiGio = tongNgoaiGio + excess;
+}
       // Check if this employee already exists in ChamCongCNThang
       bool recordExists = existingRecordsMap.containsKey(maNV);
       
@@ -452,10 +458,10 @@ if (tuan3va4 < 6) {
         'Tuan_3va4': tuan3va4,
         'Phep_3va4': phep3va4,
         'HT_3va4': ht3va4,
-        'Tong_Cong': tongCong,
+        'Tong_Cong': adjustedTongCong,
         'Tong_Phep': tongPhep,
         'Tong_Le': tongLe,
-        'Tong_NgoaiGio': tongNgoaiGio,
+        'Tong_NgoaiGio': adjustedTongNgoaiGio,
         'Tong_HV': tongHV,
         'Tong_Dem': tongDem,
         'Tong_CD': tongCD,
@@ -1521,7 +1527,13 @@ if (tuan3va4 < 6) {
         // Check if this combination already exists in ChamCongCNThang
         bool recordExists = existingRecordsMap.containsKey(maNV) && 
                           existingRecordsMap[maNV]!.containsKey(boPhan);
-        
+        double adjustedTongCong = tongCong;
+double adjustedTongNgoaiGio = tongNgoaiGio;
+if (congChuanToiDa > 0 && tongCong > congChuanToiDa) {
+  double excess = tongCong - congChuanToiDa;
+  adjustedTongCong = congChuanToiDa.toDouble();
+  adjustedTongNgoaiGio = tongNgoaiGio + excess;
+}
         // Create the record object with the correct field names for the local database
 Map<String, dynamic> recordData = {
   'UID': recordExists ? existingRecordsMap[maNV]![boPhan]!['UID'] : _generateUUID(),
@@ -1537,10 +1549,10 @@ Map<String, dynamic> recordData = {
   'Tuan_3va4': tuan3va4,     // Correct field name for local DB
   'Phep_3va4': phep3va4,     // Correct field name for local DB
   'HT_3va4': ht3va4,         // Correct field name for local DB
-  'Tong_Cong': tongCong,
+  'Tong_Cong': adjustedTongCong,
   'Tong_Phep': tongPhep,
   'Tong_Le': tongLe,
-  'Tong_NgoaiGio': tongNgoaiGio,
+  'Tong_NgoaiGio': adjustedTongNgoaiGio,
   'Tong_HV': tongHV,
   'Tong_Dem': tongDem,
   'Tong_CD': tongCD,

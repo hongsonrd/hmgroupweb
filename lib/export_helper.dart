@@ -9,7 +9,8 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
-
+import 'package:archive/archive.dart';
+import 'package:archive/archive_io.dart';
 class ExcelColorHelper {
   final String hexValue;
   
@@ -192,7 +193,201 @@ class ExportHelper {
       );
     }
   }
-static Future<void> exportToExcel({
+  static Future<void> exportAllProjectsToExcel({
+  required List<String> projects,
+  required String selectedMonth,
+  required Function loadProjectData,
+  required Function getUniqueEmployees,
+  required Function getStaffNames,
+  required Function getEmployeesWithValueInColumn,
+  required Function getDaysInMonth,
+  required Function getAttendanceForDay,
+  required Function calculateSummary,
+  required BuildContext context,
+}) async {
+  try {
+    // Show progress dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Đang xuất Excel cho tất cả dự án'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Vui lòng đợi trong giây lát...')
+            ],
+          ),
+        );
+      },
+    );
+    
+    // Create a directory for all the Excel files
+    final output = await getTemporaryDirectory();
+    final batchDir = Directory('${output.path}/batch_excel_${DateTime.now().millisecondsSinceEpoch}');
+    if (!await batchDir.exists()) {
+      await batchDir.create();
+    }
+    
+    // List to keep track of generated files
+    List<File> allFiles = [];
+    
+    // Process each project
+    int processedCount = 0;
+    for (var project in projects) {
+      // Update dialog progress
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text('Đang xuất Excel cho tất cả dự án'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(
+                  value: processedCount / projects.length,
+                ),
+                SizedBox(height: 16),
+                Text('Đang xử lý ${processedCount + 1}/${projects.length}: $project')
+              ],
+            ),
+          );
+        },
+      );
+      
+      // Load data for this project
+      await loadProjectData(project);
+      
+      // Get the required data for this project
+      final employees = getUniqueEmployees();
+      final staffNames = getStaffNames();
+      
+      // Export to Excel in batch mode
+      final files = await exportToExcel(
+        selectedDepartment: project,
+        selectedMonth: selectedMonth,
+        allEmployees: employees,
+        staffNames: staffNames,
+        getEmployeesWithValueInColumn: getEmployeesWithValueInColumn,
+        getDaysInMonth: getDaysInMonth,
+        getAttendanceForDay: getAttendanceForDay,
+        calculateSummary: calculateSummary,
+        context: context,
+        skipNavigation: true,
+        batchMode: true, // Use batch mode to collect files
+      );
+      
+      // Move the file to the batch directory
+      for (var file in files) {
+        final newPath = '${batchDir.path}/chamcong_${project.replaceAll(' ', '_')}_$selectedMonth.xlsx';
+        final newFile = await file.copy(newPath);
+        allFiles.add(newFile);
+      }
+      
+      processedCount++;
+    }
+    
+    // Close progress dialog
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+    
+    if (allFiles.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Không có dự án nào để xuất Excel'),
+          backgroundColor: Colors.orange,
+        )
+      );
+      return;
+    }
+    
+    // Show zipping progress dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Đang nén file'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Đang nén ${allFiles.length} file Excel...')
+            ],
+          ),
+        );
+      },
+    );
+    
+    // Create a ZIP file containing all the Excel files
+    final zipFile = File('${output.path}/chamcong_all_projects_$selectedMonth.zip');
+    
+    // Create a zip encoder
+    final encoder = ZipFileEncoder();
+    encoder.create(zipFile.path);
+    
+    // Add each Excel file to the ZIP
+    for (var file in allFiles) {
+      encoder.addFile(file);
+    }
+    
+    // Close the encoder when done
+    encoder.close();
+    
+    // Close dialog
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+    
+    // Share the ZIP file
+    final box = context.findRenderObject() as RenderBox?;
+    await Share.shareXFiles(
+      [XFile(zipFile.path)],
+      text: 'Báo cáo chấm công tất cả dự án $selectedMonth',
+      subject: 'Báo cáo chấm công',
+      sharePositionOrigin: box != null 
+          ? Rect.fromLTWH(
+              box.localToGlobal(Offset.zero).dx,
+              box.localToGlobal(Offset.zero).dy,
+              box.size.width,
+              box.size.height / 2,
+            )
+          : null,
+    );
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Đã xuất Excel cho ${allFiles.length} dự án thành công'),
+        backgroundColor: Colors.green,
+      )
+    );
+  } catch (e) {
+    print('Excel all projects export error: $e');
+    
+    // Close any open dialogs
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi khi xuất Excel cho tất cả dự án: $e'),
+        backgroundColor: Colors.red
+      )
+    );
+  }
+}
+static Future<List<File>> exportToExcel({
   required String selectedDepartment,
   required String selectedMonth,
   required List<String> allEmployees,
@@ -202,6 +397,8 @@ static Future<void> exportToExcel({
   required Function getAttendanceForDay,
   required Function calculateSummary,
   required BuildContext context,
+  bool skipNavigation = false, 
+  bool batchMode = false, 
 }) async {
   try {
     final excel = Excel.createExcel();
@@ -290,29 +487,39 @@ static Future<void> exportToExcel({
     final file = File('${output.path}/chamcong_${selectedDepartment.replaceAll(' ', '_')}_$selectedMonth.xlsx');
     await file.writeAsBytes(excel.encode()!);
     
-    final box = context.findRenderObject() as RenderBox?;
-    await Share.shareXFiles(
-      [XFile(file.path)], 
-      text: 'Báo cáo chấm công $selectedDepartment $selectedMonth',
-      subject: 'Báo cáo chấm công',
-      sharePositionOrigin: box != null 
-          ? Rect.fromLTWH(
-              box.localToGlobal(Offset.zero).dx,
-              box.localToGlobal(Offset.zero).dy,
-              box.size.width,
-              box.size.height / 2,
-            )
-          : null,
-    );
+    if (!batchMode) {  // Fixed missing opening parenthesis
+      // Only share the file if not in batch mode
+      final box = context.findRenderObject() as RenderBox?;
+      await Share.shareXFiles(
+        [XFile(file.path)], 
+        text: 'Báo cáo chấm công $selectedDepartment $selectedMonth',
+        subject: 'Báo cáo chấm công',
+        sharePositionOrigin: box != null 
+            ? Rect.fromLTWH(
+                box.localToGlobal(Offset.zero).dx,
+                box.localToGlobal(Offset.zero).dy,
+                box.size.width,
+                box.size.height / 2,
+              )
+            : null,
+      );
+      
+      if (!skipNavigation) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Excel đã được tạo và chia sẻ thành công'))
+        );
+      }
+    }
     
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Excel đã được tạo và chia sẻ thành công'))
-    );
+    return [file]; // Return the file for batch mode
   } catch (e) {
     print('Excel export error: $e');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Lỗi khi xuất Excel: $e'), backgroundColor: Colors.red)
-    );
+    if (!skipNavigation) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi khi xuất Excel: $e'), backgroundColor: Colors.red)
+      );
+    }
+    return []; // Return empty list on error
   }
 }
 

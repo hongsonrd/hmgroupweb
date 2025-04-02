@@ -2276,6 +2276,15 @@ String _extractCongThuongChuBase(String? value) {
                           child: Text('Xuất Excel'),
                         ),
                          SizedBox(width: 10),
+                         SizedBox(width: 10),
+        ElevatedButton(
+          onPressed: _exportExcelAllProjects,
+          child: Text('Xuất Excel 100%'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.amber[700],
+            foregroundColor: Colors.white,
+          ),
+        ),
         ElevatedButton(
           onPressed: () {
             Navigator.push(
@@ -2290,6 +2299,10 @@ String _extractCongThuongChuBase(String? value) {
             );
           },
           child: Text('Tạo tổng hợp tháng'),
+                    style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.amber[700],
+            foregroundColor: Colors.white,
+          ),
         ),
         SizedBox(width: 10),
         ElevatedButton(
@@ -2385,6 +2398,83 @@ String _extractCongThuongChuBase(String? value) {
       ),
     );
   }
+  Future<void> _exportExcelAllProjects() async {
+  setState(() => _isLoading = true);
+  
+  try {
+    // Show progress dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Đang xuất Excel cho tất cả dự án'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Vui lòng đợi trong giây lát...')
+            ],
+          ),
+        );
+      },
+    );
+    
+    // Get all departments that have data for the selected month
+    final dbHelper = DBHelper();
+    final projectsWithData = await dbHelper.rawQuery('''
+      SELECT DISTINCT BoPhan FROM chamcongcn 
+      WHERE strftime('%Y-%m', Ngay) = ?
+      ORDER BY BoPhan
+    ''', [_selectedMonth]);
+    
+    final projectsList = projectsWithData.map((p) => p['BoPhan'] as String).toList();
+    
+    // Close progress dialog
+    Navigator.of(context).pop();
+    
+    if (projectsList.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Không tìm thấy dự án nào có dữ liệu cho tháng $_selectedMonth'),
+          backgroundColor: Colors.orange,
+        )
+      );
+      return;
+    }
+    
+    // Use the helper to export all projects
+    await ExportHelper.exportAllProjectsToExcel(
+      projects: projectsList,
+      selectedMonth: _selectedMonth ?? '',
+      loadProjectData: (project) async {
+        setState(() {
+          _selectedDepartment = project;
+        });
+        await _loadAttendanceData();
+      },
+      getUniqueEmployees: _getUniqueEmployees,
+      getStaffNames: () => _staffNames,
+      getEmployeesWithValueInColumn: _getEmployeesWithValueInColumn,
+      getDaysInMonth: _getDaysInMonth,
+      getAttendanceForDay: _getAttendanceForDay,
+      calculateSummary: _calculateSummary,
+      context: context,
+    );
+    
+  } catch (e) {
+    print('Excel all projects export error: $e');
+    _showError('Lỗi khi xuất Excel tất cả dự án: $e');
+    
+    // Make sure dialog is closed in case of error
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+  }
+  
+  setState(() => _isLoading = false);
+}
   Widget _buildStatItem(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),

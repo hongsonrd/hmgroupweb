@@ -42,20 +42,24 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
 Future<void> _handleUrlOpen(String url, String title) async {
   // Special case for HM Time - navigate to ChamCongScreen
   if (title == 'HM Time') {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => MultiProvider(
-          providers: [
-            ChangeNotifierProvider<LocationProvider>(
-              create: (_) => LocationProvider(),
-            ),
-          ],
-          child: const ChamCongScreen(),
-        ),
+  // Get user data from UserState provider
+  final userState = Provider.of<UserState>(context, listen: false);
+  final userData = userState.currentUser;
+  
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (context) => MultiProvider(
+        providers: [
+          ChangeNotifierProvider<LocationProvider>(
+            create: (_) => LocationProvider(),
+          ),
+        ],
+        child: ChamCongScreen(userData: userData),
       ),
-    );
-    return;
-  }
+    ),
+  );
+  return;
+}
   
   // Rest of your existing code
   final Uri uri = Uri.parse(url);
