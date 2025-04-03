@@ -1076,12 +1076,15 @@ Widget build(BuildContext context) {
         items: _departments,
         selectedItem: _selectedDepartment,
         onChanged: (value) {
-          setState(() {
-            _selectedDepartment = value;
-            _loadAttendanceData();
-            _loadStaffColors();
-          });
-        },
+  setState(() {
+    _selectedDepartment = value;
+    _attendanceData = []; 
+    _modifiedRecords = {};
+    _newRecords = {}; 
+  });
+  _loadAttendanceData(); 
+  _loadStaffColors();
+},
         dropdownDecoratorProps: DropDownDecoratorProps(
           dropdownSearchDecoration: InputDecoration(
             hintText: "Chọn dự án",
@@ -1713,6 +1716,7 @@ Widget _buildCombinedTable() {
                      child: SizedBox(
                        height: 40,
                        child: TextFormField(
+                        key: ValueKey('$empId-$day-NgoaiGioThuong-$_selectedDepartment'),
                          initialValue: _getAttendanceForDay(empId, day, 'NgoaiGioThuong'),
                          keyboardType: TextInputType.numberWithOptions(decimal: true),
                          textAlign: TextAlign.right,
@@ -1771,6 +1775,7 @@ Widget _buildCombinedTable() {
                      child: SizedBox(
                        height: 40,
                        child: TextFormField(
+                        key: ValueKey('$empId-$day-PartTime-$_selectedDepartment'),
                          initialValue: _getAttendanceForDay(empId, day, 'PartTime'),
                          keyboardType: TextInputType.number,
                          textAlign: TextAlign.right,
@@ -2352,6 +2357,9 @@ Future<void> _fixAllPhanLoaiValues() async {
 Future<void> _loadAttendanceData() async {
   if (_selectedMonth == null || _selectedDepartment == null) return;
   try {
+    setState(() {
+      _attendanceData = []; 
+    });
     final dbHelper = DBHelper();
     final data = await dbHelper.rawQuery('''
       SELECT * FROM chamcongcn 

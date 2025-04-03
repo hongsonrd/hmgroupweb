@@ -15,6 +15,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'http_client.dart';
+import 'package:flutter/services.dart';
 
 class ProjectWorkerAutoCLThang extends StatefulWidget {
   final String selectedBoPhan;
@@ -205,13 +206,12 @@ Future<void> _createAutoDataForSingleProject(String project) async {
     
     // 3. Get all ChamCongCN records for this month and department
     final startDateStr = DateFormat('yyyy-MM-dd').format(DateTime(year, month, 1));
-    final endDateStr = DateFormat('yyyy-MM-dd').format(DateTime(year, month, daysInMonth));
+    final endDateStr = DateFormat('yyyy-MM-dd').format(DateTime(year, month + 1, 0)); 
     
     final chamCongCNRecordsQuery = await dbHelper.rawQuery(
-      "SELECT * FROM chamcongcn WHERE Ngay BETWEEN ? AND ? AND BoPhan = ? ORDER BY MaNV, Ngay",
-      [startDateStr, endDateStr, project]
-    );
-    
+  "SELECT * FROM chamcongcn WHERE strftime('%Y-%m', Ngay) = ? AND BoPhan = ? ORDER BY MaNV, Ngay",
+  [_selectedMonth, project]
+);
     // Convert query result to list of maps
     final List<Map<String, dynamic>> chamCongCNRecords = List<Map<String, dynamic>>.from(chamCongCNRecordsQuery);
     
@@ -270,13 +270,13 @@ Future<void> _createAutoDataForSingleProject(String project) async {
       double ht5plus = 0;
       
       double tongCong = 0;
-      double tongPhep = 0;
-      double tongLe = 0;
-      double tongNgoaiGio = 0;
-      double tongHV = 0;
-      double tongDem = 0;
-      double tongCD = 0;
-      double tongHT = 0;
+double tongPhep = 0;
+double tongLe = 0;
+double tongNgoaiGio = 0;
+double tongHV = 0;
+double tongDem = 0;
+double tongCD = 0;
+double tongHT = 0;
       
       // First collect all values without subtraction
 for (var record in departmentRecords) {
@@ -344,7 +344,7 @@ for (var record in departmentRecords) {
   try {
     final ngoaiGioThuong = double.tryParse(record['NgoaiGioThuong']?.toString() ?? '0') ?? 0;
     final ngoaiGioKhac = double.tryParse(record['NgoaiGioKhac']?.toString() ?? '0') ?? 0;
-    ngoaiGioValue = (ngoaiGioThuong + ngoaiGioKhac) / 8.0;
+    ngoaiGioValue = ngoaiGioThuong + ngoaiGioKhac;
   } catch (e) {
     // Ignore parsing errors
   }
@@ -352,42 +352,42 @@ for (var record in departmentRecords) {
   // Calculate other totals
   double ngoaiGiox15 = 0;
   try {
-    ngoaiGiox15 = (double.tryParse(record['NgoaiGiox15']?.toString() ?? '0') ?? 0) / 8.0;
+    ngoaiGiox15 = double.tryParse(record['NgoaiGiox15']?.toString() ?? '0') ?? 0;
   } catch (e) {
     // Ignore parsing errors
   }
   
   double ngoaiGiox2 = 0;
   try {
-    ngoaiGiox2 = (double.tryParse(record['NgoaiGiox2']?.toString() ?? '0') ?? 0) / 8.0;
+    ngoaiGiox2 = double.tryParse(record['NgoaiGiox2']?.toString() ?? '0') ?? 0;
   } catch (e) {
     // Ignore parsing errors
   }
   
   double congLe = 0;
   try {
-    congLe = (double.tryParse(record['CongLe']?.toString() ?? '0') ?? 0) / 8.0;
+    congLe = double.tryParse(record['CongLe']?.toString() ?? '0') ?? 0;
   } catch (e) {
     // Ignore parsing errors
   }
   
-  // Add values to the appropriate period (without subtraction)
+  // Add to period totals as before (keep your period calculations)
   if (day <= 15) {
-    tuan1va2 += phanLoaiValue + ngoaiGioValue;
+    tuan1va2 += phanLoaiValue;
     phep1va2 += phepValue;
     ht1va2 += htValue;
   } else if (day <= 25) {
-    tuan3va4 += phanLoaiValue + ngoaiGioValue;
+    tuan3va4 += phanLoaiValue;
     phep3va4 += phepValue;
     ht3va4 += htValue;
   } else {
-    tuan5plus += phanLoaiValue + ngoaiGioValue;
+    tuan5plus += phanLoaiValue;
     phep5plus += phepValue;
     ht5plus += htValue;
   }
   
   // Add to totals
-  tongCong += phanLoaiValue + ngoaiGioValue;
+  tongCong += phanLoaiValue;
   tongPhep += phepValue;
   tongLe += congLe;
   tongNgoaiGio += ngoaiGioValue;
@@ -397,7 +397,7 @@ for (var record in departmentRecords) {
   tongHT += htValue;
 }
 
-// After all calculations are done, adjust for permissions
+// After all days are processed, adjust for permissions
 // Reduce regular days by permission days for each period
 tuan1va2 = math.max(0, tuan1va2 - phep1va2);
 tuan3va4 = math.max(0, tuan3va4 - phep3va4);
@@ -439,7 +439,7 @@ double adjustedTongNgoaiGio = tongNgoaiGio;
 if (congChuanToiDa > 0 && tongCong > congChuanToiDa) {
   double excess = tongCong - congChuanToiDa;
   adjustedTongCong = congChuanToiDa.toDouble();
-  adjustedTongNgoaiGio = tongNgoaiGio + excess;
+  adjustedTongNgoaiGio = tongNgoaiGio + excess*8;
 }
       // Check if this employee already exists in ChamCongCNThang
       bool recordExists = existingRecordsMap.containsKey(maNV);
@@ -1260,12 +1260,12 @@ Future<void> _deleteSelectedRecords(List<Map<String, dynamic>> records) async {
     
     // 3. Get all ChamCongCN records for this month
     final startDateStr = DateFormat('yyyy-MM-dd').format(DateTime(year, month, 1));
-    final endDateStr = DateFormat('yyyy-MM-dd').format(DateTime(year, month, daysInMonth));
+    final endDateStr = DateFormat('yyyy-MM-dd').format(DateTime(year, month + 1, 0)); 
     
     final chamCongCNRecordsQuery = await dbHelper.rawQuery(
-      "SELECT * FROM chamcongcn WHERE Ngay BETWEEN ? AND ? ORDER BY MaNV, Ngay",
-      [startDateStr, endDateStr]
-    );
+  "SELECT * FROM chamcongcn WHERE strftime('%Y-%m', Ngay) = ? ORDER BY MaNV, Ngay",
+  [_selectedMonth]
+);
     
     // Convert query result to list of maps
     final List<Map<String, dynamic>> chamCongCNRecords = List<Map<String, dynamic>>.from(chamCongCNRecordsQuery);
@@ -1357,13 +1357,13 @@ for (var record in chamCongCNRecords) {
         double ht5plus = 0;
         
         double tongCong = 0;
-        double tongPhep = 0;
-        double tongLe = 0;
-        double tongNgoaiGio = 0;
-        double tongHV = 0;
-        double tongDem = 0;
-        double tongCD = 0;
-        double tongHT = 0;
+double tongPhep = 0;
+double tongLe = 0;
+double tongNgoaiGio = 0;
+double tongHV = 0;
+double tongDem = 0;
+double tongCD = 0;
+double tongHT = 0;
         
         // First collect all values without subtraction
 for (var record in departmentRecords) {
@@ -1431,7 +1431,7 @@ for (var record in departmentRecords) {
   try {
     final ngoaiGioThuong = double.tryParse(record['NgoaiGioThuong']?.toString() ?? '0') ?? 0;
     final ngoaiGioKhac = double.tryParse(record['NgoaiGioKhac']?.toString() ?? '0') ?? 0;
-    ngoaiGioValue = (ngoaiGioThuong + ngoaiGioKhac) / 8.0;
+    ngoaiGioValue = ngoaiGioThuong + ngoaiGioKhac;
   } catch (e) {
     // Ignore parsing errors
   }
@@ -1439,42 +1439,42 @@ for (var record in departmentRecords) {
   // Calculate other totals
   double ngoaiGiox15 = 0;
   try {
-    ngoaiGiox15 = (double.tryParse(record['NgoaiGiox15']?.toString() ?? '0') ?? 0) / 8.0;
+    ngoaiGiox15 = double.tryParse(record['NgoaiGiox15']?.toString() ?? '0') ?? 0;
   } catch (e) {
     // Ignore parsing errors
   }
   
   double ngoaiGiox2 = 0;
   try {
-    ngoaiGiox2 = (double.tryParse(record['NgoaiGiox2']?.toString() ?? '0') ?? 0) / 8.0;
+    ngoaiGiox2 = double.tryParse(record['NgoaiGiox2']?.toString() ?? '0') ?? 0;
   } catch (e) {
     // Ignore parsing errors
   }
   
   double congLe = 0;
   try {
-    congLe = (double.tryParse(record['CongLe']?.toString() ?? '0') ?? 0) / 8.0;
+    congLe = double.tryParse(record['CongLe']?.toString() ?? '0') ?? 0;
   } catch (e) {
     // Ignore parsing errors
   }
   
-  // Add values to the appropriate period (without subtraction)
+  // Add to period totals as before (keep your period calculations)
   if (day <= 15) {
-    tuan1va2 += phanLoaiValue + ngoaiGioValue;
+    tuan1va2 += phanLoaiValue;
     phep1va2 += phepValue;
     ht1va2 += htValue;
   } else if (day <= 25) {
-    tuan3va4 += phanLoaiValue + ngoaiGioValue;
+    tuan3va4 += phanLoaiValue;
     phep3va4 += phepValue;
     ht3va4 += htValue;
   } else {
-    tuan5plus += phanLoaiValue + ngoaiGioValue;
+    tuan5plus += phanLoaiValue;
     phep5plus += phepValue;
     ht5plus += htValue;
   }
   
   // Add to totals
-  tongCong += phanLoaiValue + ngoaiGioValue;
+  tongCong += phanLoaiValue;
   tongPhep += phepValue;
   tongLe += congLe;
   tongNgoaiGio += ngoaiGioValue;
@@ -1484,7 +1484,7 @@ for (var record in departmentRecords) {
   tongHT += htValue;
 }
 
-// After all calculations are done, adjust for permissions
+// After all days are processed, adjust for permissions
 // Reduce regular days by permission days for each period
 tuan1va2 = math.max(0, tuan1va2 - phep1va2);
 tuan3va4 = math.max(0, tuan3va4 - phep3va4);
@@ -1527,28 +1527,27 @@ if (tuan3va4 < 6) {
         // Check if this combination already exists in ChamCongCNThang
         bool recordExists = existingRecordsMap.containsKey(maNV) && 
                           existingRecordsMap[maNV]!.containsKey(boPhan);
-        double adjustedTongCong = tongCong;
+double adjustedTongCong = tongCong;
 double adjustedTongNgoaiGio = tongNgoaiGio;
 if (congChuanToiDa > 0 && tongCong > congChuanToiDa) {
   double excess = tongCong - congChuanToiDa;
   adjustedTongCong = congChuanToiDa.toDouble();
-  adjustedTongNgoaiGio = tongNgoaiGio + excess;
+  adjustedTongNgoaiGio = tongNgoaiGio + excess*8;
 }
         // Create the record object with the correct field names for the local database
 Map<String, dynamic> recordData = {
   'UID': recordExists ? existingRecordsMap[maNV]![boPhan]!['UID'] : _generateUUID(),
   'GiaiDoan': giaiDoan,
-  //'NgayCapNhat': ngayCapNhat,
   'MaNV': maNV,
   'BoPhan': boPhan,
   'MaBP': boPhan,
   'CongChuanToiDa': congChuanToiDa,
-  'Tuan_1va2': tuan1va2,     // Correct field name for local DB
-  'Phep_1va2': phep1va2,     // Correct field name for local DB
-  'HT_1va2': ht1va2,         // Correct field name for local DB
-  'Tuan_3va4': tuan3va4,     // Correct field name for local DB
-  'Phep_3va4': phep3va4,     // Correct field name for local DB
-  'HT_3va4': ht3va4,         // Correct field name for local DB
+  'Tuan_1va2': tuan1va2,
+  'Phep_1va2': phep1va2,
+  'HT_1va2': ht1va2,
+  'Tuan_3va4': tuan3va4,
+  'Phep_3va4': phep3va4,
+  'HT_3va4': ht3va4,
   'Tong_Cong': adjustedTongCong,
   'Tong_Phep': tongPhep,
   'Tong_Le': tongLe,
@@ -1724,7 +1723,333 @@ Future<void> _syncUpdatedRecordsWithServer(List<Map<String, dynamic>> records) a
     print('Error syncing with server: $e');
   }
 }
-
+Future<void> _debugCalculationForStaff(BuildContext context, String maNV) async {
+  setState(() => _isLoading = true);
+  
+    try {
+    final dbHelper = DBHelper();
+    
+    // Parse the month info
+    final parts = _selectedMonth!.split('-');
+    final year = int.parse(parts[0]);
+    final month = int.parse(parts[1]);
+    
+    // Calculate days in month
+    final lastDateOfMonth = DateTime(year, month + 1, 0);
+    final daysInMonth = lastDateOfMonth.day;
+    
+    // Date range for the month
+    final startDateStr = DateFormat('yyyy-MM-dd').format(DateTime(year, month, 1));
+    final endDateStr = DateFormat('yyyy-MM-dd').format(DateTime(year, month + 1, 0));
+    
+    // Get employee name
+    final staffResult = await dbHelper.rawQuery(
+      "SELECT Ho_ten FROM staffbio WHERE MaNV = ?", [maNV]
+    );
+    String employeeName = "Unknown";
+    if (staffResult.isNotEmpty) {
+      employeeName = staffResult.first['Ho_ten'] as String;
+    }
+    
+    // Get all attendance records for this employee
+    final recordsQuery = await dbHelper.rawQuery(
+  "SELECT * FROM chamcongcn WHERE MaNV = ? AND strftime('%Y-%m', Ngay) = ? ORDER BY Ngay",
+  [maNV, _selectedMonth]
+    );
+    
+    final records = List<Map<String, dynamic>>.from(recordsQuery);
+    
+    // Initialize calculation variables
+    double tuan1va2 = 0;
+    double phep1va2 = 0;
+    double ht1va2 = 0;
+    double tuan3va4 = 0;
+    double phep3va4 = 0;
+    double ht3va4 = 0;
+    double tuan5plus = 0;
+    double phep5plus = 0;
+    double ht5plus = 0;
+    double tongCong = 0;
+    double tongPhep = 0;
+    double tongLe = 0;
+    double tongNgoaiGio = 0;
+    double tongHV = 0;
+    double tongDem = 0;
+    double tongCD = 0;
+    double tongHT = 0;
+    
+    // Debug logs
+    List<String> debugLogs = [];
+    if (daysInMonth > 30) {
+  debugLogs.add("\nSPECIAL CHECK FOR DAY 31:");
+  
+  // Check if there are any records for day 31
+  final day31Records = records.where((record) {
+    final ngay = record['Ngay'] as String;
+    final date = DateTime.parse(ngay.split('T')[0]);
+    return date.day == 31;
+  }).toList();
+  
+  debugLogs.add("Month has 31 days. Found ${day31Records.length} records for day 31:");
+  debugLogs.add("DETAILED CHECK FOR DAY 31:");
+debugLogs.add("Raw record count for day 31: ${day31Records.length}");
+  // Log details of each day 31 record
+  for (var record in day31Records) {
+  debugLogs.add("Day 31 record: ${record.toString()}");
+}
+}
+    debugLogs.add("Calculation for $maNV - $employeeName:");
+    debugLogs.add("Period: $_selectedMonth");
+    debugLogs.add("Found ${records.length} attendance records\n");
+    
+    // Process each record
+    for (var record in records) {
+      final ngay = record['Ngay'] as String;
+      final date = DateTime.parse(ngay.split('T')[0]);
+      final day = date.day;
+      
+      final congThuongChu = record['CongThuongChu'] as String? ?? 'Ro';
+      double phanLoaiValue = 0;
+      try {
+        final phanLoai = record['PhanLoai'] as String? ?? '0';
+        phanLoaiValue = double.tryParse(phanLoai) ?? 0;
+      } catch (e) {
+        // Ignore parsing errors
+      }
+      
+      // Calculate Phep values
+      double phepValue = 0;
+      if (congThuongChu.startsWith('P') && !congThuongChu.startsWith('P/2')) {
+        phepValue += 1.0;
+      } else if (congThuongChu.startsWith('P/2')) {
+        phepValue += 0.5;
+      }
+      
+      if (congThuongChu.endsWith('+P')) {
+        phepValue += 1.0;
+      } else if (congThuongChu.endsWith('+P/2')) {
+        phepValue += 0.5;
+      }
+      
+      // Calculate other values
+      double hvValue = 0;
+      if (congThuongChu == 'HV') {
+        hvValue = 1.0;
+      } else if (congThuongChu.startsWith('2HV')) {
+        hvValue = 2.0;
+      } else if (congThuongChu.startsWith('3HV')) {
+        hvValue = 3.0;
+      }
+      
+      double demValue = 0;
+      if (congThuongChu == 'XĐ') {
+        demValue = 1.0;
+      } else if (congThuongChu == '2XĐ') {
+        demValue = 2.0;
+      }
+      
+      double cdValue = 0;
+      if (congThuongChu == 'CĐ') {
+        cdValue = 1.0;
+      }
+      
+      double htValue = 0;
+      if (congThuongChu == 'HT') {
+        htValue = 1.0;
+      }
+      
+      double ngoaiGioValue = 0;
+      try {
+        final ngoaiGioThuong = double.tryParse(record['NgoaiGioThuong']?.toString() ?? '0') ?? 0;
+        final ngoaiGioKhac = double.tryParse(record['NgoaiGioKhac']?.toString() ?? '0') ?? 0;
+        ngoaiGioValue = ngoaiGioThuong + ngoaiGioKhac;
+      } catch (e) {
+        // Ignore parsing errors
+      }
+      
+      double congLe = 0;
+      try {
+        congLe = double.tryParse(record['CongLe']?.toString() ?? '0') ?? 0;
+      } catch (e) {
+        // Ignore parsing errors
+      }
+      
+      // Add to appropriate period totals
+      String periodLabel = "";
+      if (day <= 15) {
+        tuan1va2 += phanLoaiValue;
+        phep1va2 += phepValue;
+        ht1va2 += htValue;
+        periodLabel = "Period 1-15";
+      } else if (day <= 25) {
+        tuan3va4 += phanLoaiValue;
+        phep3va4 += phepValue;
+        ht3va4 += htValue;
+        periodLabel = "Period 16-25";
+      } else {
+        tuan5plus += phanLoaiValue;
+        phep5plus += phepValue;
+        ht5plus += htValue;
+        periodLabel = "Period 26+";
+      }
+      
+      // Add to totals
+      tongCong += phanLoaiValue;
+      tongPhep += phepValue;
+      tongLe += congLe;
+      tongNgoaiGio += ngoaiGioValue;
+      tongHV += hvValue;
+      tongDem += demValue;
+      tongCD += cdValue;
+      tongHT += htValue;
+      
+      // Log this day's values
+      debugLogs.add("Day $day ($periodLabel):");
+      debugLogs.add("  CongThuongChu: $congThuongChu");
+      debugLogs.add("  PhanLoai: $phanLoaiValue");
+      debugLogs.add("  PhepValue: $phepValue");
+      debugLogs.add("  NgoaiGioValue: $ngoaiGioValue");
+      if (hvValue > 0) debugLogs.add("  HV: $hvValue");
+      if (demValue > 0) debugLogs.add("  Đêm: $demValue");
+      if (cdValue > 0) debugLogs.add("  CĐ: $cdValue");
+      if (htValue > 0) debugLogs.add("  HT: $htValue");
+      if (congLe > 0) debugLogs.add("  CongLe: $congLe");
+      debugLogs.add("");
+    }
+    
+    // After all days processed, adjust for permissions
+    debugLogs.add("BEFORE PERMISSION ADJUSTMENT:");
+    debugLogs.add("Tuan1va2: $tuan1va2, Phep1va2: $phep1va2");
+    debugLogs.add("Tuan3va4: $tuan3va4, Phep3va4: $phep3va4");
+    debugLogs.add("Tuan5plus: $tuan5plus, Phep5plus: $phep5plus");
+    debugLogs.add("TongCong (raw): $tongCong, TongPhep: $tongPhep\n");
+    
+    // Adjust for permissions
+    double originalTuan1va2 = tuan1va2;
+    double originalTuan3va4 = tuan3va4;
+    double originalTuan5plus = tuan5plus;
+    double originalTongCong = tongCong;
+    
+    tuan1va2 = math.max(0, tuan1va2 - phep1va2);
+    tuan3va4 = math.max(0, tuan3va4 - phep3va4);
+    tuan5plus = math.max(0, tuan5plus - phep5plus);
+    tongCong = math.max(0, tongCong - tongPhep);
+    
+    debugLogs.add("AFTER PERMISSION ADJUSTMENT:");
+    debugLogs.add("Tuan1va2: $originalTuan1va2 - $phep1va2 = $tuan1va2");
+    debugLogs.add("Tuan3va4: $originalTuan3va4 - $phep3va4 = $tuan3va4");
+    debugLogs.add("Tuan5plus: $originalTuan5plus - $phep5plus = $tuan5plus");
+    debugLogs.add("TongCong: $originalTongCong - $tongPhep = $tongCong\n");
+    
+    // Calculate UngLan1 based on tuan1va2
+    double ungLan1 = 0;
+    if (tuan1va2 >= 10 && tuan1va2 < 13) {
+      ungLan1 = 1500000;
+    } else if (tuan1va2 >= 13) {
+      ungLan1 = 1700000;
+    }
+    
+    // Calculate UngLan2 based on tuan3va4
+    double ungLan2 = 0;
+    if (tuan3va4 < 6) {
+      ungLan2 = 0;
+    } else if (tuan3va4 < 8) {
+      ungLan2 = 1600000;
+    } else {
+      ungLan2 = 1800000;
+    }
+    
+    debugLogs.add("FINAL CALCULATIONS:");
+    debugLogs.add("UngLan1 (based on Tuan1va2 = $tuan1va2): $ungLan1");
+    debugLogs.add("UngLan2 (based on Tuan3va4 = $tuan3va4): $ungLan2");
+    
+    // Check for standard workday adjustment
+    int congChuanToiDa = 0;
+    // Find CongChuanToiDa from existing records
+    for (var row in _monthlyData) {
+      if (row['MaNV'] == maNV) {
+        congChuanToiDa = (row['CongChuanToiDa'] as num).toInt();
+        break;
+      }
+    }
+    
+    // If we have CongChuanToiDa, check for adjustment
+    if (congChuanToiDa > 0) {
+      debugLogs.add("\nSTANDARD WORKDAY ADJUSTMENT:");
+      debugLogs.add("CongChuanToiDa: $congChuanToiDa");
+      debugLogs.add("Current TongCong: $tongCong");
+      
+      if (tongCong > congChuanToiDa) {
+        double excess = tongCong - congChuanToiDa;
+        double originalNgoaiGio = tongNgoaiGio;
+        
+        // The problematic adjustment
+        double adjustedTongCong = congChuanToiDa.toDouble();
+        double adjustedTongNgoaiGio = tongNgoaiGio + (excess * 8);
+        
+        debugLogs.add("TongCong > CongChuanToiDa by $excess days");
+        debugLogs.add("Adjusted TongCong: $adjustedTongCong (capped at CongChuanToiDa)");
+        debugLogs.add("Original TongNgoaiGio: $originalNgoaiGio hours");
+        debugLogs.add("Adjusted TongNgoaiGio: $adjustedTongNgoaiGio hours (added ${excess * 8} excess hours)");
+        
+        // Show final values that will be stored
+        debugLogs.add("\nFINAL VALUES STORED:");
+        debugLogs.add("Tong_Cong: $tongCong (unadjusted)");
+        debugLogs.add("Tong_NgoaiGio: $tongNgoaiGio (unadjusted)");
+      } else {
+        debugLogs.add("No adjustment needed (TongCong <= CongChuanToiDa)");
+      }
+    }
+    
+    // Show the debug log in a dialog
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Calculation Debug: $maNV"),
+          content: Container(
+            width: double.maxFinite,
+            height: 500,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var log in debugLogs)
+                    Padding(
+                      padding: EdgeInsets.symmetric(vertical: 2),
+                      child: Text(log, style: TextStyle(fontFamily: 'monospace')),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Close'),
+            ),
+            TextButton(
+              onPressed: () {
+                // Copy to clipboard
+                Clipboard.setData(ClipboardData(text: debugLogs.join('\n')));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Debug log copied to clipboard'))
+                );
+              },
+              child: Text('Copy to Clipboard'),
+            ),
+          ],
+        );
+      },
+    );
+    
+  } catch (e) {
+    print('Error in debug calculation: $e');
+    _showError('Error analyzing calculation: $e');
+  } finally {
+    setState(() => _isLoading = false);
+  }
+}
 Future<void> _syncDeletedRecordsWithServer(List<String> uids) async {
   try {
     print('Sending UIDs for deletion: $uids');
@@ -2156,13 +2481,13 @@ Widget build(BuildContext context) {
     'MaNV': 'Mã NV',
     'TenNV': 'Tên NV',
     'BoPhan': 'Bộ phận',
-    //'NgayCapNhat': 'Ngày cập nhật',
-    'Tuan1va2': 'Tuần 1-2',
-    'Phep1va2': 'Phép 1-2',
-    'HT1va2': 'HT 1-2',
-    'Tuan3va4': 'Tuần 3-4',
-    'Phep3va4': 'Phép 3-4',
-    'HT3va4': 'HT 3-4',
+    'CongChuanToiDa': 'Công chuẩn',
+    'Tuan_1va2': 'Tuần 1-2',
+    'Phep_1va2': 'Phép 1-2',
+    'HT_1va2': 'HT 1-2',
+    'Tuan_3va4': 'Tuần 3-4',
+    'Phep_3va4': 'Phép 3-4',
+    'HT_3va4': 'HT 3-4',
     'Tong_Cong': 'Công',
     'Tong_Phep': 'Phép',
     'Tong_Le': 'Lễ',
@@ -2182,12 +2507,13 @@ Widget build(BuildContext context) {
     'MucLuongNgoaiGio': 'Mức lương ngoài giờ',
     'MucLuongNgoaiGio2': 'Mức lương ngoài giờ 2',
     'GhiChu': 'Ghi chú',
+    'Debug': 'Debug',  // Add title for debug column
   };
   
   final List<String> columnsToShow = [
     'MaNV', 'TenNV', 'BoPhan', 'CongChuanToiDa',
-'Tuan_1va2', 'Phep_1va2', 'HT_1va2',
-  'Tuan_3va4', 'Phep_3va4', 'HT_3va4',
+    'Tuan_1va2', 'Phep_1va2', 'HT_1va2',
+    'Tuan_3va4', 'Phep_3va4', 'HT_3va4',
     'Tong_Cong', 'Tong_Phep', 'Tong_Le', 'Tong_NgoaiGio',
     'Tong_HV', 'Tong_Dem', 'Tong_CD', 'Tong_HT',
     'TongLuong', 'UngLan1', 'UngLan2', 'ThanhToan3',
@@ -2306,76 +2632,101 @@ Widget build(BuildContext context) {
                 color: Colors.grey.shade300,
                 width: 1,
               ),
-              columns: columnsToShow.map((column) => 
+              columns: [
+                // Regular columns
+                ...columnsToShow.map((column) => 
+                  DataColumn(
+                    label: Expanded(
+                      child: Text(
+                        columnTitles[column] ?? column,
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  )
+                ),
+                // Debug column
                 DataColumn(
                   label: Expanded(
                     child: Text(
-                      columnTitles[column] ?? column,
+                      'Debug',
                       style: TextStyle(fontWeight: FontWeight.bold),
                       textAlign: TextAlign.center,
                     ),
                   ),
-                )
-              ).toList(),
+                ),
+              ],
               rows: _monthlyData.map((row) {
                 return DataRow(
                   color: _modifiedRows[row['UID'].toString()] == true
                       ? MaterialStateProperty.all(Colors.yellow.shade50)
                       : null,
-                  cells: columnsToShow.map((column) {
-                    if (_editableFields.contains(column) && _isEditingAllowed) {
-                      return DataCell(
-                        TextField(
-                          controller: _controllers['${row['UID']}_$column'],
-                          decoration: InputDecoration(
-                            contentPadding: EdgeInsets.symmetric(horizontal: 8),
-                            border: OutlineInputBorder(),
+                  cells: [
+                    // Regular columns
+                    ...columnsToShow.map((column) {
+                      if (_editableFields.contains(column) && _isEditingAllowed) {
+                        return DataCell(
+                          TextField(
+                            controller: _controllers['${row['UID']}_$column'],
+                            decoration: InputDecoration(
+                              contentPadding: EdgeInsets.symmetric(horizontal: 8),
+                              border: OutlineInputBorder(),
+                            ),
+                            style: TextStyle(color: Colors.blue.shade700),
+                            keyboardType: column == 'GhiChu' 
+                                ? TextInputType.text 
+                                : TextInputType.numberWithOptions(decimal: true),
                           ),
-                          style: TextStyle(color: Colors.blue.shade700),
-                          keyboardType: column == 'GhiChu' 
-                              ? TextInputType.text 
-                              : TextInputType.numberWithOptions(decimal: true),
-                        ),
-                        showEditIcon: true,
-                      );
-                    }
-                    
-                    String displayValue = '';
-                    if (column == 'NgayCapNhat' && row[column] != null) {
-                      try {
-                        displayValue = DateFormat('dd/MM/yyyy HH:mm')
-                            .format(DateTime.parse(row[column].toString()));
-                      } catch (e) {
-                        displayValue = row[column].toString();
+                          showEditIcon: true,
+                        );
                       }
-                    } else if (column.startsWith('Tong_') || 
-                               column == 'TongLuong' || 
-                               column.startsWith('Ung') || 
-                               column.startsWith('ThanhToan') ||
-                               column.startsWith('Truy') ||
-                               column == 'Khac' ||
-                               column.startsWith('MucLuong')) {
-                      if (row[column] != null) {
+                      
+                      String displayValue = '';
+                      if (column == 'NgayCapNhat' && row[column] != null) {
                         try {
-                          final number = double.parse(row[column].toString());
-                          displayValue = NumberFormat('#,##0.##').format(number);
+                          displayValue = DateFormat('dd/MM/yyyy HH:mm')
+                              .format(DateTime.parse(row[column].toString()));
                         } catch (e) {
                           displayValue = row[column].toString();
                         }
+                      } else if (column.startsWith('Tong_') || 
+                                column == 'TongLuong' || 
+                                column.startsWith('Ung') || 
+                                column.startsWith('ThanhToan') ||
+                                column.startsWith('Truy') ||
+                                column == 'Khac' ||
+                                column.startsWith('MucLuong')) {
+                        if (row[column] != null) {
+                          try {
+                            final number = double.parse(row[column].toString());
+                            displayValue = NumberFormat('#,##0.##').format(number);
+                          } catch (e) {
+                            displayValue = row[column].toString();
+                          }
+                        }
+                      } else {
+                        displayValue = row[column]?.toString() ?? '';
                       }
-                    } else {
-                      displayValue = row[column]?.toString() ?? '';
-                    }
-                    
-                    return DataCell(
-                      SelectableText(
-                        displayValue,
-                        style: TextStyle(
-                          color: Colors.black87,
+                      
+                      return DataCell(
+                        SelectableText(
+                          displayValue,
+                          style: TextStyle(
+                            color: Colors.black87,
+                          ),
                         ),
+                      );
+                    }),
+                    
+                    // Debug button cell
+                    DataCell(
+                      IconButton(
+                        icon: Icon(Icons.bug_report, color: Colors.blue),
+                        onPressed: () => _debugCalculationForStaff(context, row['MaNV']),
+                        tooltip: 'Debug Calculation',
                       ),
-                    );
-                  }).toList(),
+                    ),
+                  ],
                 );
               }).toList(),
             ),
