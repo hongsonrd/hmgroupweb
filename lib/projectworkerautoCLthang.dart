@@ -321,11 +321,15 @@ for (var record in departmentRecords) {
   
   // Calculate night shift (XĐ) values
   double demValue = 0;
-  if (congThuongChu == 'XĐ') {
-    demValue = 1.0;
-  } else if (congThuongChu == '2XĐ') {
+  if (congThuongChu.contains('XĐ')) {
+  // Check for double night shift (2XĐ)
+  if (congThuongChu.contains('2XĐ')) {
     demValue = 2.0;
+  } else {
+    // Regular night shift (XĐ)
+    demValue = 1.0;
   }
+}
   
   // Calculate CĐ values
   double cdValue = 0;
@@ -1408,12 +1412,15 @@ for (var record in departmentRecords) {
   
   // Calculate night shift (XĐ) values
   double demValue = 0;
-  if (congThuongChu == 'XĐ') {
-    demValue = 1.0;
-  } else if (congThuongChu == '2XĐ') {
+  if (congThuongChu.contains('XĐ')) {
+  // Check for double night shift (2XĐ)
+  if (congThuongChu.contains('2XĐ')) {
     demValue = 2.0;
+  } else {
+    // Regular night shift (XĐ)
+    demValue = 1.0;
   }
-  
+}
   // Calculate CĐ values
   double cdValue = 0;
   if (congThuongChu == 'CĐ') {
@@ -1842,11 +1849,15 @@ debugLogs.add("Raw record count for day 31: ${day31Records.length}");
       }
       
       double demValue = 0;
-      if (congThuongChu == 'XĐ') {
-        demValue = 1.0;
-      } else if (congThuongChu == '2XĐ') {
-        demValue = 2.0;
-      }
+      if (congThuongChu.contains('XĐ')) {
+  // Check for double night shift (2XĐ)
+  if (congThuongChu.contains('2XĐ')) {
+    demValue = 2.0;
+  } else {
+    // Regular night shift (XĐ)
+    demValue = 1.0;
+  }
+}
       
       double cdValue = 0;
       if (congThuongChu == 'CĐ') {
