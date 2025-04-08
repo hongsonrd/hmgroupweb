@@ -28,7 +28,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'floating_draggable_icon.dart';
 import 'projectdirector.dart';
 import 'projectdirector2.dart';
-
+import 'map_project.dart';
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<bool> checkWebView2Installation() async {
@@ -104,8 +104,8 @@ void main() async {
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       await windowManager.ensureInitialized();
       WindowOptions windowOptions = const WindowOptions(
-        size: Size(1600, 900),
-        minimumSize: Size(1280, 720),
+        size: Size(1280, 720),
+        minimumSize: Size(860, 480),
         center: true,
         backgroundColor: Colors.transparent,
         skipTaskbar: false,
@@ -1182,8 +1182,9 @@ Widget build(BuildContext context) {
   
   // Define permissions for floating action buttons
   final Map<String, List<String>> allowedActionButtons = {
-    'admin': ['2'], // Quản trị button
-    'airport': ['2'], // Sân bay T1 button
+    'admin': ['2'], 
+    'saban': ['2'],
+    'airport': ['2'],
   };
   
   final List<Widget> visibleScreens = [];
@@ -1235,11 +1236,12 @@ Widget build(BuildContext context) {
   final adminPermissions = allowedActionButtons['admin'] ?? [];
   final airportPermissions = allowedActionButtons['airport'] ?? [];
   
-  bool showAdminButton = adminPermissions.isEmpty || adminPermissions.contains(userQueryType);
-  bool showAirportButton = airportPermissions.isEmpty || airportPermissions.contains(userQueryType);
-  
+bool showAdminButton = adminPermissions.isEmpty || adminPermissions.contains(userQueryType);
+bool showSaBanButton = (allowedActionButtons['saban']?.isEmpty ?? true) || (allowedActionButtons['saban']?.contains(userQueryType) ?? false);
+bool showAirportButton = airportPermissions.isEmpty || airportPermissions.contains(userQueryType);
+
   // Calculate left margin for airport button (can't use dynamic values in const constructor)
-  final airportLeftMargin = showAdminButton ? 10.0 : 0.0;
+  final airportLeftMargin = (showAdminButton || showSaBanButton) ? 10.0 : 0.0;
 
   return Banner(
     message: 'HM GROUP',
@@ -1277,6 +1279,36 @@ Widget build(BuildContext context) {
               ),
             ),
           ),
+          if (showSaBanButton) Container(
+  height: 86,
+  width: 86,
+  margin: const EdgeInsets.only(bottom: 10, right: 10),
+  child: FloatingActionButton(
+    onPressed: () {
+      final username = _userState.currentUser?['username'] ?? '';
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => MapProjectScreen(username: username),
+        ),
+      );
+    },
+    backgroundColor: Colors.green,
+    elevation: 8,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(25),
+    ),
+    child: const Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.map, color: Colors.white, size: 35),
+        Text('Sa bàn', 
+          style: TextStyle(fontSize: 16, color: Colors.white),
+          textAlign: TextAlign.center,
+        )
+      ],
+    ),
+  ),
+),
           if (showAirportButton) Container(
             height: 86,
             width: 86,

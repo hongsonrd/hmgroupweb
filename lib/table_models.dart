@@ -1922,6 +1922,127 @@ class ChamCongVangNghiTcaModel {
     );
   }
 }
+class MapListModel {
+  final String? mapUID;
+  final String? nguoiDung;
+  final String? boPhan;
+  final String? tenBanDo;
+  final String? hinhAnhBanDo;
+  final double? chieuDaiMet;
+  final double? chieuCaoMet;
+
+  MapListModel({
+    this.mapUID,
+    this.nguoiDung,
+    this.boPhan,
+    this.tenBanDo,
+    this.hinhAnhBanDo,
+    this.chieuDaiMet,
+    this.chieuCaoMet,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'mapUID': mapUID,
+    'nguoiDung': nguoiDung,
+    'boPhan': boPhan,
+    'tenBanDo': tenBanDo,
+    'hinhAnhBanDo': hinhAnhBanDo,
+    'chieuDaiMet': chieuDaiMet,
+    'chieuCaoMet': chieuCaoMet,
+  };
+
+  factory MapListModel.fromMap(Map<String, dynamic> map) {
+    return MapListModel(
+      mapUID: map['mapUID'],
+      nguoiDung: map['nguoiDung'],
+      boPhan: map['boPhan'],
+      tenBanDo: map['tenBanDo'],
+      hinhAnhBanDo: map['hinhAnhBanDo'],
+      chieuDaiMet: map['chieuDaiMet'] != null ? double.tryParse(map['chieuDaiMet'].toString()) : null,
+      chieuCaoMet: map['chieuCaoMet'] != null ? double.tryParse(map['chieuCaoMet'].toString()) : null,
+    );
+  }
+}
+
+class MapFloorModel {
+  final String? floorUID;
+  final String? mapUID;
+  final String? tenTang;
+  final String? hinhAnhTang;
+  final double? chieuDaiMet;
+  final double? chieuCaoMet;
+  final double? offsetX;
+  final double? offsetY;
+
+  MapFloorModel({
+    this.floorUID,
+    this.mapUID,
+    this.tenTang,
+    this.hinhAnhTang,
+    this.chieuDaiMet,
+    this.chieuCaoMet,
+    this.offsetX,
+    this.offsetY,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'floorUID': floorUID,
+    'mapUID': mapUID,
+    'tenTang': tenTang,
+    'hinhAnhTang': hinhAnhTang,
+    'chieuDaiMet': chieuDaiMet,
+    'chieuCaoMet': chieuCaoMet,
+    'offsetX': offsetX,
+    'offsetY': offsetY,
+  };
+
+  factory MapFloorModel.fromMap(Map<String, dynamic> map) {
+    return MapFloorModel(
+      floorUID: map['floorUID'],
+      mapUID: map['mapUID'],
+      tenTang: map['tenTang'],
+      hinhAnhTang: map['hinhAnhTang'],
+      chieuDaiMet: map['chieuDaiMet'] != null ? double.tryParse(map['chieuDaiMet'].toString()) : null,
+      chieuCaoMet: map['chieuCaoMet'] != null ? double.tryParse(map['chieuCaoMet'].toString()) : null,
+      offsetX: map['offsetX'] != null ? double.tryParse(map['offsetX'].toString()) : null,
+      offsetY: map['offsetY'] != null ? double.tryParse(map['offsetY'].toString()) : null,
+    );
+  }
+}
+
+class MapZoneModel {
+  final String? zoneUID;
+  final String? floorUID;
+  final String? tenKhuVuc;
+  final String? cacDiemMoc;
+  final String? mauSac;
+
+  MapZoneModel({
+    this.zoneUID,
+    this.floorUID,
+    this.tenKhuVuc,
+    this.cacDiemMoc,
+    this.mauSac,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'zoneUID': zoneUID,
+    'floorUID': floorUID,
+    'tenKhuVuc': tenKhuVuc,
+    'cacDiemMoc': cacDiemMoc,
+    'mauSac': mauSac,
+  };
+
+  factory MapZoneModel.fromMap(Map<String, dynamic> map) {
+    return MapZoneModel(
+      zoneUID: map['zoneUID'],
+      floorUID: map['floorUID'],
+      tenKhuVuc: map['tenKhuVuc'],
+      cacDiemMoc: map['cacDiemMoc'],
+      mauSac: map['mauSac'],
+    );
+  }
+}
 // Database Tables
 class DatabaseTables {
   // Table Names
@@ -1950,6 +2071,45 @@ class DatabaseTables {
  static const String chamCongLSTable = 'ChamCongLS';
  static const String chamCongCNThangTable = 'ChamCongCNThang';
    static const String chamCongVangNghiTcaTable = 'ChamCongVangNghiTca';
+     static const String mapListTable = 'Map_List';
+  static const String mapFloorTable = 'Map_Floor';
+  static const String mapZoneTable = 'Map_Zone';
+  static const String createMapListTable = '''
+    CREATE TABLE $mapListTable (
+      mapUID VARCHAR(255) PRIMARY KEY,
+      nguoiDung VARCHAR(255),
+      boPhan TEXT,
+      tenBanDo TEXT,
+      hinhAnhBanDo TEXT,
+      chieuDaiMet FLOAT,
+      chieuCaoMet FLOAT
+    )
+  ''';
+  
+  static const String createMapFloorTable = '''
+    CREATE TABLE $mapFloorTable (
+      floorUID VARCHAR(255) PRIMARY KEY,
+      mapUID VARCHAR(255),
+      tenTang TEXT,
+      hinhAnhTang TEXT,
+      chieuDaiMet FLOAT,
+      chieuCaoMet FLOAT,
+      offsetX FLOAT,
+      offsetY FLOAT,
+      FOREIGN KEY (mapUID) REFERENCES $mapListTable(mapUID)
+    )
+  ''';
+  
+  static const String createMapZoneTable = '''
+    CREATE TABLE $mapZoneTable (
+      zoneUID VARCHAR(255) PRIMARY KEY,
+      floorUID VARCHAR(255),
+      tenKhuVuc TEXT,
+      cacDiemMoc TEXT,
+      mauSac VARCHAR(255),
+      FOREIGN KEY (floorUID) REFERENCES $mapFloorTable(floorUID)
+    )
+  ''';
  static const String createChamCongVangNghiTcaTable = '''
     CREATE TABLE $chamCongVangNghiTcaTable (
       UID varchar(100),

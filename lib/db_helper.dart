@@ -36,14 +36,14 @@ class DBHelper {
     }
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool hasReset = prefs.getBool('db_reset_v17') ?? false;
+    bool hasReset = prefs.getBool('db_reset_v18') ?? false;
     
     if (!hasReset) {
-      print('Forcing database reset for version 17...');
+      print('Forcing database reset for version 18...');
       try {
         await deleteDatabase(path);
         //await prefs.clear();
-        await prefs.setBool('db_reset_v17', true);
+        await prefs.setBool('db_reset_v18', true);
         print('Database reset successful');
       } catch (e) {
         print('Error during database reset: $e');
@@ -55,7 +55,7 @@ class DBHelper {
     final db = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 17,
+        version: 18,
         onCreate: (Database db, int version) async {
           print('Creating database tables...');
           await db.execute(DatabaseTables.createInteractionTable);
@@ -84,28 +84,15 @@ class DBHelper {
         await db.execute(DatabaseTables.createChamCongCNThangTable); 
         await db.execute(DatabaseTables.createChamCongVangNghiTcaTable); 
         await ChecklistInitializer.initializeChecklistTable(db);
+        await db.execute(DatabaseTables.createMapListTable);
+        await db.execute(DatabaseTables.createMapFloorTable);
+        await db.execute(DatabaseTables.createMapZoneTable);
         print('Database tables created successfully');
       },
       onUpgrade: (Database db, int oldVersion, int newVersion) async {
-        if (oldVersion < 17) {
+        if (oldVersion < 18) {
           print('Upgrading database: adding baocao table');
-          await db.execute(DatabaseTables.createBaocaoTable);
-        await db.execute(DatabaseTables.createDongPhucTable);
-        await db.execute(DatabaseTables.createChiTietDPTable);
-        await db.execute(DatabaseTables.createOrderMatHangTable);
-        await db.execute(DatabaseTables.createOrderTable);
-        await db.execute(DatabaseTables.createOrderChiTietTable);
-        await db.execute(DatabaseTables.createOrderDinhMucTable);
-        await db.execute(DatabaseTables.createChamCongCNTable);
-        await db.execute(DatabaseTables.createHinhAnhZaloTable); 
-        await db.execute(DatabaseTables.createHDDuTruTable); 
-        await db.execute(DatabaseTables.createHDChiTietYCMMTable); 
-        await db.execute(DatabaseTables.createHDYeuCauMMTable); 
-        await db.execute(DatabaseTables.createChamCongTable); 
-        await db.execute(DatabaseTables.createChamCongGioTable); 
-        await db.execute(DatabaseTables.createChamCongLSTable);
-        await db.execute(DatabaseTables.createChamCongCNThangTable); 
-        await db.execute(DatabaseTables.createChamCongVangNghiTcaTable);
+
           }
         },
         onOpen: (db) async {
@@ -126,6 +113,170 @@ class DBHelper {
     print('Stack trace: $stackTrace');
     rethrow;
   }
+}
+// ==================== MapList CRUD Operations ====================
+Future<List<MapListModel>> getAllMapLists() async {
+  final maps = await query(DatabaseTables.mapListTable);
+  return maps.map((map) => MapListModel.fromMap(map)).toList();
+}
+
+Future<MapListModel?> getMapListByUID(String mapUID) async {
+  final maps = await query(
+    DatabaseTables.mapListTable,
+    where: 'mapUID = ?',
+    whereArgs: [mapUID],
+  );
+  if (maps.isNotEmpty) {
+    return MapListModel.fromMap(maps.first);
+  }
+  return null;
+}
+
+Future<List<MapListModel>> getMapListsByUser(String nguoiDung) async {
+  final maps = await query(
+    DatabaseTables.mapListTable,
+    where: 'nguoiDung = ?',
+    whereArgs: [nguoiDung],
+  );
+  return maps.map((map) => MapListModel.fromMap(map)).toList();
+}
+
+Future<void> insertMapList(MapListModel mapList) async {
+  await insert(DatabaseTables.mapListTable, mapList.toMap());
+}
+
+Future<void> updateMapList(MapListModel mapList) async {
+  await update(
+    DatabaseTables.mapListTable,
+    mapList.toMap(),
+    where: 'mapUID = ?',
+    whereArgs: [mapList.mapUID],
+  );
+}
+
+Future<void> deleteMapList(String mapUID) async {
+  await delete(
+    DatabaseTables.mapListTable,
+    where: 'mapUID = ?',
+    whereArgs: [mapUID],
+  );
+}
+Future<void> batchInsertMapList(List<MapListModel> mapLists) async {
+  final db = await database;
+  final batch = db.batch();
+  for (var mapList in mapLists) {
+    batch.insert(DatabaseTables.mapListTable, mapList.toMap());
+  }
+  await batch.commit(noResult: true);
+}
+// ==================== MapFloor CRUD Operations ====================
+Future<List<MapFloorModel>> getAllMapFloors() async {
+  final maps = await query(DatabaseTables.mapFloorTable);
+  return maps.map((map) => MapFloorModel.fromMap(map)).toList();
+}
+
+Future<MapFloorModel?> getMapFloorByUID(String floorUID) async {
+  final maps = await query(
+    DatabaseTables.mapFloorTable,
+    where: 'floorUID = ?',
+    whereArgs: [floorUID],
+  );
+  if (maps.isNotEmpty) {
+    return MapFloorModel.fromMap(maps.first);
+  }
+  return null;
+}
+
+Future<List<MapFloorModel>> getMapFloorsByMapUID(String mapUID) async {
+  final maps = await query(
+    DatabaseTables.mapFloorTable,
+    where: 'mapUID = ?',
+    whereArgs: [mapUID],
+  );
+  return maps.map((map) => MapFloorModel.fromMap(map)).toList();
+}
+
+Future<void> insertMapFloor(MapFloorModel mapFloor) async {
+  await insert(DatabaseTables.mapFloorTable, mapFloor.toMap());
+}
+
+Future<void> updateMapFloor(MapFloorModel mapFloor) async {
+  await update(
+    DatabaseTables.mapFloorTable,
+    mapFloor.toMap(),
+    where: 'floorUID = ?',
+    whereArgs: [mapFloor.floorUID],
+  );
+}
+
+Future<void> deleteMapFloor(String floorUID) async {
+  await delete(
+    DatabaseTables.mapFloorTable,
+    where: 'floorUID = ?',
+    whereArgs: [floorUID],
+  );
+}
+Future<void> batchInsertMapFloor(List<MapFloorModel> mapFloors) async {
+  final db = await database;
+  final batch = db.batch();
+  for (var mapFloor in mapFloors) {
+    batch.insert(DatabaseTables.mapFloorTable, mapFloor.toMap());
+  }
+  await batch.commit(noResult: true);
+}
+// ==================== MapZone CRUD Operations ====================
+Future<List<MapZoneModel>> getAllMapZones() async {
+  final maps = await query(DatabaseTables.mapZoneTable);
+  return maps.map((map) => MapZoneModel.fromMap(map)).toList();
+}
+
+Future<MapZoneModel?> getMapZoneByUID(String zoneUID) async {
+  final maps = await query(
+    DatabaseTables.mapZoneTable,
+    where: 'zoneUID = ?',
+    whereArgs: [zoneUID],
+  );
+  if (maps.isNotEmpty) {
+    return MapZoneModel.fromMap(maps.first);
+  }
+  return null;
+}
+
+Future<List<MapZoneModel>> getMapZonesByFloorUID(String floorUID) async {
+  final maps = await query(
+    DatabaseTables.mapZoneTable,
+    where: 'floorUID = ?',
+    whereArgs: [floorUID],
+  );
+  return maps.map((map) => MapZoneModel.fromMap(map)).toList();
+}
+
+Future<void> insertMapZone(MapZoneModel mapZone) async {
+  await insert(DatabaseTables.mapZoneTable, mapZone.toMap());
+}
+
+Future<void> updateMapZone(MapZoneModel mapZone) async {
+  await update(
+    DatabaseTables.mapZoneTable,
+    mapZone.toMap(),
+    where: 'zoneUID = ?',
+    whereArgs: [mapZone.zoneUID],
+  );
+}
+Future<void> batchInsertMapZone(List<MapZoneModel> mapZones) async {
+  final db = await database;
+  final batch = db.batch();
+  for (var mapZone in mapZones) {
+    batch.insert(DatabaseTables.mapZoneTable, mapZone.toMap());
+  }
+  await batch.commit(noResult: true);
+}
+Future<void> deleteMapZone(String zoneUID) async {
+  await delete(
+    DatabaseTables.mapZoneTable,
+    where: 'zoneUID = ?',
+    whereArgs: [zoneUID],
+  );
 }
 // ==================== ChamCongVangNghiTca CRUD Operations ====================
 Future<List<ChamCongVangNghiTcaModel>> getChamCongVangNghiTcaByNguoiDuyet(String nguoiDuyet) async {
