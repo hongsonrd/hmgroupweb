@@ -36,14 +36,14 @@ class DBHelper {
     }
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool hasReset = prefs.getBool('db_reset_v18') ?? false;
+    bool hasReset = prefs.getBool('db_reset_v19') ?? false;
     
     if (!hasReset) {
-      print('Forcing database reset for version 18...');
+      print('Forcing database reset for version 19...');
       try {
         await deleteDatabase(path);
         //await prefs.clear();
-        await prefs.setBool('db_reset_v18', true);
+        await prefs.setBool('db_reset_v19', true);
         print('Database reset successful');
       } catch (e) {
         print('Error during database reset: $e');
@@ -55,7 +55,7 @@ class DBHelper {
     final db = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 18,
+        version: 19,
         onCreate: (Database db, int version) async {
           print('Creating database tables...');
           await db.execute(DatabaseTables.createInteractionTable);
@@ -90,9 +90,13 @@ class DBHelper {
         print('Database tables created successfully');
       },
       onUpgrade: (Database db, int oldVersion, int newVersion) async {
-        if (oldVersion < 18) {
+        if (oldVersion < 19) {
           print('Upgrading database: adding baocao table');
-
+          await db.execute(DatabaseTables.createMapListTable);
+          await db.execute(DatabaseTables.createMapFloorTable);
+          await db.execute(DatabaseTables.createMapZoneTable);
+          await db.execute(DatabaseTables.createCoinTable);
+          await db.execute(DatabaseTables.createCoinRateTable);
           }
         },
         onOpen: (db) async {
@@ -113,6 +117,131 @@ class DBHelper {
     print('Stack trace: $stackTrace');
     rethrow;
   }
+}
+// ==================== Coin CRUD Operations ====================
+Future<List<CoinModel>> getAllCoins() async {
+  final coins = await query(DatabaseTables.coinTable);
+  return coins.map((coin) => CoinModel.fromMap(coin)).toList();
+}
+
+Future<CoinModel?> getCoinByUID(String uid) async {
+  final coins = await query(
+    DatabaseTables.coinTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
+  if (coins.isNotEmpty) {
+    return CoinModel.fromMap(coins.first);
+  }
+  return null;
+}
+
+Future<List<CoinModel>> getCoinsByUser(String nguoiDung) async {
+  final coins = await query(
+    DatabaseTables.coinTable,
+    where: 'nguoiDung = ?',
+    whereArgs: [nguoiDung],
+  );
+  return coins.map((coin) => CoinModel.fromMap(coin)).toList();
+}
+
+Future<List<CoinModel>> getCoinsByDate(String date) async {
+  final coins = await query(
+    DatabaseTables.coinTable,
+    where: 'ngay = ?',
+    whereArgs: [date],
+  );
+  return coins.map((coin) => CoinModel.fromMap(coin)).toList();
+}
+
+Future<void> insertCoin(CoinModel coin) async {
+  await insert(DatabaseTables.coinTable, coin.toMap());
+}
+
+Future<void> updateCoin(CoinModel coin) async {
+  await update(
+    DatabaseTables.coinTable,
+    coin.toMap(),
+    where: 'uid = ?',
+    whereArgs: [coin.uid],
+  );
+}
+
+Future<void> deleteCoin(String uid) async {
+  await delete(
+    DatabaseTables.coinTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
+}
+
+Future<void> batchInsertCoins(List<CoinModel> coins) async {
+  final db = await database;
+  final batch = db.batch();
+  for (var coin in coins) {
+    batch.insert(DatabaseTables.coinTable, coin.toMap());
+  }
+  await batch.commit(noResult: true);
+}
+
+// ==================== CoinRate CRUD Operations ====================
+Future<List<CoinRateModel>> getAllCoinRates() async {
+  final rates = await query(DatabaseTables.coinRateTable);
+  return rates.map((rate) => CoinRateModel.fromMap(rate)).toList();
+}
+
+Future<CoinRateModel?> getCoinRateByUID(String uid) async {
+  final rates = await query(
+    DatabaseTables.coinRateTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
+  if (rates.isNotEmpty) {
+    return CoinRateModel.fromMap(rates.first);
+  }
+  return null;
+}
+
+Future<CoinRateModel?> getCoinRateByCase(String caseType) async {
+  final rates = await query(
+    DatabaseTables.coinRateTable,
+    where: 'case = ?',
+    whereArgs: [caseType],
+  );
+  if (rates.isNotEmpty) {
+    return CoinRateModel.fromMap(rates.first);
+  }
+  return null;
+}
+
+Future<void> insertCoinRate(CoinRateModel rate) async {
+  await insert(DatabaseTables.coinRateTable, rate.toMap());
+}
+
+Future<void> updateCoinRate(CoinRateModel rate) async {
+  await update(
+    DatabaseTables.coinRateTable,
+    rate.toMap(),
+    where: 'uid = ?',
+    whereArgs: [rate.uid],
+  );
+}
+
+Future<void> deleteCoinRate(String uid) async {
+  await delete(
+    DatabaseTables.coinRateTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
+}
+
+Future<void> batchInsertCoinRates(List<CoinRateModel> rates) async {
+  final db = await database;
+  final batch = db.batch();
+  for (var rate in rates) {
+    batch.insert(DatabaseTables.coinRateTable, rate.toMap());
+  }
+  await batch.commit(noResult: true);
 }
 // ==================== MapList CRUD Operations ====================
 Future<List<MapListModel>> getAllMapLists() async {
@@ -2007,10 +2136,14 @@ Map<String, dynamic> _getOrderedStaffbioMap(StaffbioModel model) {
   }
 
   // Clear tables
-  Future<void> clearTable(String table) async {
-    final db = await database;
-    await db.delete(table);
+  Future<void> clearTable(String tableName, {String? whereClause, List<dynamic>? whereArgs}) async {
+  final db = await database;
+  if (whereClause != null) {
+    await db.delete(tableName, where: whereClause, whereArgs: whereArgs);
+  } else {
+    await db.delete(tableName);
   }
+}
 
   Future<void> clearAllTables() async {
     await clearTable(DatabaseTables.staffbioTable);

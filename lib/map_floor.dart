@@ -303,106 +303,120 @@ class _MapFloorScreenState extends State<MapFloorScreen> with SingleTickerProvid
       ),
       
       Expanded(
-        child: InteractiveViewer(
-          constrained: false,
-          boundaryMargin: EdgeInsets.all(8),
-          minScale: 0.5,
-          maxScale: 5.0,
-          child: AspectRatio(
-            aspectRatio: aspectRatio,
-            child: Container(
-              margin: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(7),
-                child: Stack(
-                  children: [
-                    // Base map image
-                    if (mapData?.hinhAnhBanDo != null && mapData!.hinhAnhBanDo!.isNotEmpty)
-                      Positioned.fill(
-                        child: Opacity(
-                          opacity: 0.2,
-                          child: Image.network(
-                            mapData!.hinhAnhBanDo!,
-                            fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(color: Colors.grey[200]);
-                            },
-                          ),
-                        ),
-                      ),
-                    
-                    // Display floors at their actual positions and sizes
-                    ...floors.where((floor) => 
-                      visibleFloors.contains(floor.floorUID)
-                    ).map((floor) {
-                      // Get floor dimensions
-                      final floorWidth = floor.chieuDaiMet ?? mapWidth;
-                      final floorHeight = floor.chieuCaoMet ?? mapHeight;
-                      
-                      // Calculate position based on offsets
-                      final offsetX = floor.offsetX ?? 0;
-                      final offsetY = floor.offsetY ?? 0;
-                      
-                      // Convert to percentages of map size
-                      final leftPercent = (offsetX / mapWidth) * 100;
-                      final topPercent = (offsetY / mapHeight) * 100;
-                      final widthPercent = (floorWidth / mapWidth) * 100;
-                      final heightPercent = (floorHeight / mapHeight) * 100;
-                      
-                      return Positioned(
-                        left: leftPercent,
-                        top: topPercent,
-                        width: widthPercent,
-                        height: heightPercent,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: selectedFloorUID == floor.floorUID ? Colors.blue : Colors.grey,
-                              width: selectedFloorUID == floor.floorUID ? 2 : 1,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Calculate the size based on the available width and the aspect ratio
+            double width = constraints.maxWidth;
+            double height = width / aspectRatio;
+            
+            // If height exceeds available height, recalculate based on height
+            if (height > constraints.maxHeight) {
+              height = constraints.maxHeight;
+              width = height * aspectRatio;
+            }
+            
+            return InteractiveViewer(
+              constrained: true,
+              minScale: 0.5,
+              maxScale: 5.0,
+              child: Center(
+                child: Container(
+                  width: width,
+                  height: height,
+                  margin: EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(7),
+                    child: Stack(
+                      children: [
+                        // Base map image
+                        if (mapData?.hinhAnhBanDo != null && mapData!.hinhAnhBanDo!.isNotEmpty)
+                          Positioned.fill(
+                            child: Opacity(
+                              opacity: 0.2,
+                              child: Image.network(
+                                mapData!.hinhAnhBanDo!,
+                                fit: BoxFit.fill,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(color: Colors.grey[200]);
+                                },
+                              ),
                             ),
-                            color: Colors.white.withOpacity(0.7),
                           ),
-                          child: Stack(
-                            children: [
-                              if (floor.hinhAnhTang != null && floor.hinhAnhTang!.isNotEmpty)
-                                Positioned.fill(
-                                  child: Image.network(
-                                    floor.hinhAnhTang!,
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return SizedBox();
-                                    },
-                                  ),
+                        
+                        // Display floors at their actual positions and sizes
+                        ...floors.where((floor) => 
+                          visibleFloors.contains(floor.floorUID)
+                        ).map((floor) {
+                          // Get floor dimensions
+                          final floorWidth = floor.chieuDaiMet ?? mapWidth;
+                          final floorHeight = floor.chieuCaoMet ?? mapHeight;
+                          
+                          // Calculate position based on offsets
+                          final offsetX = floor.offsetX ?? 0;
+                          final offsetY = floor.offsetY ?? 0;
+                          
+                          // Convert to percentages of map size
+                          final leftPercent = (offsetX / mapWidth) * 100;
+                          final topPercent = (offsetY / mapHeight) * 100;
+                          final widthPercent = (floorWidth / mapWidth) * 100;
+                          final heightPercent = (floorHeight / mapHeight) * 100;
+                          
+                          return Positioned(
+                            left: leftPercent * width / 100,
+                            top: topPercent * height / 100,
+                            width: widthPercent * width / 100,
+                            height: heightPercent * height / 100,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: selectedFloorUID == floor.floorUID ? Colors.blue : Colors.grey,
+                                  width: selectedFloorUID == floor.floorUID ? 2 : 1,
                                 ),
-                              Positioned(
-                                left: 4,
-                                top: 4,
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  color: Colors.black.withOpacity(0.7),
-                                  child: Text(
-                                    floor.tenTang ?? '',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10,
+                                color: Colors.white.withOpacity(0.7),
+                              ),
+                              child: Stack(
+                                children: [
+                                  if (floor.hinhAnhTang != null && floor.hinhAnhTang!.isNotEmpty)
+                                    Positioned.fill(
+                                      child: Image.network(
+                                        floor.hinhAnhTang!,
+                                        fit: BoxFit.fill,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return SizedBox();
+                                        },
+                                      ),
+                                    ),
+                                  Positioned(
+                                    left: 4,
+                                    top: 4,
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      color: Colors.black.withOpacity(0.7),
+                                      child: Text(
+                                        floor.tenTang ?? '',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                ),
+                                ],
                               ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ],
+                            ),
+                          );
+                        }).toList(),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     ],

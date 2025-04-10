@@ -2043,6 +2043,73 @@ class MapZoneModel {
     );
   }
 }
+class CoinModel {
+  final String? uid;
+  final String? nguoiDung;
+  final String? ngay;
+  final int? soLuong;
+  final int? tongTien;
+
+  CoinModel({
+    this.uid,
+    this.nguoiDung,
+    this.ngay,
+    this.soLuong,
+    this.tongTien,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'uid': uid,
+    'nguoiDung': nguoiDung,
+    'ngay': ngay,
+    'soLuong': soLuong,
+    'tongTien': tongTien,
+  };
+
+  factory CoinModel.fromMap(Map<String, dynamic> map) {
+    return CoinModel(
+      uid: map['uid'],
+      nguoiDung: map['nguoiDung'],
+      ngay: map['ngay'],
+      soLuong: map['soLuong'] != null ? int.tryParse(map['soLuong'].toString()) : null,
+      tongTien: map['tongTien'] != null ? int.tryParse(map['tongTien'].toString()) : null,
+    );
+  }
+}
+
+class CoinRateModel {
+  final String? uid;
+  final String? caseType;
+  final int? startRate;
+  final int? endRate;
+  final int? maxCount;
+
+  CoinRateModel({
+    this.uid,
+    this.caseType,
+    this.startRate,
+    this.endRate,
+    this.maxCount,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'uid': uid,
+    'caseType': caseType,
+    'startRate': startRate,
+    'endRate': endRate,
+    'maxCount': maxCount,
+  };
+
+  factory CoinRateModel.fromMap(Map<String, dynamic> map) {
+    return CoinRateModel(
+      uid: map['uid'],
+      caseType: map['caseType'],
+      startRate: map['startRate'] != null ? int.tryParse(map['startRate'].toString()) : null,
+      endRate: map['endRate'] != null ? int.tryParse(map['endRate'].toString()) : null,
+      maxCount: map['maxCount'] != null ? int.tryParse(map['maxCount'].toString()) : null,
+    );
+  }
+}
 // Database Tables
 class DatabaseTables {
   // Table Names
@@ -2074,6 +2141,28 @@ class DatabaseTables {
      static const String mapListTable = 'Map_List';
   static const String mapFloorTable = 'Map_Floor';
   static const String mapZoneTable = 'Map_Zone';
+  static const String coinTable = 'Coin';
+  static const String coinRateTable = 'CoinRate';
+  static const String createCoinTable = '''
+    CREATE TABLE $coinTable (
+      uid VARCHAR(100),
+      nguoiDung VARCHAR(100),
+      ngay DATE,
+      soLuong INT,
+      tongTien INT
+    )
+  ''';
+  
+  static const String createCoinRateTable = '''
+    CREATE TABLE $coinRateTable (
+      uid VARCHAR(100),
+      caseType VARCHAR(100),
+      startRate INT,
+      endRate INT,
+      maxCount INT
+    )
+  ''';
+
   static const String createMapListTable = '''
     CREATE TABLE $mapListTable (
       mapUID VARCHAR(255) PRIMARY KEY,
