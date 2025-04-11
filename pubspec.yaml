@@ -1,7 +1,7 @@
 name: hmgroupweb
 description: "Ứng dụng công nghệ chuyển đổi số Hoàn Mỹ Group."
 publish_to: 'none'
-version: 0.4.6
+version: 0.4.7
 
 environment:
   sdk: ">=3.2.0 <4.0.0"
@@ -19,7 +19,7 @@ dependencies:
   encrypt: ^5.0.1
   provider: ^6.0.5
   shared_preferences: ^2.2.0
-  http: ^0.13.6
+  http: ^1.3.0
   intl: ^0.18.1
   excel: ^2.1.0
   video_player: ^2.8.1
@@ -54,6 +54,9 @@ dependencies:
   uuid: ^4.2.1
   confetti: ^0.8.0
   archive: ^3.3.7
+  flutter_map: ^6.0.1
+  latlong2: ^0.9.0
+  flutter_nfc_kit: ^3.6.0
 
 dev_dependencies:
   flutter_test:

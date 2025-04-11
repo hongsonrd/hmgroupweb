@@ -23,10 +23,10 @@ class MapFloorScreen extends StatefulWidget {
 }
 
 class _MapFloorScreenState extends State<MapFloorScreen> with SingleTickerProviderStateMixin {
+  final ValueNotifier<String?> hoveredZoneNotifier = ValueNotifier<String?>(null);
   final DBHelper dbHelper = DBHelper();
   final String baseUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app';
   late TabController _tabController;
-  
   MapListModel? mapData;
   List<MapFloorModel> floors = [];
   String? selectedFloorUID;
@@ -277,20 +277,23 @@ class _MapFloorScreenState extends State<MapFloorScreen> with SingleTickerProvid
             ),
             SizedBox(height: 8),
             
-            // Floor visibility toggles
+            // Floor visibility toggles - show only one floor at a time
+            Text('Chọn tầng để hiển thị:'),
+            SizedBox(height: 4),
             Wrap(
               spacing: 8,
               children: floors.map((floor) {
                 final isVisible = visibleFloors.contains(floor.floorUID);
-                return FilterChip(
+                return ChoiceChip(
                   label: Text(floor.tenTang ?? 'Không tên'),
                   selected: isVisible,
                   onSelected: (selected) {
                     setState(() {
+                      // Only one floor visible at a time
+                      visibleFloors.clear();
                       if (selected) {
                         visibleFloors.add(floor.floorUID!);
-                      } else {
-                        visibleFloors.remove(floor.floorUID!);
+                        selectedFloorUID = floor.floorUID;
                       }
                     });
                   },
@@ -370,43 +373,159 @@ class _MapFloorScreenState extends State<MapFloorScreen> with SingleTickerProvid
                             top: topPercent * height / 100,
                             width: widthPercent * width / 100,
                             height: heightPercent * height / 100,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: selectedFloorUID == floor.floorUID ? Colors.blue : Colors.grey,
-                                  width: selectedFloorUID == floor.floorUID ? 2 : 1,
-                                ),
-                                color: Colors.white.withOpacity(0.7),
-                              ),
-                              child: Stack(
-                                children: [
-                                  if (floor.hinhAnhTang != null && floor.hinhAnhTang!.isNotEmpty)
-                                    Positioned.fill(
-                                      child: Image.network(
-                                        floor.hinhAnhTang!,
-                                        fit: BoxFit.fill,
-                                        errorBuilder: (context, error, stackTrace) {
-                                          return SizedBox();
-                                        },
-                                      ),
+                            child: Stack(
+                              children: [
+                                // Floor background
+                                Container(
+                                  decoration: BoxDecoration(
+                                    border: Border.all(
+                                      color: selectedFloorUID == floor.floorUID ? Colors.blue : Colors.grey,
+                                      width: selectedFloorUID == floor.floorUID ? 2 : 1,
                                     ),
-                                  Positioned(
-                                    left: 4,
-                                    top: 4,
-                                    child: Container(
-                                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      color: Colors.black.withOpacity(0.7),
-                                      child: Text(
-                                        floor.tenTang ?? '',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 10,
+                                    color: Colors.white.withOpacity(0.7),
+                                  ),
+                                  child: Stack(
+                                    children: [
+                                      if (floor.hinhAnhTang != null && floor.hinhAnhTang!.isNotEmpty)
+                                        Positioned.fill(
+                                          child: Image.network(
+                                            floor.hinhAnhTang!,
+                                            fit: BoxFit.fill,
+                                            errorBuilder: (context, error, stackTrace) {
+                                              return SizedBox();
+                                            },
+                                          ),
                                         ),
+                                    ],
+                                  ),
+                                ),
+                                
+                                // We'll add zones here once we load them
+                                FutureBuilder<List<MapZoneModel>>(
+  future: dbHelper.getMapZonesByFloorUID(floor.floorUID!),
+  builder: (context, snapshot) {
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return Center(child: CircularProgressIndicator());
+    }
+    
+    if (snapshot.hasError) {
+      return SizedBox();
+    }
+    
+    final zones = snapshot.data ?? [];
+    
+    // Create a map of scaled points for each zone for faster access
+    final Map<String, List<Offset>> zonePointsMap = {};
+    
+    for (var zone in zones) {
+      try {
+  final pointsData = json.decode(zone.cacDiemMoc ?? '[]') as List;
+  if (pointsData.isEmpty) {
+    continue; 
+  }
+  final points = pointsData.map((point) {
+    if (point is! Map || !point.containsKey('x') || !point.containsKey('y')) {
+      return null;
+    }
+    return Offset(
+      (point['x'] as num).toDouble(),
+      (point['y'] as num).toDouble(),
+    );
+  }).whereType<Offset>().toList(); 
+  if (points.length < 3) {
+    continue;
+  }
+        
+        // Convert to scaled points
+        final scaledPoints = points.map((point) {
+          final xPercent = (point.dx - (floor.offsetX ?? 0)) / floorWidth;
+          final yPercent = (point.dy - (floor.offsetY ?? 0)) / floorHeight;
+          
+          return Offset(
+            xPercent * widthPercent * width / 100,
+            yPercent * heightPercent * height / 100,
+          );
+        }).toList();
+        
+        zonePointsMap[zone.zoneUID!] = scaledPoints;
+      } catch (e) {
+  print('Error processing zone points for ${zone.zoneUID}: $e');
+  continue;
+}
+    }
+    
+    return Stack(
+  children: [
+    ...zones.map((zone) {
+      // Parse color (unchanged)
+      Color zoneColor;
+try {
+  final colorStr = zone.mauSac ?? '#3388FF80';
+  if (colorStr.startsWith('#')) {
+    String hexColor = colorStr.substring(1);
+    if (hexColor.length == 6) {
+      zoneColor = Color(int.parse('0xFF$hexColor')).withOpacity(0.3);
+    } else if (hexColor.length == 8) {
+      final alpha = int.parse(hexColor.substring(6, 8), radix: 16);
+      final baseColor = Color(int.parse('0xFF${hexColor.substring(0, 6)}'));
+      zoneColor = baseColor.withOpacity(alpha / 255.0 * 0.6);
+    } else {
+      zoneColor = Colors.blue.withOpacity(0.3);
+    }
+  } else {
+    zoneColor = Colors.blue.withOpacity(0.3);
+  }
+} catch (e) {
+  print('Error parsing color: $e for color string: ${zone.mauSac}');
+  zoneColor = Colors.blue.withOpacity(0.3);
+}
+      
+      final scaledPoints = zonePointsMap[zone.zoneUID] ?? [];
+      
+      return Positioned.fill(
+  child: ClipPath(
+    clipper: ZoneClipper(points: scaledPoints),
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        _showZoneDetails(zone);
+      },
+      child: CustomPaint(
+        painter: ZoneAreaPainter(
+          points: scaledPoints,
+          color: zoneColor,
+          isHighlighted: zone.zoneUID == selectedZoneUID,
+        ),
+        size: Size(
+          widthPercent * width / 100,
+          heightPercent * height / 100,
+        ),
+      ),
+    ),
+  ),
+);
+    }).toList(),
+  ],
+);
+  },
+),             
+                                // Floor label
+                                Positioned(
+                                  left: 4,
+                                  top: 4,
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    color: Colors.black.withOpacity(0.7),
+                                    child: Text(
+                                      floor.tenTang ?? '',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
                                       ),
                                     ),
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           );
                         }).toList(),
@@ -422,7 +541,167 @@ class _MapFloorScreenState extends State<MapFloorScreen> with SingleTickerProvid
     ],
   );
 }
+void _showZoneDetails(MapZoneModel zone) {
+  setState(() {
+    selectedZoneUID = zone.zoneUID;
+  });
   
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(zone.tenKhuVuc ?? 'Khu vực không tên'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Display zone properties
+            Text('Thông tin khu vực:', style: TextStyle(fontWeight: FontWeight.bold)),
+            SizedBox(height: 8),
+            
+            // Display color
+            Row(
+              children: [
+                Text('Màu sắc: '),
+                Container(
+                  width: 20,
+                  height: 20,
+                  margin: EdgeInsets.only(left: 8),
+                  decoration: BoxDecoration(
+                    color: _parseColor(zone.mauSac ?? '#3388FF80'),
+                    border: Border.all(color: Colors.black),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                Text(' ${zone.mauSac ?? '#3388FF80'}'),
+              ],
+            ),
+            
+            SizedBox(height: 16),
+            
+            // Display points count
+            Text('Số điểm: ${_getPointsCount(zone.cacDiemMoc)}'),
+            
+            // Display zone ID
+            SizedBox(height: 8),
+            Text('Zone UID: ${zone.zoneUID ?? 'N/A'}', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            
+            // Display floor ID
+            Text('Floor UID: ${zone.floorUID ?? 'N/A'}', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            
+            // Show points data if not empty
+            if (zone.cacDiemMoc != null && zone.cacDiemMoc!.isNotEmpty) 
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(height: 16),
+                  Text('Dữ liệu điểm:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
+                  Container(
+                    padding: EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      _formatPointsData(zone.cacDiemMoc!),
+                      style: TextStyle(fontFamily: 'monospace', fontSize: 12),
+                      maxLines: 5,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('Đóng'),
+        ),
+        TextButton(
+          onPressed: () {
+            Navigator.pop(context);
+            // Add your edit logic here or show a message
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Chức năng chỉnh sửa đang được phát triển'))
+            );
+          },
+          style: TextButton.styleFrom(foregroundColor: Colors.blue),
+          child: Text('Sửa'),
+        ),
+        TextButton(
+          onPressed: () {
+            Navigator.pop(context);
+            _confirmDeleteZone(zone);
+          },
+          style: TextButton.styleFrom(foregroundColor: Colors.red),
+          child: Text('Xóa'),
+        ),
+      ],
+    ),
+  ).then((_) {
+    setState(() {
+      selectedZoneUID = null;
+    });
+  });
+}
+String _formatPointsData(String pointsJson) {
+  try {
+    final jsonData = json.decode(pointsJson);
+    final prettyJson = const JsonEncoder.withIndent('  ').convert(jsonData);
+    return prettyJson.length > 200 ? prettyJson.substring(0, 200) + '...' : prettyJson;
+  } catch (e) {
+    print('Error formatting points data: $e');
+    return 'Invalid JSON data';
+  }
+}
+Color _parseColor(String colorStr) {
+  try {
+    if (colorStr.startsWith('#')) {
+      String hexColor = colorStr.substring(1);
+      if (hexColor.length == 6) {
+        return Color(int.parse('0xFF$hexColor')).withOpacity(0.3);
+      } else if (hexColor.length == 8) {
+        final alpha = int.parse(hexColor.substring(6, 8), radix: 16);
+        final baseColor = Color(int.parse('0xFF${hexColor.substring(0, 6)}'));
+        return baseColor.withOpacity(alpha / 255.0 * 0.6);
+      }
+    }
+  } catch (e) {
+    print('Error parsing color: $e');
+  }
+  return Colors.blue.withOpacity(0.3);
+}
+
+int _getPointsCount(String? pointsJson) {
+  try {
+    if (pointsJson == null || pointsJson.isEmpty) return 0;
+    final points = json.decode(pointsJson) as List;
+    return points.length;
+  } catch (e) {
+    print('Error parsing points: $e');
+    return 0;
+  }
+}
+bool _isPointInPolygon(Offset point, List<Offset> polygon) {
+  bool isInside = false;
+  int i = 0, j = polygon.length - 1;
+  
+  for (i = 0; i < polygon.length; i++) {
+    if (((polygon[i].dy > point.dy) != (polygon[j].dy > point.dy)) &&
+        (point.dx < (polygon[j].dx - polygon[i].dx) * (point.dy - polygon[i].dy) / 
+        (polygon[j].dy - polygon[i].dy) + polygon[i].dx)) {
+      isInside = !isInside;
+    }
+    j = i;
+  }
+  
+  return isInside;
+}
+String? selectedZoneUID;
+  String? hoveredZoneUID;
   void _showAddFloorDialog() {
     final formKey = GlobalKey<FormState>();
     final tenTangController = TextEditingController();
@@ -678,7 +957,48 @@ class _MapFloorScreenState extends State<MapFloorScreen> with SingleTickerProvid
       ),
     );
   }
+  Future<String> _uploadImage(File image, String floorUID) async {
+  setState(() {
+    statusMessage = 'Đang tải hình ảnh lên máy chủ...';
+  });
   
+  try {
+    final uri = Uri.parse('$baseUrl/upload');
+    final request = http.MultipartRequest('POST', uri);
+    
+    final fileStream = http.ByteStream(image.openRead());
+    final fileLength = await image.length();
+    
+    final multipartFile = http.MultipartFile(
+      'file',
+      fileStream,
+      fileLength,
+      filename: path.basename(image.path),
+      contentType: MediaType('image', path.extension(image.path).replaceAll('.', '')),
+    );
+    
+    request.files.add(multipartFile);
+    request.fields['floorUID'] = floorUID;
+    
+    final response = await request.send();
+    
+    if (response.statusCode != 200) {
+      throw Exception('Failed to upload image: ${response.statusCode}');
+    }
+    
+    final responseBody = await response.stream.bytesToString();
+    final jsonResponse = json.decode(responseBody);
+    
+    if (jsonResponse['url'] == null) {
+      throw Exception('No image URL returned from server');
+    }
+    
+    return jsonResponse['url'];
+  } catch (e) {
+    print('Error uploading image: $e');
+    throw e;
+  }
+}
   void _showEditFloorDialog(MapFloorModel floor) {
     final formKey = GlobalKey<FormState>();
     final tenTangController = TextEditingController(text: floor.tenTang);
@@ -1057,73 +1377,432 @@ class _MapFloorScreenState extends State<MapFloorScreen> with SingleTickerProvid
   }
   
   void _showAddZoneDialog() {
-    if (selectedFloorUID == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Vui lòng chọn tầng trước khi thêm khu vực mới'))
-      );
-      return;
-    }
+  if (selectedFloorUID == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Vui lòng chọn tầng trước khi thêm khu vực mới'))
+    );
+    return;
+  }
+  
+  // Get the selected floor
+  final selectedFloor = floors.firstWhere(
+    (floor) => floor.floorUID == selectedFloorUID,
+    orElse: () => throw Exception('Không tìm thấy tầng đã chọn'),
+  );
+  
+  final formKey = GlobalKey<FormState>();
+  final zoneNameController = TextEditingController();
+  Color selectedColor = Colors.blue.withOpacity(0.5);
+  List<Offset> selectedPoints = [];
+  bool isDrawingMode = false;
+  
+  // Helper function to convert real-world coordinates to pixel coordinates
+  Offset realToPixel(Offset realPoint, Size mapSize, MapFloorModel floor) {
+    final mapWidth = mapData?.chieuDaiMet ?? 1200.0;
+    final mapHeight = mapData?.chieuCaoMet ?? 600.0;
     
-    // Implementation for zone creation will go here
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Thêm khu vực mới'),
-        content: Text('Chức năng đang được phát triển'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Đóng'),
-          ),
-        ],
-      ),
+    final floorWidth = floor.chieuDaiMet ?? mapWidth;
+    final floorHeight = floor.chieuCaoMet ?? mapHeight;
+    
+    final offsetX = floor.offsetX ?? 0;
+    final offsetY = floor.offsetY ?? 0;
+    
+    final xPercent = (realPoint.dx - offsetX) / floorWidth;
+    final yPercent = (realPoint.dy - offsetY) / floorHeight;
+    
+    return Offset(
+      xPercent * mapSize.width,
+      yPercent * mapSize.height,
+    );
+  }
+final String alpha = selectedColor.alpha.toRadixString(16).padLeft(2, '0');
+final String red = selectedColor.red.toRadixString(16).padLeft(2, '0');
+final String green = selectedColor.green.toRadixString(16).padLeft(2, '0');
+final String blue = selectedColor.blue.toRadixString(16).padLeft(2, '0');
+final String colorHex = '#$red$green$blue$alpha';
+final drawingContainerKey = GlobalKey();
+
+  // Helper function to convert pixel coordinates to real-world coordinates
+  Offset pixelToReal(Offset pixelPoint, Size mapSize, MapFloorModel floor) {
+    final mapWidth = mapData?.chieuDaiMet ?? 1200.0;
+    final mapHeight = mapData?.chieuCaoMet ?? 600.0;
+    
+    final floorWidth = floor.chieuDaiMet ?? mapWidth;
+    final floorHeight = floor.chieuCaoMet ?? mapHeight;
+    
+    final offsetX = floor.offsetX ?? 0;
+    final offsetY = floor.offsetY ?? 0;
+    
+    final xPercent = pixelPoint.dx / mapSize.width;
+    final yPercent = pixelPoint.dy / mapSize.height;
+    
+    return Offset(
+      xPercent * floorWidth + offsetX,
+      yPercent * floorHeight + offsetY,
     );
   }
   
-  // API methods
-  Future<String> _uploadImage(File image, String floorUID) async {
-    setState(() {
-      statusMessage = 'Đang tải hình ảnh lên máy chủ...';
-    });
-    
-    try {
-      final uri = Uri.parse('$baseUrl/upload');
-      final request = http.MultipartRequest('POST', uri);
+  showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) {
+        return AlertDialog(
+          title: Text('Thêm khu vực mới cho ${selectedFloor.tenTang}'),
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: zoneNameController,
+                    decoration: InputDecoration(labelText: 'Tên khu vực'),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Vui lòng nhập tên khu vực';
+                      }
+                      return null;
+                    },
+                  ),
+                  SizedBox(height: 16),
+                  
+                  Text('Chọn màu cho khu vực:'),
+                  SizedBox(height: 8),
+                  
+                  // Simple color selector
+                  Wrap(
+  spacing: 8,
+  runSpacing: 8,
+  children: [
+    Colors.red,
+    Colors.green,
+    Colors.blue,
+    Colors.yellow,
+    Colors.purple,
+    Colors.orange,
+    Colors.pink,
+    Colors.teal,
+  ].map((color) {
+    return GestureDetector(
+      onTap: () {
+        setDialogState(() {
+          // Use a lower opacity value for better transparency
+          selectedColor = color.withOpacity(0.3);
+        });
+      },
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          // Also use the lower opacity for the preview
+          color: color.withOpacity(0.3),
+          border: Border.all(
+            color: selectedColor.value == color.withOpacity(0.3).value 
+              ? Colors.black 
+              : Colors.transparent,
+            width: 2,
+          ),
+          borderRadius: BorderRadius.circular(4),
+        ),
+      ),
+    );
+  }).toList(),
+),
+                  SizedBox(height: 16),
+                  
+                  Text('Vẽ khu vực trên bản đồ:'),
+                  SizedBox(height: 8),
+                  Container(
+  key: drawingContainerKey,
+  height: 300,
+  decoration: BoxDecoration(
+    border: Border.all(color: Colors.grey),
+    borderRadius: BorderRadius.circular(4),
+  ),
+  child: Stack(
+    children: [
+      // Floor image
+      if (selectedFloor.hinhAnhTang != null && selectedFloor.hinhAnhTang!.isNotEmpty)
+        Positioned.fill(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: Image.network(
+              selectedFloor.hinhAnhTang!,
+              fit: BoxFit.fill,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(color: Colors.grey[200]);
+              },
+            ),
+          ),
+        ),
       
-      final fileStream = http.ByteStream(image.openRead());
-      final fileLength = await image.length();
+      // Zone drawing area with direct position calculation
+      Positioned.fill(
+  child: GestureDetector(
+    onTapDown: isDrawingMode ? (details) {
+      // Get the RenderBox of the drawing container
+      final RenderBox box = drawingContainerKey.currentContext!.findRenderObject() as RenderBox;
+      // Get the local position within the container
+      final localPosition = box.globalToLocal(details.globalPosition);
       
-      final multipartFile = http.MultipartFile(
-        'file',
-        fileStream,
-        fileLength,
-        filename: path.basename(image.path),
-        contentType: MediaType('image', path.extension(image.path).replaceAll('.', '')),
-      );
-      
-      request.files.add(multipartFile);
-      request.fields['floorUID'] = floorUID;
-      
-      final response = await request.send();
-      
-      if (response.statusCode != 200) {
-        throw Exception('Failed to upload image: ${response.statusCode}');
+      // Ensure the point is within bounds
+      if (localPosition.dx >= 0 && 
+          localPosition.dx <= box.size.width &&
+          localPosition.dy >= 0 && 
+          localPosition.dy <= box.size.height) {
+        
+        // Add point, scaled to 0-1 for easier conversion later
+        setDialogState(() {
+          selectedPoints.add(Offset(
+            localPosition.dx / box.size.width,
+            localPosition.dy / box.size.height,
+          ));
+        });
       }
-      
-      final responseBody = await response.stream.bytesToString();
-      final jsonResponse = json.decode(responseBody);
-      
-      if (jsonResponse['url'] == null) {
-        throw Exception('No image URL returned from server');
-      }
-      
-      return jsonResponse['url'];
-    } catch (e) {
-      print('Error uploading image: $e');
-      throw e;
-    }
-  }
+    } : null,
+    child: CustomPaint(
+  size: Size.infinite,
+  painter: ZoneAreaPainter(
+    points: selectedPoints.map((point) => Offset(
+      point.dx * 300,
+      point.dy * 300,
+    )).toList(),
+    color: selectedColor,
+    isDrawingMode: true,  
+  ),
+),
+  ),
+),
+    ],
+  ),
+),
+                  SizedBox(height: 8),
+                  
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      ElevatedButton.icon(
+                        icon: Icon(
+                          isDrawingMode ? Icons.edit_off : Icons.edit,
+                          size: 18,
+                        ),
+                        label: Text(isDrawingMode ? 'Dừng vẽ' : 'Bắt đầu vẽ'),
+                        onPressed: () {
+                          setDialogState(() {
+                            isDrawingMode = !isDrawingMode;
+                          });
+                        },
+                      ),
+                      ElevatedButton.icon(
+                        icon: Icon(Icons.clear, size: 18),
+                        label: Text('Xóa điểm'),
+                        onPressed: selectedPoints.isNotEmpty ? () {
+                          setDialogState(() {
+                            if (selectedPoints.isNotEmpty) {
+                              selectedPoints.removeLast();
+                            }
+                          });
+                        } : null,
+                      ),
+                    ],
+                  ),
+                  Text(
+                    'Số điểm đã chọn: ${selectedPoints.length}',
+                    style: TextStyle(fontStyle: FontStyle.italic),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Hủy'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (formKey.currentState!.validate() && selectedPoints.length >= 3) {
+                  Navigator.pop(context);
+                  
+                  // Create new zone with unique ID
+                  String zoneUID = 'zone_${DateTime.now().millisecondsSinceEpoch}';
+                  
+                  setState(() {
+                    isLoading = true;
+                    statusMessage = 'Đang tạo khu vực mới...';
+                  });
+                  
+                  try {
+                    // Convert the points to JSON
+                    final mapSize = Size(300, 300); // The size of your drawing area
+                    final realPoints = selectedPoints.map((point) {
+  // Since points are stored as 0-1 values, convert to real-world coordinates
+  final xReal = (point.dx * selectedFloor.chieuDaiMet!) + (selectedFloor.offsetX ?? 0);
+  final yReal = (point.dy * selectedFloor.chieuCaoMet!) + (selectedFloor.offsetY ?? 0);
   
+  return Offset(xReal, yReal);
+}).toList();
+
+                    final pointsJson = json.encode(realPoints.map((point) {
+  return {'x': point.dx, 'y': point.dy};
+}).toList());
+                    
+                    // Convert color to hex string
+                    final colorHex = '#${selectedColor.value.toRadixString(16).padLeft(8, '0').substring(2)}';
+
+                    // Create zone model
+                    final newZone = MapZoneModel(
+                      zoneUID: zoneUID,
+                      floorUID: selectedFloorUID!,
+                      tenKhuVuc: zoneNameController.text,
+                      cacDiemMoc: pointsJson,
+                      mauSac: colorHex,
+                    );
+                    
+                    // Save to server
+                    await _saveZoneToServer(newZone);
+                    
+                    // Save to local database
+                    await dbHelper.insertMapZone(newZone);
+                    
+                    // Reload zones
+                    // You'll need to implement a method to load zones
+                    // await _loadZones();
+                    
+                    setState(() {
+                      isLoading = false;
+                      statusMessage = '';
+                    });
+                    
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Khu vực mới đã được tạo thành công'))
+                    );
+                  } catch (e) {
+                    setState(() {
+                      isLoading = false;
+                      statusMessage = 'Lỗi: $e';
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Lỗi khi tạo khu vực mới: $e'))
+                    );
+                  }
+                } else if (selectedPoints.length < 3) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Cần ít nhất 3 điểm để tạo khu vực'))
+                  );
+                }
+              },
+              child: Text('Tạo'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+Future<void> _saveZoneToServer(MapZoneModel zone) async {
+  setState(() {
+    statusMessage = 'Đang lưu dữ liệu khu vực lên máy chủ...';
+  });
+  
+  try {
+    final uri = Uri.parse('$baseUrl/mapzone/${zone.zoneUID}');
+    final response = await http.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(zone.toMap()),
+    );
+    
+    if (response.statusCode != 200) {
+      throw Exception('Failed to save zone: ${response.statusCode}');
+    }
+  } catch (e) {
+    print('Error saving zone to server: $e');
+    throw e;
+  }
+}
+  Future<void> _deleteZoneFromServer(String zoneUID) async {
+  setState(() {
+    statusMessage = 'Đang xóa khu vực từ máy chủ...';
+  });
+  
+  try {
+    final uri = Uri.parse('$baseUrl/mapzone/$zoneUID');
+    final response = await http.delete(uri);
+    
+    if (response.statusCode != 200) {
+      throw Exception('Failed to delete zone: ${response.statusCode}');
+    }
+  } catch (e) {
+    print('Error deleting zone from server: $e');
+    throw e;
+  }
+}
+
+void _confirmDeleteZone(MapZoneModel zone) {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('Xác nhận xóa'),
+      content: Text('Bạn có chắc muốn xóa khu vực "${zone.tenKhuVuc ?? 'Không tên'}"? Thao tác này không thể hoàn tác.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('Hủy'),
+        ),
+        TextButton(
+          style: TextButton.styleFrom(foregroundColor: Colors.red),
+          onPressed: () async {
+            Navigator.pop(context);
+            
+            setState(() {
+              isLoading = true;
+              statusMessage = 'Đang xóa khu vực...';
+              selectedZoneUID = null; // Clear selected zone immediately
+            });
+            
+            try {
+              // Delete from server
+              await _deleteZoneFromServer(zone.zoneUID!);
+              
+              // Delete from local database
+              await dbHelper.deleteMapZone(zone.zoneUID!);
+              
+              // Force UI refresh by toggling visibility
+              if (mounted) {
+                setState(() {
+                  // This will force the FutureBuilder to rebuild
+                  selectedFloorUID = null;
+                  setState(() {
+                    selectedFloorUID = zone.floorUID;
+                  });
+                  
+                  isLoading = false;
+                  statusMessage = '';
+                });
+                
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Khu vực đã được xóa thành công'))
+                );
+              }
+            } catch (e) {
+              if (mounted) {
+                setState(() {
+                  isLoading = false;
+                  statusMessage = 'Lỗi: $e';
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Lỗi khi xóa khu vực: $e'))
+                );
+              }
+            }
+          },
+          child: Text('Xóa'),
+        ),
+      ],
+    ),
+  );
+}
   Future<void> _saveFloorToServer(MapFloorModel floor) async {
     setState(() {
       statusMessage = 'Đang lưu dữ liệu tầng lên máy chủ...';
@@ -1163,4 +1842,113 @@ class _MapFloorScreenState extends State<MapFloorScreen> with SingleTickerProvid
       throw e;
     }
   }
+}
+class ZoneAreaPainter extends CustomPainter {
+  final List<Offset> points;
+  final Color color;
+  final bool isHighlighted;
+  final bool isDrawingMode; // Add this parameter
+  
+  ZoneAreaPainter({
+    required this.points, 
+    required this.color, 
+    this.isHighlighted = false,
+    this.isDrawingMode = false, // Default to false
+  });
+  
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.isEmpty) return;
+    
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    
+    final path = Path();
+    
+    // Start from the first point
+    path.moveTo(points.first.dx, points.first.dy);
+    
+    // Add lines to each point
+    for (int i = 1; i < points.length; i++) {
+      path.lineTo(points[i].dx, points[i].dy);
+    }
+    
+    // Close the path only if we have 3+ points or we're not in drawing mode
+    if (points.length >= 3 || !isDrawingMode) {
+      path.close();
+    }
+    
+    // Draw the filled path
+    canvas.drawPath(path, paint);
+    
+    // Add highlight border if hovered
+    if (isHighlighted) {
+      final borderPaint = Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3;
+      
+      canvas.drawPath(path, borderPaint);
+    }
+    
+    // Draw the points if in editing mode or highlighted
+    if (isHighlighted || isDrawingMode) {
+      final pointPaint = Paint()
+        ..color = Colors.red
+        ..style = PaintingStyle.fill;
+      
+      for (var point in points) {
+        canvas.drawCircle(point, 5, pointPaint);
+      }
+      
+      // Draw lines connecting the points
+      final linePaint = Paint()
+        ..color = Colors.red
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
+      
+      for (int i = 0; i < points.length; i++) {
+        final current = points[i];
+        // Only connect to next point if there is one
+        if (i < points.length - 1) {
+          final next = points[i + 1];
+          canvas.drawLine(current, next, linePaint);
+        } 
+        // Connect last point to first only if we're not in drawing mode or have enough points
+        else if (!isDrawingMode || points.length >= 3) {
+          canvas.drawLine(current, points[0], linePaint);
+        }
+      }
+    }
+  }
+  
+  @override
+  bool shouldRepaint(covariant ZoneAreaPainter oldDelegate) {
+    return oldDelegate.points != points || 
+           oldDelegate.color != color || 
+           oldDelegate.isHighlighted != isHighlighted ||
+           oldDelegate.isDrawingMode != isDrawingMode;
+  }
+}
+class ZoneClipper extends CustomClipper<Path> {
+  final List<Offset> points;
+  
+  ZoneClipper({required this.points});
+  
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    if (points.isEmpty) return path;
+    
+    path.moveTo(points.first.dx, points.first.dy);
+    for (int i = 1; i < points.length; i++) {
+      path.lineTo(points[i].dx, points[i].dy);
+    }
+    path.close();
+    return path;
+  }
+  
+  @override
+  bool shouldReclip(ZoneClipper oldClipper) => oldClipper.points != points;
 }

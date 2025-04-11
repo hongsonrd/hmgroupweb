@@ -6,6 +6,7 @@ import 'http_client.dart';
 import 'db_helper.dart'; 
 import 'table_models.dart'; 
 import 'map_floor.dart'; 
+import 'map_report.dart'; 
 
 class MapProjectScreen extends StatefulWidget {
   final String username;
@@ -323,57 +324,35 @@ class _MapProjectScreenState extends State<MapProjectScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          ListTile(
-                            title: Text(
-                              map.tenBanDo ?? 'Không có tên',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            subtitle: Text(map.boPhan ?? 'Không có bộ phận'),
-                            trailing: Icon(
-                              isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down
-                            ),
-                            onTap: () {
-                              setState(() {
-                                if (isExpanded) {
-                                  selectedMapUID = null;
-                                } else {
-                                  selectedMapUID = map.mapUID;
-                                }
-                              });
-                            },
-                          ),
-                          
-                          // Preview of map image
-                          if (map.hinhAnhBanDo != null && map.hinhAnhBanDo!.isNotEmpty)
-                            Container(
-                              height: 180,
-                              width: double.infinity,
-                              child: map.hinhAnhBanDo!.startsWith('http')
-                                ? Image.network(
-                                    map.hinhAnhBanDo!,
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Center(
-                                        child: Icon(Icons.broken_image, size: 50, color: Colors.grey),
-                                      );
-                                    },
-                                    loadingBuilder: (context, child, loadingProgress) {
-                                      if (loadingProgress == null) return child;
-                                      return Center(
-                                        child: CircularProgressIndicator(
-                                          value: loadingProgress.expectedTotalBytes != null
-                                            ? loadingProgress.cumulativeBytesLoaded / 
-                                              loadingProgress.expectedTotalBytes!
-                                            : null,
-                                        ),
-                                      );
-                                    },
-                                  )
-                                : Center(
-                                    child: Text('Không thể hiển thị hình ảnh'),
-                                  ),
-                            ),
-                          
+                          Container(
+  decoration: BoxDecoration(
+    gradient: LinearGradient(
+      colors: [Colors.green.shade100, Colors.green.shade200],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    borderRadius: BorderRadius.circular(18),
+  ),
+  child: ListTile(
+    title: Text(
+      map.tenBanDo ?? 'Không có tên',
+      style: TextStyle(fontWeight: FontWeight.bold),
+    ),
+    subtitle: Text(map.boPhan ?? 'Không có bộ phận'),
+    trailing: Icon(
+      isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+    ),
+    onTap: () {
+      setState(() {
+        if (isExpanded) {
+          selectedMapUID = null;
+        } else {
+          selectedMapUID = map.mapUID;
+        }
+      });
+    },
+  ),
+),
                           // Map details
                           Padding(
                             padding: const EdgeInsets.all(12.0),
@@ -406,7 +385,36 @@ class _MapProjectScreenState extends State<MapProjectScreen> {
                               ],
                             ),
                           ),
-                          
+                          // Preview of map image
+                          if (map.hinhAnhBanDo != null && map.hinhAnhBanDo!.isNotEmpty)
+                            Container(
+                              height: 180,
+                              width: double.infinity,
+                              child: map.hinhAnhBanDo!.startsWith('http')
+                                ? Image.network(
+                                    map.hinhAnhBanDo!,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Center(
+                                        child: Icon(Icons.broken_image, size: 50, color: Colors.grey),
+                                      );
+                                    },
+                                    loadingBuilder: (context, child, loadingProgress) {
+                                      if (loadingProgress == null) return child;
+                                      return Center(
+                                        child: CircularProgressIndicator(
+                                          value: loadingProgress.expectedTotalBytes != null
+                                            ? loadingProgress.cumulativeBytesLoaded / 
+                                              loadingProgress.expectedTotalBytes!
+                                            : null,
+                                        ),
+                                      );
+                                    },
+                                  )
+                                : Center(
+                                    child: Text('Không thể hiển thị hình ảnh'),
+                                  ),
+                            ),
                           if (isExpanded)
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -418,31 +426,46 @@ class _MapProjectScreenState extends State<MapProjectScreen> {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                     children: [
-                                      ElevatedButton.icon(
-                                        icon: Icon(Icons.edit),
-                                        label: Text('Sửa bản đồ'),
-                                        onPressed: () {
-                                          Navigator.push(
-                                            context, 
-                                            MaterialPageRoute(
-                                              builder: (context) => MapFloorScreen(
-                                                mapUID: map.mapUID!,
-                                                mapName: map.tenBanDo ?? 'Bản đồ'
-                                              )
-                                            )
-                                          );
-                                        },
-                                      ),
-                                      ElevatedButton.icon(
-                                        icon: Icon(Icons.bar_chart),
-                                        label: Text('Xem báo cáo'),
-                                        onPressed: () {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text('Tính năng đang phát triển'))
-                                          );
-                                        },
-                                      ),
-                                    ],
+  ElevatedButton.icon(
+    icon: Icon(Icons.bar_chart),
+    label: Text('Xem báo cáo'),
+    style: ElevatedButton.styleFrom(
+      backgroundColor: Colors.blue, // Blue background
+      foregroundColor: Colors.white, // White text/icon
+    ),
+    onPressed: () {
+      Navigator.push(
+        context, 
+        MaterialPageRoute(
+          builder: (context) => MapReportScreen(
+            mapUID: map.mapUID!,
+            mapName: map.tenBanDo ?? 'Bản đồ',
+          ),
+        ),
+      );
+    },
+  ),
+  ElevatedButton.icon(
+    icon: Icon(Icons.edit),
+    label: Text('Sửa bản đồ'),
+    style: ElevatedButton.styleFrom(
+      backgroundColor: Colors.red, // Red background
+      foregroundColor: Colors.white, // White text/icon
+    ),
+    onPressed: () {
+      Navigator.push(
+        context, 
+        MaterialPageRoute(
+          builder: (context) => MapFloorScreen(
+            mapUID: map.mapUID!,
+            mapName: map.tenBanDo ?? 'Bản đồ',
+          ),
+        ),
+      );
+    },
+  ),
+],
+
                                   ),
                                   SizedBox(height: 16),
                                   
