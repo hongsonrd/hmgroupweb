@@ -7,6 +7,7 @@ import 'db_helper.dart';
 import 'table_models.dart'; 
 import 'map_floor.dart'; 
 import 'map_report.dart'; 
+import 'package:cached_network_image/cached_network_image.dart';
 
 class MapProjectScreen extends StatefulWidget {
   final String username;
@@ -42,52 +43,205 @@ class _MapProjectScreenState extends State<MapProjectScreen> {
   }
   
   Future<void> _syncData() async {
-    if (_isSyncing) return;
-    
+  if (_isSyncing) return;
+  setState(() {
+    _isSyncing = true;
+    _syncStatus = 'Đang đồng bộ dữ liệu...';
+  });
+  try {
+    // Step 1: Sync project list
+    await _syncProjectList();
+    // Step 2: Sync map list
+    await _syncMapList();
+    // Step 3: Sync map floors
+    await _syncMapFloors();
+    // Step 4: Sync map zones
+    await _syncMapZones();
+    // Step 5: Sync map staff
+    await _syncMapStaff();
+    // Step 6: Sync map positions
+    await _syncMapPositions();
+    // Step 7: Sync map reports
+    await _syncMapReports();
+    // Save last sync date
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    await prefs.setString('last_map_sync_date', today);
     setState(() {
-      _isSyncing = true;
-      _syncStatus = 'Đang đồng bộ dữ liệu...';
+      _syncStatus = 'Đồng bộ hoàn tất';
     });
-    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Đồng bộ dữ liệu bản đồ thành công')),
+    );
+  } catch (e) {
+    setState(() {
+      _syncStatus = 'Lỗi đồng bộ: $e';
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Lỗi đồng bộ dữ liệu: $e')),
+    );
+  } finally {
+    setState(() {
+      _isSyncing = false;
+    });
+  }
+}
+  Future<void> _syncMapStaff() async {
+  setState(() => _syncStatus = 'Đang lấy danh sách nhân viên bản đồ...');
+  final mapStaffResponse = await AuthenticatedHttpClient.get(
+    Uri.parse('$baseUrl/mapstaff')
+  );
+  if (mapStaffResponse.statusCode != 200) {
+    throw Exception('Failed to load map staff: ${mapStaffResponse.statusCode}');
+  }
+  final String responseText = mapStaffResponse.body;
+  final List<dynamic> mapStaffData = json.decode(responseText);
+  await dbHelper.clearTable(DatabaseTables.mapStaffTable);
+  final List<MapStaffModel> mapStaffs = [];
+  for (var staff in mapStaffData) {
     try {
-      // Step 1: Sync project list
-      await _syncProjectList();
-      
-      // Step 2: Sync map list
-      await _syncMapList();
-      
-      // Step 3: Sync map floors
-      await _syncMapFloors();
-      
-      // Step 4: Sync map zones
-      await _syncMapZones();
-      
-      // Save last sync date
-      final prefs = await SharedPreferences.getInstance();
-      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      await prefs.setString('last_map_sync_date', today);
-      
-      setState(() {
-        _syncStatus = 'Đồng bộ hoàn tất';
-      });
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Đồng bộ dữ liệu bản đồ thành công')),
+      final model = MapStaffModel(
+        uid: staff['UID'] ?? '',
+        mapProject: staff['MapProject'] ?? '',
+        nguoiDung: staff['NguoiDung'] ?? '',
+        hoTen: staff['HoTen'] ?? '',
+        vaiTro: staff['VaiTro'] ?? '',
       );
+      mapStaffs.add(model);
     } catch (e) {
-      setState(() {
-        _syncStatus = 'Lỗi đồng bộ: $e';
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi đồng bộ dữ liệu: $e')),
+      print('Error creating map staff model: $e');
+      print('Problematic data: $staff');
+      throw e;
+    }
+  }
+  await _batchInsertMapStaff(mapStaffs);
+}
+Future<void> _syncMapPositions() async {
+  setState(() => _syncStatus = 'Đang lấy danh sách vị trí bản đồ...');
+  final mapPositionResponse = await AuthenticatedHttpClient.get(
+    Uri.parse('$baseUrl/mapposition')
+  );
+  if (mapPositionResponse.statusCode != 200) {
+    throw Exception('Failed to load map positions: ${mapPositionResponse.statusCode}');
+  }
+  final String responseText = mapPositionResponse.body;
+  final List<dynamic> mapPositionData = json.decode(responseText);
+  await dbHelper.clearTable(DatabaseTables.mapPositionTable);
+
+  final List<MapPositionModel> mapPositions = [];
+  for (var position in mapPositionData) {
+    try {
+      final model = MapPositionModel(
+        uid: position['UID'] ?? '',
+        mapList: position['MapList'] ?? '',
+        mapFloor: position['MapFloor'] ?? '',
+        mapZone: position['MapZone'] ?? '',
+        viTri: position['ViTri'] ?? '',
       );
-    } finally {
-      setState(() {
-        _isSyncing = false;
-      });
+      mapPositions.add(model);
+    } catch (e) {
+      print('Error creating map position model: $e');
+      print('Problematic data: $position');
+      throw e;
+    }
+  }
+  await _batchInsertMapPosition(mapPositions);
+}
+Future<void> _batchInsertMapPosition(List<MapPositionModel> mapPositions) async {
+  final db = await dbHelper.database;
+  final batch = db.batch();
+  for (var position in mapPositions) {
+    batch.insert(DatabaseTables.mapPositionTable, position.toMap());
+  }
+  await batch.commit(noResult: true);
+}
+
+Future<void> _batchInsertMapStaff(List<MapStaffModel> mapStaffs) async {
+  final db = await dbHelper.database;
+  final batch = db.batch();
+  for (var staff in mapStaffs) {
+    batch.insert(DatabaseTables.mapStaffTable, staff.toMap());
+  }
+  await batch.commit(noResult: true);
+}
+Future<void> _syncMapReports() async {
+  setState(() => _syncStatus = 'Đang lấy báo cáo bản đồ...');
+  final mapReportResponse = await AuthenticatedHttpClient.get(
+    Uri.parse('$baseUrl/mapreport')
+  );
+  
+  if (mapReportResponse.statusCode != 200) {
+    throw Exception('Failed to load map reports: ${mapReportResponse.statusCode}');
+  }
+
+  final String responseText = mapReportResponse.body;
+  final List<dynamic> mapReportData = json.decode(responseText);
+  
+  // Extract all UIDs from the incoming data
+  final List<String> incomingUIDs = [];
+  for (var report in mapReportData) {
+    if (report['UID'] != null) {
+      incomingUIDs.add(report['UID'].toString());
     }
   }
   
+  // Delete any existing records with UIDs that match the incoming data
+  if (incomingUIDs.isNotEmpty) {
+    final db = await dbHelper.database;
+    final placeholders = incomingUIDs.map((_) => '?').join(',');
+    await db.execute(
+      'DELETE FROM ${DatabaseTables.taskHistoryTable} WHERE UID IN ($placeholders)',
+      incomingUIDs
+    );
+  }
+  
+  // Create TaskHistory models from map report data
+  final List<Map<String, dynamic>> taskHistories = [];
+  final Set<String> processedUIDs = {}; // Track UIDs we've seen to avoid duplicates
+  
+  for (var report in mapReportData) {
+    try {
+      final String uid = report['UID']?.toString() ?? '';
+      
+      // Skip if we've already processed this UID or if it's empty
+      if (uid.isEmpty || processedUIDs.contains(uid)) continue;
+      processedUIDs.add(uid);
+      
+      final Map<String, dynamic> taskMap = {
+        'UID': uid,
+        'NguoiDung': report['NguoiDung'] ?? '',
+        'TaskID': report['TaskID'] ?? '',
+        'KetQua': report['KetQua'] ?? '',
+        'Ngay': report['Ngay'] ?? DateFormat('yyyy-MM-dd').format(DateTime.now()),
+        'Gio': report['Gio'] ?? DateFormat('HH:mm:ss').format(DateTime.now()),
+        'ChiTiet': report['ChiTiet'] ?? '',
+        'ChiTiet2': report['ChiTiet2'] ?? '',
+        'ViTri': report['ViTri'] ?? '',
+        'BoPhan': report['BoPhan'] ?? '',
+        'PhanLoai': report['PhanLoai'] ?? 'map_report',
+        'HinhAnh': report['HinhAnh'] ?? '',
+        'GiaiPhap': report['GiaiPhap'] ?? '',
+      };
+      taskHistories.add(taskMap);
+    } catch (e) {
+      print('Error creating task history from map report: $e');
+      print('Problematic data: $report');
+    }
+  }
+
+  // Batch insert task histories
+  if (taskHistories.isNotEmpty) {
+    await _batchInsertTaskHistory(taskHistories);
+  }
+}
+
+Future<void> _batchInsertTaskHistory(List<Map<String, dynamic>> taskHistories) async {
+  final batch = await dbHelper.database.then((db) => db.batch());
+  for (var taskHistory in taskHistories) {
+    batch.insert(DatabaseTables.taskHistoryTable, taskHistory);
+  }
+  await batch.commit(noResult: true);
+}
   Future<void> _syncProjectList() async {
     setState(() => _syncStatus = 'Đang lấy danh sách dự án...');
     final projectResponse = await AuthenticatedHttpClient.get(
@@ -391,26 +545,12 @@ class _MapProjectScreenState extends State<MapProjectScreen> {
                               height: 180,
                               width: double.infinity,
                               child: map.hinhAnhBanDo!.startsWith('http')
-                                ? Image.network(
-                                    map.hinhAnhBanDo!,
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Center(
-                                        child: Icon(Icons.broken_image, size: 50, color: Colors.grey),
-                                      );
-                                    },
-                                    loadingBuilder: (context, child, loadingProgress) {
-                                      if (loadingProgress == null) return child;
-                                      return Center(
-                                        child: CircularProgressIndicator(
-                                          value: loadingProgress.expectedTotalBytes != null
-                                            ? loadingProgress.cumulativeBytesLoaded / 
-                                              loadingProgress.expectedTotalBytes!
-                                            : null,
-                                        ),
-                                      );
-                                    },
-                                  )
+                                ? CachedNetworkImage(
+  imageUrl: map.hinhAnhBanDo!,
+  fit: BoxFit.contain,
+  placeholder: (context, url) => Center(child: CircularProgressIndicator()),
+  errorWidget: (context, url, error) => Icon(Icons.broken_image),
+)
                                 : Center(
                                     child: Text('Không thể hiển thị hình ảnh'),
                                   ),

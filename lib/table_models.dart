@@ -2110,6 +2110,73 @@ class CoinRateModel {
     );
   }
 }
+class MapStaffModel {
+  final String? uid;
+  final String? mapProject;
+  final String? nguoiDung;
+  final String? hoTen;
+  final String? vaiTro;
+
+  MapStaffModel({
+    this.uid,
+    this.mapProject,
+    this.nguoiDung,
+    this.hoTen,
+    this.vaiTro,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'uid': uid,
+    'mapProject': mapProject,
+    'nguoiDung': nguoiDung,
+    'hoTen': hoTen,
+    'vaiTro': vaiTro,
+  };
+
+  factory MapStaffModel.fromMap(Map<String, dynamic> map) {
+    return MapStaffModel(
+      uid: map['uid'],
+      mapProject: map['mapProject'],
+      nguoiDung: map['nguoiDung'],
+      hoTen: map['hoTen'],
+      vaiTro: map['vaiTro'],
+    );
+  }
+}
+
+class MapPositionModel {
+  final String? uid;
+  final String? mapList;
+  final String? mapFloor;
+  final String? mapZone;
+  final String? viTri;
+
+  MapPositionModel({
+    this.uid,
+    this.mapList,
+    this.mapFloor,
+    this.mapZone,
+    this.viTri,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'uid': uid,
+    'mapList': mapList,
+    'mapFloor': mapFloor,
+    'mapZone': mapZone,
+    'viTri': viTri,
+  };
+
+  factory MapPositionModel.fromMap(Map<String, dynamic> map) {
+    return MapPositionModel(
+      uid: map['uid'],
+      mapList: map['mapList'],
+      mapFloor: map['mapFloor'],
+      mapZone: map['mapZone'],
+      viTri: map['viTri'],
+    );
+  }
+}
 // Database Tables
 class DatabaseTables {
   // Table Names
@@ -2143,6 +2210,27 @@ class DatabaseTables {
   static const String mapZoneTable = 'Map_Zone';
   static const String coinTable = 'Coin';
   static const String coinRateTable = 'CoinRate';
+    static const String mapStaffTable = 'Map_Staff';
+  static const String mapPositionTable = 'Map_Position';
+  static const String createMapStaffTable = '''
+    CREATE TABLE $mapStaffTable (
+      uid VARCHAR(100),
+      mapProject VARCHAR(200),
+      nguoiDung VARCHAR(100),
+      hoTen VARCHAR(200),
+      vaiTro VARCHAR(200)
+    )
+  ''';
+  
+  static const String createMapPositionTable = '''
+    CREATE TABLE $mapPositionTable (
+      uid VARCHAR(100),
+      mapList VARCHAR(200),
+      mapFloor VARCHAR(200),
+      mapZone VARCHAR(200),
+      viTri VARCHAR(200)
+    )
+  ''';
   static const String createCoinTable = '''
     CREATE TABLE $coinTable (
       uid VARCHAR(100),

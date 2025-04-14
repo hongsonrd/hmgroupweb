@@ -1,4 +1,7 @@
 // db_helper.dart
+import 'package:intl/intl.dart';
+import 'dart:math';
+
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'table_models.dart';
@@ -36,14 +39,13 @@ class DBHelper {
     }
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool hasReset = prefs.getBool('db_reset_v19') ?? false;
+    bool hasReset = prefs.getBool('db_reset_v20') ?? false;
     
     if (!hasReset) {
-      print('Forcing database reset for version 19...');
+      print('Forcing database reset for version 20...');
       try {
         await deleteDatabase(path);
-        //await prefs.clear();
-        await prefs.setBool('db_reset_v19', true);
+        await prefs.setBool('db_reset_v20', true);
         print('Database reset successful');
       } catch (e) {
         print('Error during database reset: $e');
@@ -55,48 +57,47 @@ class DBHelper {
     final db = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 19,
+        version: 20,
         onCreate: (Database db, int version) async {
           print('Creating database tables...');
           await db.execute(DatabaseTables.createInteractionTable);
-        await db.execute(DatabaseTables.createStaffbioTable);
-        await db.execute(DatabaseTables.createChecklistTable);
-        await db.execute(DatabaseTables.createTaskHistoryTable);
-        await db.execute(DatabaseTables.createVTHistoryTable);
-        await db.execute(DatabaseTables.createStaffListTable);
-        await db.execute(DatabaseTables.createPositionListTable);
-        await db.execute(DatabaseTables.createProjectListTable);
-        await db.execute(DatabaseTables.createBaocaoTable);
-        await db.execute(DatabaseTables.createDongPhucTable);
-        await db.execute(DatabaseTables.createChiTietDPTable);
-        await db.execute(DatabaseTables.createOrderMatHangTable);
-        await db.execute(DatabaseTables.createOrderTable);
-        await db.execute(DatabaseTables.createOrderChiTietTable);
-        await db.execute(DatabaseTables.createOrderDinhMucTable);
-        await db.execute(DatabaseTables.createChamCongCNTable);
-        await db.execute(DatabaseTables.createHinhAnhZaloTable);
-        await db.execute(DatabaseTables.createHDDuTruTable); 
-        await db.execute(DatabaseTables.createHDChiTietYCMMTable); 
-        await db.execute(DatabaseTables.createHDYeuCauMMTable); 
-        await db.execute(DatabaseTables.createChamCongTable); 
-        await db.execute(DatabaseTables.createChamCongGioTable); 
-        await db.execute(DatabaseTables.createChamCongLSTable);  
-        await db.execute(DatabaseTables.createChamCongCNThangTable); 
-        await db.execute(DatabaseTables.createChamCongVangNghiTcaTable); 
-        await ChecklistInitializer.initializeChecklistTable(db);
-        await db.execute(DatabaseTables.createMapListTable);
-        await db.execute(DatabaseTables.createMapFloorTable);
-        await db.execute(DatabaseTables.createMapZoneTable);
-        print('Database tables created successfully');
-      },
-      onUpgrade: (Database db, int oldVersion, int newVersion) async {
-        if (oldVersion < 19) {
-          print('Upgrading database: adding baocao table');
+          await db.execute(DatabaseTables.createStaffbioTable);
+          await db.execute(DatabaseTables.createChecklistTable);
+          await db.execute(DatabaseTables.createTaskHistoryTable);
+          await db.execute(DatabaseTables.createVTHistoryTable);
+          await db.execute(DatabaseTables.createStaffListTable);
+          await db.execute(DatabaseTables.createPositionListTable);
+          await db.execute(DatabaseTables.createProjectListTable);
+          await db.execute(DatabaseTables.createBaocaoTable);
+          await db.execute(DatabaseTables.createDongPhucTable);
+          await db.execute(DatabaseTables.createChiTietDPTable);
+          await db.execute(DatabaseTables.createOrderMatHangTable);
+          await db.execute(DatabaseTables.createOrderTable);
+          await db.execute(DatabaseTables.createOrderChiTietTable);
+          await db.execute(DatabaseTables.createOrderDinhMucTable);
+          await db.execute(DatabaseTables.createChamCongCNTable);
+          await db.execute(DatabaseTables.createHinhAnhZaloTable);
+          await db.execute(DatabaseTables.createHDDuTruTable); 
+          await db.execute(DatabaseTables.createHDChiTietYCMMTable); 
+          await db.execute(DatabaseTables.createHDYeuCauMMTable); 
+          await db.execute(DatabaseTables.createChamCongTable); 
+          await db.execute(DatabaseTables.createChamCongGioTable); 
+          await db.execute(DatabaseTables.createChamCongLSTable);  
+          await db.execute(DatabaseTables.createChamCongCNThangTable); 
+          await db.execute(DatabaseTables.createChamCongVangNghiTcaTable); 
+          await ChecklistInitializer.initializeChecklistTable(db);
           await db.execute(DatabaseTables.createMapListTable);
           await db.execute(DatabaseTables.createMapFloorTable);
           await db.execute(DatabaseTables.createMapZoneTable);
           await db.execute(DatabaseTables.createCoinTable);
           await db.execute(DatabaseTables.createCoinRateTable);
+          await db.execute(DatabaseTables.createMapStaffTable);
+          await db.execute(DatabaseTables.createMapPositionTable);
+          print('Database tables created successfully');
+        },
+        onUpgrade: (Database db, int oldVersion, int newVersion) async {
+          if (oldVersion < 20) {
+
           }
         },
         onOpen: (db) async {
@@ -117,6 +118,511 @@ class DBHelper {
     print('Stack trace: $stackTrace');
     rethrow;
   }
+}
+// ==================== MapStaff CRUD Operations ====================
+Future<List<MapStaffModel>> getAllMapStaff() async {
+  final staffs = await query(DatabaseTables.mapStaffTable);
+  return staffs.map((staff) => MapStaffModel.fromMap(staff)).toList();
+}
+
+Future<MapStaffModel?> getMapStaffByUID(String uid) async {
+  final staffs = await query(
+    DatabaseTables.mapStaffTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
+  if (staffs.isNotEmpty) {
+    return MapStaffModel.fromMap(staffs.first);
+  }
+  return null;
+}
+
+Future<List<MapStaffModel>> getMapStaffByProject(String mapProject) async {
+  final staffs = await query(
+    DatabaseTables.mapStaffTable,
+    where: 'mapProject = ?',
+    whereArgs: [mapProject],
+  );
+  return staffs.map((staff) => MapStaffModel.fromMap(staff)).toList();
+}
+
+Future<List<MapStaffModel>> getMapStaffByUser(String nguoiDung) async {
+  final staffs = await query(
+    DatabaseTables.mapStaffTable,
+    where: 'nguoiDung = ?',
+    whereArgs: [nguoiDung],
+  );
+  return staffs.map((staff) => MapStaffModel.fromMap(staff)).toList();
+}
+
+Future<void> insertMapStaff(MapStaffModel staff) async {
+  await insert(DatabaseTables.mapStaffTable, staff.toMap());
+}
+
+Future<void> updateMapStaff(MapStaffModel staff) async {
+  await update(
+    DatabaseTables.mapStaffTable,
+    staff.toMap(),
+    where: 'uid = ?',
+    whereArgs: [staff.uid],
+  );
+}
+
+Future<void> deleteMapStaff(String uid) async {
+  await delete(
+    DatabaseTables.mapStaffTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
+}
+
+// ==================== MapPosition CRUD Operations ====================
+// Get positions in a specific zone
+Future<List<MapPositionModel>> getMapPositionsByZone({
+  required String mapUID,
+  required String floorUID, 
+  required String zoneUID,
+}) async {
+  final db = await database;
+  
+  // First, get the actual names from the IDs
+  final mapList = await db.query(
+    DatabaseTables.mapListTable,
+    columns: ['tenBanDo'],
+    where: 'mapUID = ?',
+    whereArgs: [mapUID],
+    limit: 1
+  );
+  
+  final mapFloor = await db.query(
+    DatabaseTables.mapFloorTable,
+    columns: ['tenTang'],
+    where: 'floorUID = ?',
+    whereArgs: [floorUID],
+    limit: 1
+  );
+  
+  final mapZone = await db.query(
+    DatabaseTables.mapZoneTable,
+    columns: ['tenKhuVuc'],
+    where: 'zoneUID = ?',
+    whereArgs: [zoneUID],
+    limit: 1
+  );
+  
+  if (mapList.isEmpty || mapFloor.isEmpty || mapZone.isEmpty) {
+    print('Could not find map, floor, or zone names for the specified IDs');
+    return [];
+  }
+  
+  final mapName = mapList.first['tenBanDo'] as String;
+  final floorName = mapFloor.first['tenTang'] as String;
+  final zoneName = mapZone.first['tenKhuVuc'] as String;
+  
+  print('Searching for positions with MapList=$mapName, MapFloor=$floorName, MapZone=$zoneName');
+  
+  // Now query by names instead of IDs
+  final result = await db.query(
+    DatabaseTables.mapPositionTable,
+    where: 'MapList = ? AND MapFloor = ? AND MapZone = ?',
+    whereArgs: [mapName, floorName, zoneName],
+  );
+  
+  print('Found ${result.length} map positions');
+  return result.map((e) => MapPositionModel.fromMap(e)).toList();
+}
+
+// Get all reports for a specific position
+Future<List<Map<String, dynamic>>> getReportsByPosition(String position) async {
+  final db = await database;
+  print('Searching for reports with ViTri = $position');
+  
+  // Query TaskHistory table where ViTri exactly matches the position and PhanLoai is 'map_report'
+  final result = await db.query(
+    DatabaseTables.taskHistoryTable,
+    where: 'ViTri = ? AND PhanLoai = ?',
+    whereArgs: [position, 'map_report'],
+    orderBy: 'Ngay DESC, Gio DESC',
+  );
+  
+  print('Found ${result.length} reports for position $position');
+  return result;
+}
+
+// Get total report count for a zone
+Future<int> getReportCountForZone({required String zoneUID}) async {
+  final db = await database;
+  print('Looking for report count for zone: $zoneUID');
+  
+  // First get the zone name
+  final zoneResult = await db.query(
+    DatabaseTables.mapZoneTable,
+    columns: ['tenKhuVuc'],
+    where: 'zoneUID = ?',
+    whereArgs: [zoneUID],
+    limit: 1
+  );
+  
+  if (zoneResult.isEmpty) {
+    print('Could not find zone with ID $zoneUID');
+    return 0;
+  }
+  
+  final zoneName = zoneResult.first['tenKhuVuc'] as String;
+  
+  // Get all positions in this zone
+  final positions = await db.query(
+    DatabaseTables.mapPositionTable,
+    columns: ['ViTri'],
+    where: 'MapZone = ?',
+    whereArgs: [zoneName],
+  );
+  
+  print('Found ${positions.length} positions in zone $zoneName');
+  
+  if (positions.isEmpty) return 0;
+  
+  final positionNames = positions.map((p) => p['ViTri'] as String).toList();
+  print('Position names: $positionNames');
+  
+  // Count reports for each position
+  int totalCount = 0;
+  for (var pos in positionNames) {
+    final countResult = await db.query(
+      DatabaseTables.taskHistoryTable,
+      columns: ['COUNT(*) as count'],
+      where: 'ViTri = ? AND PhanLoai = ?',
+      whereArgs: [pos, 'map_report'],
+    );
+    
+    if (countResult.isNotEmpty) {
+      final count = Sqflite.firstIntValue(countResult) ?? 0;
+      totalCount += count;
+      print('Found $count reports for position $pos');
+    }
+  }
+  
+  print('Total reports for zone $zoneName: $totalCount');
+  return totalCount;
+}
+
+// Calculate average daily report count for a zone
+Future<double> getAverageDailyReportCountForZone({required String zoneUID}) async {
+  final db = await database;
+  print('Calculating average daily report count for zone: $zoneUID');
+  
+  // Get total report count
+  final totalReports = await getReportCountForZone(zoneUID: zoneUID);
+  
+  if (totalReports == 0) return 0.0;
+  
+  // Get zone name
+  final zoneResult = await db.query(
+    DatabaseTables.mapZoneTable,
+    columns: ['tenKhuVuc'],
+    where: 'zoneUID = ?',
+    whereArgs: [zoneUID],
+    limit: 1
+  );
+  
+  if (zoneResult.isEmpty) {
+    print('Could not find zone with ID $zoneUID');
+    return 0.0;
+  }
+  
+  final zoneName = zoneResult.first['tenKhuVuc'] as String;
+  
+  // Get positions in this zone
+  final positions = await db.query(
+    DatabaseTables.mapPositionTable,
+    columns: ['ViTri'],
+    where: 'MapZone = ?',
+    whereArgs: [zoneName],
+  );
+  
+  if (positions.isEmpty) return 0.0;
+  
+  final positionNames = positions.map((p) => p['ViTri'] as String).toList();
+  
+  // Get distinct days with reports for these positions
+  Set<String> uniqueDays = {};
+  
+  for (var pos in positionNames) {
+    final daysResult = await db.query(
+      DatabaseTables.taskHistoryTable,
+      columns: ['DISTINCT Ngay'],
+      where: 'ViTri = ? AND PhanLoai = ?',
+      whereArgs: [pos, 'map_report'],
+    );
+    
+    for (var day in daysResult) {
+      uniqueDays.add(day['Ngay'] as String);
+    }
+  }
+  
+  final totalDays = uniqueDays.length;
+  print('Found reports on ${totalDays} unique days for zone $zoneName');
+  
+  // Avoid division by zero
+  if (totalDays == 0) return 0.0;
+  
+  return totalReports / totalDays;
+}
+// Debug function to check TaskHistory records
+Future<void> debugTaskHistoryViTri() async {
+  final db = await database;
+  
+  // Get all distinct ViTri values from TaskHistory table where PhanLoai is map_report
+  final distinctViTriResult = await db.rawQuery(
+    'SELECT DISTINCT ViTri FROM ${DatabaseTables.taskHistoryTable} WHERE PhanLoai = ?',
+    ['map_report']
+  );
+  
+  print('Found ${distinctViTriResult.length} distinct ViTri values in TaskHistory with PhanLoai = map_report:');
+  for (var item in distinctViTriResult) {
+    print('ViTri: "${item['ViTri']}"');
+  }
+  
+  // Get a sample of records for each ViTri
+  for (var item in distinctViTriResult) {
+    final vitri = item['ViTri'];
+    final sampleRecords = await db.query(
+      DatabaseTables.taskHistoryTable,
+      where: 'ViTri = ? AND PhanLoai = ?',
+      whereArgs: [vitri, 'map_report'],
+      limit: 2
+    );
+    
+    print('\nSample records for ViTri = "$vitri":');
+    for (var record in sampleRecords) {
+      print('UID: ${record['UID']}, Date: ${record['Ngay']}, Result: ${record['KetQua']}');
+    }
+  }
+  
+  // Also check what positions are in MapPosition table
+  final positionResult = await db.query(DatabaseTables.mapPositionTable, limit: 10);
+  print('\nSample of positions in MapPosition table (max 10):');
+  for (var pos in positionResult) {
+    print('UID: ${pos['uid']}, MapList: ${pos['mapList']}, MapZone: ${pos['mapZone']}, ViTri: "${pos['viTri']}"');
+  }
+  
+  // Compare ViTri values to see matches
+  final mapPositionViTri = await db.rawQuery(
+    'SELECT DISTINCT viTri FROM ${DatabaseTables.mapPositionTable}'
+  );
+  
+  final taskHistoryViTri = await db.rawQuery(
+    'SELECT DISTINCT ViTri FROM ${DatabaseTables.taskHistoryTable} WHERE PhanLoai = ?',
+    ['map_report']
+  );
+  
+  final mapPositionViTriValues = mapPositionViTri.map((item) => item['viTri'].toString()).toSet();
+  final taskHistoryViTriValues = taskHistoryViTri.map((item) => item['ViTri'].toString()).toSet();
+  
+  final intersection = mapPositionViTriValues.intersection(taskHistoryViTriValues);
+  
+  print('\nComparison of ViTri values:');
+  print('MapPosition distinct ViTri count: ${mapPositionViTriValues.length}');
+  print('TaskHistory distinct ViTri count: ${taskHistoryViTriValues.length}');
+  print('Matching ViTri values between tables: ${intersection.length}');
+  
+  if (intersection.isEmpty) {
+    print('\nNo matching ViTri values found! Sample comparison:');
+    print('MapPosition ViTri examples: ${mapPositionViTriValues.take(5).join(", ")}');
+    print('TaskHistory ViTri examples: ${taskHistoryViTriValues.take(5).join(", ")}');
+  } else {
+    print('\nMatching ViTri examples: ${intersection.take(5).join(", ")}');
+  }
+}
+Future<void> debugTableRecordCounts() async {
+  final db = await database;
+  
+  // Check TaskHistory table
+  final taskHistoryCount = Sqflite.firstIntValue(
+    await db.rawQuery('SELECT COUNT(*) FROM ${DatabaseTables.taskHistoryTable}')
+  ) ?? 0;
+  
+  print('TaskHistory table record count: $taskHistoryCount');
+  
+  // Check if there are any map_report records specifically
+  final mapReportCount = Sqflite.firstIntValue(
+    await db.rawQuery('SELECT COUNT(*) FROM ${DatabaseTables.taskHistoryTable} WHERE PhanLoai = ?', ['map_report'])
+  ) ?? 0;
+  
+  print('TaskHistory records with PhanLoai = "map_report": $mapReportCount');
+  
+  // Check other relevant tables
+  final mapPositionCount = Sqflite.firstIntValue(
+    await db.rawQuery('SELECT COUNT(*) FROM ${DatabaseTables.mapPositionTable}')
+  ) ?? 0;
+  
+  print('MapPosition table record count: $mapPositionCount');
+  
+  final mapZoneCount = Sqflite.firstIntValue(
+    await db.rawQuery('SELECT COUNT(*) FROM ${DatabaseTables.mapZoneTable}')
+  ) ?? 0;
+  
+  print('MapZone table record count: $mapZoneCount');
+  
+  // Check the last sync date for map data
+  final prefs = await SharedPreferences.getInstance();
+  final lastSyncDate = prefs.getString('last_map_sync_date') ?? 'Never';
+  
+  print('Last map sync date: $lastSyncDate');
+}
+Future<void> addTestMapReports() async {
+  final db = await database;
+  
+  // First check if there are already map reports
+  final count = Sqflite.firstIntValue(
+    await db.rawQuery('SELECT COUNT(*) FROM ${DatabaseTables.taskHistoryTable} WHERE PhanLoai = ?', ['map_report'])
+  ) ?? 0;
+  
+  if (count > 0) {
+    print('Map reports already exist. No test data added.');
+    return;
+  }
+  
+  print('Adding test map reports...');
+  
+  // Get positions from MapPosition table
+  final positions = await db.query(DatabaseTables.mapPositionTable);
+  
+  if (positions.isEmpty) {
+    print('No positions found in MapPosition table. Cannot create test reports.');
+    return;
+  }
+  
+  // Create test reports for each position
+  final batch = db.batch();
+  final today = DateTime.now();
+  final random = Random();
+  
+  for (var position in positions) {
+    final viTri = position['viTri'];
+    if (viTri == null || viTri.toString().isEmpty) continue;
+    
+    // Randomize the number of reports for this position (0-5)
+    final reportCount = random.nextInt(6);
+    
+    for (int i = 0; i < reportCount; i++) {
+      // Create a report date between today and 30 days ago
+      final daysAgo = random.nextInt(30);
+      final reportDate = today.subtract(Duration(days: daysAgo));
+      final formattedDate = DateFormat('yyyy-MM-dd').format(reportDate);
+      
+      // Randomize report time
+      final hour = random.nextInt(12) + 8; // 8am to 8pm
+      final minute = random.nextInt(60);
+      final formattedTime = '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}:00';
+      
+      // Create varied report text
+      final resultOptions = [
+        'Kiểm tra vệ sinh',
+        'Kiểm tra thiết bị',
+        'Đánh giá chất lượng',
+        'Báo cáo sự cố',
+        'Báo cáo tình trạng',
+      ];
+      
+      final detailOptions = [
+        'Đã kiểm tra và xử lý',
+        'Cần bổ sung vật tư',
+        'Hoạt động bình thường',
+        'Có vấn đề cần xử lý',
+        'Cần kiểm tra lại',
+      ];
+      
+      final solutionOptions = [
+        'Tiếp tục theo dõi',
+        'Cần báo cáo quản lý',
+        'Đã xử lý xong',
+        'Cần gọi bảo trì',
+        'Không cần xử lý thêm',
+      ];
+      
+      final result = resultOptions[random.nextInt(resultOptions.length)];
+      final detail = detailOptions[random.nextInt(detailOptions.length)];
+      final solution = solutionOptions[random.nextInt(solutionOptions.length)];
+      
+      // Create unique UID for each report
+      final uid = 'test-${viTri.toString().hashCode}-$i-${DateTime.now().millisecondsSinceEpoch}';
+      
+      batch.insert(DatabaseTables.taskHistoryTable, {
+        'UID': uid,
+        'NguoiDung': 'TestUser',
+        'TaskID': 'test-task-$i',
+        'KetQua': result,
+        'Ngay': formattedDate,
+        'Gio': formattedTime,
+        'ChiTiet': '$detail cho vị trí $viTri',
+        'ChiTiet2': '',
+        'ViTri': viTri.toString(),
+        'BoPhan': position['MapZone']?.toString() ?? 'Test Zone',
+        'PhanLoai': 'map_report',
+        'HinhAnh': '',
+        'GiaiPhap': solution,
+      });
+    }
+  }
+  
+  await batch.commit();
+  print('Added varied test map reports for ${positions.length} positions');
+}
+Future<List<MapPositionModel>> getAllMapPositions() async {
+  final positions = await query(DatabaseTables.mapPositionTable);
+  return positions.map((position) => MapPositionModel.fromMap(position)).toList();
+}
+
+Future<MapPositionModel?> getMapPositionByUID(String uid) async {
+  final positions = await query(
+    DatabaseTables.mapPositionTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
+  if (positions.isNotEmpty) {
+    return MapPositionModel.fromMap(positions.first);
+  }
+  return null;
+}
+
+Future<List<MapPositionModel>> getMapPositionsByMapList(String mapList) async {
+  final positions = await query(
+    DatabaseTables.mapPositionTable,
+    where: 'mapList = ?',
+    whereArgs: [mapList],
+  );
+  return positions.map((position) => MapPositionModel.fromMap(position)).toList();
+}
+
+Future<List<MapPositionModel>> getMapPositionsByFloor(String mapFloor) async {
+  final positions = await query(
+    DatabaseTables.mapPositionTable,
+    where: 'mapFloor = ?',
+    whereArgs: [mapFloor],
+  );
+  return positions.map((position) => MapPositionModel.fromMap(position)).toList();
+}
+
+Future<void> insertMapPosition(MapPositionModel position) async {
+  await insert(DatabaseTables.mapPositionTable, position.toMap());
+}
+
+Future<void> updateMapPosition(MapPositionModel position) async {
+  await update(
+    DatabaseTables.mapPositionTable,
+    position.toMap(),
+    where: 'uid = ?',
+    whereArgs: [position.uid],
+  );
+}
+
+Future<void> deleteMapPosition(String uid) async {
+  await delete(
+    DatabaseTables.mapPositionTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
 }
 // ==================== Coin CRUD Operations ====================
 Future<List<CoinModel>> getAllCoins() async {
