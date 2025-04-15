@@ -62,7 +62,7 @@ class _MapProjectScreenState extends State<MapProjectScreen> {
     // Step 6: Sync map positions
     await _syncMapPositions();
     // Step 7: Sync map reports
-    await _syncMapReports();
+    //await _syncMapReports();
     // Save last sync date
     final prefs = await SharedPreferences.getInstance();
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());

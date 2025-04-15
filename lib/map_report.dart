@@ -8,6 +8,8 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
 import 'package:sqflite/sqflite.dart';
+import 'dart:async';
+import 'package:uuid/uuid.dart';
 
 class MapReportScreen extends StatefulWidget {
   final String mapUID;
@@ -23,30 +25,210 @@ class MapReportScreen extends StatefulWidget {
   _MapReportScreenState createState() => _MapReportScreenState();
 }
 
-class _MapReportScreenState extends State<MapReportScreen> {
+class _MapReportScreenState extends State<MapReportScreen> with TickerProviderStateMixin {
   final DBHelper dbHelper = DBHelper();
   final Map<String, Widget> zoneWidgetCache = {};
   bool _isSyncing = false;
-
+final Map<String, List<PositionDot>> zonePositionDots = {};
+  late AnimationController _dotsAnimationController;
+  Random random = Random();
+Timer? _dotAnimationTimer;
+Timer? _dotTargetTimer;
   MapListModel? mapData;
   List<MapFloorModel> floors = [];
   String? selectedFloorUID;
-  
+  bool _statsVisible = true;
   bool isLoading = false;
   String statusMessage = '';
   Set<String> visibleFloors = {};
-
+List<Map<String, dynamic>> hoverStats = [
+  {
+    'title': 'Vị trí đã báo cáo/tổng',
+    'icon': Icons.location_on,
+    'value': '0/0',
+    'color': Colors.blue,
+    'futureType': 'positionRatio'
+  },
+  {
+    'title': 'Người dùng báo cáo hôm nay',
+    'icon': Icons.person,
+    'value': '0',
+    'color': Colors.orange,
+    'futureType': 'usersToday'
+  },
+  {
+    'title': 'Báo cáo máy móc',
+    'icon': Icons.build,
+    'value': '0',
+    'color': Colors.purple,
+    'futureType': 'machineReports'
+  },
+  {
+    'title': 'Giờ có báo cáo',
+    'icon': Icons.access_time,
+    'value': '0',
+    'color': Colors.green,
+    'futureType': 'reportHours'
+  },
+];
+bool _statsLoaded = false;
   @override
-  void initState() {
-    super.initState();
-    _loadMapData();
-    _loadFloors();
-    _loadFloors().then((_) => _preloadZones());
-    dbHelper.debugTaskHistoryViTri();
-    dbHelper.debugTableRecordCounts().then((_) {
-    dbHelper.addTestMapReports();
+void initState() {
+  super.initState();
+  print("MapReportScreen: initState called");
+  _loadMapData();
+  _loadFloors().then((_) => _preloadZones());
+   _loadHoverStats();
+  //dbHelper.debugTaskHistoryViTri();
+  //dbHelper.debugTableRecordCounts().then((_) {
+  //  dbHelper.addTestMapReports();
+  //});
+  // Initialize animation controller with proper debugging
+  print("Setting up animation controller");
+  _dotsAnimationController = AnimationController(
+    vsync: this,
+    duration: Duration(seconds: 5), 
+  );
+  _dotsAnimationController.addListener(() {
+    // Don't call setState in the listener for slow animations
+    // This could cause performance issues
+    print("Animation value: ${_dotsAnimationController.value}");
   });
+  // Start the animation after a short delay
+  Future.delayed(Duration(milliseconds: 500), () {
+    if (mounted) {
+      print("Starting animation");
+      _dotsAnimationController.repeat(reverse: true);
+    }
+  });
+}
+  @override
+void dispose() {
+  _dotsAnimationController.dispose();
+  _dotAnimationTimer?.cancel();
+  _dotTargetTimer?.cancel();
+  super.dispose();
+}
+Future<void> _loadHoverStats() async {
+  if (_statsLoaded) return;
+  
+  try {
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    
+    for (var i = 0; i < hoverStats.length; i++) {
+      final futureType = hoverStats[i]['futureType'] as String;
+      String result = '?';
+      
+      switch (futureType) {
+        case 'positionRatio':
+          result = await _getReportedPositionsRatio();
+          break;
+        case 'usersToday':
+          result = await _getUsersReportingToday();
+          break;
+        case 'machineReports':
+          result = await _getMachineReportsCount();
+          break;
+        case 'reportHours':
+          result = await _getReportHoursCount();
+          break;
+      }
+      
+      if (mounted) {
+        setState(() {
+          hoverStats[i]['value'] = result;
+        });
+      }
+    }
+    
+    _statsLoaded = true;
+  } catch (e) {
+    print('Error loading hover stats: $e');
   }
+}
+Future<String> _getReportedPositionsRatio() async {
+  try {
+    final db = await dbHelper.database;
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    
+    // Get total unique positions
+    final totalResult = await db.rawQuery('''
+      SELECT COUNT(DISTINCT viTri) as count
+      FROM ${DatabaseTables.mapPositionTable}
+    ''');
+    
+    final totalPositions = totalResult.first['count'] as int? ?? 0;
+    
+    // Get reported positions for TODAY only
+    final reportedResult = await db.rawQuery('''
+      SELECT COUNT(DISTINCT ViTri) as count
+      FROM ${DatabaseTables.taskHistoryTable}
+      WHERE PhanLoai = 'map_report' AND date(Ngay, '+1 day') = date(?)
+    ''', [today]);
+    
+    final reportedPositions = reportedResult.first['count'] as int? ?? 0;
+    
+    return '$reportedPositions/$totalPositions';
+  } catch (e) {
+    print('Error getting position ratio: $e');
+    return '?/?';
+  }
+}
+
+Future<String> _getUsersReportingToday() async {
+  try {
+    final db = await dbHelper.database;
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    
+    // Query using date +1 day adjustment
+    final result = await db.rawQuery('''
+      SELECT COUNT(DISTINCT NguoiDung) as count
+      FROM ${DatabaseTables.taskHistoryTable}
+      WHERE PhanLoai = 'map_report' AND date(Ngay, '+1 day') = date(?)
+    ''', [today]);
+    
+    return (result.first['count'] as int? ?? 0).toString();
+  } catch (e) {
+    print('Error getting users count: $e');
+    return '?';
+  }
+}
+
+Future<String> _getMachineReportsCount() async {
+  try {
+    final db = await dbHelper.database;
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    
+    final result = await db.rawQuery('''
+      SELECT COUNT(*) as count
+      FROM ${DatabaseTables.taskHistoryTable}
+      WHERE PhanLoai = 'map_report' AND BoPhan = 'Máy móc' 
+      AND date(Ngay, '+1 day') = date(?)
+    ''', [today]);
+    
+    return (result.first['count'] as int? ?? 0).toString();
+  } catch (e) {
+    print('Error getting machine reports: $e');
+    return '?';
+  }
+}
+
+Future<String> _getReportHoursCount() async {
+  try {
+    final db = await dbHelper.database;
+    
+    final result = await db.rawQuery('''
+      SELECT COUNT(DISTINCT substr(Gio, 1, 2)) as count
+      FROM ${DatabaseTables.taskHistoryTable}
+      WHERE PhanLoai = 'map_report'
+    ''');
+    
+    return (result.first['count'] as int? ?? 0).toString();
+  } catch (e) {
+    print('Error getting report hours: $e');
+    return '?';
+  }
+}
   Future<void> _syncMapReports() async {
   if (_isSyncing) return;
   
@@ -103,14 +285,15 @@ class _MapReportScreenState extends State<MapReportScreen> {
         }
         
         processedUIDs.add(uid);
-        
+        final reportDate = report['Ngay'] ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
+
         final Map<String, dynamic> taskMap = {
-          'UID': uid,
-          'NguoiDung': report['NguoiDung'] ?? '',
-          'TaskID': report['TaskID'] ?? '',
-          'KetQua': report['KetQua'] ?? '',
-          'Ngay': report['Ngay'] ?? DateFormat('yyyy-MM-dd').format(DateTime.now()),
-          'Gio': report['Gio'] ?? DateFormat('HH:mm:ss').format(DateTime.now()),
+  'UID': uid,
+  'NguoiDung': report['NguoiDung'] ?? '',
+  'TaskID': report['TaskID'] ?? '',
+  'KetQua': report['KetQua'] ?? '',
+  'Ngay': _normalizeDateString(reportDate),
+  'Gio': report['Gio'] ?? DateFormat('HH:mm:ss').format(DateTime.now()),
           'ChiTiet': report['ChiTiet'] ?? '',
           'ChiTiet2': report['ChiTiet2'] ?? '',
           'ViTri': report['ViTri'] ?? '',
@@ -156,6 +339,10 @@ class _MapReportScreenState extends State<MapReportScreen> {
       print('Successfully inserted $successCount map reports');
     }
     
+    // Step 5: Sync checklist data
+    setState(() => statusMessage = 'Đang đồng bộ lịch công việc (checklist)...');
+    await _syncChecklist();
+    
     // Save last sync date
     final prefs = await SharedPreferences.getInstance();
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -184,6 +371,82 @@ class _MapReportScreenState extends State<MapReportScreen> {
     });
   }
 }
+
+// Add this new method to sync checklist data
+Future<void> _syncChecklist() async {
+  try {
+    final String baseUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app';
+    final String encodedMapName = Uri.encodeComponent(widget.mapName);
+    
+    // Fetch checklist data from server
+    final checklistResponse = await AuthenticatedHttpClient.get(
+      Uri.parse('$baseUrl/maplich/$encodedMapName')
+    );
+    
+    if (checklistResponse.statusCode != 200) {
+      throw Exception('Failed to load checklist: ${checklistResponse.statusCode}');
+    }
+    
+    final String responseText = checklistResponse.body;
+    final List<dynamic> checklistData = json.decode(responseText);
+    
+    print('Retrieved ${checklistData.length} checklist items from server');
+    
+    // Clear existing checklist data
+    final db = await dbHelper.database;
+    await db.delete(DatabaseTables.checklistTable);
+    print('Cleared existing checklist table');
+    
+    // Insert new checklist data
+    if (checklistData.isNotEmpty) {
+      int successCount = 0;
+      
+      // Insert in batches
+      for (int i = 0; i < checklistData.length; i += 50) {
+        final int end = min(i + 50, checklistData.length);
+        final batch = db.batch();
+        
+        for (int j = i; j < end; j++) {
+          final item = checklistData[j];
+          
+          final Map<String, dynamic> checklistMap = {
+            'TASKID': item['TASKID'] ?? const Uuid().v4().toString(),
+            'DUAN': item['DUAN'] ?? '',
+            'VITRI': item['VITRI'] ?? '',
+            'WEEKDAY': item['WEEKDAY'] ?? '',
+            'START': item['START'] ?? '',
+            'END': item['END'] ?? '',
+            'TASK': item['TASK'] ?? '',
+            'TUAN': item['TUAN'] ?? '',
+            'THANG': item['THANG'] ?? '',
+            'NGAYBC': item['NGAYBC'] ?? '',
+          };
+          
+          batch.insert(
+            DatabaseTables.checklistTable, 
+            checklistMap,
+            conflictAlgorithm: ConflictAlgorithm.replace
+          );
+        }
+        
+        await batch.commit(noResult: true);
+        successCount += end - i;
+        
+        // Update progress for the whole sync operation
+        setState(() {
+          statusMessage = 'Đã lưu $successCount/${checklistData.length} lịch công việc...';
+        });
+      }
+      
+      print('Successfully inserted $successCount checklist items');
+    }
+    
+    return;
+  } catch (e) {
+    print('Error syncing checklist: $e');
+    throw e; // Re-throw to be caught by the calling method
+  }
+}
   Future<void> _preloadZones() async {
   if (floors.isEmpty) return;
   
@@ -192,11 +455,208 @@ class _MapReportScreenState extends State<MapReportScreen> {
       try {
         final zones = await dbHelper.getMapZonesByFloorUID(floor.floorUID!);
         zoneCache[floor.floorUID!] = zones;
+        
+        // For each zone, load positions and create dots
+        for (final zone in zones) {
+          if (zone.zoneUID != null) {
+            // Get positions for this zone
+            final positions = await dbHelper.getMapPositionsByZone(
+              mapUID: widget.mapUID,
+              floorUID: floor.floorUID!,
+              zoneUID: zone.zoneUID!
+            );
+            
+            // Get today's date for report comparison
+            final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+            
+            // For each position, create initial dots
+            List<PositionDot> dots = [];
+            
+            for (final position in positions) {
+  // Get reports for this position to determine color
+  final reports = await dbHelper.getReportsByPosition(position.viTri ?? '');
+  final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+  
+  // Check if has report today
+  final hasReportToday = reports.any((report) {
+    final reportDate = report['Ngay']?.toString() ?? '';
+    if (reportDate.isEmpty) return false;
+    
+    try {
+      DateTime date;
+      if (reportDate.contains('T')) {
+        date = DateTime.parse(reportDate.split('.')[0]);
+      } else {
+        date = DateTime.parse(reportDate);
+      }
+      date = date.add(Duration(days: 1));
+      final adjustedDateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+      return adjustedDateStr == today;
+    } catch (e) {
+      return false;
+    }
+  });
+  
+  // Check if has machine reports
+  final hasMachineReports = reports.any((report) => 
+    report['BoPhan']?.toString() == 'Máy móc'
+  );
+              
+              // Parse zone boundary points
+              List<Offset> zonePoints = [];
+              try {
+                final pointsData = json.decode(zone.cacDiemMoc ?? '[]') as List;
+                zonePoints = pointsData.map((point) {
+                  return Offset(
+                    (point['x'] as num).toDouble(),
+                    (point['y'] as num).toDouble(),
+                  );
+                }).toList();
+              } catch (e) {
+                print('Error parsing zone points: $e');
+                continue;
+              }
+              
+              if (zonePoints.length < 3) continue;
+              
+              // Calculate a random initial position within the zone
+              double centerX = 0, centerY = 0;
+              for (var point in zonePoints) {
+                centerX += point.dx;
+                centerY += point.dy;
+              }
+              centerX /= zonePoints.length;
+              centerY /= zonePoints.length;
+              
+              // Initial position is close to center
+              final initialPos = Offset(
+                centerX + (random.nextDouble() - 0.5) * 20,
+                centerY + (random.nextDouble() - 0.5) * 20
+              );
+              
+              final dot = PositionDot(
+    positionName: position.viTri ?? 'Vị trí không tên',
+    zoneUID: zone.zoneUID!,
+    floorUID: floor.floorUID!, 
+    position: initialPos,
+    hasReportToday: hasReportToday,
+    isMachine: hasMachineReports,
+    random: Random(),
+  );
+              
+              // Set initial target
+              dot.setNewTarget(zonePoints, random);
+              dots.add(dot);
+            }
+            
+            // Store dots for this zone
+            zonePositionDots[zone.zoneUID!] = dots;
+          }
+        }
       } catch (e) {
         print('Error preloading zones for floor ${floor.floorUID}: $e');
       }
     }
   }
+  
+  // Start dot movement updates
+  _startDotMovement();
+}
+
+void _startDotMovement() {
+  // Cancel any existing timers first
+  _dotAnimationTimer?.cancel();
+  _dotTargetTimer?.cancel();
+  
+  // Move dots every 50ms (20fps) - simple direct movement
+  _dotAnimationTimer = Timer.periodic(Duration(milliseconds: 50), (timer) {
+    if (!mounted) {
+      timer.cancel();
+      return;
+    }
+    
+    bool anyDotsMoved = false;
+    
+    // Update all dots' positions
+    zonePositionDots.forEach((zoneUID, dots) {
+      for (var dot in dots) {
+        // Only move dots for the current floor
+        if (dot.floorUID == selectedFloorUID) {
+          // Store old position to check if it moved
+          final oldX = dot.position.dx;
+          final oldY = dot.position.dy;
+          
+          // Update position
+          dot.updatePosition(0); // t parameter no longer used
+          
+          // Check if it moved significantly
+          if ((dot.position.dx - oldX).abs() > 0.5 || 
+              (dot.position.dy - oldY).abs() > 0.5) {
+            anyDotsMoved = true;
+          }
+        }
+      }
+    });
+    
+    // Only rebuild if dots actually moved
+    if (anyDotsMoved) {
+      setState(() {
+        // Nothing needed here, just trigger rebuild
+      });
+    }
+  });
+  
+  // Set new targets every 3 seconds
+  _dotTargetTimer = Timer.periodic(Duration(seconds: 3), (timer) {
+    if (!mounted) {
+      timer.cancel();
+      return;
+    }
+    
+    // Set new targets for all dots
+    zonePositionDots.forEach((zoneUID, dots) {
+      // Skip dots that aren't for the current floor
+      if (dots.isEmpty || dots.first.floorUID != selectedFloorUID) {
+        return;
+      }
+      
+      // Get the zone for these dots
+      final zones = zoneCache[selectedFloorUID] ?? [];
+      final zone = zones.firstWhere(
+        (z) => z.zoneUID == zoneUID, 
+        orElse: () => MapZoneModel()
+      );
+      
+      if (zone.zoneUID == null || zone.cacDiemMoc == null) return;
+      
+      // Parse zone boundary points
+      List<Offset> zonePoints = [];
+      try {
+        final pointsData = json.decode(zone.cacDiemMoc ?? '[]') as List;
+        zonePoints = pointsData.map((point) {
+          return Offset(
+            (point['x'] as num).toDouble(),
+            (point['y'] as num).toDouble(),
+          );
+        }).toList();
+      } catch (e) {
+        print('Error parsing zone points: $e');
+        return;
+      }
+      
+      if (zonePoints.length < 3) return;
+      
+      // Set new targets for all dots in this zone
+      for (var dot in dots) {
+        dot.setNewTarget(zonePoints, random);
+        
+        // Print movement info for debugging
+        print('Setting new target for dot in zone ${zone.tenKhuVuc}: '
+            'From (${dot.position.dx.toStringAsFixed(1)}, ${dot.position.dy.toStringAsFixed(1)}) '
+            'to (${dot.targetPosition.dx.toStringAsFixed(1)}, ${dot.targetPosition.dy.toStringAsFixed(1)})');
+      }
+    });
+  });
 }
   Future<void> _loadMapData() async {
     try {
@@ -262,12 +722,22 @@ class _MapReportScreenState extends State<MapReportScreen> {
     }
   }
   
-  @override
+@override
 Widget build(BuildContext context) {
   return Scaffold(
     appBar: AppBar(
       title: Text('Báo cáo: ${widget.mapName}'),
       actions: [
+        // Stats toggle button
+        IconButton(
+          icon: Icon(_statsVisible ? Icons.analytics : Icons.analytics_outlined),
+          tooltip: _statsVisible ? 'Ẩn thống kê' : 'Hiện thống kê',
+          onPressed: () {
+            setState(() {
+              _statsVisible = !_statsVisible;
+            });
+          },
+        ),
         IconButton(
           icon: _isSyncing
               ? SizedBox(
@@ -293,36 +763,229 @@ Widget build(BuildContext context) {
         ),
       ),
     ),
-      body: isLoading 
-        ? Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text(statusMessage),
-              ],
-            ),
-          )
-        : Column(
+    body: isLoading 
+      ? Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (statusMessage.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Text(
-                    statusMessage,
-                    style: TextStyle(fontStyle: FontStyle.italic),
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text(statusMessage),
+            ],
+          ),
+        )
+      : Row(
+          children: [
+            // Main content area
+            Expanded(
+              child: Column(
+                children: [
+                  if (statusMessage.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Text(
+                        statusMessage,
+                        style: TextStyle(fontStyle: FontStyle.italic),
+                      ),
+                    ),
+                  Expanded(
+                    child: _buildMapView(),
                   ),
-                ),
+                ],
+              ),
+            ),
+            
+            // Right side stats panel with animation
+            AnimatedContainer(
+              duration: Duration(milliseconds: 300),
+              width: _statsVisible ? 200 : 0,
+              curve: Curves.easeInOut,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 5,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: _statsVisible ? Column(
+                children: [
+                  // Stats header with close button
+                  Container(
+  padding: EdgeInsets.symmetric(vertical: 12),
+  decoration: BoxDecoration(
+    color: Colors.green.shade700,
+    boxShadow: [
+      BoxShadow(
+        color: Colors.black26,
+        blurRadius: 3,
+        spreadRadius: 0,
+        offset: Offset(0, 2),
+      ),
+    ],
+  ),
+  child: Column(
+    children: [
+      Text(
+        'Thống kê hôm nay',
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      SizedBox(height: 8),
+      Align(
+        alignment: Alignment.centerRight,
+        child: Padding(
+          padding: EdgeInsets.only(right: 8),
+          child: InkWell(
+            onTap: () {
+              setState(() {
+                _statsVisible = false;
+              });
+            },
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.3),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.close,
+                size: 16,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ),
+    ],
+  ),
+),
+                  Expanded(
+                    child: RefreshIndicator(
+                      onRefresh: _loadHoverStats,
+                      child: ListView.builder(
+                        itemCount: hoverStats.length,
+                        itemBuilder: (context, index) {
+                          final stat = hoverStats[index];
+                          return _buildStatCard(
+                            title: stat['title'],
+                            value: stat['value'],
+                            icon: stat['icon'],
+                            color: stat['color'],
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  // Refresh button at bottom
+                  Container(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: TextButton.icon(
+                      onPressed: _loadHoverStats,
+                      icon: Icon(Icons.refresh),
+                      label: Text('Làm mới'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.green.shade700,
+                      ),
+                    ),
+                  ),
+                ],
+              ) : null,
+            ),
+          ],
+        ),
+  );
+}
+Widget _buildStatCard({
+  required String title,
+  required String value,
+  required IconData icon,
+  required Color color,
+}) {
+  return Card(
+    margin: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    elevation: 2,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(12.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                icon,
+                color: color,
+                size: 18,
+              ),
+              SizedBox(width: 8),
               Expanded(
-                child: _buildMapView(),
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey.shade700,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
-    );
-  }
+          SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
   final Map<String, List<MapZoneModel>> zoneCache = {};
-
+  void _clearZoneWidgetCache() {
+  zoneWidgetCache.clear();
+}
+void _handleFloorChange(String floorUID) {
+  if (selectedFloorUID == floorUID) return;
+  
+  print("Floor changing from ${selectedFloorUID} to ${floorUID}");
+  
+  // Clear all caches
+  zoneWidgetCache.clear();
+  
+  setState(() {
+    // Update floor selection
+    selectedFloorUID = floorUID;
+    visibleFloors.clear();
+    visibleFloors.add(floorUID);
+    
+    // Force rebuild of zones for this floor only
+    print("Cleared zone widget cache for floor change");
+  });
+  
+  // Restart dot animation
+  _dotAnimationTimer?.cancel();
+  _dotTargetTimer?.cancel();
+  _startDotMovement();
+  
+  // Force immediate rebuild of widget tree
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (mounted) setState(() {});
+  });
+}
   Widget _buildMapView() {
     if (mapData == null) {
       return Center(child: Text('Không có dữ liệu bản đồ'));
@@ -344,17 +1007,17 @@ Widget build(BuildContext context) {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Xem bản đồ ${widget.mapName}',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 8),
+              //Text(
+              //  'Xem bản đồ ${widget.mapName}',
+              //  style: TextStyle(
+              //    fontSize: 18,
+              //    fontWeight: FontWeight.bold,
+              //  ),
+              //),
+              //SizedBox(height: 8),
               
               // Floor visibility toggles - show only one floor at a time
-              Text('Chọn tầng để hiển thị:'),
+              Text('${widget.mapName} / Chọn tầng để hiển thị:'),
               SizedBox(height: 4),
               Wrap(
                 spacing: 8,
@@ -364,15 +1027,10 @@ Widget build(BuildContext context) {
                     label: Text(floor.tenTang ?? 'Không tên'),
                     selected: isVisible,
                     onSelected: (selected) {
-                      setState(() {
-                        // Only one floor visible at a time
-                        visibleFloors.clear();
-                        if (selected) {
-                          visibleFloors.add(floor.floorUID!);
-                          selectedFloorUID = floor.floorUID;
-                        }
-                      });
-                    },
+  if (selected) {
+    _handleFloorChange(floor.floorUID!);
+  }
+},
                     selectedColor: Colors.blue.withOpacity(0.3),
                   );
                 }).toList(),
@@ -458,7 +1116,7 @@ Widget build(BuildContext context) {
                                         color: selectedFloorUID == floor.floorUID ? Colors.blue : Colors.grey,
                                         width: selectedFloorUID == floor.floorUID ? 2 : 1,
                                       ),
-                                      color: Colors.white.withOpacity(0.7),
+                                      color: Colors.white.withOpacity(0.4),
                                     ),
                                     child: Stack(
                                       children: [
@@ -477,28 +1135,34 @@ Widget build(BuildContext context) {
                                   ),
                                   
                                   FutureBuilder<List<MapZoneModel>>(
-  future: zoneCache.containsKey(floor.floorUID) 
-      ? Future.value(zoneCache[floor.floorUID])
-      : dbHelper.getMapZonesByFloorUID(floor.floorUID!).then((zones) {
-          zoneCache[floor.floorUID!] = zones;
-          return zones;
-        }),
+  key: ValueKey("floor_zones_${floor.floorUID}"), // Add a key that changes with floor
+  future: dbHelper.getMapZonesByFloorUID(floor.floorUID!), // Always get fresh data
   builder: (context, snapshot) {
-    // Check cache first
-    if (zoneWidgetCache.containsKey(floor.floorUID)) {
+  print("Building zones for floor ${floor.floorUID}, selected floor is ${selectedFloorUID}");
+
+    // Only use cache if it's valid for the current floor
+    if (zoneWidgetCache.containsKey(floor.floorUID) && selectedFloorUID == floor.floorUID) {
       return zoneWidgetCache[floor.floorUID]!;
     }
     
-    if (snapshot.connectionState == ConnectionState.waiting) {
+    // Clear cache for other floors to ensure correct display
+    for (final key in List.from(zoneWidgetCache.keys)) {
+      if (key != floor.floorUID) {
+        zoneWidgetCache.remove(key);
+      }
+    }
+    
+    if (!snapshot.hasData && snapshot.connectionState == ConnectionState.waiting) {
       return Center(child: CircularProgressIndicator());
     }
     
     if (snapshot.hasError) {
-      return SizedBox();
+      print("Error loading zones: ${snapshot.error}");
+      return Center(child: Text("Error loading zone data"));
     }
     
     final zones = snapshot.data ?? [];
-    
+
     // Create a map of scaled points for each zone for faster access
     final Map<String, List<Offset>> zonePointsMap = {};
     
@@ -539,43 +1203,100 @@ Widget build(BuildContext context) {
       }
     }
     
-    final zoneWidgets = zones.map((zone) {
+    final List<Widget> allZoneWidgets = [];
+    
+    // First add the zone polygons
+    for (var zone in zones) {
       // Parse color
       Color zoneColor = _parseColor(zone.mauSac ?? '#3388FF80');
       final scaledPoints = zonePointsMap[zone.zoneUID] ?? [];
       
-      return GestureDetector(
-        onTap: () {
-          // Create a fresh copy to avoid closure issues
-          final clickedZone = MapZoneModel(
-            zoneUID: zone.zoneUID,
-            floorUID: zone.floorUID,
-            tenKhuVuc: zone.tenKhuVuc,
-            mauSac: zone.mauSac,
-            cacDiemMoc: zone.cacDiemMoc
-          );
-          _showZoneInfo(clickedZone);
-        },
-        child: CustomPaint(
-          painter: ZoneAreaPainter(
-            points: scaledPoints,
-            color: zoneColor,
-            isSelectable: true,
+      allZoneWidgets.add(
+        GestureDetector(
+          onTap: () {
+            // Create a fresh copy to avoid closure issues
+            final clickedZone = MapZoneModel(
+              zoneUID: zone.zoneUID,
+              floorUID: zone.floorUID,
+              tenKhuVuc: zone.tenKhuVuc,
+              mauSac: zone.mauSac,
+              cacDiemMoc: zone.cacDiemMoc
+            );
+            _showZoneInfo(clickedZone);
+          },
+          child: CustomPaint(
+            painter: ZoneAreaPainter(
+              points: scaledPoints,
+              color: zoneColor,
+              isSelectable: true,
+            ),
+            size: Size(
+              widthPercent * width / 100,
+              heightPercent * height / 100,
+            ),
           ),
-          size: Size(
-            widthPercent * width / 100,
-            heightPercent * height / 100,
+        )
+      );
+      
+      // Now add position dots for this zone
+      final dots = zonePositionDots[zone.zoneUID] ?? [];
+      if (zone.floorUID == selectedFloorUID) {
+
+      for (var dot in dots) {
+        // Update dot position based on animation controller
+        dot.updatePosition(_dotsAnimationController.value);
+        
+        // Scale dot position to match the floor dimensions
+        final xPercent = (dot.position.dx - (floor.offsetX ?? 0)) / floorWidth;
+        final yPercent = (dot.position.dy - (floor.offsetY ?? 0)) / floorHeight;
+        
+        final scaledX = xPercent * widthPercent * width / 100;
+        final scaledY = yPercent * heightPercent * height / 100;
+        
+        allZoneWidgets.add(
+  Positioned(
+    left: scaledX - 10,
+    top: scaledY - 10,
+    child: GestureDetector(
+      onTap: () {
+        _showPositionChecklist(dot.positionName);
+      },
+      child: Container(
+        width: 20,
+        height: 20, 
+        decoration: BoxDecoration(
+          color: dot.hasReportToday ? Colors.green.shade600 : Colors.red.shade600,
+          shape: dot.isMachine ? BoxShape.rectangle : BoxShape.circle,
+          borderRadius: dot.isMachine ? BorderRadius.circular(4) : null,
+          border: Border.all(color: Colors.white, width: 2.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black54,
+              blurRadius: 4,
+              spreadRadius: 1,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Center(
+          child: Icon(
+            dot.isMachine ? Icons.build : Icons.person,
+            size: 12,
+            color: Colors.white,
           ),
         ),
-      );
-    }).toList();
-    
-    final stackWidget = Stack(children: zoneWidgets);
+      ),
+    ),
+  )
+);
+      }
+    }
+    }
+    final stackWidget = Stack(children: allZoneWidgets);
     zoneWidgetCache[floor.floorUID!] = stackWidget;
     return stackWidget;
   },
 ),
-                                  
                                   // Floor label
                                   Positioned(
                                     left: 4,
@@ -608,6 +1329,66 @@ Widget build(BuildContext context) {
       ],
     );
   }
+  void _showPositionChecklist(String positionName) async {
+  try {
+    // Fetch checklist items for this position
+    final db = await dbHelper.database;
+    final items = await db.query(
+      DatabaseTables.checklistTable,
+      where: 'VITRI = ?',
+      whereArgs: [positionName]
+    );
+    
+    if (items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Không có công việc nào cho vị trí này'))
+      );
+      return;
+    }
+    
+    // Show dialog with checklist items
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Danh sách công việc: $positionName'),
+        content: Container(
+          width: double.maxFinite,
+          height: MediaQuery.of(context).size.height * 0.6,
+          child: ListView.builder(
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final item = items[index];
+              return ListTile(
+                title: Text(item['TASK']?.toString() ?? 'Không có tên'),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (item['START'] != null && item['END'] != null)
+                      Text('${item['START']} - ${item['END']}'),
+                    if (item['WEEKDAY'] != null)
+                      Text('${item['WEEKDAY']}'),
+                  ],
+                ),
+                leading: Icon(Icons.check_circle_outline),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Đóng'),
+          ),
+        ],
+      ),
+    );
+  } catch (e) {
+    print('Error showing position checklist: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Lỗi: $e'))
+    );
+  }
+}
   Widget buildZoneGestureDetector(MapZoneModel zone, List<Offset> points, Color color, Size size) {
   return GestureDetector(
     onTap: () {
@@ -791,7 +1572,27 @@ Widget build(BuildContext context) {
           fontWeight: FontWeight.bold,
         ),
       ),
-      subtitle: Text('${reports.length} báo cáo'),
+      subtitle: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text('${reports.length} báo cáo'),
+          // Add the "Xem lịch" button here
+          TextButton.icon(
+            icon: Icon(Icons.schedule, size: 16),
+            label: Text('Xem lịch'),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.blue,
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              minimumSize: Size(80, 30),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: () {
+              Navigator.pop(context); // Close the zone info dialog
+              _showPositionChecklist(position.viTri ?? '');
+            },
+          ),
+        ],
+      ),
       children: [
         if (reports.isEmpty)
           Padding(
@@ -914,12 +1715,49 @@ Future<Map<String, List<Map<String, dynamic>>>> _getPositionReportsMap(List<MapP
   
   return result;
 }
-
-// Helper function to check if a position has a report today
+String _normalizeDateString(String? dateStr) {
+  if (dateStr == null || dateStr.isEmpty) return '';
+  
+  try {
+    DateTime date;
+    if (dateStr.contains('T')) {
+      date = DateTime.parse(dateStr.split('.')[0]);
+    } else if (dateStr.contains('/')) {
+      final parts = dateStr.split('/');
+      if (parts.length == 3) {
+        date = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+      } else {
+        date = DateTime.now();
+      }
+    } else {
+      date = DateTime.parse(dateStr);
+    }
+    // Add one day to fix the -1 day issue
+    date = date.add(Duration(days: 1));
+    return "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+  } catch (e) {
+    print('Error normalizing date: $e for date string: $dateStr');
+    return dateStr; 
+  }
+}
 bool _hasReportToday(List<Map<String, dynamic>> reports, String today) {
   return reports.any((report) {
     final reportDate = report['Ngay']?.toString() ?? '';
-    return reportDate == today || reportDate.split('T')[0] == today;
+    if (reportDate.isEmpty) return false;
+    try {
+      DateTime date;
+      if (reportDate.contains('T')) {
+        date = DateTime.parse(reportDate.split('.')[0]);
+      } else {
+        date = DateTime.parse(reportDate);
+      }
+      date = date.add(Duration(days: 1));
+      final adjustedDateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+      return adjustedDateStr == today;
+    } catch (e) {
+      print('Error parsing date in _hasReportToday: $e');
+      return false;
+    }
   });
 }
 String _formatDateTime(String? dateStr, String? timeStr) {
@@ -1255,4 +2093,141 @@ class ZoneClipper extends CustomClipper<Path> {
   
   @override
   bool shouldReclip(ZoneClipper oldClipper) => oldClipper.points != points;
+}
+class PositionDot {
+  final String positionName;
+  final String zoneUID;
+  final String floorUID;
+  Offset position;
+  Offset targetPosition;
+  bool hasReportToday;
+  bool isMachine; // New property to track if this is a machine position
+  Color color;
+  Random random;
+  
+  PositionDot({
+    required this.positionName,
+    required this.zoneUID,
+    required this.floorUID, 
+    required this.position,
+    required this.hasReportToday,
+    required this.isMachine,
+    required this.random,
+  }) : 
+    targetPosition = position,
+    color = hasReportToday ? Colors.green.shade600 : Colors.red.shade600;
+  
+  void updatePosition(double t) {
+  // Skip the animation controller value and just move directly toward target
+  // Use a fixed amount like 5% of the distance each time
+  final dx = targetPosition.dx - position.dx;
+  final dy = targetPosition.dy - position.dy;
+  
+  // Move 5% of the way to the target each time
+  position = Offset(
+    position.dx + dx * 0.05,
+    position.dy + dy * 0.05
+  );
+}
+  
+  void setNewTarget(List<Offset> zoneBoundary, Random random) {
+    // Get random point within zone polygon
+    if (zoneBoundary.length < 3) return;
+    
+    // Simple method: find bounding box and try random points until one is inside the polygon
+    double minX = double.infinity, maxX = double.negativeInfinity;
+    double minY = double.infinity, maxY = double.negativeInfinity;
+    
+    for (var point in zoneBoundary) {
+      minX = min(minX, point.dx);
+      maxX = max(maxX, point.dx);
+      minY = min(minY, point.dy);
+      maxY = max(maxY, point.dy);
+    }
+    
+    bool isPointInPolygon(Offset point, List<Offset> polygon) {
+      bool isInside = false;
+      int i = 0, j = polygon.length - 1;
+      
+      for (i = 0; i < polygon.length; i++) {
+        if (((polygon[i].dy > point.dy) != (polygon[j].dy > point.dy)) &&
+            (point.dx < (polygon[j].dx - polygon[i].dx) * (point.dy - polygon[i].dy) / 
+            (polygon[j].dy - polygon[i].dy) + polygon[i].dx)) {
+          isInside = !isInside;
+        }
+        j = i;
+      }
+      
+      return isInside;
+    }
+    
+    // Try up to 10 times to find a point inside the polygon
+    for (int i = 0; i < 10; i++) {
+      final newX = minX + random.nextDouble() * (maxX - minX);
+      final newY = minY + random.nextDouble() * (maxY - minY);
+      final testPoint = Offset(newX, newY);
+      
+      if (isPointInPolygon(testPoint, zoneBoundary)) {
+        targetPosition = testPoint;
+        return;
+      }
+    }
+    
+    // If we couldn't find a point inside, just use the current position
+    targetPosition = position;
+  }
+}
+class DotsPainter extends CustomPainter {
+  final List<PositionDot> dots;
+  final Map<String, double> dotScaleFactors; // Scaling factors by floorUID
+  
+  DotsPainter({required this.dots, required this.dotScaleFactors});
+  
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (var dot in dots) {
+      final scale = dotScaleFactors[dot.floorUID] ?? 1.0;
+      
+      // Draw dot
+      final paint = Paint()
+        ..color = dot.color
+        ..style = PaintingStyle.fill;
+      
+      // Draw shadow first
+      final shadowPaint = Paint()
+        ..color = Colors.black.withOpacity(0.4)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4);
+      
+      canvas.drawCircle(
+        Offset(dot.position.dx, dot.position.dy),
+        12 * scale, // Shadow slightly larger
+        shadowPaint
+      );
+      
+      // Draw border
+      final borderPaint = Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5;
+      
+      canvas.drawCircle(
+        Offset(dot.position.dx, dot.position.dy),
+        10 * scale,
+        borderPaint
+      );
+      
+      // Draw dot itself
+      canvas.drawCircle(
+        Offset(dot.position.dx, dot.position.dy),
+        10 * scale,
+        paint
+      );
+    }
+  }
+  
+  @override
+  bool shouldRepaint(covariant DotsPainter oldDelegate) {
+    // Always repaint when dot positions change
+    return true;
+  }
 }

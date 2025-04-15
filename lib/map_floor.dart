@@ -1395,306 +1395,383 @@ String? selectedZoneUID;
   Color selectedColor = Colors.blue.withOpacity(0.5);
   List<Offset> selectedPoints = [];
   bool isDrawingMode = false;
-  
-  // Helper function to convert real-world coordinates to pixel coordinates
-  Offset realToPixel(Offset realPoint, Size mapSize, MapFloorModel floor) {
-    final mapWidth = mapData?.chieuDaiMet ?? 1200.0;
-    final mapHeight = mapData?.chieuCaoMet ?? 600.0;
-    
-    final floorWidth = floor.chieuDaiMet ?? mapWidth;
-    final floorHeight = floor.chieuCaoMet ?? mapHeight;
-    
-    final offsetX = floor.offsetX ?? 0;
-    final offsetY = floor.offsetY ?? 0;
-    
-    final xPercent = (realPoint.dx - offsetX) / floorWidth;
-    final yPercent = (realPoint.dy - offsetY) / floorHeight;
-    
-    return Offset(
-      xPercent * mapSize.width,
-      yPercent * mapSize.height,
-    );
-  }
-final String alpha = selectedColor.alpha.toRadixString(16).padLeft(2, '0');
-final String red = selectedColor.red.toRadixString(16).padLeft(2, '0');
-final String green = selectedColor.green.toRadixString(16).padLeft(2, '0');
-final String blue = selectedColor.blue.toRadixString(16).padLeft(2, '0');
-final String colorHex = '#$red$green$blue$alpha';
-final drawingContainerKey = GlobalKey();
+  final drawingContainerKey = GlobalKey();
 
-  // Helper function to convert pixel coordinates to real-world coordinates
-  Offset pixelToReal(Offset pixelPoint, Size mapSize, MapFloorModel floor) {
-    final mapWidth = mapData?.chieuDaiMet ?? 1200.0;
-    final mapHeight = mapData?.chieuCaoMet ?? 600.0;
-    
-    final floorWidth = floor.chieuDaiMet ?? mapWidth;
-    final floorHeight = floor.chieuCaoMet ?? mapHeight;
-    
-    final offsetX = floor.offsetX ?? 0;
-    final offsetY = floor.offsetY ?? 0;
-    
-    final xPercent = pixelPoint.dx / mapSize.width;
-    final yPercent = pixelPoint.dy / mapSize.height;
-    
-    return Offset(
-      xPercent * floorWidth + offsetX,
-      yPercent * floorHeight + offsetY,
-    );
-  }
-  
   showDialog(
     context: context,
+    barrierDismissible: false,
     builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) {
-        return AlertDialog(
-          title: Text('Thêm khu vực mới cho ${selectedFloor.tenTang}'),
-          content: SingleChildScrollView(
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: zoneNameController,
-                    decoration: InputDecoration(labelText: 'Tên khu vực'),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Vui lòng nhập tên khu vực';
-                      }
-                      return null;
-                    },
-                  ),
-                  SizedBox(height: 16),
-                  
-                  Text('Chọn màu cho khu vực:'),
-                  SizedBox(height: 8),
-                  
-                  // Simple color selector
-                  Wrap(
-  spacing: 8,
-  runSpacing: 8,
-  children: [
-    Colors.red,
-    Colors.green,
-    Colors.blue,
-    Colors.yellow,
-    Colors.purple,
-    Colors.orange,
-    Colors.pink,
-    Colors.teal,
-  ].map((color) {
-    return GestureDetector(
-      onTap: () {
-        setDialogState(() {
-          // Use a lower opacity value for better transparency
-          selectedColor = color.withOpacity(0.3);
-        });
-      },
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          // Also use the lower opacity for the preview
-          color: color.withOpacity(0.3),
-          border: Border.all(
-            color: selectedColor.value == color.withOpacity(0.3).value 
-              ? Colors.black 
-              : Colors.transparent,
-            width: 2,
-          ),
-          borderRadius: BorderRadius.circular(4),
-        ),
-      ),
-    );
-  }).toList(),
-),
-                  SizedBox(height: 16),
-                  
-                  Text('Vẽ khu vực trên bản đồ:'),
-                  SizedBox(height: 8),
-                  Container(
-  key: drawingContainerKey,
-  height: 300,
-  decoration: BoxDecoration(
-    border: Border.all(color: Colors.grey),
-    borderRadius: BorderRadius.circular(4),
-  ),
-  child: Stack(
-    children: [
-      // Floor image
-      if (selectedFloor.hinhAnhTang != null && selectedFloor.hinhAnhTang!.isNotEmpty)
-        Positioned.fill(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: Image.network(
-              selectedFloor.hinhAnhTang!,
-              fit: BoxFit.fill,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(color: Colors.grey[200]);
-              },
-            ),
-          ),
-        ),
-      
-      // Zone drawing area with direct position calculation
-      Positioned.fill(
-  child: GestureDetector(
-    onTapDown: isDrawingMode ? (details) {
-      // Get the RenderBox of the drawing container
-      final RenderBox box = drawingContainerKey.currentContext!.findRenderObject() as RenderBox;
-      // Get the local position within the container
-      final localPosition = box.globalToLocal(details.globalPosition);
-      
-      // Ensure the point is within bounds
-      if (localPosition.dx >= 0 && 
-          localPosition.dx <= box.size.width &&
-          localPosition.dy >= 0 && 
-          localPosition.dy <= box.size.height) {
-        
-        // Add point, scaled to 0-1 for easier conversion later
-        setDialogState(() {
-          selectedPoints.add(Offset(
-            localPosition.dx / box.size.width,
-            localPosition.dy / box.size.height,
-          ));
-        });
-      }
-    } : null,
-    child: CustomPaint(
-  size: Size.infinite,
-  painter: ZoneAreaPainter(
-    points: selectedPoints.map((point) => Offset(
-      point.dx * 300,
-      point.dy * 300,
-    )).toList(),
-    color: selectedColor,
-    isDrawingMode: true,  
-  ),
-),
-  ),
-),
-    ],
-  ),
-),
-                  SizedBox(height: 8),
-                  
-                  Row(
+        return Dialog(
+          insetPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.9,
+            height: MediaQuery.of(context).size.height * 0.85,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Dialog header
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      ElevatedButton.icon(
-                        icon: Icon(
-                          isDrawingMode ? Icons.edit_off : Icons.edit,
-                          size: 18,
+                      Text(
+                        'Thêm khu vực mới cho ${selectedFloor.tenTang}',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
                         ),
-                        label: Text(isDrawingMode ? 'Dừng vẽ' : 'Bắt đầu vẽ'),
-                        onPressed: () {
-                          setDialogState(() {
-                            isDrawingMode = !isDrawingMode;
-                          });
-                        },
                       ),
-                      ElevatedButton.icon(
-                        icon: Icon(Icons.clear, size: 18),
-                        label: Text('Xóa điểm'),
-                        onPressed: selectedPoints.isNotEmpty ? () {
-                          setDialogState(() {
-                            if (selectedPoints.isNotEmpty) {
-                              selectedPoints.removeLast();
-                            }
-                          });
-                        } : null,
+                      IconButton(
+                        icon: Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
                       ),
                     ],
                   ),
-                  Text(
-                    'Số điểm đã chọn: ${selectedPoints.length}',
-                    style: TextStyle(fontStyle: FontStyle.italic),
+                ),
+                Divider(),
+                
+                // Dialog content
+                Expanded(
+                  child: Form(
+                    key: formKey,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Controls panel - left side
+                        Container(
+                          width: 300,
+                          padding: EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              TextFormField(
+                                controller: zoneNameController,
+                                decoration: InputDecoration(labelText: 'Tên khu vực'),
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Vui lòng nhập tên khu vực';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              SizedBox(height: 24),
+                              
+                              Text('Chọn màu cho khu vực:'),
+                              SizedBox(height: 8),
+                              
+                              // Color selector
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  Colors.red,
+                                  Colors.green,
+                                  Colors.blue,
+                                  Colors.yellow,
+                                  Colors.purple,
+                                  Colors.orange,
+                                  Colors.pink,
+                                  Colors.teal,
+                                ].map((color) {
+                                  return GestureDetector(
+                                    onTap: () {
+                                      setDialogState(() {
+                                        selectedColor = color.withOpacity(0.3);
+                                      });
+                                    },
+                                    child: Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: color.withOpacity(0.3),
+                                        border: Border.all(
+                                          color: selectedColor.value == color.withOpacity(0.3).value 
+                                            ? Colors.black 
+                                            : Colors.transparent,
+                                          width: 2,
+                                        ),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                              
+                              SizedBox(height: 24),
+                              Text(
+                                'Số điểm đã chọn: ${selectedPoints.length}',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              SizedBox(height: 8),
+                              
+                              // Drawing controls
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      icon: Icon(
+                                        isDrawingMode ? Icons.edit_off : Icons.edit,
+                                        size: 18,
+                                      ),
+                                      label: Text(isDrawingMode ? 'Dừng vẽ' : 'Bắt đầu vẽ'),
+                                      onPressed: () {
+                                        setDialogState(() {
+                                          isDrawingMode = !isDrawingMode;
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 8),
+                              ElevatedButton.icon(
+                                icon: Icon(Icons.clear, size: 18),
+                                label: Text('Xóa điểm cuối'),
+                                onPressed: selectedPoints.isNotEmpty ? () {
+                                  setDialogState(() {
+                                    if (selectedPoints.isNotEmpty) {
+                                      selectedPoints.removeLast();
+                                    }
+                                  });
+                                } : null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                  foregroundColor: Colors.white,
+                                ),
+                              ),
+                              SizedBox(height: 8),
+                              ElevatedButton.icon(
+                                icon: Icon(Icons.delete_sweep, size: 18),
+                                label: Text('Xóa tất cả điểm'),
+                                onPressed: selectedPoints.isNotEmpty ? () {
+                                  setDialogState(() {
+                                    selectedPoints.clear();
+                                  });
+                                } : null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red.shade700,
+                                  foregroundColor: Colors.white,
+                                ),
+                              ),
+                              
+                              Spacer(),
+                              // Submit button at bottom of left panel
+                              ElevatedButton(
+                                onPressed: () async {
+                                  if (formKey.currentState!.validate() && selectedPoints.length >= 3) {
+                                    Navigator.pop(context);
+                                    
+                                    // Create new zone with unique ID
+                                    String zoneUID = 'zone_${DateTime.now().millisecondsSinceEpoch}';
+                                    
+                                    setState(() {
+                                      isLoading = true;
+                                      statusMessage = 'Đang tạo khu vực mới...';
+                                    });
+                                    
+                                    try {
+                                      // Convert the points to JSON
+                                      final realPoints = selectedPoints.map((point) {
+                                        // Convert from 0-1 values to real-world coordinates
+                                        final xReal = (point.dx * selectedFloor.chieuDaiMet!) + (selectedFloor.offsetX ?? 0);
+                                        final yReal = (point.dy * selectedFloor.chieuCaoMet!) + (selectedFloor.offsetY ?? 0);
+                                        
+                                        return Offset(xReal, yReal);
+                                      }).toList();
+
+                                      final pointsJson = json.encode(realPoints.map((point) {
+                                        return {'x': point.dx, 'y': point.dy};
+                                      }).toList());
+                                      
+                                      // Convert color to hex string
+                                      final colorHex = '#${selectedColor.value.toRadixString(16).padLeft(8, '0').substring(2)}';
+
+                                      // Create zone model
+                                      final newZone = MapZoneModel(
+                                        zoneUID: zoneUID,
+                                        floorUID: selectedFloorUID!,
+                                        tenKhuVuc: zoneNameController.text,
+                                        cacDiemMoc: pointsJson,
+                                        mauSac: colorHex,
+                                      );
+                                      
+                                      // Save to server
+                                      await _saveZoneToServer(newZone);
+                                      
+                                      // Save to local database
+                                      await dbHelper.insertMapZone(newZone);
+                                      
+                                      setState(() {
+                                        isLoading = false;
+                                        statusMessage = '';
+                                      });
+                                      
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Khu vực mới đã được tạo thành công'))
+                                      );
+                                    } catch (e) {
+                                      setState(() {
+                                        isLoading = false;
+                                        statusMessage = 'Lỗi: $e';
+                                      });
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Lỗi khi tạo khu vực mới: $e'))
+                                      );
+                                    }
+                                  } else if (selectedPoints.length < 3) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Cần ít nhất 3 điểm để tạo khu vực'))
+                                    );
+                                  }
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  padding: EdgeInsets.symmetric(vertical: 15),
+                                  backgroundColor: Colors.blue,
+                                  foregroundColor: Colors.white,
+                                ),
+                                child: Text('TẠO KHU VỰC', style: TextStyle(fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        
+                        VerticalDivider(),
+                        
+                        // Drawing area - right side (expanded to fill remaining space)
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Vẽ khu vực trên bản đồ: ${isDrawingMode ? "ĐANG VẼ" : "CHỌN BẮT ĐẦU VẼ"}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: isDrawingMode ? Colors.green : Colors.black,
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                Expanded(
+                                  child: LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      // This gives us the actual constraints of the container,
+                                      // which we can use for scaling
+                                      final containerWidth = constraints.maxWidth;
+                                      final containerHeight = constraints.maxHeight;
+                                      
+                                      return Container(
+                                        key: drawingContainerKey,
+                                        width: containerWidth,
+                                        height: containerHeight,
+                                        decoration: BoxDecoration(
+                                          border: Border.all(
+                                            color: isDrawingMode ? Colors.green : Colors.grey,
+                                            width: isDrawingMode ? 2 : 1,
+                                          ),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Stack(
+                                          children: [
+                                            // Floor image
+                                            if (selectedFloor.hinhAnhTang != null && selectedFloor.hinhAnhTang!.isNotEmpty)
+                                              Positioned.fill(
+                                                child: ClipRRect(
+                                                  borderRadius: BorderRadius.circular(3),
+                                                  child: Image.network(
+                                                    selectedFloor.hinhAnhTang!,
+                                                    fit: BoxFit.fill,
+                                                    errorBuilder: (context, error, stackTrace) {
+                                                      return Container(color: Colors.grey[200]);
+                                                    },
+                                                  ),
+                                                ),
+                                              ),
+                                            
+                                            // Zone drawing area
+                                            Positioned.fill(
+                                              child: GestureDetector(
+                                                onTapDown: isDrawingMode ? (details) {
+                                                  final localPosition = details.localPosition;
+                                                  
+                                                  // Add point, normalized to 0-1 range
+                                                  setDialogState(() {
+                                                    selectedPoints.add(Offset(
+                                                      localPosition.dx / containerWidth,
+                                                      localPosition.dy / containerHeight,
+                                                    ));
+                                                  });
+                                                } : null,
+                                                child: CustomPaint(
+                                                  size: Size(containerWidth, containerHeight),
+                                                  painter: ZoneAreaPainter(
+                                                    points: selectedPoints.map((point) => Offset(
+                                                      point.dx * containerWidth,
+                                                      point.dy * containerHeight,
+                                                    )).toList(),
+                                                    color: selectedColor,
+                                                    isDrawingMode: true,  
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            
+                                            // Instructions overlay when not in drawing mode
+                                            if (!isDrawingMode)
+                                              Positioned.fill(
+                                                child: Container(
+                                                  color: Colors.black.withOpacity(0.1),
+                                                  child: Center(
+                                                    child: Column(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Icon(Icons.touch_app, size: 48, color: Colors.white),
+                                                        SizedBox(height: 16),
+                                                        Text(
+                                                          'Nhấn BẮT ĐẦU VẼ để bắt đầu vẽ khu vực',
+                                                          style: TextStyle(
+                                                            color: Colors.white,
+                                                            fontSize: 18,
+                                                            fontWeight: FontWeight.bold,
+                                                            shadows: [
+                                                              Shadow(
+                                                                blurRadius: 3.0,
+                                                                color: Colors.black,
+                                                                offset: Offset(1.0, 1.0),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                if (isDrawingMode)
+                                  Text(
+                                    'Nhấn vào bản đồ để tạo các điểm. Cần tối thiểu 3 điểm để tạo khu vực.',
+                                    style: TextStyle(fontStyle: FontStyle.italic),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Hủy'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (formKey.currentState!.validate() && selectedPoints.length >= 3) {
-                  Navigator.pop(context);
-                  
-                  // Create new zone with unique ID
-                  String zoneUID = 'zone_${DateTime.now().millisecondsSinceEpoch}';
-                  
-                  setState(() {
-                    isLoading = true;
-                    statusMessage = 'Đang tạo khu vực mới...';
-                  });
-                  
-                  try {
-                    // Convert the points to JSON
-                    final mapSize = Size(300, 300); // The size of your drawing area
-                    final realPoints = selectedPoints.map((point) {
-  // Since points are stored as 0-1 values, convert to real-world coordinates
-  final xReal = (point.dx * selectedFloor.chieuDaiMet!) + (selectedFloor.offsetX ?? 0);
-  final yReal = (point.dy * selectedFloor.chieuCaoMet!) + (selectedFloor.offsetY ?? 0);
-  
-  return Offset(xReal, yReal);
-}).toList();
-
-                    final pointsJson = json.encode(realPoints.map((point) {
-  return {'x': point.dx, 'y': point.dy};
-}).toList());
-                    
-                    // Convert color to hex string
-                    final colorHex = '#${selectedColor.value.toRadixString(16).padLeft(8, '0').substring(2)}';
-
-                    // Create zone model
-                    final newZone = MapZoneModel(
-                      zoneUID: zoneUID,
-                      floorUID: selectedFloorUID!,
-                      tenKhuVuc: zoneNameController.text,
-                      cacDiemMoc: pointsJson,
-                      mauSac: colorHex,
-                    );
-                    
-                    // Save to server
-                    await _saveZoneToServer(newZone);
-                    
-                    // Save to local database
-                    await dbHelper.insertMapZone(newZone);
-                    
-                    // Reload zones
-                    // You'll need to implement a method to load zones
-                    // await _loadZones();
-                    
-                    setState(() {
-                      isLoading = false;
-                      statusMessage = '';
-                    });
-                    
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Khu vực mới đã được tạo thành công'))
-                    );
-                  } catch (e) {
-                    setState(() {
-                      isLoading = false;
-                      statusMessage = 'Lỗi: $e';
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Lỗi khi tạo khu vực mới: $e'))
-                    );
-                  }
-                } else if (selectedPoints.length < 3) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Cần ít nhất 3 điểm để tạo khu vực'))
-                  );
-                }
-              },
-              child: Text('Tạo'),
-            ),
-          ],
         );
       },
     ),
