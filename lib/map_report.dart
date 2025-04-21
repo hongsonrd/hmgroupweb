@@ -1339,39 +1339,126 @@ void _handleFloorChange(String floorUID) {
       whereArgs: [positionName]
     );
     
-    if (items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Không có công việc nào cho vị trí này'))
-      );
-      return;
-    }
+    // Fetch report images for this position
+    final reports = await dbHelper.getReportsByPosition(positionName);
+    final reportImages = reports
+        .where((report) => report['HinhAnh'] != null && report['HinhAnh'].toString().isNotEmpty)
+        .map((report) => report['HinhAnh'].toString())
+        .toList();
     
-    // Show dialog with checklist items
+    // Show dialog with checklist items and images
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Danh sách công việc: $positionName'),
+        title: Text('Vị trí: $positionName'),
         content: Container(
           width: double.maxFinite,
-          height: MediaQuery.of(context).size.height * 0.6,
-          child: ListView.builder(
-            itemCount: items.length,
-            itemBuilder: (context, index) {
-              final item = items[index];
-              return ListTile(
-                title: Text(item['TASK']?.toString() ?? 'Không có tên'),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (item['START'] != null && item['END'] != null)
-                      Text('${item['START']} - ${item['END']}'),
-                    if (item['WEEKDAY'] != null)
-                      Text('${item['WEEKDAY']}'),
-                  ],
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Images section
+              if (reportImages.isNotEmpty) ...[
+                Text('Hình ảnh báo cáo (${reportImages.length}):', 
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                SizedBox(height: 8),
+                Container(
+                  height: 120,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: reportImages.length,
+                    itemBuilder: (context, index) {
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => Scaffold(
+                                appBar: AppBar(
+                                  title: Text('Hình ảnh báo cáo'),
+                                  backgroundColor: Colors.black,
+                                ),
+                                body: Center(
+                                  child: InteractiveViewer(
+                                    panEnabled: true,
+                                    boundaryMargin: EdgeInsets.all(20),
+                                    minScale: 0.5,
+                                    maxScale: 4,
+                                    child: Image.network(
+                                      reportImages[index],
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Text('Không thể tải hình ảnh: $error');
+                                      },
+                                    ),
+                                  ),
+                                ),
+                                backgroundColor: Colors.black,
+                              ),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          width: 100,
+                          margin: EdgeInsets.only(right: 8),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(7),
+                            child: Image.network(
+                              reportImages[index],
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  color: Colors.grey.shade200,
+                                  child: Icon(Icons.broken_image, color: Colors.grey),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
-                leading: Icon(Icons.check_circle_outline),
-              );
-            },
+                Divider(height: 24),
+              ],
+              
+              // Checklist header
+              Text('Danh sách công việc' + (items.isEmpty ? ': Không có' : ' (${items.length}):'), 
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              SizedBox(height: 8),
+              
+              // Checklist items
+              Expanded(
+                child: items.isEmpty
+                  ? Center(child: Text('Không có công việc nào cho vị trí này'))
+                  : ListView.builder(
+                      itemCount: items.length,
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        return Card(
+                          margin: EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            title: Text(item['TASK']?.toString() ?? 'Không có tên'),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (item['START'] != null && item['END'] != null)
+                                  Text('${item['START']} - ${item['END']}'),
+                                if (item['WEEKDAY'] != null)
+                                  Text('${item['WEEKDAY']}'),
+                              ],
+                            ),
+                            leading: Icon(Icons.check_circle_outline, color: Colors.green.shade700),
+                          ),
+                        );
+                      },
+                    ),
+              ),
+            ],
           ),
         ),
         actions: [
@@ -1383,7 +1470,7 @@ void _handleFloorChange(String floorUID) {
       ),
     );
   } catch (e) {
-    print('Error showing position checklist: $e');
+    print('Error showing position checklist and images: $e');
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Lỗi: $e'))
     );
