@@ -1061,7 +1061,7 @@ class OrderChiTietModel {
     'DonVi': donVi,
     'SoLuong': soLuong,
     'DonGia': donGia,
-    'KhachTra': khachTra,
+    'KhachTra': khachTra == true ? 1 : 0, 
     'ThanhTien': thanhTien,
   };
 

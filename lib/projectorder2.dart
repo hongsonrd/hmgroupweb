@@ -172,7 +172,7 @@ Color _getStatusColor(String status) {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Trạng thái: ${order['TrangThai']}'),
-                          Text('Bộ phận: ${order['BoPhan']}'),
+                          Text('Tổng tiền: ${order['TongTien']} đ'),
                         ],
                       ),
                       trailing: Icon(Icons.chevron_right),
