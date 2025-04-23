@@ -2518,7 +2518,7 @@ static const String createOrderChiTietTable = '''
     DonVi VARCHAR(100),
     SoLuong DECIMAL(10,0),
     DonGia INT,
-    KhachTra TINYINT(1),
+    KhachTra BOOLEAN,
     ThanhTien INT,
     PRIMARY KEY (UID)
   )

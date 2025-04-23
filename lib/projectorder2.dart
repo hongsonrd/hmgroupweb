@@ -113,62 +113,86 @@ Color _getStatusColor(String status) {
       });
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Đặt vật tư ${widget.selectedBoPhan}'),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.refresh),
-            onPressed: _loadOrders,
-          ),
-        ],
+    appBar: AppBar(
+      title: Text('Đặt vật tư ${widget.selectedBoPhan}'),
+      leading: IconButton(
+        icon: Icon(Icons.arrow_back),
+        onPressed: () => Navigator.of(context).pop(),
       ),
-      body: _isLoading
-        ? const Center(child: CircularProgressIndicator())
-        : ordersByMonth.isEmpty
-          ? Center(child: Text('Không có đơn hàng'))
-          : ListView.builder(
-              itemCount: sortedMonths.length,
-              itemBuilder: (context, index) {
-                final month = sortedMonths[index];
-                final orders = ordersByMonth[month]!;
+      actions: [
+        IconButton(
+          icon: Icon(Icons.refresh),
+          onPressed: _loadOrders,
+        ),
+      ],
+    ),
+    body: _isLoading
+      ? const Center(child: CircularProgressIndicator())
+      : ordersByMonth.isEmpty
+        ? Center(child: Text('Không có đơn hàng'))
+        : ListView.builder(
+            itemCount: sortedMonths.length,
+            itemBuilder: (context, index) {
+              final month = sortedMonths[index];
+              final orders = ordersByMonth[month]!;
+              
+              // Sort orders by TrangThai with "Gửi" first, then by BoPhan
+              orders.sort((a, b) {
+                // First priority: "Gửi" status comes first
+                if (a['TrangThai'] == 'Gửi' && b['TrangThai'] != 'Gửi') {
+                  return -1;
+                } else if (a['TrangThai'] != 'Gửi' && b['TrangThai'] == 'Gửi') {
+                  return 1;
+                }
                 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Text(
-                        month,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
+                // Second priority: other TrangThai values
+                if (a['TrangThai'] != b['TrangThai']) {
+                  return a['TrangThai'].compareTo(b['TrangThai']);
+                }
+                
+                // Third priority: sort by BoPhan
+                return a['BoPhan'].compareTo(b['BoPhan']);
+              });
+              
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(
+                      month,
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
-                    ...orders.map((order) => Card(
-                      color: _getStatusColor(order['TrangThai']),
-                      child: ListTile(
-                        title: Text(order['TenDon']),
-                        subtitle: Text('Trạng thái: ${order['TrangThai']}'),
-                        trailing: Icon(Icons.chevron_right),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ProjectOrderDetail2( 
-                                orderId: order['OrderID'],
-                                boPhan: order['BoPhan'],
-                              ),
-                            ),
-                          );
-                        },
+                  ),
+                  ...orders.map((order) => Card(
+                    color: _getStatusColor(order['TrangThai']),
+                    child: ListTile(
+                      title: Text(order['TenDon']),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Trạng thái: ${order['TrangThai']}'),
+                          Text('Bộ phận: ${order['BoPhan']}'),
+                        ],
                       ),
-                    )).toList(),
-                  ],
-                );
-              },
-            ),
-    );
-  }
+                      trailing: Icon(Icons.chevron_right),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ProjectOrderDetail2( 
+                              orderId: order['OrderID'],
+                              boPhan: order['BoPhan'],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  )).toList(),
+                ],
+              );
+            },
+          ),
+  );
+}
 }
