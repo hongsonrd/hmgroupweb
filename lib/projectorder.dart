@@ -368,7 +368,13 @@ Widget build(BuildContext context) {
                                 color: _getStatusColor(order['TrangThai']),
                                 child: ListTile(
                                   title: Text(order['TenDon']),
-                                  subtitle: Text('Trạng thái: ${order['TrangThai']}'),
+                                  subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Trạng thái: ${order['TrangThai']}'),
+                          Text('Tổng tiền: ${order['TongTien']} đ'),
+                        ],
+                      ),
                                   trailing: Icon(Icons.chevron_right),
                                   onTap: () {
                                     Navigator.push(

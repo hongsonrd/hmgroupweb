@@ -39,13 +39,13 @@ class DBHelper {
     }
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool hasReset = prefs.getBool('db_reset_v20') ?? false;
+    bool hasReset = prefs.getBool('db_reset_v21') ?? false;
     
     if (!hasReset) {
-      print('Forcing database reset for version 20...');
+      print('Forcing database reset for version 21...');
       try {
         await deleteDatabase(path);
-        await prefs.setBool('db_reset_v20', true);
+        await prefs.setBool('db_reset_v21', true);
         print('Database reset successful');
       } catch (e) {
         print('Error during database reset: $e');
@@ -57,7 +57,7 @@ class DBHelper {
     final db = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 20,
+        version: 21,
         onCreate: (Database db, int version) async {
           print('Creating database tables...');
           await db.execute(DatabaseTables.createInteractionTable);
@@ -93,11 +93,32 @@ class DBHelper {
           await db.execute(DatabaseTables.createCoinRateTable);
           await db.execute(DatabaseTables.createMapStaffTable);
           await db.execute(DatabaseTables.createMapPositionTable);
+                 await db.execute(DatabaseTables.createDonHangTable);
+        await db.execute(DatabaseTables.createChiTietDonTable);
+          await db.execute(DatabaseTables.createDSHangTable);
+        await db.execute(DatabaseTables.createGiaoDichKhoTable);
+        await db.execute(DatabaseTables.createGiaoHangTable);
+        await db.execute(DatabaseTables.createKhoTable);
+        await db.execute(DatabaseTables.createKhuVucKhoTable);
+        await db.execute(DatabaseTables.createLoHangTable);
+        await db.execute(DatabaseTables.createTonKhoTable);
+        await db.execute(DatabaseTables.createNewsActivityTable);
+        await db.execute(DatabaseTables.createNewsTable);
           print('Database tables created successfully');
         },
         onUpgrade: (Database db, int oldVersion, int newVersion) async {
-          if (oldVersion < 20) {
-
+          if (oldVersion < 21) {
+                   await db.execute(DatabaseTables.createDonHangTable);
+        await db.execute(DatabaseTables.createChiTietDonTable);
+await db.execute(DatabaseTables.createDSHangTable);
+        await db.execute(DatabaseTables.createGiaoDichKhoTable);
+        await db.execute(DatabaseTables.createGiaoHangTable);
+        await db.execute(DatabaseTables.createKhoTable);
+        await db.execute(DatabaseTables.createKhuVucKhoTable);
+        await db.execute(DatabaseTables.createLoHangTable);
+        await db.execute(DatabaseTables.createTonKhoTable);
+        await db.execute(DatabaseTables.createNewsActivityTable);
+        await db.execute(DatabaseTables.createNewsTable);
           }
         },
         onOpen: (db) async {
@@ -118,6 +139,676 @@ class DBHelper {
     print('Stack trace: $stackTrace');
     rethrow;
   }
+}
+// ==================== DSHang CRUD Operations ====================
+Future<List<LoHangModel>> getLoHangByMaHangAndKho(String maHangID, String khoHangID) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    'LoHang',
+    where: 'maHangID = ? AND khoHangID = ? AND soLuongHienTai > 0',
+    whereArgs: [maHangID, khoHangID],
+  );
+  return List.generate(maps.length, (i) {
+    return LoHangModel.fromMap(maps[i]);
+  });
+}
+Future<List<DSHangModel>> getAllDSHang() async {
+  try {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('dshang');
+    
+    print("Raw database query result for DSHang: ${maps.length} items");
+    if (maps.isNotEmpty) {
+      print("First raw item: ${maps[0]}");
+      
+      // Debug: Print all keys from the first item to see actual case
+      print("Keys in first item: ${maps[0].keys.toList()}");
+    }
+    
+    return maps.map((e) => DSHangModel.fromMap(e)).toList();
+  } catch (e) {
+    print("Error getting all DSHang: $e");
+    return [];
+  }
+}
+
+Future<DSHangModel?> getDSHangByUID(String uid) async {
+  final dshangs = await query(
+    DatabaseTables.dsHangTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
+  if (dshangs.isNotEmpty) {
+    return DSHangModel.fromMap(dshangs.first);
+  }
+  return null;
+}
+
+Future<DSHangModel?> getDSHangBySKU(String sku) async {
+  final dshangs = await query(
+    DatabaseTables.dsHangTable,
+    where: 'sku = ?',
+    whereArgs: [sku],
+  );
+  if (dshangs.isNotEmpty) {
+    return DSHangModel.fromMap(dshangs.first);
+  }
+  return null;
+}
+
+Future<void> insertDSHang(DSHangModel dshang) async {
+  await insert(DatabaseTables.dsHangTable, dshang.toMap());
+}
+
+Future<void> updateDSHang(DSHangModel dshang) async {
+  await update(
+    DatabaseTables.dsHangTable,
+    dshang.toMap(),
+    where: 'uid = ?',
+    whereArgs: [dshang.uid],
+  );
+}
+
+Future<void> deleteDSHang(String uid) async {
+  await delete(
+    DatabaseTables.dsHangTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
+}
+
+// ==================== GiaoDichKho CRUD Operations ====================
+Future<List<GiaoDichKhoModel>> getAllGiaoDichKho() async {
+  final giaodichkhos = await query(DatabaseTables.giaoDichKhoTable);
+  return giaodichkhos.map((giaodichkho) => GiaoDichKhoModel.fromMap(giaodichkho)).toList();
+}
+
+Future<GiaoDichKhoModel?> getGiaoDichKhoById(String giaoDichID) async {
+  final giaodichkhos = await query(
+    DatabaseTables.giaoDichKhoTable,
+    where: 'giaoDichID = ?',
+    whereArgs: [giaoDichID],
+  );
+  if (giaodichkhos.isNotEmpty) {
+    return GiaoDichKhoModel.fromMap(giaodichkhos.first);
+  }
+  return null;
+}
+
+Future<List<GiaoDichKhoModel>> getGiaoDichKhoByLoHang(String loHangID) async {
+  final giaodichkhos = await query(
+    DatabaseTables.giaoDichKhoTable,
+    where: 'loHangID = ?',
+    whereArgs: [loHangID],
+  );
+  return giaodichkhos.map((giaodichkho) => GiaoDichKhoModel.fromMap(giaodichkho)).toList();
+}
+
+Future<void> insertGiaoDichKho(GiaoDichKhoModel giaodichkho) async {
+  await insert(DatabaseTables.giaoDichKhoTable, giaodichkho.toMap());
+}
+
+Future<void> updateGiaoDichKho(GiaoDichKhoModel giaodichkho) async {
+  await update(
+    DatabaseTables.giaoDichKhoTable,
+    giaodichkho.toMap(),
+    where: 'giaoDichID = ?',
+    whereArgs: [giaodichkho.giaoDichID],
+  );
+}
+
+Future<void> deleteGiaoDichKho(String giaoDichID) async {
+  await delete(
+    DatabaseTables.giaoDichKhoTable,
+    where: 'giaoDichID = ?',
+    whereArgs: [giaoDichID],
+  );
+}
+
+// ==================== GiaoHang CRUD Operations ====================
+Future<List<GiaoHangModel>> getAllGiaoHang() async {
+  final giaohangs = await query(DatabaseTables.giaoHangTable);
+  return giaohangs.map((giaohang) => GiaoHangModel.fromMap(giaohang)).toList();
+}
+
+Future<GiaoHangModel?> getGiaoHangByUID(String uid) async {
+  final giaohangs = await query(
+    DatabaseTables.giaoHangTable,
+    where: 'UID = ?',
+    whereArgs: [uid],
+  );
+  if (giaohangs.isNotEmpty) {
+    return GiaoHangModel.fromMap(giaohangs.first);
+  }
+  return null;
+}
+
+Future<List<Map<String, dynamic>>> getGiaoHangBySoPhieu(String soPhieu) async {
+  final db = await database;
+  return await db.query(
+    'GiaoHang',
+    where: 'SoPhieu = ?',
+    whereArgs: [soPhieu],
+    orderBy: 'Ngay DESC, Gio DESC',
+  );
+}
+
+Future<int> insertGiaoHang(Map<String, dynamic> giaoHang) async {
+  final db = await database;
+  return await db.insert('GiaoHang', giaoHang);
+}
+
+Future<void> updateGiaoHang(GiaoHangModel giaohang) async {
+  await update(
+    DatabaseTables.giaoHangTable,
+    giaohang.toMap(),
+    where: 'UID = ?',
+    whereArgs: [giaohang.uid],
+  );
+}
+
+Future<void> deleteGiaoHang(String uid) async {
+  await delete(
+    DatabaseTables.giaoHangTable,
+    where: 'UID = ?',
+    whereArgs: [uid],
+  );
+}
+
+// ==================== Kho CRUD Operations ====================
+Future<List<KhoModel>> getAllKho() async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query('kho');
+  return List.generate(maps.length, (i) {
+    return KhoModel.fromMap(maps[i]);
+  });
+}
+
+Future<KhoModel?> getKhoById(String khoHangID) async {
+  final khos = await query(
+    DatabaseTables.khoTable,
+    where: 'khoHangID = ?',
+    whereArgs: [khoHangID],
+  );
+  if (khos.isNotEmpty) {
+    return KhoModel.fromMap(khos.first);
+  }
+  return null;
+}
+
+Future<void> insertKho(KhoModel kho) async {
+  await insert(DatabaseTables.khoTable, kho.toMap());
+}
+
+Future<void> updateKho(KhoModel kho) async {
+  await update(
+    DatabaseTables.khoTable,
+    kho.toMap(),
+    where: 'khoHangID = ?',
+    whereArgs: [kho.khoHangID],
+  );
+}
+
+Future<void> deleteKho(String khoHangID) async {
+  // First delete all related KhuVucKho
+  await delete(
+    DatabaseTables.khuVucKhoTable,
+    where: 'khoHangID = ?',
+    whereArgs: [khoHangID],
+  );
+  
+  // Then delete the Kho
+  await delete(
+    DatabaseTables.khoTable,
+    where: 'khoHangID = ?',
+    whereArgs: [khoHangID],
+  );
+}
+
+// ==================== KhuVucKho CRUD Operations ====================
+Future<List<KhuVucKhoModel>> getAllKhuVucKho() async {
+  final khuvuckhos = await query(DatabaseTables.khuVucKhoTable);
+  return khuvuckhos.map((khuvuckho) => KhuVucKhoModel.fromMap(khuvuckho)).toList();
+}
+Future<List<KhuVucKhoModel>> getKhuVucKhoByKhoID(String khoHangID) async {
+  final db = await database;
+  
+  // Add debugging query to check what's in the khuvuckho table
+  print('Querying khuvuckho for khoHangID: $khoHangID');
+  final checkData = await db.query('khuvuckho');
+  print('All records in khuvuckho: $checkData');
+  
+  // Now try to get the specific records
+  final List<Map<String, dynamic>> maps = await db.query(
+    'khuvuckho',
+    where: 'khoHangID = ?',
+    whereArgs: [khoHangID],
+  );
+  
+  print('Found ${maps.length} matching records for khoHangID: $khoHangID');
+  
+  return List.generate(maps.length, (i) {
+    print('Record $i: ${maps[i]}');
+    return KhuVucKhoModel.fromMap(maps[i]);
+  });
+}
+Future<List<KhuVucKhoModel>> getKhuVucKhoById(String khuVucKhoID) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    'khuvuckho',
+    where: 'khuVucKhoID = ?',
+    whereArgs: [khuVucKhoID],
+  );
+  return List.generate(maps.length, (i) {
+    return KhuVucKhoModel.fromMap(maps[i]);
+  });
+}
+Future<List<KhuVucKhoModel>> getKhuVucKhoByKhoHang(String khoHangID) async {
+  final khuvuckhos = await query(
+    DatabaseTables.khuVucKhoTable,
+    where: 'khoHangID = ?',
+    whereArgs: [khoHangID],
+  );
+  return khuvuckhos.map((khuvuckho) => KhuVucKhoModel.fromMap(khuvuckho)).toList();
+}
+
+Future<void> insertKhuVucKho(KhuVucKhoModel khuvuckho) async {
+  await insert(DatabaseTables.khuVucKhoTable, khuvuckho.toMap());
+}
+
+Future<void> updateKhuVucKho(KhuVucKhoModel khuvuckho) async {
+  await update(
+    DatabaseTables.khuVucKhoTable,
+    khuvuckho.toMap(),
+    where: 'khuVucKhoID = ?',
+    whereArgs: [khuvuckho.khuVucKhoID],
+  );
+}
+
+Future<void> deleteKhuVucKho(String khuVucKhoID) async {
+  await delete(
+    DatabaseTables.khuVucKhoTable,
+    where: 'khuVucKhoID = ?',
+    whereArgs: [khuVucKhoID],
+  );
+}
+Future<int> getKhuVucKhoCount() async {
+  final db = await database;
+  final result = await db.rawQuery('SELECT COUNT(*) as count FROM khuvuckho');
+  return Sqflite.firstIntValue(result) ?? 0;
+}
+
+Future<void> clearKhuVucKhoTable() async {
+  final db = await database;
+  await db.delete('khuvuckho');
+}
+
+Future<Batch> startBatch() async {
+  final db = await database;
+  return db.batch();
+}
+
+void addToBatch(Batch batch, String sql, List<dynamic> arguments) {
+  batch.rawInsert(sql, arguments);
+}
+
+Future<void> commitBatch(Batch batch) async {
+  await batch.commit(noResult: true);
+}
+// ==================== LoHang CRUD Operations ====================
+Future<List<LoHangModel>> getAllLoHang() async {
+  final lohangs = await query(DatabaseTables.loHangTable);
+  return lohangs.map((lohang) => LoHangModel.fromMap(lohang)).toList();
+}
+
+Future<LoHangModel?> getLoHangById(String loHangID) async {
+  final lohangs = await query(
+    DatabaseTables.loHangTable,
+    where: 'loHangID = ?',
+    whereArgs: [loHangID],
+  );
+  if (lohangs.isNotEmpty) {
+    return LoHangModel.fromMap(lohangs.first);
+  }
+  return null;
+}
+
+Future<void> insertLoHang(LoHangModel lohang) async {
+  await insert(DatabaseTables.loHangTable, lohang.toMap());
+}
+
+Future<void> updateLoHang(LoHangModel lohang) async {
+  await update(
+    DatabaseTables.loHangTable,
+    lohang.toMap(),
+    where: 'loHangID = ?',
+    whereArgs: [lohang.loHangID],
+  );
+}
+
+Future<void> deleteLoHang(String loHangID) async {
+  // First delete all related GiaoDichKho
+  await delete(
+    DatabaseTables.giaoDichKhoTable,
+    where: 'loHangID = ?',
+    whereArgs: [loHangID],
+  );
+  
+  // Then delete the LoHang
+  await delete(
+    DatabaseTables.loHangTable,
+    where: 'loHangID = ?',
+    whereArgs: [loHangID],
+  );
+}
+Future<List<LoHangModel>> getLoHangForProduct(String productId, String warehouseId) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.loHangTable,
+    where: 'maHangID = ? AND khoHangID = ?',
+    whereArgs: [productId, warehouseId],
+  );
+  
+  return List.generate(maps.length, (i) {
+    return LoHangModel.fromMap(maps[i]);
+  });
+}
+// ==================== TonKho CRUD Operations ====================
+Future<List<TonKhoModel>> getAllTonKho() async {
+  final tonkhos = await query(DatabaseTables.tonKhoTable);
+  return tonkhos.map((tonkho) => TonKhoModel.fromMap(tonkho)).toList();
+}
+
+Future<TonKhoModel?> getTonKhoById(String tonKhoID) async {
+  final tonkhos = await query(
+    DatabaseTables.tonKhoTable,
+    where: 'tonKhoID = ?',
+    whereArgs: [tonKhoID],
+  );
+  if (tonkhos.isNotEmpty) {
+    return TonKhoModel.fromMap(tonkhos.first);
+  }
+  return null;
+}
+
+Future<List<TonKhoModel>> getTonKhoByMaHang(String maHangID) async {
+  final tonkhos = await query(
+    DatabaseTables.tonKhoTable,
+    where: 'maHangID = ?',
+    whereArgs: [maHangID],
+  );
+  return tonkhos.map((tonkho) => TonKhoModel.fromMap(tonkho)).toList();
+}
+
+Future<List<TonKhoModel>> getTonKhoByKhoHang(String khoHangID) async {
+  final tonkhos = await query(
+    DatabaseTables.tonKhoTable,
+    where: 'khoHangID = ?',
+    whereArgs: [khoHangID],
+  );
+  return tonkhos.map((tonkho) => TonKhoModel.fromMap(tonkho)).toList();
+}
+
+Future<void> insertTonKho(TonKhoModel tonkho) async {
+  await insert(DatabaseTables.tonKhoTable, tonkho.toMap());
+}
+
+Future<void> updateTonKho(TonKhoModel tonkho) async {
+  await update(
+    DatabaseTables.tonKhoTable,
+    tonkho.toMap(),
+    where: 'tonKhoID = ?',
+    whereArgs: [tonkho.tonKhoID],
+  );
+}
+
+Future<void> deleteTonKho(String tonKhoID) async {
+  // First delete all related LoHang records
+  await delete(
+    DatabaseTables.loHangTable,
+    where: 'tonKhoID = ?',
+    whereArgs: [tonKhoID],
+  );
+  
+  // Then delete the TonKho record
+  await delete(
+    DatabaseTables.tonKhoTable,
+    where: 'tonKhoID = ?',
+    whereArgs: [tonKhoID],
+  );
+}
+
+// ==================== News CRUD Operations ====================
+Future<List<NewsModel>> getAllNews() async {
+  final news = await query(DatabaseTables.newsTable);
+  return news.map((item) => NewsModel.fromMap(item)).toList();
+}
+
+Future<NewsModel?> getNewsById(String newsID) async {
+  final news = await query(
+    DatabaseTables.newsTable,
+    where: 'NewsID = ?',
+    whereArgs: [newsID],
+  );
+  if (news.isNotEmpty) {
+    return NewsModel.fromMap(news.first);
+  }
+  return null;
+}
+
+Future<void> insertNews(NewsModel news) async {
+  await insert(DatabaseTables.newsTable, news.toMap());
+}
+
+Future<void> updateNews(NewsModel news) async {
+  await update(
+    DatabaseTables.newsTable,
+    news.toMap(),
+    where: 'NewsID = ?',
+    whereArgs: [news.newsID],
+  );
+}
+
+Future<void> deleteNews(String newsID) async {
+  // First delete all related NewsActivity
+  await delete(
+    DatabaseTables.newsActivityTable,
+    where: 'NewsID = ?',
+    whereArgs: [newsID],
+  );
+  
+  // Then delete the News
+  await delete(
+    DatabaseTables.newsTable,
+    where: 'NewsID = ?',
+    whereArgs: [newsID],
+  );
+}
+
+// ==================== NewsActivity CRUD Operations ====================
+Future<List<NewsActivityModel>> getAllNewsActivity() async {
+  final activities = await query(DatabaseTables.newsActivityTable);
+  return activities.map((activity) => NewsActivityModel.fromMap(activity)).toList();
+}
+
+Future<NewsActivityModel?> getNewsActivityById(String likeID) async {
+  final activities = await query(
+    DatabaseTables.newsActivityTable,
+    where: 'LikeID = ?',
+    whereArgs: [likeID],
+  );
+  if (activities.isNotEmpty) {
+    return NewsActivityModel.fromMap(activities.first);
+  }
+  return null;
+}
+
+Future<List<NewsActivityModel>> getNewsActivityByNews(String newsID) async {
+  final activities = await query(
+    DatabaseTables.newsActivityTable,
+    where: 'NewsID = ?',
+    whereArgs: [newsID],
+  );
+  return activities.map((activity) => NewsActivityModel.fromMap(activity)).toList();
+}
+
+Future<List<NewsActivityModel>> getNewsActivityByUser(String nguoiDung) async {
+  final activities = await query(
+    DatabaseTables.newsActivityTable,
+    where: 'NguoiDung = ?',
+    whereArgs: [nguoiDung],
+  );
+  return activities.map((activity) => NewsActivityModel.fromMap(activity)).toList();
+}
+
+Future<void> insertNewsActivity(NewsActivityModel activity) async {
+  await insert(DatabaseTables.newsActivityTable, activity.toMap());
+}
+
+Future<void> updateNewsActivity(NewsActivityModel activity) async {
+  await update(
+    DatabaseTables.newsActivityTable,
+    activity.toMap(),
+    where: 'LikeID = ?',
+    whereArgs: [activity.likeID],
+  );
+}
+
+Future<void> deleteNewsActivity(String likeID) async {
+  await delete(
+    DatabaseTables.newsActivityTable,
+    where: 'LikeID = ?',
+    whereArgs: [likeID],
+  );
+}
+// ==================== DonHang CRUD Operations ====================
+Future<List<DonHangModel>> getAllDonHang() async {
+  final donhangs = await query(DatabaseTables.donHangTable);
+  return donhangs.map((donhang) => DonHangModel.fromMap(donhang)).toList();
+}
+
+Future<DonHangModel?> getDonHangBySoPhieu(String soPhieu) async {
+  final donhangs = await query(
+    DatabaseTables.donHangTable,
+    where: 'soPhieu = ?',
+    whereArgs: [soPhieu],
+  );
+  if (donhangs.isNotEmpty) {
+    return DonHangModel.fromMap(donhangs.first);
+  }
+  return null;
+}
+
+Future<List<DonHangModel>> getDonHangByNguoiTao(String nguoiTao) async {
+  final donhangs = await query(
+    DatabaseTables.donHangTable,
+    where: 'nguoiTao = ?',
+    whereArgs: [nguoiTao],
+  );
+  return donhangs.map((donhang) => DonHangModel.fromMap(donhang)).toList();
+}
+
+Future<List<DonHangModel>> getDonHangByTrangThai(String trangThai) async {
+  final donhangs = await query(
+    DatabaseTables.donHangTable,
+    where: 'trangThai = ?',
+    whereArgs: [trangThai],
+  );
+  return donhangs.map((donhang) => DonHangModel.fromMap(donhang)).toList();
+}
+
+Future<void> insertDonHang(DonHangModel donhang) async {
+  await insert(DatabaseTables.donHangTable, donhang.toMap());
+}
+
+Future<void> updateDonHang(DonHangModel donhang) async {
+  await update(
+    DatabaseTables.donHangTable,
+    donhang.toMap(),
+    where: 'soPhieu = ?',
+    whereArgs: [donhang.soPhieu],
+  );
+}
+
+Future<void> deleteDonHang(String soPhieu) async {
+  // First delete all related ChiTietDon records
+  await delete(
+    DatabaseTables.chiTietDonTable,
+    where: 'soPhieu = ?',
+    whereArgs: [soPhieu],
+  );
+  
+  // Then delete the DonHang record
+  await delete(
+    DatabaseTables.donHangTable,
+    where: 'soPhieu = ?',
+    whereArgs: [soPhieu],
+  );
+}
+
+// ==================== ChiTietDon CRUD Operations ====================
+Future<List<ChiTietDonModel>> getAllChiTietDon() async {
+  final chitietdons = await query(DatabaseTables.chiTietDonTable);
+  return chitietdons.map((chitiet) => ChiTietDonModel.fromMap(chitiet)).toList();
+}
+
+Future<ChiTietDonModel?> getChiTietDonByUID(String uid) async {
+  final chitietdons = await query(
+    DatabaseTables.chiTietDonTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
+  if (chitietdons.isNotEmpty) {
+    return ChiTietDonModel.fromMap(chitietdons.first);
+  }
+  return null;
+}
+
+Future<List<ChiTietDonModel>> getChiTietDonBySoPhieu(String soPhieu) async {
+  final chitietdons = await query(
+    DatabaseTables.chiTietDonTable,
+    where: 'soPhieu = ?',
+    whereArgs: [soPhieu],
+  );
+  return chitietdons.map((chitiet) => ChiTietDonModel.fromMap(chitiet)).toList();
+}
+
+Future<List<ChiTietDonModel>> getChiTietDonByTrangThai(String trangThai) async {
+  final chitietdons = await query(
+    DatabaseTables.chiTietDonTable,
+    where: 'trangThai = ?',
+    whereArgs: [trangThai],
+  );
+  return chitietdons.map((chitiet) => ChiTietDonModel.fromMap(chitiet)).toList();
+}
+
+Future<void> insertChiTietDon(ChiTietDonModel chitietdon) async {
+  await insert(DatabaseTables.chiTietDonTable, chitietdon.toMap());
+}
+
+Future<void> updateChiTietDon(ChiTietDonModel chitietdon) async {
+  await update(
+    DatabaseTables.chiTietDonTable,
+    chitietdon.toMap(),
+    where: 'uid = ?',
+    whereArgs: [chitietdon.uid],
+  );
+}
+
+Future<void> deleteChiTietDon(String uid) async {
+  await delete(
+    DatabaseTables.chiTietDonTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
+}
+
+Future<void> deleteChiTietDonBySoPhieu(String soPhieu) async {
+  await delete(
+    DatabaseTables.chiTietDonTable,
+    where: 'soPhieu = ?',
+    whereArgs: [soPhieu],
+  );
 }
 // ==================== MapStaff CRUD Operations ====================
 Future<List<MapStaffModel>> getAllMapStaff() async {

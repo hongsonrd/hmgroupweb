@@ -28,6 +28,10 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSPrintInfoFirstPage</key>
+	<integer>1</integer>
+	<key>NSPrintInfoOrientation</key>
+	<integer>1</integer>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

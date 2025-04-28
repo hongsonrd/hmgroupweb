@@ -2177,6 +2177,799 @@ class MapPositionModel {
     );
   }
 }
+class DonHangModel {
+  final String? soPhieu;
+  final String? nguoiTao;
+  final String? ngay;
+  final String? tenKhachHang;
+  final String? sdtKhachHang;
+  final String? soPO;
+  final String? diaChi;
+  final String? mst;
+  final String? tapKH;
+  final String? tenNguoiGiaoDich;
+  final String? boPhanGiaoDich;
+  final String? sdtNguoiGiaoDich;
+  final String? thoiGianDatHang;
+  final String? ngayYeuCauGiao;
+  final String? thoiGianCapNhatTrangThai;
+  final String? phuongThucThanhToan;
+  final int? thanhToanSauNhanHangXNgay;
+  final int? datCocSauXNgay;
+  final String? giayToCanKhiGiaoHang;
+  final String? thoiGianVietHoaDon;
+  final String? thongTinVietHoaDon;
+  final String? diaChiGiaoHang;
+  final String? hoTenNguoiNhanHoaHong;
+  final String? sdtNguoiNhanHoaHong;
+  final String? hinhThucChuyenHoaHong;
+  final String? thongTinNhanHoaHong;
+  final String? ngaySeGiao;
+  final String? thoiGianCapNhatMoiNhat;
+  final String? phuongThucGiaoHang;
+  final String? phuongTienGiaoHang;
+  final String? hoTenNguoiGiaoHang;
+  final String? ghiChu;
+  final int? giaNet;
+  final int? tongTien;
+  final int? vat10;
+  final int? tongCong;
+  final int? hoaHong10;
+  final int? tienGui10;
+  final int? thueTNDN;
+  final int? vanChuyen;
+  final int? thucThu;
+  final String? nguoiNhanHang;
+  final String? sdtNguoiNhanHang;
+  final String? phieuXuatKho;
+  final String? trangThai;
+  final String? tenKhachHang2;
+
+  DonHangModel({
+    this.soPhieu,
+    this.nguoiTao,
+    this.ngay,
+    this.tenKhachHang,
+    this.sdtKhachHang,
+    this.soPO,
+    this.diaChi,
+    this.mst,
+    this.tapKH,
+    this.tenNguoiGiaoDich,
+    this.boPhanGiaoDich,
+    this.sdtNguoiGiaoDich,
+    this.thoiGianDatHang,
+    this.ngayYeuCauGiao,
+    this.thoiGianCapNhatTrangThai,
+    this.phuongThucThanhToan,
+    this.thanhToanSauNhanHangXNgay,
+    this.datCocSauXNgay,
+    this.giayToCanKhiGiaoHang,
+    this.thoiGianVietHoaDon,
+    this.thongTinVietHoaDon,
+    this.diaChiGiaoHang,
+    this.hoTenNguoiNhanHoaHong,
+    this.sdtNguoiNhanHoaHong,
+    this.hinhThucChuyenHoaHong,
+    this.thongTinNhanHoaHong,
+    this.ngaySeGiao,
+    this.thoiGianCapNhatMoiNhat,
+    this.phuongThucGiaoHang,
+    this.phuongTienGiaoHang,
+    this.hoTenNguoiGiaoHang,
+    this.ghiChu,
+    this.giaNet,
+    this.tongTien,
+    this.vat10,
+    this.tongCong,
+    this.hoaHong10,
+    this.tienGui10,
+    this.thueTNDN,
+    this.vanChuyen,
+    this.thucThu,
+    this.nguoiNhanHang,
+    this.sdtNguoiNhanHang,
+    this.phieuXuatKho,
+    this.trangThai,
+    this.tenKhachHang2,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'soPhieu': soPhieu,
+    'nguoiTao': nguoiTao,
+    'ngay': ngay,
+    'tenKhachHang': tenKhachHang,
+    'sdtKhachHang': sdtKhachHang,
+    'soPO': soPO,
+    'diaChi': diaChi,
+    'mst': mst,
+    'tapKH': tapKH,
+    'tenNguoiGiaoDich': tenNguoiGiaoDich,
+    'boPhanGiaoDich': boPhanGiaoDich,
+    'sdtNguoiGiaoDich': sdtNguoiGiaoDich,
+    'thoiGianDatHang': thoiGianDatHang,
+    'ngayYeuCauGiao': ngayYeuCauGiao,
+    'thoiGianCapNhatTrangThai': thoiGianCapNhatTrangThai,
+    'phuongThucThanhToan': phuongThucThanhToan,
+    'thanhToanSauNhanHangXNgay': thanhToanSauNhanHangXNgay,
+    'datCocSauXNgay': datCocSauXNgay,
+    'giayToCanKhiGiaoHang': giayToCanKhiGiaoHang,
+    'thoiGianVietHoaDon': thoiGianVietHoaDon,
+    'thongTinVietHoaDon': thongTinVietHoaDon,
+    'diaChiGiaoHang': diaChiGiaoHang,
+    'hoTenNguoiNhanHoaHong': hoTenNguoiNhanHoaHong,
+    'sdtNguoiNhanHoaHong': sdtNguoiNhanHoaHong,
+    'hinhThucChuyenHoaHong': hinhThucChuyenHoaHong,
+    'thongTinNhanHoaHong': thongTinNhanHoaHong,
+    'ngaySeGiao': ngaySeGiao,
+    'thoiGianCapNhatMoiNhat': thoiGianCapNhatMoiNhat,
+    'phuongThucGiaoHang': phuongThucGiaoHang,
+    'phuongTienGiaoHang': phuongTienGiaoHang,
+    'hoTenNguoiGiaoHang': hoTenNguoiGiaoHang,
+    'ghiChu': ghiChu,
+    'giaNet': giaNet,
+    'tongTien': tongTien,
+    'vat10': vat10,
+    'tongCong': tongCong,
+    'hoaHong10': hoaHong10,
+    'tienGui10': tienGui10,
+    'thueTNDN': thueTNDN,
+    'vanChuyen': vanChuyen,
+    'thucThu': thucThu,
+    'nguoiNhanHang': nguoiNhanHang,
+    'sdtNguoiNhanHang': sdtNguoiNhanHang,
+    'phieuXuatKho': phieuXuatKho,
+    'trangThai': trangThai,
+    'tenKhachHang2': tenKhachHang2,
+  };
+
+  factory DonHangModel.fromMap(Map<String, dynamic> map) {
+    return DonHangModel(
+      soPhieu: map['soPhieu'],
+      nguoiTao: map['nguoiTao'],
+      ngay: map['ngay'],
+      tenKhachHang: map['tenKhachHang'],
+      sdtKhachHang: map['sdtKhachHang'],
+      soPO: map['soPO'],
+      diaChi: map['diaChi'],
+      mst: map['mst'],
+      tapKH: map['tapKH'],
+      tenNguoiGiaoDich: map['tenNguoiGiaoDich'],
+      boPhanGiaoDich: map['boPhanGiaoDich'],
+      sdtNguoiGiaoDich: map['sdtNguoiGiaoDich'],
+      thoiGianDatHang: map['thoiGianDatHang'],
+      ngayYeuCauGiao: map['ngayYeuCauGiao'],
+      thoiGianCapNhatTrangThai: map['thoiGianCapNhatTrangThai'],
+      phuongThucThanhToan: map['phuongThucThanhToan'],
+      thanhToanSauNhanHangXNgay: map['thanhToanSauNhanHangXNgay'] != null ? int.tryParse(map['thanhToanSauNhanHangXNgay'].toString()) : null,
+      datCocSauXNgay: map['datCocSauXNgay'] != null ? int.tryParse(map['datCocSauXNgay'].toString()) : null,
+      giayToCanKhiGiaoHang: map['giayToCanKhiGiaoHang'],
+      thoiGianVietHoaDon: map['thoiGianVietHoaDon'],
+      thongTinVietHoaDon: map['thongTinVietHoaDon'],
+      diaChiGiaoHang: map['diaChiGiaoHang'],
+      hoTenNguoiNhanHoaHong: map['hoTenNguoiNhanHoaHong'],
+      sdtNguoiNhanHoaHong: map['sdtNguoiNhanHoaHong'],
+      hinhThucChuyenHoaHong: map['hinhThucChuyenHoaHong'],
+      thongTinNhanHoaHong: map['thongTinNhanHoaHong'],
+      ngaySeGiao: map['ngaySeGiao'],
+      thoiGianCapNhatMoiNhat: map['thoiGianCapNhatMoiNhat'],
+      phuongThucGiaoHang: map['phuongThucGiaoHang'],
+      phuongTienGiaoHang: map['phuongTienGiaoHang'],
+      hoTenNguoiGiaoHang: map['hoTenNguoiGiaoHang'],
+      ghiChu: map['ghiChu'],
+      giaNet: map['giaNet'] != null ? int.tryParse(map['giaNet'].toString()) : null,
+      tongTien: map['tongTien'] != null ? int.tryParse(map['tongTien'].toString()) : null,
+      vat10: map['vat10'] != null ? int.tryParse(map['vat10'].toString()) : null,
+      tongCong: map['tongCong'] != null ? int.tryParse(map['tongCong'].toString()) : null,
+      hoaHong10: map['hoaHong10'] != null ? int.tryParse(map['hoaHong10'].toString()) : null,
+      tienGui10: map['tienGui10'] != null ? int.tryParse(map['tienGui10'].toString()) : null,
+      thueTNDN: map['thueTNDN'] != null ? int.tryParse(map['thueTNDN'].toString()) : null,
+      vanChuyen: map['vanChuyen'] != null ? int.tryParse(map['vanChuyen'].toString()) : null,
+      thucThu: map['thucThu'] != null ? int.tryParse(map['thucThu'].toString()) : null,
+      nguoiNhanHang: map['nguoiNhanHang'],
+      sdtNguoiNhanHang: map['sdtNguoiNhanHang'],
+      phieuXuatKho: map['phieuXuatKho'],
+      trangThai: map['trangThai'],
+      tenKhachHang2: map['tenKhachHang2'],
+    );
+  }
+}
+
+class ChiTietDonModel {
+  final String? uid;
+  final String? soPhieu;
+  final String? trangThai;
+  final String? tenHang;
+  final String? maHang;
+  final String? donViTinh;
+  final double? soLuongYeuCau;
+  final int? donGia;
+  final int? thanhTien;
+  final double? soLuongThucGiao;
+  final String? chiNhanh;
+  final String? idHang;
+  final double? soLuongKhachNhan;
+  final String? duyet;
+  final String? xuatXuHangKhac;
+  final String? baoGia;
+  final String? hinhAnh;
+  final String? ghiChu;
+  final int? phanTramVAT;
+  final int? vat;
+  final String? tenKhachHang;
+  final String? updateTime;
+
+  ChiTietDonModel({
+    this.uid,
+    this.soPhieu,
+    this.trangThai,
+    this.tenHang,
+    this.maHang,
+    this.donViTinh,
+    this.soLuongYeuCau,
+    this.donGia,
+    this.thanhTien,
+    this.soLuongThucGiao,
+    this.chiNhanh,
+    this.idHang,
+    this.soLuongKhachNhan,
+    this.duyet,
+    this.xuatXuHangKhac,
+    this.baoGia,
+    this.hinhAnh,
+    this.ghiChu,
+    this.phanTramVAT,
+    this.vat,
+    this.tenKhachHang,
+    this.updateTime,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'uid': uid,
+    'soPhieu': soPhieu,
+    'trangThai': trangThai,
+    'tenHang': tenHang,
+    'maHang': maHang,
+    'donViTinh': donViTinh,
+    'soLuongYeuCau': soLuongYeuCau,
+    'donGia': donGia,
+    'thanhTien': thanhTien,
+    'soLuongThucGiao': soLuongThucGiao,
+    'chiNhanh': chiNhanh,
+    'idHang': idHang,
+    'soLuongKhachNhan': soLuongKhachNhan,
+    'duyet': duyet,
+    'xuatXuHangKhac': xuatXuHangKhac,
+    'baoGia': baoGia,
+    'hinhAnh': hinhAnh,
+    'ghiChu': ghiChu,
+    'phanTramVAT': phanTramVAT,
+    'vat': vat,
+    'tenKhachHang': tenKhachHang,
+    'updateTime': updateTime,
+  };
+
+  factory ChiTietDonModel.fromMap(Map<String, dynamic> map) {
+    return ChiTietDonModel(
+      uid: map['uid'],
+      soPhieu: map['soPhieu'],
+      trangThai: map['trangThai'],
+      tenHang: map['tenHang'],
+      maHang: map['maHang'],
+      donViTinh: map['donViTinh'],
+      soLuongYeuCau: map['soLuongYeuCau'] != null ? double.tryParse(map['soLuongYeuCau'].toString()) : null,
+      donGia: map['donGia'] != null ? int.tryParse(map['donGia'].toString()) : null,
+      thanhTien: map['thanhTien'] != null ? int.tryParse(map['thanhTien'].toString()) : null,
+      soLuongThucGiao: map['soLuongThucGiao'] != null ? double.tryParse(map['soLuongThucGiao'].toString()) : null,
+      chiNhanh: map['chiNhanh'],
+      idHang: map['idHang'],
+      soLuongKhachNhan: map['soLuongKhachNhan'] != null ? double.tryParse(map['soLuongKhachNhan'].toString()) : null,
+      duyet: map['duyet'],
+      xuatXuHangKhac: map['xuatXuHangKhac'],
+      baoGia: map['baoGia'],
+      hinhAnh: map['hinhAnh'],
+      ghiChu: map['ghiChu'],
+      phanTramVAT: map['phanTramVAT'] != null ? int.tryParse(map['phanTramVAT'].toString()) : null,
+      vat: map['vat'] != null ? int.tryParse(map['vat'].toString()) : null,
+      tenKhachHang: map['tenKhachHang'],
+      updateTime: map['updateTime'],
+    );
+  }
+}
+class DSHangModel {
+  final String? uid;
+  final String? sku;
+  final int? counter;
+  final String? maNhapKho;
+  final String? tenModel;
+  final String? tenSanPham;
+  final String? sanPhamGoc;
+  final String? phanLoai1;
+  final String? congDung;
+  final String? chatLieu;
+  final String? mauSac;
+  final String? kichThuoc;
+  final String? dungTich;
+  final String? khoiLuong;
+  final String? quyCachDongGoi;
+  final String? soLuongDongGoi;
+  final String? donVi;
+  final String? kichThuocDongGoi;
+  final String? thuongHieu;
+  final String? nhaCungCap;
+  final String? xuatXu;
+  final String? moTa;
+  final String? hinhAnh;
+  final bool? hangTieuHao;
+  final bool? coThoiHan;
+  final String? thoiHanSuDung;
+
+  DSHangModel({
+    this.uid,
+    this.sku,
+    this.counter,
+    this.maNhapKho,
+    this.tenModel,
+    this.tenSanPham,
+    this.sanPhamGoc,
+    this.phanLoai1,
+    this.congDung,
+    this.chatLieu,
+    this.mauSac,
+    this.kichThuoc,
+    this.dungTich,
+    this.khoiLuong,
+    this.quyCachDongGoi,
+    this.soLuongDongGoi,
+    this.donVi,
+    this.kichThuocDongGoi,
+    this.thuongHieu,
+    this.nhaCungCap,
+    this.xuatXu,
+    this.moTa,
+    this.hinhAnh,
+    this.hangTieuHao,
+    this.coThoiHan,
+    this.thoiHanSuDung,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'UID': uid,
+    'SKU': sku,
+    'Counter': counter,
+    'MaNhapKho': maNhapKho,
+    'TenModel': tenModel,
+    'TenSanPham': tenSanPham,
+    'SanPhamGoc': sanPhamGoc,
+    'PhanLoai1': phanLoai1,
+    'CongDung': congDung,
+    'ChatLieu': chatLieu,
+    'MauSac': mauSac,
+    'KichThuoc': kichThuoc,
+    'DungTich': dungTich,
+    'KhoiLuong': khoiLuong,
+    'QuyCachDongGoi': quyCachDongGoi,
+    'SoLuongDongGoi': soLuongDongGoi,
+    'DonVi': donVi,
+    'KichThuocDongGoi': kichThuocDongGoi,
+    'ThuongHieu': thuongHieu,
+    'NhaCungCap': nhaCungCap,
+    'XuatXu': xuatXu,
+    'MoTa': moTa,
+    'HinhAnh': hinhAnh,
+    'HangTieuHao': hangTieuHao,
+    'CoThoiHan': coThoiHan,
+    'ThoiHanSuDung': thoiHanSuDung,
+  };
+
+  factory DSHangModel.fromMap(Map<String, dynamic> map) {
+  // Function to safely get a value with case-insensitive key matching
+  dynamic getValue(String key) {
+    // Try all possible case variations
+    final variations = [
+      key,                    // As provided
+      key.toLowerCase(),      // lowercase
+      key.toUpperCase(),      // UPPERCASE
+      key[0].toUpperCase() + key.substring(1).toLowerCase() // Title Case
+    ];
+    
+    for (var variation in variations) {
+      if (map.containsKey(variation)) {
+        return map[variation];
+      }
+    }
+    
+    // If not found, try with more complex camelCase or PascalCase matching
+    if (key.length > 1) {
+      final keyLower = key.toLowerCase();
+      for (var mapKey in map.keys) {
+        if (mapKey.toLowerCase() == keyLower) {
+          return map[mapKey];
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  return DSHangModel(
+    uid: getValue('uid'),
+    sku: getValue('sku'),
+    counter: getValue('counter') != null ? int.tryParse(getValue('counter').toString()) : null,
+    maNhapKho: getValue('maNhapKho'),
+    tenModel: getValue('tenModel'),
+    tenSanPham: getValue('tenSanPham'),
+    sanPhamGoc: getValue('sanPhamGoc'),
+    phanLoai1: getValue('phanLoai1'),
+    congDung: getValue('congDung'),
+    chatLieu: getValue('chatLieu'),
+    mauSac: getValue('mauSac'),
+    kichThuoc: getValue('kichThuoc'),
+    dungTich: getValue('dungTich'),
+    khoiLuong: getValue('khoiLuong'),
+    quyCachDongGoi: getValue('quyCachDongGoi'),
+    soLuongDongGoi: getValue('soLuongDongGoi'),
+    donVi: getValue('donVi'),
+    kichThuocDongGoi: getValue('kichThuocDongGoi'),
+    thuongHieu: getValue('thuongHieu'),
+    nhaCungCap: getValue('nhaCungCap'),
+    xuatXu: getValue('xuatXu'),
+    moTa: getValue('moTa'),
+    hinhAnh: getValue('hinhAnh'),
+    hangTieuHao: [1, '1', true, 'true'].contains(getValue('hangTieuHao')),
+    coThoiHan: [1, '1', true, 'true'].contains(getValue('coThoiHan')),
+    thoiHanSuDung: getValue('thoiHanSuDung'),
+  );
+}
+}
+
+class GiaoDichKhoModel {
+  final String? giaoDichID;
+  final String? ngay;
+  final String? gio;
+  final String? nguoiDung;
+  final String? trangThai;
+  final String? loaiGiaoDich;
+  final String? maGiaoDich;
+  final String? loHangID;
+  final double? soLuong;
+  final String? ghiChu;
+  final double? thucTe;
+
+  GiaoDichKhoModel({
+    this.giaoDichID,
+    this.ngay,
+    this.gio,
+    this.nguoiDung,
+    this.trangThai,
+    this.loaiGiaoDich,
+    this.maGiaoDich,
+    this.loHangID,
+    this.soLuong,
+    this.ghiChu,
+    this.thucTe,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'giaoDichID': giaoDichID,
+    'ngay': ngay,
+    'gio': gio,
+    'nguoiDung': nguoiDung,
+    'trangThai': trangThai,
+    'loaiGiaoDich': loaiGiaoDich,
+    'maGiaoDich': maGiaoDich,
+    'loHangID': loHangID,
+    'soLuong': soLuong,
+    'ghiChu': ghiChu,
+    'thucTe': thucTe,
+  };
+
+  factory GiaoDichKhoModel.fromMap(Map<String, dynamic> map) {
+    return GiaoDichKhoModel(
+      giaoDichID: map['giaoDichID'],
+      ngay: map['ngay'],
+      gio: map['gio'],
+      nguoiDung: map['nguoiDung'],
+      trangThai: map['trangThai'],
+      loaiGiaoDich: map['loaiGiaoDich'],
+      maGiaoDich: map['maGiaoDich'],
+      loHangID: map['loHangID'],
+      soLuong: map['soLuong'] != null ? double.tryParse(map['soLuong'].toString()) : null,
+      ghiChu: map['ghiChu'],
+      thucTe: map['thucTe'] != null ? double.tryParse(map['thucTe'].toString()) : null,
+    );
+  }
+}
+
+class GiaoHangModel {
+  final String? uid;
+  final String? soPhieu;
+  final String? nguoiGiao;
+  final String? ngay;
+  final String? gio;
+  final String? ghiChu;
+  final String? hinhAnh;
+  final String? hinhAnh2;
+  final String? dinhVi;
+
+  GiaoHangModel({
+    this.uid,
+    this.soPhieu,
+    this.nguoiGiao,
+    this.ngay,
+    this.gio,
+    this.ghiChu,
+    this.hinhAnh,
+    this.hinhAnh2,
+    this.dinhVi,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'uid': uid,
+    'soPhieu': soPhieu,
+    'nguoiGiao': nguoiGiao,
+    'ngay': ngay,
+    'gio': gio,
+    'ghiChu': ghiChu,
+    'hinhAnh': hinhAnh,
+    'hinhAnh2': hinhAnh2,
+    'dinhVi': dinhVi,
+  };
+
+  factory GiaoHangModel.fromMap(Map<String, dynamic> map) {
+    return GiaoHangModel(
+      uid: map['uid'],
+      soPhieu: map['soPhieu'],
+      nguoiGiao: map['nguoiGiao'],
+      ngay: map['ngay'],
+      gio: map['gio'],
+      ghiChu: map['ghiChu'],
+      hinhAnh: map['hinhAnh'],
+      hinhAnh2: map['hinhAnh2'],
+      dinhVi: map['dinhVi'],
+    );
+  }
+}
+
+class KhoModel {
+  final String? khoHangID;
+  final String? tenKho;
+  final String? diaChi;
+
+  KhoModel({
+    this.khoHangID,
+    this.tenKho,
+    this.diaChi,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'khoHangID': khoHangID,
+    'tenKho': tenKho,
+    'diaChi': diaChi,
+  };
+
+  factory KhoModel.fromMap(Map<String, dynamic> map) {
+    return KhoModel(
+      khoHangID: map['khoHangID'],
+      tenKho: map['tenKho'],
+      diaChi: map['diaChi'],
+    );
+  }
+}
+
+class KhuVucKhoModel {
+  final String? khuVucKhoID;
+  final String? khoHangID;
+
+  KhuVucKhoModel({
+    this.khuVucKhoID,
+    this.khoHangID,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'khuVucKhoID': khuVucKhoID,
+    'khoHangID': khoHangID,
+  };
+
+  factory KhuVucKhoModel.fromMap(Map<String, dynamic> map) {
+    return KhuVucKhoModel(
+      khuVucKhoID: map['khuVucKhoID'],
+      khoHangID: map['khoHangID'],
+    );
+  }
+}
+
+class LoHangModel {
+  final String? loHangID;
+  final double? soLuongBanDau;
+  final double? soLuongHienTai;
+  final String? ngayNhap;
+  final String? ngayCapNhat;
+  final int? hanSuDung;
+  final String? trangThai;
+  final String? maHangID;
+  final String? khoHangID;
+  final String? khuVucKhoID;
+
+  LoHangModel({
+    this.loHangID,
+    this.soLuongBanDau,
+    this.soLuongHienTai,
+    this.ngayNhap,
+    this.ngayCapNhat,
+    this.hanSuDung,
+    this.trangThai,
+    this.maHangID,
+    this.khoHangID,
+    this.khuVucKhoID,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'loHangID': loHangID,
+    'soLuongBanDau': soLuongBanDau,
+    'soLuongHienTai': soLuongHienTai,
+    'ngayNhap': ngayNhap,
+    'ngayCapNhat': ngayCapNhat,
+    'hanSuDung': hanSuDung,
+    'trangThai': trangThai,
+    'maHangID': maHangID,
+    'khoHangID': khoHangID,
+    'khuVucKhoID': khuVucKhoID,
+  };
+
+  factory LoHangModel.fromMap(Map<String, dynamic> map) {
+    return LoHangModel(
+      loHangID: map['loHangID'],
+      soLuongBanDau: map['soLuongBanDau'] != null ? double.tryParse(map['soLuongBanDau'].toString()) : null,
+      soLuongHienTai: map['soLuongHienTai'] != null ? double.tryParse(map['soLuongHienTai'].toString()) : null,
+      ngayNhap: map['ngayNhap'],
+      ngayCapNhat: map['ngayCapNhat'],
+      hanSuDung: map['hanSuDung'] != null ? int.tryParse(map['hanSuDung'].toString()) : null,
+      trangThai: map['trangThai'],
+      maHangID: map['maHangID'],
+      khoHangID: map['khoHangID'],
+      khuVucKhoID: map['khuVucKhoID'],
+    );
+  }
+}
+
+class TonKhoModel {
+  final String? tonKhoID;
+  final String? maHangID;
+  final String? khoHangID;
+  final double? soLuongHienTai;
+  final double? soLuongDuTru;
+  final double? soLuongCanXuat;
+
+  TonKhoModel({
+    this.tonKhoID,
+    this.maHangID,
+    this.khoHangID,
+    this.soLuongHienTai,
+    this.soLuongDuTru,
+    this.soLuongCanXuat,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'tonKhoID': tonKhoID,
+    'maHangID': maHangID,
+    'khoHangID': khoHangID,
+    'soLuongHienTai': soLuongHienTai,
+    'soLuongDuTru': soLuongDuTru,
+    'soLuongCanXuat': soLuongCanXuat,
+  };
+
+  factory TonKhoModel.fromMap(Map<String, dynamic> map) {
+    return TonKhoModel(
+      tonKhoID: map['tonKhoID'],
+      maHangID: map['maHangID'],
+      khoHangID: map['khoHangID'],
+      soLuongHienTai: map['soLuongHienTai'] != null ? double.tryParse(map['soLuongHienTai'].toString()) : null,
+      soLuongDuTru: map['soLuongDuTru'] != null ? double.tryParse(map['soLuongDuTru'].toString()) : null,
+      soLuongCanXuat: map['soLuongCanXuat'] != null ? double.tryParse(map['soLuongCanXuat'].toString()) : null,
+    );
+  }
+}
+
+class NewsActivityModel {
+  final String? likeID;
+  final String? newsID;
+  final String? ngay;
+  final String? gio;
+  final String? phanLoai;
+  final String? noiDung;
+  final String? nguoiDung;
+
+  NewsActivityModel({
+    this.likeID,
+    this.newsID,
+    this.ngay,
+    this.gio,
+    this.phanLoai,
+    this.noiDung,
+    this.nguoiDung,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'likeID': likeID,
+    'newsID': newsID,
+    'ngay': ngay,
+    'gio': gio,
+    'phanLoai': phanLoai,
+    'noiDung': noiDung,
+    'nguoiDung': nguoiDung,
+  };
+
+  factory NewsActivityModel.fromMap(Map<String, dynamic> map) {
+    return NewsActivityModel(
+      likeID: map['likeID'],
+      newsID: map['newsID'],
+      ngay: map['ngay'],
+      gio: map['gio'],
+      phanLoai: map['phanLoai'],
+      noiDung: map['noiDung'],
+      nguoiDung: map['nguoiDung'],
+    );
+  }
+}
+
+class NewsModel {
+  final String? newsID;
+  final String? tieuDe;
+  final String? socialURL;
+  final String? hinhAnh;
+  final String? baiViet;
+  final String? ngay;
+  final String? logo;
+  final String? tomTat;
+  final String? tacGia;
+  final int? likeCount;
+  final int? commentCount;
+
+  NewsModel({
+    this.newsID,
+    this.tieuDe,
+    this.socialURL,
+    this.hinhAnh,
+    this.baiViet,
+    this.ngay,
+    this.logo,
+    this.tomTat,
+    this.tacGia,
+    this.likeCount,
+    this.commentCount,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'newsID': newsID,
+    'tieuDe': tieuDe,
+    'socialURL': socialURL,
+    'hinhAnh': hinhAnh,
+    'baiViet': baiViet,
+    'ngay': ngay,
+    'logo': logo,
+    'tomTat': tomTat,
+    'tacGia': tacGia,
+    'likeCount': likeCount,
+    'commentCount': commentCount,
+  };
+
+  factory NewsModel.fromMap(Map<String, dynamic> map) {
+    return NewsModel(
+      newsID: map['newsID'],
+      tieuDe: map['tieuDe'],
+      socialURL: map['socialURL'],
+      hinhAnh: map['hinhAnh'],
+      baiViet: map['baiViet'],
+      ngay: map['ngay'],
+      logo: map['logo'],
+      tomTat: map['tomTat'],
+      tacGia: map['tacGia'],
+      likeCount: map['likeCount'] != null ? int.tryParse(map['likeCount'].toString()) : null,
+      commentCount: map['commentCount'] != null ? int.tryParse(map['commentCount'].toString()) : null,
+    );
+  }
+}
 // Database Tables
 class DatabaseTables {
   // Table Names
@@ -2212,6 +3005,224 @@ class DatabaseTables {
   static const String coinRateTable = 'CoinRate';
     static const String mapStaffTable = 'Map_Staff';
   static const String mapPositionTable = 'Map_Position';
+      static const String donHangTable = 'donhang';
+  static const String chiTietDonTable = 'chitietdon';
+  static const String dsHangTable = 'dshang';
+  static const String giaoDichKhoTable = 'giaodikhkho';
+  static const String giaoHangTable = 'giaohang';
+  static const String khoTable = 'kho';
+  static const String khuVucKhoTable = 'khuvuckho';
+  static const String loHangTable = 'lohang';
+  static const String tonKhoTable = 'tonkho';
+  static const String newsActivityTable = 'newsactivity';
+  static const String newsTable = 'news';
+  static const String createDSHangTable = '''
+    CREATE TABLE $dsHangTable (
+      uid TEXT,
+      sku VARCHAR(100),
+      Counter INT,
+      MaNhapKho TEXT,
+      TenModel VARCHAR(100),
+      TenSanPham TEXT,
+      SanPhamGoc TEXT,
+      PhanLoai1 VARCHAR(100),
+      CongDung TEXT,
+      ChatLieu VARCHAR(100),
+      MauSac VARCHAR(50),
+      KichThuoc VARCHAR(100),
+      DungTich VARCHAR(50),
+      KhoiLuong VARCHAR(50),
+      QuyCachDongGoi TEXT,
+      SoLuongDongGoi TEXT,
+      DonVi VARCHAR(50),
+      KichThuocDongGoi VARCHAR(100),
+      ThuongHieu VARCHAR(100),
+      NhaCungCap VARCHAR(150),
+      XuatXu VARCHAR(100),
+      MoTa TEXT,
+      HinhAnh VARCHAR(255),
+      HangTieuHao TINYINT(1),
+      CoThoiHan TINYINT(1),
+      ThoiHanSuDung VARCHAR(50)
+    )
+  ''';
+  
+  static const String createGiaoDichKhoTable = '''
+    CREATE TABLE $giaoDichKhoTable (
+      giaoDichID TEXT,
+      ngay DATE,
+      gio TIME,
+      nguoiDung VARCHAR(100),
+      trangThai VARCHAR(100),
+      loaiGiaoDich VARCHAR(100),
+      maGiaoDich VARCHAR(100),
+      loHangID TEXT,
+      soLuong FLOAT,
+      ghiChu TEXT,
+      thucTe FLOAT
+    )
+  ''';
+  
+  static const String createGiaoHangTable = '''
+    CREATE TABLE $giaoHangTable (
+      UID VARCHAR(100),
+      SoPhieu VARCHAR(100),
+      NguoiGiao VARCHAR(100),
+      Ngay DATE,
+      Gio TIME,
+      GhiChu TEXT,
+      HinhAnh TEXT,
+      HinhAnh2 TEXT,
+      DinhVi VARCHAR(100)
+    )
+  ''';
+  
+  static const String createKhoTable = '''
+    CREATE TABLE $khoTable (
+      khoHangID TEXT,
+      tenKho TEXT,
+      diaChi TEXT
+    )
+  ''';
+  
+  static const String createKhuVucKhoTable = '''
+    CREATE TABLE $khuVucKhoTable (
+      khuVucKhoID TEXT,
+      khoHangID TEXT
+    )
+  ''';
+  
+  static const String createLoHangTable = '''
+    CREATE TABLE $loHangTable (
+      loHangID TEXT,
+      soLuongBanDau FLOAT,
+      soLuongHienTai FLOAT,
+      ngayNhap DATE,
+      ngayCapNhat TIMESTAMP,
+      hanSuDung INT,
+      trangThai VARCHAR(100),
+      maHangID TEXT,
+      khoHangID TEXT,
+      khuVucKhoID
+    )
+  ''';
+  
+  static const String createTonKhoTable = '''
+    CREATE TABLE $tonKhoTable (
+      tonKhoID TEXT,
+      maHangID TEXT,
+      khoHangID TEXT,
+      soLuongHienTai FLOAT,
+      soLuongDuTru FLOAT,
+      soLuongCanXuat FLOAT
+    )
+  ''';
+  
+  static const String createNewsActivityTable = '''
+    CREATE TABLE $newsActivityTable (
+      LikeID VARCHAR(100),
+      NewsID VARCHAR(100),
+      Ngay DATE,
+      Gio TIME,
+      PhanLoai VARCHAR(100),
+      NoiDung TEXT,
+      NguoiDung VARCHAR(100)
+    )
+  ''';
+  
+  static const String createNewsTable = '''
+    CREATE TABLE $newsTable (
+      NewsID VARCHAR(100),
+      TieuDe TEXT,
+      SocialURL TEXT,
+      HinhAnh TEXT,
+      BaiViet TEXT,
+      Ngay DATE,
+      Logo TEXT,
+      TomTat TEXT,
+      TacGia VARCHAR(100),
+      LikeCount INT,
+      CommentCount INT
+    )
+  ''';
+
+  static const String createDonHangTable = '''
+    CREATE TABLE $donHangTable (
+      soPhieu VARCHAR(255) NOT NULL PRIMARY KEY,
+      nguoiTao VARCHAR(255),
+      ngay DATE,
+      tenKhachHang TEXT,
+      sdtKhachHang VARCHAR(255),
+      soPO VARCHAR(255),
+      diaChi TEXT,
+      mst VARCHAR(255),
+      tapKH VARCHAR(255),
+      tenNguoiGiaoDich VARCHAR(255),
+      boPhanGiaoDich VARCHAR(255),
+      sdtNguoiGiaoDich VARCHAR(255),
+      thoiGianDatHang VARCHAR(255),
+      ngayYeuCauGiao DATE,
+      thoiGianCapNhatTrangThai DATETIME,
+      phuongThucThanhToan VARCHAR(255),
+      thanhToanSauNhanHangXNgay INT,
+      datCocSauXNgay INT,
+      giayToCanKhiGiaoHang TEXT,
+      thoiGianVietHoaDon TEXT,
+      thongTinVietHoaDon TEXT,
+      diaChiGiaoHang TEXT,
+      hoTenNguoiNhanHoaHong VARCHAR(255),
+      sdtNguoiNhanHoaHong VARCHAR(255),
+      hinhThucChuyenHoaHong VARCHAR(255),
+      thongTinNhanHoaHong VARCHAR(255),
+      ngaySeGiao TEXT,
+      thoiGianCapNhatMoiNhat DATETIME,
+      phuongThucGiaoHang VARCHAR(255),
+      phuongTienGiaoHang VARCHAR(255),
+      hoTenNguoiGiaoHang VARCHAR(255),
+      ghiChu TEXT,
+      giaNet INT,
+      tongTien INT,
+      vat10 INT,
+      tongCong INT,
+      hoaHong10 INT,
+      tienGui10 INT,
+      thueTNDN INT,
+      vanChuyen INT,
+      thucThu INT,
+      nguoiNhanHang VARCHAR(255),
+      sdtNguoiNhanHang VARCHAR(255),
+      phieuXuatKho VARCHAR(255),
+      trangThai VARCHAR(255),
+      tenKhachHang2 TEXT
+    )
+  ''';
+  static const String createChiTietDonTable = '''
+    CREATE TABLE $chiTietDonTable (
+      uid VARCHAR(255) NOT NULL PRIMARY KEY,
+      soPhieu VARCHAR(255),
+      trangThai VARCHAR(255),
+      tenHang TEXT,
+      maHang TEXT,
+      donViTinh VARCHAR(255),
+      soLuongYeuCau FLOAT,
+      donGia INT,
+      thanhTien INT,
+      soLuongThucGiao FLOAT,
+      chiNhanh VARCHAR(255),
+      idHang TEXT,
+      soLuongKhachNhan FLOAT,
+      duyet VARCHAR(255),
+      xuatXuHangKhac TEXT,
+      baoGia VARCHAR(255),
+      hinhAnh VARCHAR(255),
+      ghiChu VARCHAR(255),
+      phanTramVAT INT,
+      vat INT,
+      tenKhachHang TEXT,
+      updateTime DATETIME,
+      FOREIGN KEY (soPhieu) REFERENCES $donHangTable(soPhieu)
+    )
+  ''';
   static const String createMapStaffTable = '''
     CREATE TABLE $mapStaffTable (
       uid VARCHAR(100),

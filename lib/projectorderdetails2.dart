@@ -839,14 +839,18 @@ Future<void> _updateOrderStatus(String status) async {
         Text('Người tạo: ${_orderDetails!.nguoiDung ?? ''}'),
         Text('Trạng thái: ${_orderDetails!.trangThai ?? ''}'),
         Text('Ngày tạo: ${_orderDetails!.ngay != null ? DateFormat('dd/MM/yyyy').format(_orderDetails!.ngay!) : ''}'),
-        Text('Tổng tiền: ${formatter.format(_orderDetails!.tongTien ?? 0)}', style: TextStyle(
-            color: (_orderDetails!.tongTien ?? 0) > (_orderDetails!.dinhMuc ?? 0)
-                ? Colors.red
-                : Colors.green,
-            fontWeight: (_orderDetails!.tongTien ?? 0) > (_orderDetails!.dinhMuc ?? 0)
-                ? FontWeight.bold
-                : FontWeight.normal,
-          ),),
+        Text(
+  'Tổng tiền: ${formatter.format(_orderDetails!.tongTien ?? 0)} '
+  '(trội: ${formatter.format((_orderDetails!.tongTien ?? 0) - (_orderDetails!.dinhMuc ?? 0))})',
+  style: TextStyle(
+    color: (_orderDetails!.tongTien ?? 0) > (_orderDetails!.dinhMuc ?? 0)
+        ? Colors.red
+        : Colors.green,
+    fontWeight: (_orderDetails!.tongTien ?? 0) > (_orderDetails!.dinhMuc ?? 0)
+        ? FontWeight.bold
+        : FontWeight.normal,
+  ),
+),
         Text(
           'Định mức: ${formatter.format(_orderDetails!.dinhMuc ?? 0)}',
           style: TextStyle(

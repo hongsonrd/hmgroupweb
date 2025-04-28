@@ -1000,10 +1000,15 @@ Future<void> _deleteOrder() async {
                           Text('Ngày tạo: ${_orderDetails!.ngay != null ? DateFormat('dd/MM/yyyy').format(_orderDetails!.ngay!) : ''}'),
                           Text('Tổng tiền: ${formatter.format(_orderDetails!.tongTien ?? 0)}'),
                           Text(
-  'Tổng tiền: ${formatter.format(_orderDetails!.tongTien ?? 0)}',
+  'Tổng tiền: ${formatter.format(_orderDetails!.tongTien ?? 0)} '
+  '(trội: ${formatter.format((_orderDetails!.tongTien ?? 0) - (_orderDetails!.dinhMuc ?? 0))})',
   style: TextStyle(
-    fontSize: 18,
-    fontWeight: FontWeight.bold,
+    color: (_orderDetails!.tongTien ?? 0) > (_orderDetails!.dinhMuc ?? 0)
+        ? Colors.red
+        : Colors.green,
+    fontWeight: (_orderDetails!.tongTien ?? 0) > (_orderDetails!.dinhMuc ?? 0)
+        ? FontWeight.bold
+        : FontWeight.normal,
   ),
 ),
 Text(
