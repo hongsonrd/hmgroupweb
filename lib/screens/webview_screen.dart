@@ -164,14 +164,14 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
                       ),
                       child: Center(
                         child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 600),
+                          constraints: const BoxConstraints(maxWidth: 900),
                           child: CustomScrollView(
                             slivers: [
                               SliverPadding(
                                 padding: const EdgeInsets.all(16.0),
                                 sliver: SliverGrid(
                                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 3, // 3 columns for the grid
+                                    crossAxisCount: 4, // 4 columns for the grid
                                     mainAxisSpacing: 6.0,
                                     crossAxisSpacing: 6.0,
                                     childAspectRatio: 1 / 0.8,

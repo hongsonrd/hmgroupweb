@@ -72,29 +72,32 @@ List<Map<String, dynamic>> hoverStats = [
   },
 ];
 bool _statsLoaded = false;
-  @override
+//bool _initialSyncDone = false;
+
+ @override
 void initState() {
   super.initState();
   print("MapReportScreen: initState called");
   _loadMapData();
-  _loadFloors().then((_) => _preloadZones());
-   _loadHoverStats();
-  //dbHelper.debugTaskHistoryViTri();
-  //dbHelper.debugTableRecordCounts().then((_) {
-  //  dbHelper.addTestMapReports();
-  //});
-  // Initialize animation controller with proper debugging
-  print("Setting up animation controller");
+  _loadFloors().then((_) {
+    _preloadZones();
+    // Trigger sync if not done yet
+    //if (!_initialSyncDone) {
+    //  _initialSyncDone = true;
+    //  _syncMapReports();
+    //}
+  });
+  _loadHoverStats();
+  
+  // Animation controller setup remains the same
   _dotsAnimationController = AnimationController(
     vsync: this,
     duration: Duration(seconds: 5), 
   );
   _dotsAnimationController.addListener(() {
-    // Don't call setState in the listener for slow animations
-    // This could cause performance issues
     print("Animation value: ${_dotsAnimationController.value}");
   });
-  // Start the animation after a short delay
+  
   Future.delayed(Duration(milliseconds: 500), () {
     if (mounted) {
       print("Starting animation");
@@ -1544,23 +1547,23 @@ void _handleFloorChange(String floorUID) {
         return AlertDialog(
           title: Row(
             children: [
-      Expanded(child: Text(zone.tenKhuVuc ?? 'Khu vực không tên')),
-      Container(
-        padding: EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: Colors.blue,
-          borderRadius: BorderRadius.circular(15),
-        ),
-        child: Text(
-          '$positionCount vị trí',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
+              Expanded(child: Text(zone.tenKhuVuc ?? 'Khu vực không tên')),
+              Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue,
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Text(
+                  '$positionCount vị trí',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ),
-      ),
-    ],
-  ),
           content: Container(
             width: double.maxFinite,
             constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
@@ -1588,7 +1591,95 @@ void _handleFloorChange(String floorUID) {
                     Text(' ${zone.mauSac ?? '#3388FF80'}'),
                   ],
                 ),
-                
+                FutureBuilder<List<String>>(
+                  future: _getAllPositionImagesInZone(positions),
+                  builder: (context, imagesSnapshot) {
+                    if (imagesSnapshot.connectionState == ConnectionState.waiting) {
+                      return Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+                    
+                    final images = imagesSnapshot.data ?? [];
+                    
+                    if (images.isEmpty) {
+                      return SizedBox.shrink(); // No images to show
+                    }
+                    
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(height: 16),
+                        Text('Hình ảnh vị trí (${images.length}):', 
+                             style: TextStyle(fontWeight: FontWeight.bold)),
+                        SizedBox(height: 8),
+                        Container(
+                          height: 120,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: images.length,
+                            itemBuilder: (context, index) {
+                              return GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => Scaffold(
+                                        appBar: AppBar(
+                                          title: Text('Hình ảnh báo cáo'),
+                                          backgroundColor: Colors.black,
+                                        ),
+                                        body: Center(
+                                          child: InteractiveViewer(
+                                            panEnabled: true,
+                                            boundaryMargin: EdgeInsets.all(20),
+                                            minScale: 0.5,
+                                            maxScale: 4,
+                                            child: Image.network(
+                                              images[index],
+                                              fit: BoxFit.contain,
+                                              errorBuilder: (context, error, stackTrace) {
+                                                return Text('Không thể tải hình ảnh: $error');
+                                              },
+                                            ),
+                                          ),
+                                        ),
+                                        backgroundColor: Colors.black,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  width: 100,
+                                  margin: EdgeInsets.only(right: 8),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.grey.shade300),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(7),
+                                    child: Image.network(
+                                      images[index],
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Container(
+                                          color: Colors.grey.shade200,
+                                          child: Icon(Icons.broken_image, color: Colors.grey),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        Divider(height: 24),
+                      ],
+                    );
+                  },
+                ),
                 SizedBox(height: 16),
                 
                 // Zone statistics
@@ -1761,6 +1852,24 @@ void _handleFloorChange(String floorUID) {
       },
     ),
   );
+}
+Future<List<String>> _getAllPositionImagesInZone(List<MapPositionModel> positions) async {
+  final Set<String> uniqueImages = {};
+  
+  for (var position in positions) {
+    if (position.viTri != null && position.viTri!.isNotEmpty) {
+      final reports = await dbHelper.getReportsByPosition(position.viTri!);
+      
+      for (var report in reports) {
+        final imageUrl = report['HinhAnh']?.toString() ?? '';
+        if (imageUrl.isNotEmpty) {
+          uniqueImages.add(imageUrl);
+        }
+      }
+    }
+  }
+  
+  return uniqueImages.toList();
 }
 Future<Map<String, String>?> _getStaffInfo(String username) async {
   if (username.isEmpty) return null;
