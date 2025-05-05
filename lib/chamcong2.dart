@@ -3,8 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:core';
 import 'table_models.dart';
-import 'http_client.dart';
-
+import 'chamlaixe.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
@@ -14,6 +13,8 @@ import 'chamcongvang.dart';
 import 'chamcongnghi.dart';
 import 'chamcongtca.dart';
 import 'chamcongduyet.dart';
+import 'chamcongthang.dart';
+import 'http_client.dart';
 
 class ChamCong2Screen extends StatefulWidget {
   final String username;
@@ -34,7 +35,8 @@ class ChamCong2Screen extends StatefulWidget {
 class _ChamCong2ScreenState extends State<ChamCong2Screen> {
   bool _isLoading = true;
   String _message = '';
-  
+  bool _canAccessLaiXeScreen = false;
+  bool _canAccessTongHopScreen = false;
   // Stats variables
   double _totalCong = 0.0;
   int _totalWorkDays = 0;
@@ -51,31 +53,59 @@ class _ChamCong2ScreenState extends State<ChamCong2Screen> {
   @override
   void initState() {
     super.initState();
+    _checkUserPermissions();
     _checkAndLoadData();
   }
-  Future<void> _checkAndLoadData() async {
-    // Get the last refresh date from SharedPreferences
-    final prefs = await SharedPreferences.getInstance();
-    final lastRefreshStr = prefs.getString('lastRefresh_${widget.username}');
-    
-    if (lastRefreshStr != null) {
-      _lastRefreshDate = DateTime.parse(lastRefreshStr);
-    }
-    
-    // Check if we need to load data (first time or new day)
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final lastRefreshDay = _lastRefreshDate != null 
-        ? DateTime(_lastRefreshDate!.year, _lastRefreshDate!.month, _lastRefreshDate!.day)
-        : null;
-    
-    if (lastRefreshDay == null || lastRefreshDay != today) {
-      await _loadUserStats();
-    } else {
-      // Load cached stats
-      _loadCachedStats();
-    }
+    final List<String> _laiXeAuthorizedUsers = [
+  'hm.tason', 
+  'hm.duongloan', 
+  'hm.daotan', 
+  'hm.quanganh', 
+];
+  final List<String> _tongHopAuthorizedUsers = [
+  'hm.tason', 
+  'hm.quanganh', 
+  'hm.nguyenthu', 
+  'hm.nguyengiang',
+  'hm.lethihoa',
+  'hm.vovy',
+  'hm.nguyenlua', 
+  'hm.nguyentoan2', 
+  'hm.anhmanh', 
+  'hm.doannga', 
+  'hm.damlinh', 
+  'hm.ngochuyen', 
+];
+void _checkUserPermissions() {
+  setState(() {
+    _canAccessLaiXeScreen = _laiXeAuthorizedUsers.contains(widget.username);
+    _canAccessTongHopScreen = _tongHopAuthorizedUsers.contains(widget.username);
+  });
+}
+
+Future<void> _checkAndLoadData() async {
+  // Get the last refresh date from SharedPreferences
+  final prefs = await SharedPreferences.getInstance();
+  final lastRefreshStr = prefs.getString('lastRefresh_${widget.username}');
+  
+  if (lastRefreshStr != null) {
+    _lastRefreshDate = DateTime.parse(lastRefreshStr);
   }
+  
+  // Check if we need to load data (first time or new day)
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final lastRefreshDay = _lastRefreshDate != null 
+      ? DateTime(_lastRefreshDate!.year, _lastRefreshDate!.month, _lastRefreshDate!.day)
+      : null;
+  
+  if (lastRefreshDay == null || lastRefreshDay != today) {
+    await _loadUserStats();
+  } else {
+    // Load cached stats
+    _loadCachedStats();
+  }
+}
   Future<void> _loadUnapprovedChamCongLS() async {
   try {
     final dbHelper = DBHelper();
@@ -269,27 +299,29 @@ Future<void> _loadAdditionalUserData() async {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.username),
-        backgroundColor: const Color.fromARGB(255, 190, 226, 255),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Làm mới',
-            onPressed: _loadUserStats,
+  return Scaffold(
+    appBar: AppBar(
+      title: Text(widget.username),
+      backgroundColor: const Color.fromARGB(255, 190, 226, 255),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.refresh),
+          tooltip: 'Làm mới',
+          onPressed: _loadUserStats,
+        ),
+      ],
+    ),
+    body: RefreshIndicator(
+      onRefresh: _loadUserStats,
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 32.0, // More padding on sides for desktop
+            vertical: 16.0,
           ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _loadUserStats,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
                 // Role and approver info card (if available)
                 if (widget.userRole.isNotEmpty || widget.approverUsername.isNotEmpty)
                   Card(
@@ -473,16 +505,16 @@ const SizedBox(height: 24),
                 
                 // Grid of function buttons
                 GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 16,
-                  crossAxisSpacing: 16,
-                  childAspectRatio: 1.5,
-                  children: [
+  crossAxisCount: 4, // Changed from 2 to 4 columns
+  shrinkWrap: true,
+  physics: const NeverScrollableScrollPhysics(),
+  mainAxisSpacing: 8, // Reduced from 16
+  crossAxisSpacing: 8, // Reduced from 16
+  childAspectRatio: 1.2, // Changed from 1.5 to make more square-shaped
+  children: [
                     _buildFunctionButton(
   icon: Icons.person_off,
-  label: 'Báo vắng',
+  label: 'Báo/duyệt\nVắng',
   color: Colors.red.shade400,
   onTap: () {
     Navigator.push(
@@ -499,7 +531,7 @@ const SizedBox(height: 24),
 ),
                     _buildFunctionButton(
                       icon: Icons.beach_access,
-                      label: 'Báo nghỉ',
+                      label: 'Báo/duyệt\nNghỉ',
                       color: Colors.amber.shade700,
                       onTap: () {
                         Navigator.push(
@@ -516,7 +548,7 @@ const SizedBox(height: 24),
                     ),
                     _buildFunctionButton(
                       icon: Icons.access_time_filled,
-                      label: 'Báo tăng ca',
+                      label: 'Báo/duyệt\nTăng ca',
                       color: Colors.green.shade600,
                       onTap: () {
                         Navigator.push(
@@ -533,7 +565,7 @@ const SizedBox(height: 24),
                     ),
                     _buildFunctionButton(
                       icon: Icons.approval,
-                      label: 'Xét duyệt',
+                      label: 'Duyệt chấm\nBất thường',
                       color: Colors.purple.shade600,
                       onTap: () {
                         Navigator.push(
@@ -548,6 +580,41 @@ const SizedBox(height: 24),
                         );
                       },
                     ),
+                    // Add the conditional Lái xe button
+                    if (_canAccessLaiXeScreen)
+                      _buildFunctionButton(
+                        icon: Icons.drive_eta,
+                        label: 'Lái xe/ Kỹ thuật',
+                        color: Colors.blue.shade600,
+                        onTap: () {
+                          Navigator.push(
+  context,
+  MaterialPageRoute(
+    builder: (context) => ChamLaiXeScreen(
+      username: widget.username,
+      userRole: widget.userRole,
+      approverUsername: widget.approverUsername,
+    ),
+  ),
+);},),
+                          if (_canAccessTongHopScreen)
+  _buildFunctionButton(
+    icon: Icons.star,
+    label: 'Tổng hợp tháng',
+    color: Colors.blue.shade600,
+    onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ChamCongThangScreen(
+            username: widget.username,
+            userRole: widget.userRole,
+            approverUsername: widget.approverUsername,
+          ),
+        ),
+      );
+    },
+  ),
                   ],
                 ),
                 
@@ -577,17 +644,18 @@ const SizedBox(height: 24),
   required IconData icon,
 }) {
   return Padding(
-    padding: const EdgeInsets.symmetric(vertical: 4.0),
+    padding: const EdgeInsets.symmetric(vertical: 2.0), // Reduced from 4.0
     child: Row(
       children: [
-        Icon(icon, color: color, size: 18),
-        const SizedBox(width: 8),
+        Icon(icon, color: color, size: 16), // Reduced from 18
+        const SizedBox(width: 6), // Reduced from 8
         Expanded(
           child: Text(
             text,
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.w500,
+              fontSize: 13, // Added smaller font size
             ),
           ),
         ),
@@ -596,68 +664,69 @@ const SizedBox(height: 24),
   );
 }
   Widget _buildStatItem({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 28),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-            color: color,
-          ),
+  required IconData icon,
+  required String label,
+  required String value,
+  required Color color,
+}) {
+  return Column(
+    children: [
+      Icon(icon, color: color, size: 20), // Reduced from 28
+      const SizedBox(height: 4), // Reduced from 8
+      Text(
+        value,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 16, // Reduced from 18
+          color: color,
         ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-          ),
+      ),
+      const SizedBox(height: 2), // Reduced from 4
+      Text(
+        label,
+        style: TextStyle(
+          fontSize: 10, // Reduced from 12
+          color: Colors.grey[600],
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
+}
   
   Widget _buildFunctionButton({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: color, size: 32),
-              const SizedBox(height: 12),
-              Text(
-                label,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
-                textAlign: TextAlign.center,
+  required IconData icon,
+  required String label,
+  required Color color,
+  required VoidCallback onTap,
+}) {
+  return Card(
+    elevation: 2, // Reduced from 3
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(8), // Reduced from 12
+    ),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(8), // Reduced from 16
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 24), // Reduced from 32
+            const SizedBox(height: 6), // Reduced from 12
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: color,
+                fontSize: 12, // Added smaller font size
               ),
-            ],
-          ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

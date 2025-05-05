@@ -14,11 +14,9 @@ import 'user_credentials.dart';
 import 'location_provider.dart'; 
 import 'package:share_plus/share_plus.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/services.dart';
+
 class HSScanScreen extends StatefulWidget {
-  final String? username;
-  
-  const HSScanScreen({Key? key, this.username}) : super(key: key);
-  
   @override
   _HSScanScreenState createState() => _HSScanScreenState();
 }
@@ -33,8 +31,9 @@ class _HSScanScreenState extends State<HSScanScreen> {
   String _errorMessage = '';
   MobileScannerController? _scannerController;
   List<Map<String, dynamic>> _deliveryHistory = [];
+  final TextEditingController _manualInputController = TextEditingController();
   // List of authorized users who can confirm delivery
-  final List<String> _authorizedUsers = ['nvthunghiem', 'hm.tason', 'hm.anhviet','hm.manhha','hm.kimdung','hm.phiminh'];
+  final List<String> _authorizedUsers = ['nvthunghiem', 'hm.tason', 'hm.anhviet','hm.manhha','hm.phiminh'];
   
   @override
   void initState() {
@@ -49,7 +48,18 @@ class _HSScanScreenState extends State<HSScanScreen> {
   @override
   void dispose() {
     _scannerController?.dispose();
+    _manualInputController.dispose();
     super.dispose();
+  }
+   void _lookupManualOrder() {
+    if (_manualInputController.text.isNotEmpty) {
+      setState(() {
+        _isScanning = false;
+        _orderNumber = _manualInputController.text;
+      });
+      _fetchOrderDetails(_manualInputController.text);
+      _manualInputController.clear();
+    }
   }
   Future<void> _fetchOrderDetails(String soPhieu) async {
     try {
@@ -128,43 +138,29 @@ class _HSScanScreenState extends State<HSScanScreen> {
     });
   }
 
-  bool _isUserAuthorized() {
-  // First check the username passed to the widget
-  if (widget.username != null && widget.username!.isNotEmpty) {
-    return _authorizedUsers.contains(widget.username);
+  bool _isUserAuthorized(BuildContext context) {
+    final userCredentials = Provider.of<UserCredentials>(context, listen: false);
+    return _authorizedUsers.contains(userCredentials.username);
   }
-  
-  // Fall back to UserCredentials provider if no username was passed
-  final userCredentials = Provider.of<UserCredentials>(context, listen: false);
-  return _authorizedUsers.contains(userCredentials.username);
-}
 
   // Show delivery confirmation dialog
   Future<void> _showDeliveryConfirmationDialog(BuildContext context) async {
-  // Get username either from widget parameter or from provider
-  String username = '';
-  if (widget.username != null && widget.username!.isNotEmpty) {
-    username = widget.username!;
-  } else {
     final userCredentials = Provider.of<UserCredentials>(context, listen: false);
-    username = userCredentials.username;
-  }
-  
-  final locationProvider = Provider.of<LocationProvider>(context, listen: false);
-  final TextEditingController _notesController = TextEditingController();
-  File? _image1, _image2;
-  final _imagePicker = ImagePicker();
-  
-  // Ensure we have the latest location
-  await locationProvider.fetchLocation();
-  final currentLocation = locationProvider.locationData;
-  String locationStr = '';
-  
-  if (currentLocation != null && 
-      currentLocation.latitude != null && 
-      currentLocation.longitude != null) {
-    locationStr = '${currentLocation.latitude},${currentLocation.longitude}';
-  }
+    final locationProvider = Provider.of<LocationProvider>(context, listen: false);
+    final TextEditingController _notesController = TextEditingController();
+    File? _image1, _image2;
+    final _imagePicker = ImagePicker();
+    
+    // Ensure we have the latest location
+    await locationProvider.fetchLocation();
+    final currentLocation = locationProvider.locationData;
+    String locationStr = '';
+    
+    if (currentLocation != null && 
+        currentLocation.latitude != null && 
+        currentLocation.longitude != null) {
+      locationStr = '${currentLocation.latitude},${currentLocation.longitude}';
+    }
     
     Future<File?> _pickImage() async {
       final XFile? pickedFile = await _imagePicker.pickImage(
@@ -318,18 +314,9 @@ class _HSScanScreenState extends State<HSScanScreen> {
         );
         
         try {
-          // Get username either from widget parameter or from provider
-          String username = '';
-          if (widget.username != null && widget.username!.isNotEmpty) {
-            username = widget.username!;
-          } else {
-            final userCredentials = Provider.of<UserCredentials>(context, listen: false);
-            username = userCredentials.username;
-          }
-          
           await _submitDeliveryConfirmation(
             _orderDetails!.soPhieu!,
-            username,
+            userCredentials.username,
             _notesController.text,
             _image1!,
             _image2,
@@ -515,7 +502,7 @@ Future<void> _submitDeliveryConfirmation(
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Tra cứu đơn hàng' , style: TextStyle(color: Colors.white)),
+        title: Text('Tra cứu đơn hàng', style: TextStyle(color: Colors.white)),
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -532,6 +519,50 @@ Future<void> _submitDeliveryConfirmation(
       ),
       body: Column(
         children: [
+          // Manual Input Area
+          if (_isScanning)
+            Container(
+              color: Colors.white,
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+  controller: _manualInputController,
+  decoration: InputDecoration(
+    labelText: 'Nhập số đơn hàng',
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+    ),
+    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    helperText: 'Nhập số và dấu gạch ngang (-)',
+  ),
+  style: TextStyle(fontSize: 16),
+  keyboardType: Platform.isIOS 
+    ? TextInputType.numberWithOptions(decimal: false, signed: true)
+    : TextInputType.phone, // Phone keyboards usually have hyphen
+  inputFormatters: [
+    FilteringTextInputFormatter.allow(RegExp(r'[0-9\-]')),
+  ],
+  onSubmitted: (_) => _lookupManualOrder(),
+)
+                  ),
+                  SizedBox(width: 12),
+                  ElevatedButton(
+                    onPressed: _lookupManualOrder,
+                    child: Text('Tìm', style: TextStyle(color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: buttonColor,
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // Scanner or Results area
           Expanded(
             child: _isScanning
@@ -565,27 +596,27 @@ Future<void> _submitDeliveryConfirmation(
                 ),
                 
                 // Delivery confirmation button (only for authorized users and when not scanning)
-                if (!_isScanning && _orderDetails != null && _isUserAuthorized())
-  SizedBox(width: 12),
-  
-if (!_isScanning && _orderDetails != null && _isUserAuthorized())
-  Expanded(
-    child: ElevatedButton.icon(
-      onPressed: () => _showDeliveryConfirmationDialog(context),
-      icon: Icon(Icons.local_shipping, color: Colors.white),
-      label: Text(
-        'Xác nhận giao hàng',
-        style: TextStyle(color: Colors.white),
-      ),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.orange,
-        padding: EdgeInsets.symmetric(vertical: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-    ),
-  ),
+                if (!_isScanning && _orderDetails != null && _isUserAuthorized(context))
+                  SizedBox(width: 12),
+                  
+                if (!_isScanning && _orderDetails != null && _isUserAuthorized(context))
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _showDeliveryConfirmationDialog(context),
+                      icon: Icon(Icons.local_shipping, color: Colors.white),
+                      label: Text(
+                        'Xác nhận giao hàng',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange,
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
