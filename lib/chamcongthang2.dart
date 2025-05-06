@@ -8,12 +8,12 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
-class ChamCongThangScreen extends StatefulWidget {
+class ChamCongThang2Screen extends StatefulWidget {
   final String username;
   final String userRole;
   final String approverUsername;
 
-  const ChamCongThangScreen({
+  const ChamCongThang2Screen({
     Key? key,
     required this.username,
     this.userRole = '',
@@ -21,10 +21,10 @@ class ChamCongThangScreen extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  _ChamCongThangScreenState createState() => _ChamCongThangScreenState();
+  _ChamCongThang2ScreenState createState() => _ChamCongThang2ScreenState();
 }
 
-class _ChamCongThangScreenState extends State<ChamCongThangScreen> {
+class _ChamCongThang2ScreenState extends State<ChamCongThang2Screen> {
   String? _selectedMonth;
   List<String> _monthOptions = [];
   String? _selectedBranch;
@@ -80,33 +80,37 @@ class _ChamCongThangScreenState extends State<ChamCongThangScreen> {
   }
 
   void _generateBranchOptions() {
-    setState(() {
-      _branchOptions = [];
+  setState(() {
+    _branchOptions = [];
+    
+    // Add "Của tôi" as the first option for all users
+    _branchOptions.add('Của tôi');
+    
+    // Check if user is admin
+    if (_adminUsers.contains(widget.username)) {
+      _branchOptions.add('Tất cả');
       
-      // Check if user is admin
-      if (_adminUsers.contains(widget.username)) {
-        _branchOptions.add('Tất cả');
-        
-        // Add all unique branches from the map
-        final allBranches = <String>{};
-        _userBranchMap.values.forEach((branches) {
-          allBranches.addAll(branches);
-        });
-        _branchOptions.addAll(allBranches.toList()..sort());
-        
-        // Default to "Tất cả" for admins
-        _selectedBranch = 'Tất cả';
-      } else if (_userBranchMap.containsKey(widget.username)) {
-        // Non-admin user - add only their assigned branches
-        _branchOptions.addAll(_userBranchMap[widget.username]!);
-        
-        // Default to first branch if only one option
-        if (_branchOptions.length == 1) {
-          _selectedBranch = _branchOptions.first;
-        }
-      }
-    });
-  }
+      // Add all unique branches from the map
+      final allBranches = <String>{};
+      _userBranchMap.values.forEach((branches) {
+        allBranches.addAll(branches);
+      });
+      _branchOptions.addAll(allBranches.toList()..sort());
+      
+      // Default to "Của tôi" for everyone
+      _selectedBranch = 'Của tôi';
+    } else if (_userBranchMap.containsKey(widget.username)) {
+      // Non-admin user - add only their assigned branches
+      _branchOptions.addAll(_userBranchMap[widget.username]!);
+      
+      // Always set default to "Của tôi"
+      _selectedBranch = 'Của tôi';
+    } else {
+      // For users not in the branch map, still set default
+      _selectedBranch = 'Của tôi';
+    }
+  });
+}
 
   Future<void> _showSyncConfirmation() async {
     final confirm = await showDialog<bool>(
@@ -831,6 +835,7 @@ class _ChamCongThangScreenState extends State<ChamCongThangScreen> {
     );
   }
 }
+
 // Fallback method for Windows Downloads folder
 Future<void> _saveToDownloadsWindows(List<int> fileBytes) async {
   try {
@@ -883,6 +888,7 @@ Future<void> _saveToDocumentsWindows(List<int> fileBytes) async {
     );
   }
 }
+
 double _calculateChamCong(String nguoiDung, String date, int weekday) {
   if (nguoiDung == 'hm.tason') {
     print('\n***** Calculating ChamCong for $nguoiDung on $date *****');
@@ -1182,82 +1188,108 @@ String _getVietnameseWeekday(int weekday) {
               ),
             ),
             const SizedBox(height: 24),
+            const Text(
+              '⚠️ HƯỚNG DẪN: Chọn tháng cần xem (từ T3/2025) rồi bấm nút Đồng bộ (2 mũi tên xoay tròn) trên cùng bên phải rồi đợi tải dữ liệu.\nSau khi tải xong sẽ thấy nút Tải về (mũi tên trỏ xuống) để lưu bảng excel về máy (chọn Zalo/Mail khi chia sẻ)',
+               style: TextStyle(
+             color: Colors.blue,
+              fontSize: 12,
+                              ),
+                            ),
+                            const Text(
+              '❌ Nếu bạn là NV xử lý công văn phòng, bạn phải vào từ mục Tổng hợp tháng',
+               style: TextStyle(
+             color: Colors.red,
+              fontSize: 12,
+                              ),
+                            ),
             // Data display area
             Expanded(
-              child: _hasData
-                  ? DefaultTabController(
-                      length: 2,
-                      child: Column(
-                        children: [
-                          const TabBar(
-                            tabs: [
-                              Tab(text: 'Lịch sử chấm'),
-                              Tab(text: 'Vắng Nghỉ Tca'),
-                            ],
-                          ),
-                          Expanded(
-                            child: TabBarView(
-                              children: [
-                                // Attendance data tab
-                                SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: SingleChildScrollView(
-                                    child: DataTable(
-                                      columns: _attendanceData.isNotEmpty
-                                          ? _attendanceData.first.keys.map((key) => DataColumn(label: Text(key))).toList()
-                                          : [],
-                                      rows: _attendanceData.map((data) {
-                                        return DataRow(
-                                          cells: data.values.map((value) => DataCell(Text(value?.toString() ?? ''))).toList(),
-                                        );
-                                      }).toList(),
-                                    ),
-                                  ),
-                                ),
-                                // Other case data tab
-                                SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: SingleChildScrollView(
-                                    child: DataTable(
-                                      columns: _otherCaseData.isNotEmpty
-                                          ? _otherCaseData.first.keys.map((key) => DataColumn(label: Text(key))).toList()
-                                          : [],
-                                      rows: _otherCaseData.map((data) {
-                                        return DataRow(
-                                          cells: data.values.map((value) => DataCell(Text(value?.toString() ?? ''))).toList(),
-                                        );
-                                      }).toList(),
-                                    ),
-                                  ),
-                                ),
-                              ],
+  child: _hasData
+      ? DefaultTabController(
+          length: 2,
+          child: Column(
+            children: [
+              const TabBar(
+                tabs: [
+                  Tab(text: 'Lịch sử chấm'),
+                  Tab(text: 'Vắng Nghỉ Tca'),
+                ],
+              ),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    // Attendance data tab
+                    _attendanceData.isNotEmpty 
+                      ? SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: SingleChildScrollView(
+                            child: DataTable(
+                              columns: _attendanceData.first.keys
+                                  .map((key) => DataColumn(label: Text(key)))
+                                  .toList(),
+                              rows: _attendanceData.map((data) {
+                                return DataRow(
+                                  cells: data.values
+                                      .map((value) => DataCell(Text(value?.toString() ?? '')))
+                                      .toList(),
+                                );
+                              }).toList(),
                             ),
                           ),
-                        ],
-                      ),
-                    )
-                  : Center(
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24.0),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'Chọn tháng và chi nhánh để bắt đầu',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'Nhấn nút đồng bộ trên appbar để tải dữ liệu',
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            ],
-                          ),
+                        )
+                      : const Center(
+                          child: Text('Không có dữ liệu chấm công'),
                         ),
-                      ),
-                    ),
+                    // Other case data tab
+                    _otherCaseData.isNotEmpty
+                      ? SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: SingleChildScrollView(
+                            child: DataTable(
+                              columns: _otherCaseData.first.keys
+                                  .map((key) => DataColumn(label: Text(key)))
+                                  .toList(),
+                              rows: _otherCaseData.map((data) {
+                                return DataRow(
+                                  cells: data.values
+                                      .map((value) => DataCell(Text(value?.toString() ?? '')))
+                                      .toList(),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        )
+                      : const Center(
+                          child: Text('Không có dữ liệu vắng nghỉ tăng ca'),
+                        ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        )
+      : Center(
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Chọn tháng và chi nhánh để bắt đầu',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Nhấn nút đồng bộ trên appbar để tải dữ liệu',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ],
+              ),
             ),
+          ),
+        ),
+),
           ],
         ),
       ),

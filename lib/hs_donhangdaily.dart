@@ -19,7 +19,8 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:qr_flutter/qr_flutter.dart';
 import 'dart:typed_data';
 import 'package:flutter/rendering.dart';
-
+import 'hs_pxkform.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 class HSDonHangDailyScreen extends StatefulWidget {
   final String? username;
   
@@ -1207,6 +1208,53 @@ bool _isUserAllowedToApproveOrder(DonHangModel order) {
   
   return approvers.contains(_username) && 
          approveableStatuses.contains(lowerStatus);
+}
+void _generatePXK(DonHangModel order) async {
+  if (order.soPhieu == null) {
+    return;
+  }
+  
+  setState(() {
+    _isLoading = true;
+  });
+  
+  try {
+    // Get order items
+    final items = await _dbHelper.getChiTietDonBySoPhieu(order.soPhieu!);
+    
+    // Get current user name
+    final prefs = await SharedPreferences.getInstance();
+    final username = prefs.getString('username') ?? 'User';
+    
+    // Get warehouse info
+    final warehouses = await _dbHelper.getAllKho();
+    String? warehouseId;
+    String? warehouseName;
+    
+    if (warehouses.isNotEmpty) {
+      warehouseId = warehouses.first.khoHangID;
+      warehouseName = warehouses.first.tenKho;
+    }
+    
+    setState(() {
+      _isLoading = false;
+    });
+    
+    // Generate and show the export form
+    await ExportFormGenerator.generateExportForm(
+      context: context,
+      order: order,
+      items: items,
+      createdBy: username,
+      warehouseId: warehouseId,
+      warehouseName: warehouseName,
+    );
+    
+  } catch (e) {
+    setState(() {
+      _isLoading = false;
+    });
+  }
 }
   Widget _buildOrderItem(DonHangModel order, int columnCount) {
   final isProcessingApproval = order.soPhieu != null && 

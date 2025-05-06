@@ -15,6 +15,7 @@ import 'chamcongtca.dart';
 import 'chamcongduyet.dart';
 import 'chamcongthang.dart';
 import 'http_client.dart';
+import 'chamcongthang2.dart';
 
 class ChamCong2Screen extends StatefulWidget {
   final String username;
@@ -388,6 +389,13 @@ Future<void> _loadAdditionalUserData() async {
                                 fontSize: 16,
                               ),
                             ),
+                            const Text(
+                              'Đã có mục mới Lịch sử của tôi bên dưới, có thể tải lịch sử chấm và tính công theo tháng (chính xác nhất)',
+                              style: TextStyle(
+                                color: Colors.blue,
+                                fontSize: 10,
+                              ),
+                            ),
                             const SizedBox(height: 12),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -580,6 +588,23 @@ const SizedBox(height: 24),
                         );
                       },
                     ),
+                    _buildFunctionButton(
+    icon: Icons.insights,
+    label: 'Lịch sử của tôi\n(NVVP)',
+    color: Colors.blue.shade600,
+    onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ChamCongThang2Screen(
+            username: widget.username,
+            userRole: widget.userRole,
+            approverUsername: widget.approverUsername,
+          ),
+        ),
+      );
+    },
+  ),
                     // Add the conditional Lái xe button
                     if (_canAccessLaiXeScreen)
                       _buildFunctionButton(

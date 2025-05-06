@@ -18,6 +18,8 @@ import 'package:pdf/pdf.dart' as pdfx;
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'hs_pxkform.dart';
+
 class HSKhoScreen extends StatefulWidget {
   final String? username;
   
@@ -1087,6 +1089,55 @@ Future<void> _printBatchQRCode(String loHangID, String maHangID) async {
     );
   }
 }
+void _generatePXK(DonHangModel order) async {
+  if (order.soPhieu == null) {
+    _showErrorSnackBar('Không thể tạo phiếu xuất kho: Số phiếu không hợp lệ');
+    return;
+  }
+  
+  setState(() {
+    _isLoading = true;
+  });
+  
+  try {
+    // Get order items
+    final items = await _dbHelper.getChiTietDonBySoPhieu(order.soPhieu!);
+    
+    // Get current user name
+    final prefs = await SharedPreferences.getInstance();
+    final username = prefs.getString('username') ?? 'User';
+    
+    // Get warehouse info
+    final warehouses = await _dbHelper.getAllKho();
+    String? warehouseId;
+    String? warehouseName;
+    
+    if (warehouses.isNotEmpty) {
+      warehouseId = warehouses.first.khoHangID;
+      warehouseName = warehouses.first.tenKho;
+    }
+    
+    setState(() {
+      _isLoading = false;
+    });
+    
+    // Generate and show the export form
+    await ExportFormGenerator.generateExportForm(
+      context: context,
+      order: order,
+      items: items,
+      createdBy: username,
+      warehouseId: warehouseId,
+      warehouseName: warehouseName,
+    );
+    
+  } catch (e) {
+    setState(() {
+      _isLoading = false;
+    });
+    _showErrorSnackBar('Lỗi khi tạo phiếu xuất kho: ${e.toString()}');
+  }
+}
 void _showWarehouseDetails() async {
     setState(() {
       _isLoading = true;
@@ -1202,6 +1253,22 @@ void _showWarehouseDetails() async {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
+                  ElevatedButton.icon(
+        onPressed: () {
+          // Generate PXK for order
+          _generatePXK(order);
+        },
+        icon: Icon(Icons.receipt_long, size: 16, color: Colors.white),
+        label: Text('PXK', style: TextStyle(color: Colors.white)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.green[700],
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      ),
+                        SizedBox(width: 8),
                   // Add QR button
                   ElevatedButton.icon(
                     onPressed: () {

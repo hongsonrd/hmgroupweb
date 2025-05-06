@@ -1522,7 +1522,7 @@ Widget build(BuildContext context) {
   flex: 2,
   child: ElevatedButton.icon(
     icon: const Icon(Icons.note_add, size: 14),
-    label: const Text('Báo khác', style: TextStyle(fontSize: 13)),
+    label: const Text('Báo/Duyệt khác', style: TextStyle(fontSize: 13)),
     style: ElevatedButton.styleFrom(
       backgroundColor: Colors.blue,
       foregroundColor: Colors.white,
