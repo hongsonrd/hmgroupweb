@@ -2557,8 +2557,8 @@ class DSHangModel {
     'XuatXu': xuatXu,
     'MoTa': moTa,
     'HinhAnh': hinhAnh,
-    'HangTieuHao': hangTieuHao,
-    'CoThoiHan': coThoiHan,
+    'HangTieuHao': hangTieuHao == true ? 1 : 0, 
+    'CoThoiHan': coThoiHan == true ? 1 : 0,
     'ThoiHanSuDung': thoiHanSuDung,
   };
 
