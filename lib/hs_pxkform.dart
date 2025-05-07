@@ -15,396 +15,398 @@ import 'db_helper.dart';
 
 class ExportFormGenerator {
   static Future<void> generateExportForm({
-    required BuildContext context,
-    required DonHangModel order,
-    required List<ChiTietDonModel> items,
-    required String createdBy,
-    String? warehouseId,
-    String? warehouseName,
-  }) async {
+  required BuildContext context,
+  required DonHangModel order,
+  required List<ChiTietDonModel> items,
+  required String createdBy,
+  String? warehouseId,
+  String? warehouseName,
+}) async {
+  try {
+    final pdf = pw.Document();
+    
+    final fontData = await rootBundle.load("assets/fonts/RobotoCondensed-Regular.ttf");
+    final ttf = pw.Font.ttf(fontData);
+    
+    final now = DateTime.now();
+    final formatter = DateFormat('dd/MM/yyyy');
+    final formattedDate = formatter.format(now);
+    
+    pw.MemoryImage? logoImage;
+    pw.MemoryImage? watermarkImage;
     try {
-      // Create PDF document
-      final pdf = pw.Document();
+      final logoData = await rootBundle.load('assets/hotellogo2.png');
+      logoImage = pw.MemoryImage(
+        logoData.buffer.asUint8List(),
+      );
       
-      // Load font
-      final fontData = await rootBundle.load("assets/fonts/RobotoCondensed-Regular.ttf");
-      final ttf = pw.Font.ttf(fontData);
-      
-      // Get current date formatted
-      final now = DateTime.now();
-      final formatter = DateFormat('dd/MM/yyyy');
-      final formattedDate = formatter.format(now);
-      
-      // Add logo if available
-      pw.MemoryImage? logoImage;
       try {
-        final logoData = await rootBundle.load('assets/hotellogo.png');
-        logoImage = pw.MemoryImage(
-          logoData.buffer.asUint8List(),
+        final watermarkData = await rootBundle.load('assets/hotellogo.png');
+        watermarkImage = pw.MemoryImage(
+          watermarkData.buffer.asUint8List(),
         );
       } catch (e) {
-        // Logo not available, continue without it
-        print('Logo not found: $e');
+        watermarkImage = logoImage;
+        print('Watermark logo not found, using regular logo: $e');
       }
-      
-      // Generate QR code image
-      final qrImage = await _generateQRCodeImage(order.soPhieu ?? 'unknown');
-      final qrImagePdf = qrImage != null ? pw.MemoryImage(qrImage) : null;
-      
-      // Build the PDF document
-      pdf.addPage(
-        pw.Page(
-          pageFormat: PdfPageFormat.a4.copyWith(
-            marginLeft: 28,
-            marginRight: 28,
-            marginTop: 28,
-            marginBottom: 28
-          ),
-          build: (pw.Context context) {
-            return pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                // Header with company info and logo
-                pw.Row(
-                  children: [
-                    logoImage != null ? 
-                      pw.Container(
-                        width: 70,
-                        height: 70,
-                        child: pw.Image(logoImage)
-                      ) : pw.SizedBox(width: 70),
-                    pw.SizedBox(width: 10),
-                    pw.Expanded(
-                      child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Text(
-                            'CÔNG TY TNHH CUNG ỨNG TBKS HOÀN MỸ',
-                            style: pw.TextStyle(
-                              font: ttf,
-                              fontSize: 12,
-                              fontWeight: pw.FontWeight.bold,
-                            ),
-                          ),
-                          pw.Text(
-                            'Địa chỉ: Tầng 6,Tòa nhà 25T2, Nguyễn Thị Thập, Cầu Giấy, Hà Nội',
-                            style: pw.TextStyle(font: ttf, fontSize: 9),
-                          ),
-                          pw.Text(
-                            'ĐT: 024.37831480 – Fax: 024.37831484',
-                            style: pw.TextStyle(font: ttf, fontSize: 9),
-                          ),
-                          pw.Text(
-                            'Website: http://hoanmyhotelsupply.com/',
-                            style: pw.TextStyle(font: ttf, fontSize: 9),
-                          ),
-                        ],
+    } catch (e) {
+      print('Logo not found: $e');
+    }
+    
+    final qrImage = await _generateQRCodeImage(order.soPhieu ?? 'unknown');
+    final qrImagePdf = qrImage != null ? pw.MemoryImage(qrImage) : null;
+    
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4.copyWith(
+          marginLeft: 28,
+          marginRight: 28,
+          marginTop: 28,
+          marginBottom: 28
+        ),
+        build: (pw.Context context) {
+          return pw.Stack(
+            children: [
+              if (watermarkImage != null)
+                pw.Positioned.fill(
+                  child: pw.Center(
+                    child: pw.Opacity(
+                      opacity: 0.05,
+                      child: pw.Image(
+                        watermarkImage,
+                        width: 200,
+                        height: 200,
+                        fit: pw.BoxFit.contain,
                       ),
-                    ),
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text(
-                          'MST: 0102630297',
-                          style: pw.TextStyle(font: ttf, fontSize: 9),
-                        ),
-                        pw.Text(
-                          'Email: info@hoanmyhotelsupply.com',
-                          style: pw.TextStyle(font: ttf, fontSize: 9),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                
-                pw.SizedBox(height: 20),
-                
-                // Form title
-                pw.Center(
-                  child: pw.Text(
-                    'PHIẾU GIAO HÀNG (KIÊM PHIẾU XUẤT KHO)',
-                    style: pw.TextStyle(
-                      font: ttf,
-                      fontSize: 16,
-                      fontWeight: pw.FontWeight.bold,
                     ),
                   ),
                 ),
-                
-                pw.SizedBox(height: 5),
-                
-                // Form subheader
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text(
-                      'Liên 2: Giao khách hàng',
-                      style: pw.TextStyle(font: ttf, fontSize: 10),
-                    ),
-                    pw.Row(
-                      children: [
-                        pw.Text(
-                          'Số phiếu: ',
-                          style: pw.TextStyle(font: ttf, fontSize: 10),
-                        ),
-                        pw.Text(
-                          order.soPhieu ?? 'N/A',
-                          style: pw.TextStyle(font: ttf, fontSize: 10),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                
-                pw.SizedBox(height: 5),
-                
-                // Date
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.end,
-                  children: [
-                    pw.Text(
-                      'Ngày: ',
-                      style: pw.TextStyle(font: ttf, fontSize: 10),
-                    ),
-                    pw.Text(
-                      order.ngay ?? formattedDate,
-                      style: pw.TextStyle(font: ttf, fontSize: 10),
-                    ),
-                  ],
-                ),
-                
-                pw.SizedBox(height: 10),
-                
-                // Customer info
-                pw.Table(
-                  border: pw.TableBorder.all(width: 0.5, color: PdfColors.grey),
-                  columnWidths: {
-                    0: pw.FixedColumnWidth(100),
-                    1: pw.FixedColumnWidth(200),
-                    2: pw.FixedColumnWidth(100),
-                    3: pw.FixedColumnWidth(100),
-                  },
-                  children: [
-                    // Row 1
-                    pw.TableRow(
-                      children: [
-                        _buildTableCell('Tên khách hàng:', ttf, align: pw.TextAlign.right),
-                        _buildTableCell(order.tenKhachHang2 ?? order.tenKhachHang ?? 'N/A', ttf),
-                        _buildTableCell('Người liên hệ:', ttf, align: pw.TextAlign.right),
-                        _buildTableCell(order.nguoiNhanHang ?? 'N/A', ttf),
-                      ],
-                    ),
-                    
-                    // Row 2
-                    pw.TableRow(
-                      children: [
-                        _buildTableCell('Địa chỉ giao hàng:', ttf, align: pw.TextAlign.right),
-                        _buildTableCell(order.diaChiGiaoHang ?? order.diaChi ?? 'N/A', ttf),
-                        _buildTableCell('SĐT:', ttf, align: pw.TextAlign.right),
-                        _buildTableCell(order.sdtNguoiNhanHang ?? 'N/A', ttf),
-                      ],
-                    ),
-                    
-                    // Row 3
-                    pw.TableRow(
-                      children: [
-                        _buildTableCell('MST:', ttf, align: pw.TextAlign.right),
-                        _buildTableCell(order.mst ?? 'N/A', ttf),
-                        _buildTableCell('Bộ phận:', ttf, align: pw.TextAlign.right),
-                        _buildTableCell(order.boPhanGiaoDich ?? 'N/A', ttf),
-                      ],
-                    ),
-                    
-                    // Row 4
-                    pw.TableRow(
-                      children: [
-                        _buildTableCell('Điện thoại:', ttf, align: pw.TextAlign.right),
-                        _buildTableCell(order.sdtKhachHang ?? 'N/A', ttf),
-                        _buildTableCell('Theo PO:', ttf, align: pw.TextAlign.right),
-                        _buildTableCell(order.soPO ?? 'N/A', ttf),
-                      ],
-                    ),
-                    
-                    // Row 5
-                    pw.TableRow(
-                      children: [
-                        _buildTableCell('Phương thức thanh toán:', ttf, align: pw.TextAlign.right),
-                        _buildTableCell(order.phuongThucThanhToan ?? 'Tiền mặt', ttf),
-                        pw.Container(), // Empty cell
-                        pw.Container(), // Empty cell
-                      ],
-                    ),
-                  ],
-                ),
-                
-                pw.SizedBox(height: 15),
-                
-                // Order items table
-                pw.Table(
-                  border: pw.TableBorder.all(width: 0.5, color: PdfColors.grey),
-                  columnWidths: {
-                    0: pw.FlexColumnWidth(3), // Tên hàng
-                    1: pw.FlexColumnWidth(2), // Mã hàng
-                    2: pw.FlexColumnWidth(1), // ĐVT
-                    3: pw.FlexColumnWidth(1.5), // SL yêu cầu
-                    4: pw.FlexColumnWidth(1.5), // SL thực giao
-                    5: pw.FlexColumnWidth(1.5), // Đơn giá
-                    6: pw.FlexColumnWidth(1), // %VAT
-                    7: pw.FlexColumnWidth(2), // Thành tiền
-                  },
-                  children: [
-                    // Table header
-                    pw.TableRow(
-                      decoration: pw.BoxDecoration(color: PdfColors.grey200),
-                      children: [
-                        _buildTableCell('Tên hàng', ttf, isBold: true),
-                        _buildTableCell('Mã hàng', ttf, isBold: true),
-                        _buildTableCell('ĐVT', ttf, isBold: true),
-                        _buildTableCell('SL yêu cầu', ttf, isBold: true),
-                        _buildTableCell('SL thực giao', ttf, isBold: true),
-                        _buildTableCell('Đơn giá', ttf, isBold: true),
-                        _buildTableCell('%VAT', ttf, isBold: true),
-                        _buildTableCell('Thành tiền', ttf, isBold: true),
-                      ],
-                    ),
-                    
-                    // Table rows for items
-                    ...items.map((item) => pw.TableRow(
-                      children: [
-                        _buildTableCell(item.tenHang ?? 'N/A', ttf, textColor: PdfColors.red),
-                        _buildTableCell(item.maHang ?? 'N/A', ttf),
-                        _buildTableCell(item.donViTinh ?? 'N/A', ttf),
-                        _buildTableCell(item.soLuongYeuCau?.toString() ?? '0', ttf, align: pw.TextAlign.right),
-                        _buildTableCell(item.soLuongThucGiao?.toString() ?? item.soLuongYeuCau?.toString() ?? '0', ttf, align: pw.TextAlign.right),
-                        _buildTableCell(_formatCurrency(item.donGia), ttf, align: pw.TextAlign.right),
-                        _buildTableCell(item.phanTramVAT?.toString() ?? '10%', ttf, align: pw.TextAlign.center),
-                        _buildTableCell(_formatCurrency(item.thanhTien), ttf, align: pw.TextAlign.right, textColor: PdfColors.red),
-                      ],
-                    )).toList(),
-                  ],
-                ),
-                
-                pw.SizedBox(height: 10),
-                
-                // Total section
-                pw.Container(
-                  alignment: pw.Alignment.centerRight,
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+              
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Row(
                     children: [
-                      pw.Row(
-                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                        children: [
-                          pw.Text(
-                            'TỔNG',
-                            style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold),
-                          ),
-                          pw.Text(
-                            _formatCurrency(order.tongTien),
-                            style: pw.TextStyle(font: ttf, fontSize: 10),
-                          ),
-                        ],
+                      logoImage != null ? 
+                        pw.Container(
+                          width: 70,
+                          height: 70,
+                          child: pw.Image(logoImage)
+                        ) : pw.SizedBox(width: 70),
+                      pw.SizedBox(width: 10),
+                      pw.Expanded(
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text(
+                              'CÔNG TY TNHH CUNG ỨNG TBKS HOÀN MỸ',
+                              style: pw.TextStyle(
+                                font: ttf,
+                                fontSize: 12,
+                                fontWeight: pw.FontWeight.bold,
+                              ),
+                            ),
+                            pw.Text(
+                              'Địa chỉ: Tầng 6,Tòa nhà 25T2, Nguyễn Thị Thập, Cầu Giấy, Hà Nội',
+                              style: pw.TextStyle(font: ttf, fontSize: 9),
+                            ),
+                            pw.Text(
+                              'ĐT: 024.37831480 – Fax: 024.37831484',
+                              style: pw.TextStyle(font: ttf, fontSize: 9),
+                            ),
+                            pw.Text(
+                              'Website: http://hoanmyhotelsupply.com/',
+                              style: pw.TextStyle(font: ttf, fontSize: 9),
+                            ),
+                          ],
+                        ),
                       ),
-                      pw.SizedBox(height: 5),
-                      pw.Row(
-                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
                           pw.Text(
-                            'TỔNG VAT',
-                            style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold),
+                            'MST: 0102630297',
+                            style: pw.TextStyle(font: ttf, fontSize: 9),
                           ),
                           pw.Text(
-                            _formatCurrency(order.vat10),
-                            style: pw.TextStyle(font: ttf, fontSize: 10),
-                          ),
-                        ],
-                      ),
-                      pw.SizedBox(height: 5),
-                      pw.Row(
-                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                        children: [
-                          pw.Text(
-                            'TỔNG CỘNG',
-                            style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold),
-                          ),
-                          pw.Text(
-                            _formatCurrency(order.tongCong),
-                            style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold),
+                            'Email: info@hoanmyhotelsupply.com',
+                            style: pw.TextStyle(font: ttf, fontSize: 9),
                           ),
                         ],
                       ),
                     ],
                   ),
-                ),
-                
-                pw.SizedBox(height: 20),
-                
-                // QR code and signatures in a row
-                pw.Row(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    // QR code on the left
-                    qrImagePdf != null ? 
-                      pw.Container(
-                        width: 100,
-                        child: pw.Column(
+                  
+                  pw.SizedBox(height: 20),
+                  
+                  pw.Center(
+                    child: pw.Text(
+                      'PHIẾU GIAO HÀNG (KIÊM PHIẾU XUẤT KHO)',
+                      style: pw.TextStyle(
+                        font: ttf,
+                        fontSize: 16,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  
+                  pw.SizedBox(height: 5),
+                  
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text(
+                        'Liên 2: Giao khách hàng',
+                        style: pw.TextStyle(font: ttf, fontSize: 10),
+                      ),
+                      pw.Row(
+                        children: [
+                          pw.Text(
+                            'Số phiếu: ',
+                            style: pw.TextStyle(font: ttf, fontSize: 10),
+                          ),
+                          pw.Text(
+                            order.soPhieu ?? 'N/A',
+                            style: pw.TextStyle(font: ttf, fontSize: 10),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  
+                  pw.SizedBox(height: 5),
+                  
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.end,
+                    children: [
+                      pw.Text(
+                        'Ngày: ',
+                        style: pw.TextStyle(font: ttf, fontSize: 10),
+                      ),
+                      pw.Text(
+                        order.ngay ?? formattedDate,
+                        style: pw.TextStyle(font: ttf, fontSize: 10),
+                      ),
+                    ],
+                  ),
+                  
+                  pw.SizedBox(height: 10),
+                  
+                  pw.Table(
+                    border: pw.TableBorder.all(width: 0.5, color: PdfColors.grey),
+                    columnWidths: {
+                      0: pw.FixedColumnWidth(100),
+                      1: pw.FixedColumnWidth(200),
+                      2: pw.FixedColumnWidth(100),
+                      3: pw.FixedColumnWidth(100),
+                    },
+                    children: [
+                      pw.TableRow(
+                        children: [
+                          _buildTableCell('Tên khách hàng:', ttf, align: pw.TextAlign.right),
+                          _buildTableCell(order.tenKhachHang2 ?? order.tenKhachHang ?? 'N/A', ttf),
+                          _buildTableCell('Người liên hệ:', ttf, align: pw.TextAlign.right),
+                          _buildTableCell(order.nguoiNhanHang ?? 'N/A', ttf),
+                        ],
+                      ),
+                      
+                      pw.TableRow(
+                        children: [
+                          _buildTableCell('Địa chỉ giao hàng:', ttf, align: pw.TextAlign.right),
+                          _buildTableCell(order.diaChiGiaoHang ?? order.diaChi ?? 'N/A', ttf),
+                          _buildTableCell('SĐT:', ttf, align: pw.TextAlign.right),
+                          _buildTableCell(order.sdtNguoiNhanHang ?? 'N/A', ttf),
+                        ],
+                      ),
+                      
+                      pw.TableRow(
+                        children: [
+                          _buildTableCell('MST:', ttf, align: pw.TextAlign.right),
+                          _buildTableCell(order.mst ?? 'N/A', ttf),
+                          _buildTableCell('Bộ phận:', ttf, align: pw.TextAlign.right),
+                          _buildTableCell(order.boPhanGiaoDich ?? 'N/A', ttf),
+                        ],
+                      ),
+                      
+                      pw.TableRow(
+                        children: [
+                          _buildTableCell('Điện thoại:', ttf, align: pw.TextAlign.right),
+                          _buildTableCell(order.sdtKhachHang ?? 'N/A', ttf),
+                          _buildTableCell('Theo PO:', ttf, align: pw.TextAlign.right),
+                          _buildTableCell(order.soPO ?? 'N/A', ttf),
+                        ],
+                      ),
+                      
+                      pw.TableRow(
+                        children: [
+                          _buildTableCell('Phương thức thanh toán:', ttf, align: pw.TextAlign.right),
+                          _buildTableCell(order.phuongThucThanhToan ?? 'Tiền mặt', ttf),
+                          pw.Container(),
+                          pw.Container(),
+                        ],
+                      ),
+                    ],
+                  ),
+                  
+                  pw.SizedBox(height: 15),
+                  
+                  pw.Table(
+                    border: pw.TableBorder.all(width: 0.5, color: PdfColors.grey),
+                    columnWidths: {
+                      0: pw.FlexColumnWidth(3),
+                      1: pw.FlexColumnWidth(2),
+                      2: pw.FlexColumnWidth(1),
+                      3: pw.FlexColumnWidth(1.5),
+                      4: pw.FlexColumnWidth(1.5),
+                      5: pw.FlexColumnWidth(1.5),
+                      6: pw.FlexColumnWidth(1),
+                      7: pw.FlexColumnWidth(2),
+                    },
+                    children: [
+                      pw.TableRow(
+                        decoration: pw.BoxDecoration(color: PdfColors.grey200),
+                        children: [
+                          _buildTableCell('Tên hàng', ttf, isBold: true),
+                          _buildTableCell('Mã hàng', ttf, isBold: true),
+                          _buildTableCell('ĐVT', ttf, isBold: true),
+                          _buildTableCell('SL yêu cầu', ttf, isBold: true),
+                          _buildTableCell('SL thực giao', ttf, isBold: true),
+                          _buildTableCell('Đơn giá', ttf, isBold: true),
+                          _buildTableCell('%VAT', ttf, isBold: true),
+                          _buildTableCell('Thành tiền', ttf, isBold: true),
+                        ],
+                      ),
+                      
+                      ...items.map((item) => pw.TableRow(
+                        children: [
+                          _buildTableCell(item.idHang ?? 'N/A', ttf, textColor: PdfColors.red),
+                          _buildTableCell(item.maHang ?? 'N/A', ttf),
+                          _buildTableCell(item.donViTinh ?? 'N/A', ttf),
+                          _buildTableCell(item.soLuongYeuCau?.toString() ?? '0', ttf, align: pw.TextAlign.right),
+                          _buildTableCell(item.soLuongThucGiao?.toString() ?? item.soLuongYeuCau?.toString() ?? '0', ttf, align: pw.TextAlign.right),
+                          _buildTableCell(_formatCurrency(item.donGia), ttf, align: pw.TextAlign.right),
+                          _buildTableCell(item.phanTramVAT?.toString() ?? '10%', ttf, align: pw.TextAlign.center),
+                          _buildTableCell(_formatCurrency(item.thanhTien), ttf, align: pw.TextAlign.right, textColor: PdfColors.red),
+                        ],
+                      )).toList(),
+                    ],
+                  ),
+                  
+                  pw.SizedBox(height: 10),
+                  
+                  pw.Container(
+                    alignment: pw.Alignment.centerRight,
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.end,
+                      children: [
+                        pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                           children: [
-                            pw.Image(qrImagePdf, width: 80, height: 80),
-                            pw.SizedBox(height: 5),
                             pw.Text(
-                              'Mã đơn: ${order.soPhieu}',
-                              style: pw.TextStyle(font: ttf, fontSize: 8),
-                              textAlign: pw.TextAlign.center,
+                              'TỔNG',
+                              style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold),
+                            ),
+                            pw.Text(
+                              _formatCurrency(order.tongTien),
+                              style: pw.TextStyle(font: ttf, fontSize: 10),
                             ),
                           ],
                         ),
-                      ) : pw.SizedBox(width: 0),
-                    
-                    // Signatures on the right
-                    pw.Expanded(
-                      child: pw.Row(
-                        mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _buildSignatureBox('Người giao hàng', ttf),
-                          _buildSignatureBox('Phòng kế toán', ttf),
-                          _buildSignatureBox('Thủ kho', ttf),
-                          _buildSignatureBox('Người nhận', ttf),
-                        ],
-                      ),
+                        pw.SizedBox(height: 5),
+                        pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text(
+                              'TỔNG VAT',
+                              style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold),
+                            ),
+                            pw.Text(
+                              _formatCurrency(order.vat10),
+                              style: pw.TextStyle(font: ttf, fontSize: 10),
+                            ),
+                          ],
+                        ),
+                        pw.SizedBox(height: 5),
+                        pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text(
+                              'TỔNG CỘNG',
+                              style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold),
+                            ),
+                            pw.Text(
+                              _formatCurrency(order.tongCong),
+                              style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ],
-            );
-          },
-        ),
-      );
-      
-      // Save PDF to a temporary file
-      final output = await getTemporaryDirectory();
-      final file = File('${output.path}/PXK_${order.soPhieu}.pdf');
-      await file.writeAsBytes(await pdf.save());
-      
-      // Show PDF preview
-      await Printing.layoutPdf(
-        onLayout: (PdfPageFormat format) async => pdf.save(),
-        name: 'PXK_${order.soPhieu}.pdf',
-      );
-      
-      // Show options dialog after preview
-      _showPrintOptionsDialog(context, file, order.soPhieu ?? 'unknown');
-      
-    } catch (e) {
-      // Show error
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Lỗi khi tạo phiếu xuất kho: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      print('Error generating export form: $e');
-    }
+                  ),
+                  
+                  pw.SizedBox(height: 20),
+                  
+                  pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      qrImagePdf != null ? 
+                        pw.Container(
+                          width: 100,
+                          child: pw.Column(
+                            children: [
+                              pw.Image(qrImagePdf, width: 80, height: 80),
+                              pw.SizedBox(height: 5),
+                              pw.Text(
+                                'Mã đơn: ${order.soPhieu}',
+                                style: pw.TextStyle(font: ttf, fontSize: 8),
+                                textAlign: pw.TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ) : pw.SizedBox(width: 0),
+                    
+                      pw.Expanded(
+                        child: pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
+                          children: [
+                            _buildSignatureBox('Người giao hàng', ttf),
+                            _buildSignatureBox('Phòng kế toán', ttf),
+                            _buildSignatureBox('Thủ kho', ttf),
+                            _buildSignatureBox('Người nhận', ttf),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    
+    final output = await getTemporaryDirectory();
+    final file = File('${output.path}/PXK_${order.soPhieu}.pdf');
+    await file.writeAsBytes(await pdf.save());
+    
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+      name: 'PXK_${order.soPhieu}.pdf',
+    );
+    
+    _showPrintOptionsDialog(context, file, order.soPhieu ?? 'unknown');
+    
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi khi tạo phiếu xuất kho: ${e.toString()}'),
+        backgroundColor: Colors.red,
+      ),
+    );
+    print('Error generating export form: $e');
   }
+}
   
   // QR code generation with qr_flutter
   static Future<Uint8List?> _generateQRCodeImage(String data) async {

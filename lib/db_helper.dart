@@ -39,13 +39,13 @@ class DBHelper {
     }
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool hasReset = prefs.getBool('db_reset_v21') ?? false;
+    bool hasReset = prefs.getBool('db_reset_v22') ?? false;
     
     if (!hasReset) {
-      print('Forcing database reset for version 21...');
+      print('Forcing database reset for version 22...');
       try {
         await deleteDatabase(path);
-        await prefs.setBool('db_reset_v21', true);
+        await prefs.setBool('db_reset_v22', true);
         print('Database reset successful');
       } catch (e) {
         print('Error during database reset: $e');
@@ -57,7 +57,7 @@ class DBHelper {
     final db = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 21,
+        version: 22,
         onCreate: (Database db, int version) async {
           print('Creating database tables...');
           await db.execute(DatabaseTables.createInteractionTable);
@@ -107,10 +107,43 @@ class DBHelper {
           print('Database tables created successfully');
         },
         onUpgrade: (Database db, int oldVersion, int newVersion) async {
-          if (oldVersion < 21) {
-                   await db.execute(DatabaseTables.createDonHangTable);
+          if (oldVersion < 22) {
+                    await db.execute(DatabaseTables.createInteractionTable);
+          await db.execute(DatabaseTables.createStaffbioTable);
+          await db.execute(DatabaseTables.createChecklistTable);
+          await db.execute(DatabaseTables.createTaskHistoryTable);
+          await db.execute(DatabaseTables.createVTHistoryTable);
+          await db.execute(DatabaseTables.createStaffListTable);
+          await db.execute(DatabaseTables.createPositionListTable);
+          await db.execute(DatabaseTables.createProjectListTable);
+          await db.execute(DatabaseTables.createBaocaoTable);
+          await db.execute(DatabaseTables.createDongPhucTable);
+          await db.execute(DatabaseTables.createChiTietDPTable);
+          await db.execute(DatabaseTables.createOrderMatHangTable);
+          await db.execute(DatabaseTables.createOrderTable);
+          await db.execute(DatabaseTables.createOrderChiTietTable);
+          await db.execute(DatabaseTables.createOrderDinhMucTable);
+          await db.execute(DatabaseTables.createChamCongCNTable);
+          await db.execute(DatabaseTables.createHinhAnhZaloTable);
+          await db.execute(DatabaseTables.createHDDuTruTable); 
+          await db.execute(DatabaseTables.createHDChiTietYCMMTable); 
+          await db.execute(DatabaseTables.createHDYeuCauMMTable); 
+          await db.execute(DatabaseTables.createChamCongTable); 
+          await db.execute(DatabaseTables.createChamCongGioTable); 
+          await db.execute(DatabaseTables.createChamCongLSTable);  
+          await db.execute(DatabaseTables.createChamCongCNThangTable); 
+          await db.execute(DatabaseTables.createChamCongVangNghiTcaTable); 
+          await ChecklistInitializer.initializeChecklistTable(db);
+          await db.execute(DatabaseTables.createMapListTable);
+          await db.execute(DatabaseTables.createMapFloorTable);
+          await db.execute(DatabaseTables.createMapZoneTable);
+          await db.execute(DatabaseTables.createCoinTable);
+          await db.execute(DatabaseTables.createCoinRateTable);
+          await db.execute(DatabaseTables.createMapStaffTable);
+          await db.execute(DatabaseTables.createMapPositionTable);
+                 await db.execute(DatabaseTables.createDonHangTable);
         await db.execute(DatabaseTables.createChiTietDonTable);
-await db.execute(DatabaseTables.createDSHangTable);
+          await db.execute(DatabaseTables.createDSHangTable);
         await db.execute(DatabaseTables.createGiaoDichKhoTable);
         await db.execute(DatabaseTables.createGiaoHangTable);
         await db.execute(DatabaseTables.createKhoTable);

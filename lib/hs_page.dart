@@ -1043,7 +1043,7 @@ Widget build(BuildContext context) {
                 onPressed: () {
                   Navigator.push(
         context,
-                MaterialPageRoute(builder: (context) => HSDonHangDailyScreen(username: _username)),
+                MaterialPageRoute(builder: (context) => HSKhoScreen(username: _username)),
       );
                 },
                 icon: Icon(

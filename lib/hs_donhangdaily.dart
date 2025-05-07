@@ -21,6 +21,8 @@ import 'dart:typed_data';
 import 'package:flutter/rendering.dart';
 import 'hs_pxkform.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'hs_pycform.dart';
+
 class HSDonHangDailyScreen extends StatefulWidget {
   final String? username;
   
@@ -1209,6 +1211,61 @@ bool _isUserAllowedToApproveOrder(DonHangModel order) {
   return approvers.contains(_username) && 
          approveableStatuses.contains(lowerStatus);
 }
+void _generatePYC(DonHangModel order) async {
+  if (order.soPhieu == null) {
+    return;
+  }
+  
+  setState(() {
+    _isLoading = true;
+  });
+  
+  try {
+    // Get order items
+    final items = await _dbHelper.getChiTietDonBySoPhieu(order.soPhieu!);
+    
+    // Get current user name
+    final prefs = await SharedPreferences.getInstance();
+    final username = prefs.getString('username') ?? 'User';
+    
+    // Get warehouse info (if needed for this form)
+    final warehouses = await _dbHelper.getAllKho();
+    String? warehouseId;
+    String? warehouseName;
+    
+    if (warehouses.isNotEmpty) {
+      warehouseId = warehouses.first.khoHangID;
+      warehouseName = warehouses.first.tenKho;
+    }
+    
+    setState(() {
+      _isLoading = false;
+    });
+    
+    // Generate and show the delivery request form
+    await DeliveryRequestFormGenerator.generateDeliveryRequestForm(
+      context: context,
+      order: order,
+      items: items,
+      createdBy: username,
+      warehouseId: warehouseId,
+      warehouseName: warehouseName,
+    );
+    
+  } catch (e) {
+    setState(() {
+      _isLoading = false;
+    });
+    
+    // Show error message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi khi tạo phiếu yêu cầu: ${e.toString()}'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+}
 void _generatePXK(DonHangModel order) async {
   if (order.soPhieu == null) {
     return;
@@ -1402,6 +1459,58 @@ void _generatePXK(DonHangModel order) async {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                if (showQrButton)
+  ElevatedButton.icon(
+    onPressed: () {
+      // Generate PXK for order
+      _generatePXK(order);
+    },
+    icon: Icon(
+      Icons.receipt_long,
+      size: columnCount == 3 ? 12 : (columnCount == 2 ? 14 : 16),
+      color: Colors.white,
+    ),
+    label: Text(
+      'PXK',
+      style: TextStyle(
+        color: Colors.white,
+        fontSize: microSize,
+      ),
+    ),
+    style: ElevatedButton.styleFrom(
+      backgroundColor: Color(0xFF534b0d),
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      textStyle: TextStyle(fontSize: microSize),
+      minimumSize: Size(0, 28),
+    ),
+  ),
+                        SizedBox(width: 8),
+                if (showQrButton)
+  ElevatedButton.icon(
+    onPressed: () {
+      // Generate PXK for order
+      _generatePYC(order);
+    },
+    icon: Icon(
+      Icons.receipt_long,
+      size: columnCount == 3 ? 12 : (columnCount == 2 ? 14 : 16),
+      color: Colors.white,
+    ),
+    label: Text(
+      'PYC',
+      style: TextStyle(
+        color: Colors.white,
+        fontSize: microSize,
+      ),
+    ),
+    style: ElevatedButton.styleFrom(
+      backgroundColor: Color(0xFF564b0d),
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      textStyle: TextStyle(fontSize: microSize),
+      minimumSize: Size(0, 28),
+    ),
+  ),
+                        SizedBox(width: 8),
                 if (showQrButton)
                   ElevatedButton.icon(
                     icon: Icon(
