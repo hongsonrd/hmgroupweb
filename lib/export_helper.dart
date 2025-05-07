@@ -11,6 +11,8 @@ import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'package:archive/archive.dart';
 import 'package:archive/archive_io.dart';
+import 'package:file_picker/file_picker.dart';
+
 class ExcelColorHelper {
   final String hexValue;
   
@@ -165,8 +167,8 @@ class ExportHelper {
       );
       
       // Save PDF to file
-      final output = await getTemporaryDirectory();
-      final file = File('${output.path}/chamcong_${selectedDepartment.replaceAll(' ', '_')}_$selectedMonth.pdf');
+      final output2 = await getTemporaryDirectory();
+      final file = File('${output2.path}/chamcong_${selectedDepartment.replaceAll(' ', '_')}_$selectedMonth.pdf');
       await file.writeAsBytes(await pdf.save());
       
       final box = context.findRenderObject() as RenderBox?;
@@ -226,8 +228,8 @@ class ExportHelper {
     );
     
     // Create a directory for all the Excel files
-    final output = await getTemporaryDirectory();
-    final batchDir = Directory('${output.path}/batch_excel_${DateTime.now().millisecondsSinceEpoch}');
+    final output3 = await getTemporaryDirectory();
+    final batchDir = Directory('${output3.path}/batch_excel_${DateTime.now().millisecondsSinceEpoch}');
     if (!await batchDir.exists()) {
       await batchDir.create();
     }
@@ -330,7 +332,10 @@ class ExportHelper {
     );
     
     // Create a ZIP file containing all the Excel files
-    final zipFile = File('${output.path}/chamcong_all_projects_$selectedMonth.zip');
+    final dateStr = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    final zipFileName = 'BaoCaoChamCong_${selectedMonth}_TatCaDuAn_$dateStr.zip';
+    final output = await getTemporaryDirectory();
+    final zipFile = File('${output.path}/$zipFileName');
     
     // Create a zip encoder
     final encoder = ZipFileEncoder();
@@ -349,21 +354,52 @@ class ExportHelper {
       Navigator.of(context).pop();
     }
     
-    // Share the ZIP file
-    final box = context.findRenderObject() as RenderBox?;
-    await Share.shareXFiles(
-      [XFile(zipFile.path)],
-      text: 'Báo cáo chấm công tất cả dự án $selectedMonth',
-      subject: 'Báo cáo chấm công',
-      sharePositionOrigin: box != null 
-          ? Rect.fromLTWH(
-              box.localToGlobal(Offset.zero).dx,
-              box.localToGlobal(Offset.zero).dy,
-              box.size.width,
-              box.size.height / 2,
-            )
-          : null,
-    );
+    // Platform-specific saving
+    if (Platform.isWindows) {
+      try {
+        // First attempt: Use file_picker save dialog
+        String? saveLocation = await FilePicker.platform.saveFile(
+          dialogTitle: 'Lưu báo cáo chấm công (ZIP)',
+          fileName: zipFileName,
+          type: FileType.custom,
+          allowedExtensions: ['zip'],
+        );
+        
+        if (saveLocation != null) {
+          // Copy the temp zip to the selected location
+          await zipFile.copy(saveLocation);
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('File đã được lưu tại: $saveLocation'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          // If user cancels, save to Downloads as fallback
+          await _saveZipToDownloadsWindows(zipFile, zipFileName, context);
+        }
+      } catch (e) {
+        // If there's an error, save to Documents folder
+        await _saveZipToDocumentsWindows(zipFile, zipFileName, context);
+      }
+    } else {
+      // For Mac and other platforms, use the existing share code
+      final box = context.findRenderObject() as RenderBox?;
+      await Share.shareXFiles(
+        [XFile(zipFile.path)],
+        text: 'Báo cáo chấm công tất cả dự án $selectedMonth',
+        subject: 'Báo cáo chấm công',
+        sharePositionOrigin: box != null 
+            ? Rect.fromLTWH(
+                box.localToGlobal(Offset.zero).dx,
+                box.localToGlobal(Offset.zero).dy,
+                box.size.width,
+                box.size.height / 2,
+              )
+            : null,
+      );
+    }
     
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -384,6 +420,117 @@ class ExportHelper {
         content: Text('Lỗi khi xuất Excel cho tất cả dự án: $e'),
         backgroundColor: Colors.red
       )
+    );
+  }
+}
+
+// Add these helper methods to ExportHelper class
+static Future<File> _saveToDownloadsWindows(List<int> fileBytes, String fileName, BuildContext context, bool skipNavigation) async {
+  try {
+    final userHome = Platform.environment['USERPROFILE'];
+    if (userHome != null) {
+      final downloadsPath = '$userHome\\Downloads';
+      final directory = Directory(downloadsPath);
+      
+      if (await directory.exists()) {
+        final filePath = '$downloadsPath\\$fileName';
+        final file = File(filePath);
+        await file.writeAsBytes(fileBytes);
+        
+        if (!skipNavigation) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('File đã được lưu tại: $filePath'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+        return file;
+      }
+    }
+    // If Downloads folder not accessible, fall back to Documents
+    return await _saveToDocumentsWindows(fileBytes, fileName, context, skipNavigation);
+  } catch (e) {
+    return await _saveToDocumentsWindows(fileBytes, fileName, context, skipNavigation);
+  }
+}
+
+static Future<File> _saveToDocumentsWindows(List<int> fileBytes, String fileName, BuildContext context, bool skipNavigation) async {
+  try {
+    final directory = await getApplicationDocumentsDirectory();
+    final filePath = '${directory.path}\\$fileName';
+    final file = File(filePath);
+    await file.writeAsBytes(fileBytes);
+    
+    if (!skipNavigation) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('File đã được lưu tại: $filePath'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+    return file;
+  } catch (e) {
+    if (!skipNavigation) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi khi lưu file: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+    // Return an empty file in case of error
+    final temp = await getTemporaryDirectory();
+    return File('${temp.path}/$fileName');
+  }
+}
+
+static Future<void> _saveZipToDownloadsWindows(File zipFile, String fileName, BuildContext context) async {
+  try {
+    final userHome = Platform.environment['USERPROFILE'];
+    if (userHome != null) {
+      final downloadsPath = '$userHome\\Downloads';
+      final directory = Directory(downloadsPath);
+      
+      if (await directory.exists()) {
+        final filePath = '$downloadsPath\\$fileName';
+        await zipFile.copy(filePath);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('File đã được lưu tại: $filePath'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        return;
+      }
+    }
+    // If Downloads folder not accessible, fall back to Documents
+    await _saveZipToDocumentsWindows(zipFile, fileName, context);
+  } catch (e) {
+    await _saveZipToDocumentsWindows(zipFile, fileName, context);
+  }
+}
+
+static Future<void> _saveZipToDocumentsWindows(File zipFile, String fileName, BuildContext context) async {
+  try {
+    final directory = await getApplicationDocumentsDirectory();
+    final filePath = '${directory.path}\\$fileName';
+    await zipFile.copy(filePath);
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('File đã được lưu tại: $filePath'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi khi lưu file: $e'),
+        backgroundColor: Colors.red,
+      ),
     );
   }
 }
@@ -483,43 +630,92 @@ static Future<List<File>> exportToExcel({
       staffNames: staffNames, getAttendanceForDay: getAttendanceForDay, calculateSummary: calculateSummary
     );
     
-    final output = await getTemporaryDirectory();
-    final file = File('${output.path}/chamcong_${selectedDepartment.replaceAll(' ', '_')}_$selectedMonth.xlsx');
-    await file.writeAsBytes(excel.encode()!);
+    final dateStr = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    final fileName = 'BaoCaoChamCong_${selectedMonth}_${selectedDepartment.replaceAll(' ', '_')}_$dateStr.xlsx';
+    final fileBytes = excel.encode()!;
     
-    if (!batchMode) {  // Fixed missing opening parenthesis
-      // Only share the file if not in batch mode
-      final box = context.findRenderObject() as RenderBox?;
-      await Share.shareXFiles(
-        [XFile(file.path)], 
-        text: 'Báo cáo chấm công $selectedDepartment $selectedMonth',
-        subject: 'Báo cáo chấm công',
-        sharePositionOrigin: box != null 
-            ? Rect.fromLTWH(
-                box.localToGlobal(Offset.zero).dx,
-                box.localToGlobal(Offset.zero).dy,
-                box.size.width,
-                box.size.height / 2,
-              )
-            : null,
-      );
-      
-      if (!skipNavigation) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Excel đã được tạo và chia sẻ thành công'))
+    if (batchMode) {
+      // In batch mode, save to temp directory for later processing
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/$fileName');
+      await file.writeAsBytes(fileBytes);
+      return [file];
+    } else {
+      // Standard mode with platform-specific saving
+      if (Platform.isWindows) {
+        try {
+          // First attempt: Use file_picker save dialog
+          String? outputFile = await FilePicker.platform.saveFile(
+            dialogTitle: 'Lưu báo cáo chấm công',
+            fileName: fileName,
+            type: FileType.custom,
+            allowedExtensions: ['xlsx'],
+          );
+          
+          if (outputFile != null) {
+            final file = File(outputFile);
+            await file.writeAsBytes(fileBytes);
+            
+            if (!skipNavigation) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('File đã được lưu tại: $outputFile'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
+            
+            return [file];
+          } else {
+            // If user cancels, save to Downloads as fallback
+            final file = await _saveToDownloadsWindows(fileBytes, fileName, context, skipNavigation);
+            return [file];
+          }
+        } catch (e) {
+          // If file_picker fails, save to Documents as second fallback
+          final file = await _saveToDocumentsWindows(fileBytes, fileName, context, skipNavigation);
+          return [file];
+        }
+      } else {
+        // For Mac and other platforms, use the existing code
+        final tempDir = await getTemporaryDirectory();
+        final file = File('${tempDir.path}/$fileName');
+        await file.writeAsBytes(fileBytes);
+        
+        final box = context.findRenderObject() as RenderBox?;
+        await Share.shareXFiles(
+          [XFile(file.path)], 
+          text: 'Báo cáo chấm công $selectedDepartment $selectedMonth',
+          subject: 'Báo cáo chấm công',
+          sharePositionOrigin: box != null 
+              ? Rect.fromLTWH(
+                  box.localToGlobal(Offset.zero).dx,
+                  box.localToGlobal(Offset.zero).dy,
+                  box.size.width,
+                  box.size.height / 2,
+                )
+              : null,
         );
+        
+        if (!skipNavigation) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Excel đã được tạo và chia sẻ thành công'))
+          );
+        }
+        
+        return [file];
       }
     }
-    
-    return [file]; // Return the file for batch mode
   } catch (e) {
     print('Excel export error: $e');
+    
     if (!skipNavigation) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Lỗi khi xuất Excel: $e'), backgroundColor: Colors.red)
       );
     }
-    return []; // Return empty list on error
+    
+    return [];
   }
 }
 

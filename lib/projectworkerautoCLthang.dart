@@ -16,6 +16,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'http_client.dart';
 import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart';
 
 class ProjectWorkerAutoCLThang extends StatefulWidget {
   final String selectedBoPhan;
@@ -689,59 +690,73 @@ Future<void> _exportExcelForAllProjects() async {
    final directory = await getApplicationDocumentsDirectory();
    final dateStr = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
    final fileName = 'ChamCongThang_${_selectedMonth ?? ""}_TatCaDuAn_$dateStr.xlsx';
-   final filePath = '${directory.path}/$fileName';
-   
-   // Get external storage directory for easier access on Windows
-   Directory? externalDir;
-   try {
-     externalDir = await getExternalStorageDirectory();
-   } catch (e) {
-     print('External directory not available: $e');
-   }
-   
-   final fileBytes = excel.encode();
-   if (fileBytes != null) {
-     final file = File(filePath);
-     await file.writeAsBytes(fileBytes);
-     
-     // Save additional copy to external storage if available
-     if (externalDir != null) {
-       final externalFilePath = '${externalDir.path}/$fileName';
-       final externalFile = File(externalFilePath);
-       await externalFile.writeAsBytes(fileBytes);
-       
-       // Show file location info
-       ScaffoldMessenger.of(context).showSnackBar(
-         SnackBar(
-           content: Text('File đã được lưu tại: ${externalFilePath}'),
-           backgroundColor: Colors.green,
-           duration: Duration(seconds: 5),
-         ),
-       );
-     }
-     
-     // Share the file
-     await Share.shareXFiles(
-       [XFile(filePath)],
-       text: 'Chấm công tháng ${_selectedMonth ?? ""} - Tất cả dự án',
-     );
-   } else {
-     throw Exception('Failed to encode Excel file');
-   }
-   
-   await _loadMonthlyData();
-   
- } catch (e) {
-   print('Error exporting all projects to Excel: $e');
-   _showError('Lỗi khi xuất file Excel: $e');
- } finally {
-   setState(() {
-     _isProcessingAllProjects = false;
-     _isLoading = false;
-   });
- }
+    
+    final fileBytes = excel.encode();
+    if (fileBytes != null) {
+      // Platform-specific saving approach
+      if (Platform.isWindows) {
+        // Windows: Use file_picker with multiple fallback strategies
+        try {
+          // First attempt: Use file_picker save dialog
+          String? outputFile = await FilePicker.platform.saveFile(
+            dialogTitle: 'Lưu dữ liệu chấm công tháng - Tất cả dự án',
+            fileName: fileName,
+            type: FileType.custom,
+            allowedExtensions: ['xlsx'],
+          );
+          
+          if (outputFile != null) {
+            final file = File(outputFile);
+            await file.writeAsBytes(fileBytes);
+            
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('File đã được lưu tại: $outputFile'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          } else {
+            // If user cancels, save to Downloads as fallback
+            await _saveToDownloadsWindows(fileBytes, fileName);
+          }
+        } catch (e) {
+          // If file_picker fails, save to Documents as second fallback
+          await _saveToDocumentsWindows(fileBytes, fileName);
+        }
+      } else if (Platform.isMacOS) {
+        // macOS: Use share_plus as requested
+        final directory = await getTemporaryDirectory();
+        final filePath = '${directory.path}/$fileName';
+        final file = File(filePath);
+        await file.writeAsBytes(fileBytes);
+        
+        await Share.shareXFiles(
+          [XFile(filePath)],
+          text: 'Chấm công tháng ${_selectedMonth ?? ""} - Tất cả dự án',
+        );
+      } else {
+        // Fallback for other platforms
+        await Share.shareXFiles(
+          [XFile('${(await getTemporaryDirectory()).path}/$fileName')],
+          text: 'Chấm công tháng ${_selectedMonth ?? ""} - Tất cả dự án',
+        );
+      }
+    } else {
+      throw Exception('Failed to encode Excel file');
+    }
+    
+    await _loadMonthlyData();
+    
+  } catch (e) {
+    print('Error exporting all projects to Excel: $e');
+    _showError('Lỗi khi xuất file Excel: $e');
+  } finally {
+    setState(() {
+      _isProcessingAllProjects = false;
+      _isLoading = false;
+    });
+  }
 }
-
   void _checkEditingPermission() {
     if (_selectedMonth == null) return;
     
@@ -2211,14 +2226,54 @@ Future<void> _exportToExcel() async {
     
     final fileBytes = excel.encode();
     if (fileBytes != null) {
-      final file = File(filePath);
-      await file.writeAsBytes(fileBytes);
-      
-      // Share the file
-      await Share.shareXFiles(
-        [XFile(filePath)],
-        text: 'Chấm công tháng ${_selectedMonth ?? ""} - ${_selectedDepartment ?? ""}',
-      );
+      // Platform-specific saving approach
+      if (Platform.isWindows) {
+        // Windows: Use file_picker with multiple fallback strategies
+        try {
+          // First attempt: Use file_picker save dialog
+          String? outputFile = await FilePicker.platform.saveFile(
+            dialogTitle: 'Lưu dữ liệu chấm công tháng',
+            fileName: fileName,
+            type: FileType.custom,
+            allowedExtensions: ['xlsx'],
+          );
+          
+          if (outputFile != null) {
+            final file = File(outputFile);
+            await file.writeAsBytes(fileBytes);
+            
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('File đã được lưu tại: $outputFile'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          } else {
+            // If user cancels, save to Downloads as fallback
+            await _saveToDownloadsWindows(fileBytes, fileName);
+          }
+        } catch (e) {
+          // If file_picker fails, save to Documents as second fallback
+          await _saveToDocumentsWindows(fileBytes, fileName);
+        }
+      } else if (Platform.isMacOS) {
+        // macOS: Use share_plus as requested
+        final directory = await getTemporaryDirectory();
+        final filePath = '${directory.path}/$fileName';
+        final file = File(filePath);
+        await file.writeAsBytes(fileBytes);
+        
+        await Share.shareXFiles(
+          [XFile(filePath)],
+          text: 'Chấm công tháng ${_selectedMonth ?? ""} - ${_selectedDepartment ?? ""}'
+        );
+      } else {
+        // Fallback for other platforms
+        await Share.shareXFiles(
+          [XFile('${(await getTemporaryDirectory()).path}/$fileName')],
+          text: 'Chấm công tháng ${_selectedMonth ?? ""} - ${_selectedDepartment ?? ""}'
+        );
+      }
     } else {
       throw Exception('Failed to encode Excel file');
     }
@@ -2228,6 +2283,58 @@ Future<void> _exportToExcel() async {
     _showError('Lỗi khi xuất file Excel: $e');
   } finally {
     setState(() => _isLoading = false);
+  }
+}
+
+// Add these fallback methods for Windows
+Future<void> _saveToDownloadsWindows(List<int> fileBytes, String fileName) async {
+  try {
+    final userHome = Platform.environment['USERPROFILE'];
+    if (userHome != null) {
+      final downloadsPath = '$userHome\\Downloads';
+      final directory = Directory(downloadsPath);
+      
+      if (await directory.exists()) {
+        final filePath = '$downloadsPath\\$fileName';
+        final file = File(filePath);
+        await file.writeAsBytes(fileBytes);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('File đã được lưu tại: $filePath'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        return;
+      }
+    }
+    // If Downloads folder not accessible, fall back to Documents
+    await _saveToDocumentsWindows(fileBytes, fileName);
+  } catch (e) {
+    await _saveToDocumentsWindows(fileBytes, fileName);
+  }
+}
+
+Future<void> _saveToDocumentsWindows(List<int> fileBytes, String fileName) async {
+  try {
+    final directory = await getApplicationDocumentsDirectory();
+    final filePath = '${directory.path}\\$fileName';
+    final file = File(filePath);
+    await file.writeAsBytes(fileBytes);
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('File đã được lưu tại: $filePath'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi khi lưu file: $e'),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
 }
   @override
