@@ -733,10 +733,10 @@ Widget build(BuildContext context) {
             );
           },
         ),
-        IconButton(
-          icon: Icon(Icons.refresh),
-          onPressed: _loadOrders,
-        ),
+        //IconButton(
+        //  icon: Icon(Icons.refresh),
+        //  onPressed: _loadOrders,
+        //),
       ],
     ),
     body: Column(

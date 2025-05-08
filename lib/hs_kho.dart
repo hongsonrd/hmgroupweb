@@ -986,33 +986,60 @@ Future<void> _printBatchQRCode(String loHangID, String maHangID) async {
   try {
     final pdf = pw.Document();
     
-    // Create the PDF page with QR code
+    // Use horizontal page format (5x3cm)
     pdf.addPage(
       pw.Page(
-        pageFormat: pdfx.PdfPageFormat(30 * pdfx.PdfPageFormat.mm, 50 * pdfx.PdfPageFormat.mm, marginAll: 2 * pdfx.PdfPageFormat.mm),
+        pageFormat: pdfx.PdfPageFormat(50 * pdfx.PdfPageFormat.mm, 30 * pdfx.PdfPageFormat.mm, marginAll: 2 * pdfx.PdfPageFormat.mm),
         build: (pw.Context context) {
           return pw.Center(
-            child: pw.Column(
+            child: pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.center,
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
               children: [
-                // QR Code using BarcodeWidget
-                pw.BarcodeWidget(
-                  barcode: pw.Barcode.qrCode(),
-                  data: loHangID,
+                // QR Code on the left
+                pw.Container(
                   width: 26 * pdfx.PdfPageFormat.mm,
                   height: 26 * pdfx.PdfPageFormat.mm,
+                  child: pw.BarcodeWidget(
+                    barcode: pw.Barcode.qrCode(),
+                    data: loHangID,
+                    width: 26 * pdfx.PdfPageFormat.mm,
+                    height: 26 * pdfx.PdfPageFormat.mm,
+                  ),
                 ),
-                pw.SizedBox(height: 3 * pdfx.PdfPageFormat.mm),
-                // Lot ID text
-                pw.Text(
-                  'Mã lô: $loHangID',
-                  style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold),
-                ),
-                pw.SizedBox(height: 1 * pdfx.PdfPageFormat.mm),
-                // Product ID text
-                pw.Text(
-                  'Mã SP: $maHangID',
-                  style: pw.TextStyle(fontSize: 6),
+                
+                pw.SizedBox(width: 4 * pdfx.PdfPageFormat.mm),
+                
+                // Rotated text information on the right
+                pw.Container(
+                  width: 16 * pdfx.PdfPageFormat.mm,
+                  height: 26 * pdfx.PdfPageFormat.mm,
+                  alignment: pw.Alignment.center,
+                  child: pw.Transform.rotate(
+                    angle: 90 * 3.1415927 / 180, // Rotate 90 degrees (counter-clockwise)
+                    child: pw.Container(
+                      width: 26 * pdfx.PdfPageFormat.mm, // Height of the original container becomes width
+                      height: 16 * pdfx.PdfPageFormat.mm, // Width of the original container becomes height
+                      child: pw.Column(
+                        mainAxisAlignment: pw.MainAxisAlignment.center,
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          // Lot ID text
+                          pw.Text(
+                            'Mã lô: $loHangID',
+                            style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold),
+                          ),
+                          pw.SizedBox(height: 2 * pdfx.PdfPageFormat.mm),
+                          
+                          // Product ID text
+                          pw.Text(
+                            'Mã SP: $maHangID',
+                            style: pw.TextStyle(fontSize: 6),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -1021,72 +1048,29 @@ Future<void> _printBatchQRCode(String loHangID, String maHangID) async {
       ),
     );
     
-    // Save PDF to a file (for fallback)
-    final Directory appDocDir = await getApplicationDocumentsDirectory();
-    final String appDocPath = appDocDir.path;
-    final String filePath = '$appDocPath/QR_${loHangID}.pdf';
-    final File file = File(filePath);
-    final pdfBytes = await pdf.save();
-    await file.writeAsBytes(pdfBytes);
+    // Print the document
+    await Printing.layoutPdf(
+      onLayout: (pdfx.PdfPageFormat format) async => pdf.save(),
+      format: pdfx.PdfPageFormat(50 * pdfx.PdfPageFormat.mm, 30 * pdfx.PdfPageFormat.mm),
+      name: 'QR_${loHangID}.pdf',
+    );
     
-    // First attempt direct printing (will work on Windows, might fail on macOS)
-    bool printSuccess = false;
-    try {
-      final result = await Printing.layoutPdf(
-        onLayout: (pdfx.PdfPageFormat format) async => pdfBytes,
-        format: pdfx.PdfPageFormat(30 * pdfx.PdfPageFormat.mm, 50 * pdfx.PdfPageFormat.mm),
-        name: 'QR_${loHangID}.pdf',
-      );
-      printSuccess = result;
-    } catch (e) {
-      print('Direct printing failed: $e');
-      printSuccess = false;
-    }
-    
-    if (printSuccess) {
-      // Printing succeeded
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Đã gửi lệnh in mã QR thành công'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } else {
-      // Printing failed, show status and fallback to opening the file
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Đang mở tệp PDF trong trình xem mặc định...'),
-          backgroundColor: Colors.blue,
-        ),
-      );
-      
-      // Wait for 3 seconds before opening the file
-      await Future.delayed(Duration(seconds: 3));
-      
-      if (Platform.isMacOS) {
-        await Process.run('open', [filePath]);
-      } else if (Platform.isWindows) {
-        await Process.run('cmd', ['/c', 'start', filePath]);
-      } else {
-        // For other platforms try the share method
-        await Share.shareXFiles([XFile(filePath)], text: 'QR Code cho lô $loHangID');
-      }
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Đã mở tệp PDF. Bạn có thể in từ ứng dụng xem PDF.'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    }
-  } catch (e) {
-    print('Error in printing/PDF generation: $e');
+    // Show success message
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Lỗi khi tạo hoặc in mã QR: ${e.toString()}'),
+        content: Text('Đã gửi lệnh in mã QR thành công'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  } catch (e) {
+    // Show error message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi khi in mã QR: ${e.toString()}'),
         backgroundColor: Colors.red,
       ),
     );
+    print('Error printing QR code: $e');
   }
 }
 void _generatePXK(DonHangModel order) async {
@@ -1389,8 +1373,6 @@ void _showOrderQRCode(DonHangModel order) async {
     ),
   );
 }
-
-// Add a new method to print the order QR code
 Future<void> _printOrderQRCode(DonHangModel order) async {
   try {
     final pdf = pw.Document();
@@ -1408,50 +1390,70 @@ Future<void> _printOrderQRCode(DonHangModel order) async {
       displayText = order.soPhieu!;
     }
     
-    // Create 5x3cm (50mm x 30mm) vertical page
+    // Create 5x3cm (50mm x 30mm) horizontal page
     pdf.addPage(
       pw.Page(
-        pageFormat: pdfx.PdfPageFormat(30 * pdfx.PdfPageFormat.mm, 50 * pdfx.PdfPageFormat.mm, marginAll: 2 * pdfx.PdfPageFormat.mm),
+        pageFormat: pdfx.PdfPageFormat(50 * pdfx.PdfPageFormat.mm, 30 * pdfx.PdfPageFormat.mm, marginAll: 2 * pdfx.PdfPageFormat.mm),
         build: (pw.Context context) {
           return pw.Center(
-            child: pw.Column(
+            child: pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.center,
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
               children: [
-                // QR Code using BarcodeWidget
-                pw.BarcodeWidget(
-                  barcode: pw.Barcode.qrCode(),
-                  data: order.soPhieu!,
+                // QR Code on the left
+                pw.Container(
                   width: 26 * pdfx.PdfPageFormat.mm,
                   height: 26 * pdfx.PdfPageFormat.mm,
+                  child: pw.BarcodeWidget(
+                    barcode: pw.Barcode.qrCode(),
+                    data: order.soPhieu!,
+                    width: 26 * pdfx.PdfPageFormat.mm,
+                    height: 26 * pdfx.PdfPageFormat.mm,
+                  ),
                 ),
-                pw.SizedBox(height: 4 * pdfx.PdfPageFormat.mm),
                 
-                // Black pill with identifier
+                pw.SizedBox(width: 4 * pdfx.PdfPageFormat.mm),
+                
+                // Text information - no rotation, with wrapping
                 pw.Container(
-                  padding: pw.EdgeInsets.symmetric(
-                    horizontal: 8 * pdfx.PdfPageFormat.mm,
-                    vertical: 2 * pdfx.PdfPageFormat.mm,
+                  width: 16 * pdfx.PdfPageFormat.mm,
+                  child: pw.Column(
+                    mainAxisAlignment: pw.MainAxisAlignment.center,
+                    crossAxisAlignment: pw.CrossAxisAlignment.center,
+                    children: [
+                      // Black pill with identifier
+                      pw.Container(
+                        width: 16 * pdfx.PdfPageFormat.mm,
+                        padding: pw.EdgeInsets.symmetric(
+                          horizontal: 2 * pdfx.PdfPageFormat.mm,
+                          vertical: 2 * pdfx.PdfPageFormat.mm,
+                        ),
+                        decoration: pw.BoxDecoration(
+                          color: pdfx.PdfColors.black,
+                          borderRadius: pw.BorderRadius.circular(8),
+                        ),
+                        child: pw.Text(
+                          displayText,
+                          style: pw.TextStyle(
+                            color: pdfx.PdfColors.white,
+                            fontSize: 10,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                          textAlign: pw.TextAlign.center,
+                        ),
+                      ),
+                      
+                      pw.SizedBox(height: 4 * pdfx.PdfPageFormat.mm),
+                      
+                      // Order number text with wrapping
+                      pw.Text(
+                        'Đơn: ${order.soPhieu}',
+                        style: pw.TextStyle(fontSize: 6),
+                        textAlign: pw.TextAlign.center,
+                        maxLines: 3, // Allow multiple lines
+                      ),
+                    ],
                   ),
-                  decoration: pw.BoxDecoration(
-                    color: pdfx.PdfColors.black,
-                    borderRadius: pw.BorderRadius.circular(10),
-                  ),
-                  child: pw.Text(
-                    displayText,
-                    style: pw.TextStyle(
-                      color: pdfx.PdfColors.white,
-                      fontSize: 8,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                ),
-                
-                pw.SizedBox(height: 2 * pdfx.PdfPageFormat.mm),
-                
-                // Order number text
-                pw.Text(
-                  'Đơn: ${order.soPhieu}',
-                  style: pw.TextStyle(fontSize: 6),
                 ),
               ],
             ),
@@ -1463,7 +1465,7 @@ Future<void> _printOrderQRCode(DonHangModel order) async {
     // Print the document
     await Printing.layoutPdf(
       onLayout: (pdfx.PdfPageFormat format) async => pdf.save(),
-      format: pdfx.PdfPageFormat(30 * pdfx.PdfPageFormat.mm, 50 * pdfx.PdfPageFormat.mm),
+      format: pdfx.PdfPageFormat(50 * pdfx.PdfPageFormat.mm, 30 * pdfx.PdfPageFormat.mm),
       name: 'ORDER_QR_${order.soPhieu}.pdf',
     );
     
@@ -3144,33 +3146,60 @@ Future<void> _printQRCode(String loHangID, String maHangID) async {
   try {
     final pdf = pw.Document();
     
-    // Use the barcode widget from pdf package directly
+    // Use horizontal page format (5x3cm)
     pdf.addPage(
       pw.Page(
-        pageFormat: pdfx.PdfPageFormat(30 * pdfx.PdfPageFormat.mm, 50 * pdfx.PdfPageFormat.mm, marginAll: 2 * pdfx.PdfPageFormat.mm),
+        pageFormat: pdfx.PdfPageFormat(50 * pdfx.PdfPageFormat.mm, 30 * pdfx.PdfPageFormat.mm, marginAll: 2 * pdfx.PdfPageFormat.mm),
         build: (pw.Context context) {
           return pw.Center(
-            child: pw.Column(
+            child: pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.center,
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
               children: [
-                // QR Code using BarcodeWidget
-                pw.BarcodeWidget(
-                  barcode: pw.Barcode.qrCode(),
-                  data: loHangID,
+                // QR Code on the left
+                pw.Container(
                   width: 26 * pdfx.PdfPageFormat.mm,
                   height: 26 * pdfx.PdfPageFormat.mm,
+                  child: pw.BarcodeWidget(
+                    barcode: pw.Barcode.qrCode(),
+                    data: loHangID,
+                    width: 26 * pdfx.PdfPageFormat.mm,
+                    height: 26 * pdfx.PdfPageFormat.mm,
+                  ),
                 ),
-                pw.SizedBox(height: 3 * pdfx.PdfPageFormat.mm),
-                // Lot ID text
-                pw.Text(
-                  'Mã lô: $loHangID',
-                  style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold),
-                ),
-                pw.SizedBox(height: 1 * pdfx.PdfPageFormat.mm),
-                // Product ID text
-                pw.Text(
-                  'Mã SP: $maHangID',
-                  style: pw.TextStyle(fontSize: 6),
+                
+                pw.SizedBox(width: 4 * pdfx.PdfPageFormat.mm),
+                
+                // Rotated text information on the right
+                pw.Container(
+                  width: 16 * pdfx.PdfPageFormat.mm,
+                  height: 26 * pdfx.PdfPageFormat.mm,
+                  alignment: pw.Alignment.center,
+                  child: pw.Transform.rotate(
+                    angle: 90 * 3.1415927 / 180, // Rotate 90 degrees (counter-clockwise)
+                    child: pw.Container(
+                      width: 26 * pdfx.PdfPageFormat.mm, // Height of the original container becomes width
+                      height: 16 * pdfx.PdfPageFormat.mm, // Width of the original container becomes height
+                      child: pw.Column(
+                        mainAxisAlignment: pw.MainAxisAlignment.center,
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          // Lot ID text
+                          pw.Text(
+                            'Mã lô: $loHangID',
+                            style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold),
+                          ),
+                          pw.SizedBox(height: 2 * pdfx.PdfPageFormat.mm),
+                          
+                          // Product ID text
+                          pw.Text(
+                            'Mã SP: $maHangID',
+                            style: pw.TextStyle(fontSize: 6),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -3182,7 +3211,7 @@ Future<void> _printQRCode(String loHangID, String maHangID) async {
     // Print the document
     await Printing.layoutPdf(
       onLayout: (pdfx.PdfPageFormat format) async => pdf.save(),
-      format: pdfx.PdfPageFormat(30 * pdfx.PdfPageFormat.mm, 50 * pdfx.PdfPageFormat.mm),
+      format: pdfx.PdfPageFormat(50 * pdfx.PdfPageFormat.mm, 30 * pdfx.PdfPageFormat.mm),
       name: 'QR_${loHangID}.pdf',
     );
     
