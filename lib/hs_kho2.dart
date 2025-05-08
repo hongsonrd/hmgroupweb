@@ -1199,92 +1199,81 @@ Widget _buildCapacityIndicator(double percentValue, {bool mini = false}) {
   }
   
   Widget _buildBatchCard(LoHangModel batch) {
-    final dateFormat = DateFormat('dd/MM/yyyy');
-    final ngayNhap = batch.ngayNhap != null 
-        ? dateFormat.format(DateTime.parse(batch.ngayNhap!))
-        : 'N/A';
-    final ngayCapNhat = batch.ngayCapNhat != null 
-        ? dateFormat.format(DateTime.parse(batch.ngayCapNhat!))
-        : 'N/A';
-    
-    return FutureBuilder<Map<String, dynamic>?>(
-      future: _fetchProductDetails(batch.maHangID),
-      builder: (context, snapshot) {
-        final productName = snapshot.data?['tenHang'] ?? 'Đang tải...';
-        final productUnit = snapshot.data?['donVi'] ?? '';
-        
-        final quantityText = batch.soLuongHienTai != null 
-            ? '${batch.soLuongHienTai} $productUnit'
-            : 'N/A';
-        
-        // Determine status color
-        Color statusColor = Colors.grey;
-        if (batch.trangThai != null) {
-          switch (batch.trangThai!.toLowerCase()) {
-            case 'còn hàng':
-              statusColor = Colors.green;
-              break;
-            case 'sắp hết':
-              statusColor = Colors.orange;
-              break;
-            case 'hết hàng':
-              statusColor = Colors.red;
-              break;
-          }
-        }
-        
-        return Card(
-          margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        productName,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        batch.trangThai ?? 'N/A',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: statusColor,
-                        ),
-                      ),
-                    ),
-                  ],
+  final dateFormat = DateFormat('dd/MM/yyyy');
+  final ngayNhap = batch.ngayNhap != null 
+      ? dateFormat.format(DateTime.parse(batch.ngayNhap!))
+      : 'N/A';
+  final ngayCapNhat = batch.ngayCapNhat != null 
+      ? dateFormat.format(DateTime.parse(batch.ngayCapNhat!))
+      : 'N/A';
+  
+  // Instead of using FutureBuilder to get product details, just display the maHangID directly
+  return Card(
+    margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    child: Padding(
+      padding: const EdgeInsets.all(12.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  // Change here: Use batch.maHangID instead of productName
+                  batch.maHangID ?? 'N/A',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
                 ),
-                Divider(),
-                _buildInfoRow('Mã lô hàng', batch.loHangID ?? 'N/A'),
-                _buildInfoRow('Số lượng hiện tại', quantityText),
-                _buildInfoRow('Số lượng ban đầu', 
-                    batch.soLuongBanDau != null 
-                        ? '${batch.soLuongBanDau} $productUnit' 
-                        : 'N/A'),
-                _buildInfoRow('Ngày nhập', ngayNhap),
-                _buildInfoRow('Ngày cập nhật', ngayCapNhat),
-                if (batch.hanSuDung != null)
-                  _buildInfoRow('Hạn sử dụng', '${batch.hanSuDung} ngày'),
-              ],
-            ),
+              ),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _getStatusColor(batch.trangThai).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  batch.trangThai ?? 'N/A',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: _getStatusColor(batch.trangThai),
+                  ),
+                ),
+              ),
+            ],
           ),
-        );
-      },
-    );
+          Divider(),
+          _buildInfoRow('Mã lô hàng', batch.loHangID ?? 'N/A'),
+          _buildInfoRow('Số lượng hiện tại', 
+              batch.soLuongHienTai != null ? batch.soLuongHienTai.toString() : 'N/A'),
+          _buildInfoRow('Số lượng ban đầu', 
+              batch.soLuongBanDau != null ? batch.soLuongBanDau.toString() : 'N/A'),
+          _buildInfoRow('Ngày nhập', ngayNhap),
+          _buildInfoRow('Ngày cập nhật', ngayCapNhat),
+          if (batch.hanSuDung != null)
+            _buildInfoRow('Hạn sử dụng', '${batch.hanSuDung} ngày'),
+        ],
+      ),
+    ),
+  );
+}
+
+// Add a helper function to determine status color
+Color _getStatusColor(String? status) {
+  if (status == null) return Colors.grey;
+  
+  switch (status.toLowerCase()) {
+    case 'còn hàng':
+      return Colors.green;
+    case 'sắp hết':
+      return Colors.orange;
+    case 'hết hàng':
+      return Colors.red;
+    default:
+      return Colors.grey;
   }
+}
 Future<void> _saveEditedValues(Map<String, int> editedValues, List<KhuVucKhoChiTietModel> items) async {
   if (editedValues.isEmpty) return;
   

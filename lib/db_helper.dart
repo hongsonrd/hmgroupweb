@@ -250,39 +250,54 @@ Future<List<KhuVucKhoChiTietModel>> getAllKhuVucKhoChiTiet() async {
   }
 }
 
-Future<List<LoHangModel>> getLoHangByKhuVucKhoID(String khuVucKhoID) async {
-    final db = await database;
-    try {
-      final List<Map<String, dynamic>> maps = await db.query(
-        'lo_hang',
-        where: 'khuVucKhoID = ?',
-        whereArgs: [khuVucKhoID],
-      );
+Future<Map<String, dynamic>?> getHangHoaByID(String maHangID) async {
+  if (maHangID == null || maHangID.isEmpty) return null;
+  
+  final db = await database;
+  try {
+    // Fix: Use the correct table name and column for DSHang table
+    final List<Map<String, dynamic>> maps = await db.query(
+      DatabaseTables.dsHangTable,  // Use DSHang table instead of lo_hang
+      where: 'uid = ?',            // Try matching by uid first
+      whereArgs: [maHangID],
+      limit: 1,
+    );
 
-      return maps.map((map) => LoHangModel.fromMap(map)).toList();
-    } catch (e) {
-      print('Error querying LoHang: $e');
-      return [];
-    }
-  }
-
-  // Query HangHoa by ID
-  Future<Map<String, dynamic>?> getHangHoaByID(String maHangID) async {
-    final db = await database;
-    try {
-      final List<Map<String, dynamic>> maps = await db.query(
-        'lo_hang',
-        where: 'maHangID = ?',
+    if (maps.isEmpty) {
+      // If not found by uid, try by sku
+      final skuMaps = await db.query(
+        DatabaseTables.dsHangTable,
+        where: 'sku = ?',
         whereArgs: [maHangID],
         limit: 1,
       );
-
-      return maps.isNotEmpty ? maps.first : null;
-    } catch (e) {
-      print('Error querying HangHoa: $e');
-      return null;
+      
+      return skuMaps.isNotEmpty ? skuMaps.first : null;
     }
+
+    return maps.first;
+  } catch (e) {
+    print('Error querying HangHoa: $e');
+    return null;
   }
+}
+Future<List<LoHangModel>> getLoHangByKhuVucKhoID(String khuVucKhoID) async {
+  final db = await database;
+  try {
+    // Fix: Use the correct table name constant and query parameter
+    final List<Map<String, dynamic>> maps = await db.query(
+      DatabaseTables.loHangTable,  // Use the constant defined in DatabaseTables
+      where: 'khuVucKhoID = ?',    // Match the column name in the database
+      whereArgs: [khuVucKhoID],
+    );
+
+    print('Found ${maps.length} lô hàng for khuVucKhoID: $khuVucKhoID');
+    return maps.map((map) => LoHangModel.fromMap(map)).toList();
+  } catch (e) {
+    print('Error querying LoHang: $e');
+    return [];
+  }
+}
 Future<List<KhuVucKhoChiTietModel>> getKhuVucKhoChiTietByKhuVucKhoID(String khuVucKhoID) async {
   final db = await database;
   
