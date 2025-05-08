@@ -1617,31 +1617,84 @@ Future<void> _showQrCode(String soPhieu, String khachHang) async {
   // Create a PDF document for printing
   final pdf = pw.Document();
   
-  // Add QR code to PDF
+  // Parse the SoPhieu into parts (if needed)
+  List<String> parts = soPhieu.split('-');
+  String displayText = '';
+  
+  // Make sure we display number2-number3 as specified (if it follows that format)
+  if (parts.length >= 3) {
+    displayText = '${parts[1]}-${parts[2]}';
+  } else if (parts.length == 2) {
+    displayText = parts.join('-');
+  } else {
+    displayText = soPhieu;
+  }
+  
+  // Add QR code to PDF with horizontal 5x3cm layout
   pdf.addPage(
     pw.Page(
+      pageFormat: pdfx.PdfPageFormat(50 * pdfx.PdfPageFormat.mm, 30 * pdfx.PdfPageFormat.mm, marginAll: 2 * pdfx.PdfPageFormat.mm),
       build: (pw.Context context) {
-        return pw.Center(
-          child: pw.Column(
-            mainAxisAlignment: pw.MainAxisAlignment.center,
-            children: [
-              pw.SizedBox(
-                width: 250, // 5cm at 72 DPI
-                height: 250,
-                child: pw.BarcodeWidget(
-                  barcode: pw.Barcode.qrCode(),
-                  data: soPhieu,
-                ),
+        return pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.center,
+          crossAxisAlignment: pw.CrossAxisAlignment.center,
+          children: [
+            // QR Code on the left
+            pw.Container(
+              width: 26 * pdfx.PdfPageFormat.mm,
+              height: 26 * pdfx.PdfPageFormat.mm,
+              child: pw.BarcodeWidget(
+                barcode: pw.Barcode.qrCode(),
+                data: soPhieu,
+                width: 26 * pdfx.PdfPageFormat.mm,
+                height: 26 * pdfx.PdfPageFormat.mm,
               ),
-              pw.SizedBox(height: 10),
-              pw.Text(
-                "Số phiếu: $soPhieu",
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            ),
+            
+            pw.SizedBox(width: 4 * pdfx.PdfPageFormat.mm),
+            
+            // Text on the right (normal orientation for simplicity)
+            pw.Container(
+              width: 16 * pdfx.PdfPageFormat.mm,
+              child: pw.Column(
+                mainAxisAlignment: pw.MainAxisAlignment.center,
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
+                children: [
+                  // Black pill with identifier
+                  pw.Container(
+                    width: 16 * pdfx.PdfPageFormat.mm,
+                    padding: pw.EdgeInsets.symmetric(
+                      horizontal: 2 * pdfx.PdfPageFormat.mm,
+                      vertical: 2 * pdfx.PdfPageFormat.mm,
+                    ),
+                    decoration: pw.BoxDecoration(
+                      color: pdfx.PdfColors.black,
+                      borderRadius: pw.BorderRadius.circular(8),
+                    ),
+                    child: pw.Text(
+                      displayText,
+                      style: pw.TextStyle(
+                        color: pdfx.PdfColors.white,
+                        fontSize: 10,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                  ),
+                  
+                  pw.SizedBox(height: 4 * pdfx.PdfPageFormat.mm),
+                  
+                  // Order number text with wrapping
+                  pw.Text(
+                    'Đơn: $soPhieu',
+                    style: pw.TextStyle(fontSize: 6),
+                    textAlign: pw.TextAlign.center,
+                    maxLines: 3, // Allow multiple lines
+                  ),
+                ],
               ),
-              pw.SizedBox(height: 5),
-              pw.Text("Khách hàng: $khachHang"),
-            ],
-          ),
+            ),
+          ],
         );
       },
     ),
@@ -1657,7 +1710,7 @@ Future<void> _showQrCode(String soPhieu, String khachHang) async {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 250, // 5cm at 72 DPI
+            width: 250,
             height: 250,
             child: QrImageView(
               data: soPhieu,
@@ -1689,32 +1742,72 @@ Future<void> _showQrCode(String soPhieu, String khachHang) async {
           ),
           onPressed: () async {
             try {
-              // Create PDF with QR code
-              final pdf = pw.Document();
-              pdf.addPage(
+              // Create PDF with QR code using the simplified format
+              final savePdf = pw.Document();
+              savePdf.addPage(
                 pw.Page(
+                  pageFormat: pdfx.PdfPageFormat(50 * pdfx.PdfPageFormat.mm, 30 * pdfx.PdfPageFormat.mm, marginAll: 2 * pdfx.PdfPageFormat.mm),
                   build: (pw.Context context) {
-                    return pw.Center(
-                      child: pw.Column(
-                        mainAxisAlignment: pw.MainAxisAlignment.center,
-                        children: [
-                          pw.SizedBox(
-                            width: 300,
-                            height: 300,
-                            child: pw.BarcodeWidget(
-                              barcode: pw.Barcode.qrCode(),
-                              data: soPhieu,
-                            ),
+                    return pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.center,
+                      crossAxisAlignment: pw.CrossAxisAlignment.center,
+                      children: [
+                        // QR Code on the left
+                        pw.Container(
+                          width: 26 * pdfx.PdfPageFormat.mm,
+                          height: 26 * pdfx.PdfPageFormat.mm,
+                          child: pw.BarcodeWidget(
+                            barcode: pw.Barcode.qrCode(),
+                            data: soPhieu,
+                            width: 26 * pdfx.PdfPageFormat.mm,
+                            height: 26 * pdfx.PdfPageFormat.mm,
                           ),
-                          pw.SizedBox(height: 10),
-                          pw.Text(
-                            "Số phiếu: $soPhieu",
-                            style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                        ),
+                        
+                        pw.SizedBox(width: 4 * pdfx.PdfPageFormat.mm),
+                        
+                        // Text on the right (normal orientation for simplicity)
+                        pw.Container(
+                          width: 16 * pdfx.PdfPageFormat.mm,
+                          child: pw.Column(
+                            mainAxisAlignment: pw.MainAxisAlignment.center,
+                            crossAxisAlignment: pw.CrossAxisAlignment.center,
+                            children: [
+                              // Black pill with identifier
+                              pw.Container(
+                                width: 16 * pdfx.PdfPageFormat.mm,
+                                padding: pw.EdgeInsets.symmetric(
+                                  horizontal: 2 * pdfx.PdfPageFormat.mm,
+                                  vertical: 2 * pdfx.PdfPageFormat.mm,
+                                ),
+                                decoration: pw.BoxDecoration(
+                                  color: pdfx.PdfColors.black,
+                                  borderRadius: pw.BorderRadius.circular(8),
+                                ),
+                                child: pw.Text(
+                                  displayText,
+                                  style: pw.TextStyle(
+                                    color: pdfx.PdfColors.white,
+                                    fontSize: 10,
+                                    fontWeight: pw.FontWeight.bold,
+                                  ),
+                                  textAlign: pw.TextAlign.center,
+                                ),
+                              ),
+                              
+                              pw.SizedBox(height: 4 * pdfx.PdfPageFormat.mm),
+                              
+                              // Order number text with wrapping
+                              pw.Text(
+                                'Đơn: $soPhieu',
+                                style: pw.TextStyle(fontSize: 6),
+                                textAlign: pw.TextAlign.center,
+                                maxLines: 3, // Allow multiple lines
+                              ),
+                            ],
                           ),
-                          pw.SizedBox(height: 5),
-                          pw.Text("Khách hàng: $khachHang"),
-                        ],
-                      ),
+                        ),
+                      ],
                     );
                   },
                 ),
@@ -1727,7 +1820,7 @@ Future<void> _showQrCode(String soPhieu, String khachHang) async {
               
               // Save PDF to file
               final file = File(filePath);
-              await file.writeAsBytes(await pdf.save());
+              await file.writeAsBytes(await savePdf.save());
               
               // Share the file
               await Share.shareXFiles(
@@ -1753,6 +1846,7 @@ Future<void> _showQrCode(String soPhieu, String khachHang) async {
               await Printing.layoutPdf(
                 onLayout: (format) => pdf.save(),
                 name: 'QR_$soPhieu',
+                format: pdfx.PdfPageFormat(50 * pdfx.PdfPageFormat.mm, 30 * pdfx.PdfPageFormat.mm),
               );
             } catch (e) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -1772,6 +1866,7 @@ Future<void> _showQrCode(String soPhieu, String khachHang) async {
       await Printing.layoutPdf(
         onLayout: (format) => pdf.save(),
         name: 'QR_$soPhieu',
+        format: pdfx.PdfPageFormat(50 * pdfx.PdfPageFormat.mm, 30 * pdfx.PdfPageFormat.mm),
       );
     } catch (e) {
       print('Error auto-printing QR: $e');
