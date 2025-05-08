@@ -39,13 +39,13 @@ class DBHelper {
     }
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool hasReset = prefs.getBool('db_reset_v22') ?? false;
+    bool hasReset = prefs.getBool('db_reset_v23') ?? false;
     
     if (!hasReset) {
-      print('Forcing database reset for version 22...');
+      print('Forcing database reset for version 23...');
       try {
         await deleteDatabase(path);
-        await prefs.setBool('db_reset_v22', true);
+        await prefs.setBool('db_reset_v23', true);
         print('Database reset successful');
       } catch (e) {
         print('Error during database reset: $e');
@@ -57,7 +57,7 @@ class DBHelper {
     final db = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 22,
+        version: 23,
         onCreate: (Database db, int version) async {
           print('Creating database tables...');
           await db.execute(DatabaseTables.createInteractionTable);
@@ -104,10 +104,11 @@ class DBHelper {
         await db.execute(DatabaseTables.createTonKhoTable);
         await db.execute(DatabaseTables.createNewsActivityTable);
         await db.execute(DatabaseTables.createNewsTable);
+        await db.execute(DatabaseTables.createKhuVucKhoChiTietTable);
           print('Database tables created successfully');
         },
         onUpgrade: (Database db, int oldVersion, int newVersion) async {
-          if (oldVersion < 22) {
+          if (oldVersion < 23) {
                     await db.execute(DatabaseTables.createInteractionTable);
           await db.execute(DatabaseTables.createStaffbioTable);
           await db.execute(DatabaseTables.createChecklistTable);
@@ -152,6 +153,7 @@ class DBHelper {
         await db.execute(DatabaseTables.createTonKhoTable);
         await db.execute(DatabaseTables.createNewsActivityTable);
         await db.execute(DatabaseTables.createNewsTable);
+        await db.execute(DatabaseTables.createKhuVucKhoChiTietTable);
           }
         },
         onOpen: (db) async {
@@ -172,6 +174,172 @@ class DBHelper {
     print('Stack trace: $stackTrace');
     rethrow;
   }
+}
+// ==================== KhuVucKhoChiTiet CRUD Operations ====================
+
+Future<List<KhuVucKhoModel>> getUniqueKhoHangIDs() async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.rawQuery('''
+    SELECT DISTINCT khoHangID 
+    FROM khuvuckho
+    ORDER BY khoHangID
+  ''');
+  
+  return List.generate(maps.length, (i) {
+    return KhuVucKhoModel(
+      khuVucKhoID: '',
+      khoHangID: maps[i]['khoHangID'] as String?
+    );
+  });
+}
+
+// Get floors by warehouse ID
+Future<List<KhuVucKhoModel>> getFloorsByWarehouseID(String khoHangID) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    'khuvuckho',
+    where: 'khoHangID = ?',
+    whereArgs: [khoHangID],
+  );
+  
+  return List.generate(maps.length, (i) {
+    return KhuVucKhoModel.fromMap(maps[i]);
+  });
+}
+
+// Get floor details
+Future<List<KhuVucKhoChiTietModel>> getFloorDetails(String khuVucKhoID) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    'khuvuckhochitiet',
+    where: 'khuVucKhoID = ?',
+    whereArgs: [khuVucKhoID],
+  );
+  
+  return List.generate(maps.length, (i) {
+    return KhuVucKhoChiTietModel.fromMap(maps[i]);
+  });
+}
+Future<void> clearKhuVucKhoChiTietTable() async {
+  final db = await database;
+  await db.execute('DELETE FROM khuvuckhochitiet');
+  print('Cleared KhuVucKhoChiTiet table');
+}
+
+// Add this method to DBHelper class
+Future<int> getKhuVucKhoChiTietCount() async {
+  final db = await database;
+  final result = await db.rawQuery('SELECT COUNT(*) as count FROM khuvuckhochitiet');
+  return Sqflite.firstIntValue(result) ?? 0;
+}
+Future<List<KhuVucKhoChiTietModel>> getAllKhuVucKhoChiTiet() async {
+  try {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(DatabaseTables.khuVucKhoChiTietTable);
+    
+    print("Raw database query result for KhuVucKhoChiTiet: ${maps.length} items");
+    if (maps.isNotEmpty) {
+      print("First raw item: ${maps[0]}");
+      print("Keys in first item: ${maps[0].keys.toList()}");
+    }
+    
+    return maps.map((e) => KhuVucKhoChiTietModel.fromMap(e)).toList();
+  } catch (e) {
+    print("Error getting all KhuVucKhoChiTiet: $e");
+    return [];
+  }
+}
+
+Future<List<LoHangModel>> getLoHangByKhuVucKhoID(String khuVucKhoID) async {
+    final db = await database;
+    try {
+      final List<Map<String, dynamic>> maps = await db.query(
+        'lo_hang',
+        where: 'khuVucKhoID = ?',
+        whereArgs: [khuVucKhoID],
+      );
+
+      return maps.map((map) => LoHangModel.fromMap(map)).toList();
+    } catch (e) {
+      print('Error querying LoHang: $e');
+      return [];
+    }
+  }
+
+  // Query HangHoa by ID
+  Future<Map<String, dynamic>?> getHangHoaByID(String maHangID) async {
+    final db = await database;
+    try {
+      final List<Map<String, dynamic>> maps = await db.query(
+        'lo_hang',
+        where: 'maHangID = ?',
+        whereArgs: [maHangID],
+        limit: 1,
+      );
+
+      return maps.isNotEmpty ? maps.first : null;
+    } catch (e) {
+      print('Error querying HangHoa: $e');
+      return null;
+    }
+  }
+Future<List<KhuVucKhoChiTietModel>> getKhuVucKhoChiTietByKhuVucKhoID(String khuVucKhoID) async {
+  final db = await database;
+  
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.khuVucKhoChiTietTable,
+    where: 'khuVucKhoID = ?',
+    whereArgs: [khuVucKhoID],
+  );
+  
+  return List.generate(maps.length, (i) {
+    return KhuVucKhoChiTietModel(
+      chiTietID: maps[i]['chiTietID'],
+      khuVucKhoID: maps[i]['khuVucKhoID'],
+      tang: maps[i]['tang'],
+      tangSize: maps[i]['tangSize'],
+      phong: maps[i]['phong'],
+      ke: maps[i]['ke'],
+      tangKe: maps[i]['tangKe'],
+      gio: maps[i]['gio'],
+      noiDung: maps[i]['noiDung'],
+      viTri: maps[i]['viTri'],
+      dungTich: maps[i]['dungTich'],
+    );
+  });
+}
+
+Future<KhuVucKhoChiTietModel?> getKhuVucKhoChiTietByID(String chiTietID) async {
+  final chiTiets = await query(
+    DatabaseTables.khuVucKhoChiTietTable,
+    where: 'chiTietID = ?',
+    whereArgs: [chiTietID],
+  );
+  if (chiTiets.isNotEmpty) {
+    return KhuVucKhoChiTietModel.fromMap(chiTiets.first);
+  }
+  return null;
+}
+
+Future<void> insertKhuVucKhoChiTiet(KhuVucKhoChiTietModel chiTiet) async {
+  await insert(DatabaseTables.khuVucKhoChiTietTable, chiTiet.toMap());
+}
+
+Future<void> updateKhuVucKhoChiTiet(KhuVucKhoChiTietModel chiTiet) async {
+  await update(
+    DatabaseTables.khuVucKhoChiTietTable,
+    chiTiet.toMap(),
+    where: 'chiTietID = ?',
+    whereArgs: [chiTiet.chiTietID],
+  );
+}
+
+Future<void> deleteKhuVucKhoChiTiet(String chiTietID) async {
+  await delete(
+    DatabaseTables.khuVucKhoChiTietTable,
+    where: 'chiTietID = ?',
+    whereArgs: [chiTietID],
+  );
 }
 // ==================== DSHang CRUD Operations ====================
 Future<List<LoHangModel>> getLoHangByMaHangAndKho(String maHangID, String khoHangID) async {

@@ -2778,7 +2778,63 @@ class KhuVucKhoModel {
     );
   }
 }
+class KhuVucKhoChiTietModel {
+  final String? chiTietID;
+  final String? khuVucKhoID;
+  final String? tang;
+  final String? tangSize;
+  final String? phong;
+  final String? ke;
+  final String? tangKe;
+  final String? gio;
+  final String? noiDung;
+  final String? viTri;
+  int? dungTich;
 
+  KhuVucKhoChiTietModel({
+    this.chiTietID,
+    this.khuVucKhoID,
+    this.tang,
+    this.tangSize,
+    this.phong,
+    this.ke,
+    this.tangKe,
+    this.gio,
+    this.noiDung,
+    this.viTri,
+    this.dungTich,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'chiTietID': chiTietID,
+    'khuVucKhoID': khuVucKhoID,
+    'tang': tang,
+    'tangSize': tangSize,
+    'phong': phong,
+    'ke': ke,
+    'tangKe': tangKe,
+    'gio': gio,
+    'noiDung': noiDung,
+    'viTri': viTri,
+    'dungTich': dungTich,
+  };
+
+  factory KhuVucKhoChiTietModel.fromMap(Map<String, dynamic> map) {
+    return KhuVucKhoChiTietModel(
+      chiTietID: map['chiTietID'],
+      khuVucKhoID: map['khuVucKhoID'],
+      tang: map['tang'],
+      tangSize: map['tangSize'],
+      phong: map['phong'],
+      ke: map['ke'],
+      tangKe: map['tangKe'],
+      gio: map['gio'],
+      noiDung: map['noiDung'],
+      viTri: map['viTri'],
+      dungTich: map['dungTich'],
+    );
+  }
+}
 class LoHangModel {
   final String? loHangID;
   final double? soLuongBanDau;
@@ -3016,6 +3072,8 @@ class DatabaseTables {
   static const String tonKhoTable = 'tonkho';
   static const String newsActivityTable = 'newsactivity';
   static const String newsTable = 'news';
+  static const String khuVucKhoChiTietTable = 'khuvuckhochitiet';
+
   static const String createDSHangTable = '''
     CREATE TABLE $dsHangTable (
       uid TEXT,
@@ -3091,7 +3149,21 @@ class DatabaseTables {
       khoHangID TEXT
     )
   ''';
-  
+  static const String createKhuVucKhoChiTietTable = '''
+  CREATE TABLE $khuVucKhoChiTietTable (
+    chiTietID TEXT,
+    khuVucKhoID TEXT,
+    tang TEXT,
+    tangSize TEXT,
+    phong TEXT,
+    ke TEXT,
+    tangKe TEXT,
+    gio TEXT,
+    noiDung TEXT,
+    viTri TEXT,
+    dungTich INTEGER
+  )
+''';
   static const String createLoHangTable = '''
     CREATE TABLE $loHangTable (
       loHangID TEXT,

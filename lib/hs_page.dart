@@ -19,6 +19,7 @@ import 'hs_scan.dart';
 import 'hs_kho.dart';
 import 'hs_dshang.dart';
 import 'http_client.dart';
+import 'hs_kho2.dart';
 
 class AppVersion {
   final String version;
@@ -810,7 +811,7 @@ Widget build(BuildContext context) {
     'route': 'xuatnhap',
   },
   {
-    'title': 'Tra cứu đơn hàng',
+    'title': 'Tra cứu kho hàng',
     'icon': Icons.search,
     'colors': iconGradients[4],
     'route': 'tracuu',
@@ -889,7 +890,7 @@ Widget build(BuildContext context) {
     case 'tracuu':
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => HSScanScreen(username: _username)),
+        MaterialPageRoute(builder: (context) => HSKho2Screen(username: _username)),
       );
       break;
     case 'baogia':
@@ -905,7 +906,159 @@ Widget build(BuildContext context) {
       print('Unknown route: $route');
   }
 }
+Future<void> _syncKhuVucKhoChiTietData() async {
+  try {
+    // Show progress dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _buildSyncProgressDialog(),
+    );
 
+    setState(() {
+      _message = 'Đang đồng bộ chi tiết khu vực kho...';
+    });
+
+    // Debug log
+    print('Syncing KhuVucKhoChiTiet data');
+    
+    final response = await http.get(
+      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelkhuvuckhochitiet')
+    );
+    
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      
+      // Debug log
+      print('Received ${data is List ? data.length : 0} KhuVucKhoChiTiet records from API');
+      print('Sample data: ${data is List && data.isNotEmpty ? data[0] : "No data"}');
+      
+      if (data is List && data.isNotEmpty) {
+        // Clear existing data to prevent any stale records
+        await _dbHelper.clearKhuVucKhoChiTietTable();
+        
+        // Insert all records in batch
+        final batch = await _dbHelper.startBatch();
+        
+        for (var item in data) {
+          if (item['chiTietID'] != null && item['chiTietID'].toString().isNotEmpty &&
+              item['khuVucKhoID'] != null && item['khuVucKhoID'].toString().isNotEmpty) {
+            
+            // Debug log for each item
+            print('Processing KhuVucKhoChiTiet: ${item['chiTietID']} for khu vuc ${item['khuVucKhoID']}');
+            
+            final khuVucKhoChiTiet = KhuVucKhoChiTietModel(
+              chiTietID: item['chiTietID'].toString(),
+              khuVucKhoID: item['khuVucKhoID'].toString(),
+              tang: item['tang']?.toString(),
+              tangSize: item['tangSize']?.toString(),
+              phong: item['phong']?.toString(),
+              ke: item['ke']?.toString(),
+              tangKe: item['tangKe']?.toString(),
+              gio: item['gio']?.toString(),
+              noiDung: item['noiDung']?.toString(),
+              viTri: item['viTri']?.toString(),
+              dungTich: item['dungTich'] != null ? int.tryParse(item['dungTich'].toString()) : null,
+            );
+            
+            // Add to batch with parameterized query
+            _dbHelper.addToBatch(batch, 
+              'INSERT INTO khuvuckhochitiet (chiTietID, khuVucKhoID, tang, tangSize, phong, ke, tangKe, gio, noiDung, viTri, dungTich) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              [
+                khuVucKhoChiTiet.chiTietID, 
+                khuVucKhoChiTiet.khuVucKhoID,
+                khuVucKhoChiTiet.tang,
+                khuVucKhoChiTiet.tangSize,
+                khuVucKhoChiTiet.phong,
+                khuVucKhoChiTiet.ke,
+                khuVucKhoChiTiet.tangKe,
+                khuVucKhoChiTiet.gio,
+                khuVucKhoChiTiet.noiDung,
+                khuVucKhoChiTiet.viTri,
+                khuVucKhoChiTiet.dungTich
+              ]
+            );
+          } else {
+            print('Skipping invalid KhuVucKhoChiTiet record: $item');
+          }
+        }
+        
+        // Commit batch
+        await _dbHelper.commitBatch(batch);
+        
+        // Debug: Verify data was inserted correctly
+        final count = await _dbHelper.getKhuVucKhoChiTietCount();
+        print('After sync: $count KhuVucKhoChiTiet records in database');
+        
+        // Update last sync time
+        final prefs = await SharedPreferences.getInstance();
+        final now = DateTime.now();
+        final formattedNow = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
+        await prefs.setString('last_khuvuckhochitiet_sync', formattedNow);
+        
+        // Close dialog and update state
+        if (mounted && Navigator.canPop(context)) {
+          Navigator.of(context).pop();
+        }
+        
+        setState(() {
+          _isLoading = false;
+          _message = 'Đồng bộ chi tiết khu vực kho thành công lúc ${DateFormat('HH:mm').format(now)}';
+        });
+        
+        // Show success snackbar
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Đồng bộ chi tiết khu vực kho thành công'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        // Close dialog on empty data
+        if (mounted && Navigator.canPop(context)) {
+          Navigator.of(context).pop();
+        }
+        
+        print('No KhuVucKhoChiTiet data received from server or empty list');
+        
+        // Show info snackbar
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Không có dữ liệu chi tiết khu vực kho mới'),
+            backgroundColor: Colors.blue,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } else {
+      // Close dialog on error
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.of(context).pop();
+      }
+      
+      throw Exception('Failed to sync KhuVucKhoChiTiet data. Status code: ${response.statusCode}');
+    }
+  } catch (e) {
+    // Close dialog on error
+    if (mounted && Navigator.canPop(context)) {
+      Navigator.of(context).pop();
+    }
+    
+    print('Error syncing KhuVucKhoChiTiet data: $e');
+    
+    // Show error snackbar
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi đồng bộ chi tiết khu vực kho: ${e.toString()}'),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 3),
+      ),
+    );
+    
+    throw e;
+  }
+}
   // Build the operations list widget
   Widget operationsList = SliverList(
     delegate: SliverChildBuilderDelegate(
@@ -1175,7 +1328,7 @@ Widget build(BuildContext context) {
         padding: EdgeInsets.zero,
         icon: Icon(Icons.tips_and_updates, color: Colors.white, size: 18),
         onPressed: () {
-          _syncDSHangData();
+          _syncKhuVucKhoChiTietData();
         },
       ),
     ),
