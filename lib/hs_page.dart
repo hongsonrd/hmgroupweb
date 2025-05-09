@@ -20,7 +20,7 @@ import 'hs_kho.dart';
 import 'hs_dshang.dart';
 import 'http_client.dart';
 import 'hs_kho2.dart';
-
+import 'hs_stat.dart';
 class AppVersion {
   final String version;
   final int buildNumber;
@@ -1445,20 +1445,7 @@ Future<void> _syncKhuVucKhoChiTietData() async {
                       ),
                 
                 // Second tab - Coming soon message
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Text(
-                      'Tính năng đang được phát triển',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.grey[600],
-                        fontStyle: FontStyle.italic,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
+                HSStatScreen(),
               ],
             ),
           ),

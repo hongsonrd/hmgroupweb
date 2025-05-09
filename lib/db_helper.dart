@@ -1,7 +1,7 @@
 // db_helper.dart
 import 'package:intl/intl.dart';
 import 'dart:math';
-
+import 'dart:core';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'table_models.dart';
@@ -175,6 +175,536 @@ class DBHelper {
     rethrow;
   }
 }
+//ADDON:
+// Get all branches from ChiTietDon
+Future<List<String>> getAllBranches() async {
+  final db = await database;
+  final results = await db.rawQuery('SELECT DISTINCT chiNhanh FROM chitietdon WHERE chiNhanh IS NOT NULL');
+  
+  List<String> branches = [];
+  for (var row in results) {
+    final branch = row['chiNhanh']?.toString();
+    if (branch != null && branch.isNotEmpty && !branches.contains(branch)) {
+      branches.add(branch);
+    }
+  }
+  
+  return branches;
+}
+
+// Get all completed order items
+Future<List<Map<String, dynamic>>> getCompletedOrderItems() async {
+  final db = await database;
+  return await db.rawQuery('''
+    SELECT * FROM chitietdon 
+    WHERE duyet = 'Hoàn thành' AND soLuongYeuCau > 0 AND idHang IS NOT NULL
+  ''');
+}
+
+// Get all products
+Future<List<Map<String, dynamic>>> getAllProducts() async {
+  final db = await database;
+  return await db.query('dshang');
+}
+
+// Get all stock levels
+Future<List<Map<String, dynamic>>> getAllStockLevels() async {
+  final db = await database;
+  return await db.query('tonkho');
+}
+
+// Get product by ID
+Future<Map<String, dynamic>?> getProductById(String id) async {
+  final db = await database;
+  final results = await db.query(
+    'dshang',
+    where: 'uid = ?',
+    whereArgs: [id],
+  );
+  
+  if (results.isNotEmpty) {
+    return results.first;
+  }
+  return null;
+}
+
+// Get stock level for a specific product and branch
+Future<Map<String, dynamic>?> getStockLevel(String productId, String branch) async {
+  final db = await database;
+  final results = await db.query(
+    'tonkho',
+    where: 'maHangID = ? AND khoHangID = ?',
+    whereArgs: [productId, branch],
+  );
+  
+  if (results.isNotEmpty) {
+    return results.first;
+  }
+  return null;
+}
+Future<void> diagnoseMissingKhuVucKhoID(String khuVucKhoID) async {
+  try {
+    final db = await database;
+    print('\n======= DIAGNOSING MISSING KHUVUCKHOID: $khuVucKhoID =======');
+    
+    // 1. Check if the khuVucKhoID exists in the LoHang table
+    final loHangCount = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM ${DatabaseTables.loHangTable} WHERE khuVucKhoID = ?',
+      [khuVucKhoID]
+    );
+    final loHangMatches = Sqflite.firstIntValue(loHangCount) ?? 0;
+    print('Found $loHangMatches records in LoHang with khuVucKhoID = $khuVucKhoID');
+    
+    // 2. Check if the khuVucKhoID exists in the KhuVucKho table
+    final khuVucKhoCount = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM ${DatabaseTables.khuVucKhoTable} WHERE khuVucKhoID = ?',
+      [khuVucKhoID]
+    );
+    final khuVucKhoMatches = Sqflite.firstIntValue(khuVucKhoCount) ?? 0;
+    print('Found $khuVucKhoMatches records in KhuVucKho with khuVucKhoID = $khuVucKhoID');
+    
+    // 3. Check if the khuVucKhoID exists in the KhuVucKhoChiTiet table
+    final chiTietCount = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM ${DatabaseTables.khuVucKhoChiTietTable} WHERE khuVucKhoID = ?',
+      [khuVucKhoID]
+    );
+    final chiTietMatches = Sqflite.firstIntValue(chiTietCount) ?? 0;
+    print('Found $chiTietMatches records in KhuVucKhoChiTiet with khuVucKhoID = $khuVucKhoID');
+    
+    // 4. List all distinct khuVucKhoID in KhuVucKhoChiTiet to see what format they have
+    final distinctIDs = await db.rawQuery(
+      'SELECT DISTINCT khuVucKhoID FROM ${DatabaseTables.khuVucKhoChiTietTable} LIMIT 10'
+    );
+    print('Sample distinct khuVucKhoID values in KhuVucKhoChiTiet:');
+    for (var record in distinctIDs) {
+      print('- ${record['khuVucKhoID']}');
+    }
+    
+    // 5. Check if there's a case-sensitive issue with the khuVucKhoID
+    if (chiTietMatches == 0) {
+      print('Checking for case-insensitive matches...');
+      final lowerCaseQuery = await db.rawQuery(
+        'SELECT * FROM ${DatabaseTables.khuVucKhoChiTietTable} WHERE LOWER(khuVucKhoID) = LOWER(?)',
+        [khuVucKhoID]
+      );
+      print('Found ${lowerCaseQuery.length} records with case-insensitive match');
+      
+      if (lowerCaseQuery.isNotEmpty) {
+        print('Case-sensitive ID in database: ${lowerCaseQuery.first['khuVucKhoID']}');
+      }
+    }
+    
+    print('======= END DIAGNOSIS =======\n');
+  } catch (e) {
+    print('Error during diagnosis: $e');
+  }
+}
+Future<KhuVucKhoModel?> getTangFromKhuVucKhoID(String khuVucKhoID) async {
+  try {
+    final db = await database;
+    
+    // Check if the ID directly exists in KhuVucKho
+    final directMatches = await db.query(
+      DatabaseTables.khuVucKhoTable,
+      where: 'khuVucKhoID = ?',
+      whereArgs: [khuVucKhoID],
+    );
+    
+    if (directMatches.isNotEmpty) {
+      return KhuVucKhoModel.fromMap(directMatches.first);
+    }
+    
+    // Try to extract a floor number if the ID follows a pattern like "a0000X"
+    if (khuVucKhoID.startsWith('a0000')) {
+      final floorNumber = khuVucKhoID.substring(5);
+      if (int.tryParse(floorNumber) != null) {
+        print('Extracted floor number $floorNumber from $khuVucKhoID');
+        
+        // Look for a record with Tang="Tầng X" or similar pattern
+        final tangMatches = await db.query(
+          DatabaseTables.khuVucKhoTable,
+          where: 'tang LIKE ?',
+          whereArgs: ['%$floorNumber%'],
+        );
+        
+        if (tangMatches.isNotEmpty) {
+          print('Found match by floor number: ${tangMatches.first}');
+          return KhuVucKhoModel.fromMap(tangMatches.first);
+        }
+      }
+    }
+    
+    return null;
+  } catch (e) {
+    print('Error in getTangFromKhuVucKhoID: $e');
+    return null;
+  }
+}
+// Get all products by brand
+Future<List<DSHangModel>> getDSHangByThuongHieu(String thuongHieu) async {
+  try {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      DatabaseTables.dsHangTable,
+      where: 'thuongHieu = ?',
+      whereArgs: [thuongHieu],
+    );
+    
+    return List.generate(maps.length, (i) {
+      return DSHangModel.fromMap(maps[i]);
+    });
+  } catch (e) {
+    print('Error loading products by brand: $e');
+    return [];
+  }
+}
+// Get all batches for a warehouse
+Future<List<LoHangModel>> getLoHangByKhoID(String khoHangID) async {
+  try {
+    print('=== getLoHangByKhoID for warehouse: $khoHangID ===');
+    final db = await database;
+    
+    final List<Map<String, dynamic>> maps = await db.query(
+      DatabaseTables.loHangTable,
+      where: 'khoHangID = ?',
+      whereArgs: [khoHangID],
+    );
+    
+    print('Found ${maps.length} batches for khoHangID: $khoHangID');
+    
+    if (maps.isNotEmpty) {
+      print('Sample batch data:');
+      print('loHangID: ${maps[0]['loHangID']}');
+      print('maHangID: ${maps[0]['maHangID']}');
+      print('khuVucKhoID: ${maps[0]['khuVucKhoID']}');
+    }
+    
+    final batches = maps.map((map) => LoHangModel.fromMap(map)).toList();
+    return batches;
+  } catch (e) {
+    print('Error loading batches for warehouse: $e');
+    return [];
+  }
+}
+// Add this method to check database tables structure
+Future<void> checkDatabaseTables() async {
+  try {
+    final db = await database;
+    
+    // Check LoHang table structure
+    print('\n=== CHECKING LOHANG TABLE ===');
+    final loHangInfo = await db.rawQuery('PRAGMA table_info(${DatabaseTables.loHangTable})');
+    print('LoHang table columns:');
+    for (var col in loHangInfo) {
+      print('${col['name']} (${col['type']})');
+    }
+    
+    // Check DSHang table structure
+    print('\n=== CHECKING DSHANG TABLE ===');
+    final dsHangInfo = await db.rawQuery('PRAGMA table_info(${DatabaseTables.dsHangTable})');
+    print('DSHang table columns:');
+    for (var col in dsHangInfo) {
+      print('${col['name']} (${col['type']})');
+    }
+    
+    // Check KhuVucKhoChiTiet table structure
+    print('\n=== CHECKING KHUVUCKHOCHITIET TABLE ===');
+    final khuvucInfo = await db.rawQuery('PRAGMA table_info(${DatabaseTables.khuVucKhoChiTietTable})');
+    print('KhuVucKhoChiTiet table columns:');
+    for (var col in khuvucInfo) {
+      print('${col['name']} (${col['type']})');
+    }
+    
+    // Sample data from each table
+    print('\n=== SAMPLE DATA FROM TABLES ===');
+    
+    final loHangSample = await db.query(DatabaseTables.loHangTable, limit: 2);
+    print('LoHang sample (${loHangSample.length} records):');
+    for (var record in loHangSample) {
+      print(record);
+    }
+    
+    final dsHangSample = await db.query(DatabaseTables.dsHangTable, limit: 2);
+    print('DSHang sample (${dsHangSample.length} records):');
+    for (var record in dsHangSample) {
+      print(record);
+    }
+    
+    final khuvucSample = await db.query(DatabaseTables.khuVucKhoChiTietTable, limit: 2);
+    print('KhuVucKhoChiTiet sample (${khuvucSample.length} records):');
+    for (var record in khuvucSample) {
+      print(record);
+    }
+  } catch (e, stackTrace) {
+    print('Error checking database tables: $e');
+    print('Stack trace: $stackTrace');
+  }
+}
+// Fetch all brands from products in the warehouse
+Future<List<String>> getAllBrands() async {
+  try {
+    final db = await database;
+    // Modified query to explicitly handle nulls and use correct field name
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT DISTINCT ThuongHieu FROM ${DatabaseTables.dsHangTable} 
+      WHERE ThuongHieu IS NOT NULL AND ThuongHieu != ''
+      ORDER BY ThuongHieu
+    ''');
+    
+    // Debug what we're getting from the database
+    print('Raw brand results from DB: ${maps.length} brands');
+    if (maps.isNotEmpty) {
+      print('Sample brand fields: ${maps[0].keys.toList()}');
+    }
+    
+    // Filter out null values
+    final brands = <String>[];
+    for (var map in maps) {
+      final thuongHieu = map['ThuongHieu'];
+      if (thuongHieu != null && thuongHieu is String && thuongHieu.isNotEmpty) {
+        brands.add(thuongHieu);
+        print('Brand added: $thuongHieu');
+      }
+    }
+    
+    print('Final brand list: ${brands.join(', ')}');
+    return brands;
+  } catch (e) {
+    print('Error loading brands: $e');
+    return [];
+  }
+}
+// Fetch products by brand
+Future<List<String>> getProductNamesByBrand(String brand) async {
+  try {
+    final db = await database;
+    // Modified query to use correct field names
+    print('Querying products for brand: $brand');
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT DISTINCT TenSanPham FROM ${DatabaseTables.dsHangTable} 
+      WHERE ThuongHieu = ? AND TenSanPham IS NOT NULL AND TenSanPham != ''
+      ORDER BY TenSanPham
+    ''', [brand]);
+    
+    print('Raw product results for brand $brand: ${maps.length} products');
+    
+    // Filter out null values
+    final products = <String>[];
+    for (var map in maps) {
+      final tenSanPham = map['TenSanPham'];
+      if (tenSanPham != null && tenSanPham is String && tenSanPham.isNotEmpty) {
+        products.add(tenSanPham);
+        print('Product added for brand $brand: $tenSanPham');
+      }
+    }
+    
+    print('Final product list for brand $brand: ${products.join(', ')}');
+    return products;
+  } catch (e) {
+    print('Error loading product names: $e');
+    return [];
+  }
+}
+
+// Get all product names in warehouse
+Future<List<String>> getAllProductNames() async {
+  try {
+    final db = await database;
+    // Modified query to use correct field name
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT DISTINCT TenSanPham FROM ${DatabaseTables.dsHangTable} 
+      WHERE TenSanPham IS NOT NULL AND TenSanPham != ''
+      ORDER BY TenSanPham
+    ''');
+    
+    print('Raw all products results from DB: ${maps.length} products');
+    
+    // Filter out null values
+    final products = <String>[];
+    for (var map in maps) {
+      final tenSanPham = map['TenSanPham'];
+      if (tenSanPham != null && tenSanPham is String && tenSanPham.isNotEmpty) {
+        products.add(tenSanPham);
+      }
+    }
+    
+    print('Final all products list count: ${products.length}');
+    if (products.length > 0) {
+      print('Sample products: ${products.take(5).join(', ')}...');
+    }
+    
+    return products;
+  } catch (e) {
+    print('Error loading all product names: $e');
+    return [];
+  }
+}
+Map<String, dynamic> normalizeProductFields(Map<String, dynamic> product) {
+  final normalized = <String, dynamic>{};
+  
+  // Define field mappings (original DB field -> normalized field)
+  final fieldMap = {
+    'uid': 'uid',
+    'sku': 'sku',
+    'Counter': 'counter',
+    'MaNhapKho': 'maNhapKho',
+    'TenModel': 'tenModel',
+    'TenSanPham': 'tenSanPham',
+    'SanPhamGoc': 'sanPhamGoc',
+    'PhanLoai1': 'phanLoai1',
+    'CongDung': 'congDung',
+    'ChatLieu': 'chatLieu',
+    'MauSac': 'mauSac',
+    'KichThuoc': 'kichThuoc',
+    'DungTich': 'dungTich',
+    'KhoiLuong': 'khoiLuong',
+    'QuyCachDongGoi': 'quyCachDongGoi',
+    'SoLuongDongGoi': 'soLuongDongGoi',
+    'DonVi': 'donVi',
+    'KichThuocDongGoi': 'kichThuocDongGoi',
+    'ThuongHieu': 'thuongHieu',
+    'NhaCungCap': 'nhaCungCap',
+    'XuatXu': 'xuatXu',
+    'MoTa': 'moTa',
+    'HinhAnh': 'hinhAnh',
+    'HangTieuHao': 'hangTieuHao',
+    'CoThoiHan': 'coThoiHan',
+    'ThoiHanSuDung': 'thoiHanSuDung',
+  };
+  
+  // Debug print to see original product keys
+  print('Original product keys: ${product.keys.toList()}');
+  
+  // Map each field, handling case where original field might be missing
+  fieldMap.forEach((originalField, normalizedField) {
+    // First check if the original field exists
+    if (product.containsKey(originalField)) {
+      normalized[normalizedField] = product[originalField];
+    } else {
+      // Try case-insensitive lookup
+      final originalLower = originalField.toLowerCase();
+      for (var key in product.keys) {
+        if (key.toLowerCase() == originalLower) {
+          normalized[normalizedField] = product[key];
+          break;
+        }
+      }
+    }
+  });
+  
+  // Debug the normalized fields
+  print('Normalized product fields:');
+  print('- tenSanPham: ${normalized['tenSanPham']}');
+  print('- thuongHieu: ${normalized['thuongHieu']}');
+  print('- phanLoai1: ${normalized['phanLoai1']}');
+  
+  return normalized;
+}
+Future<Map<String, dynamic>?> getProductDetailsByMaHangID(String maHangID) async {
+  try {
+    print('=== getProductDetailsByMaHangID for: $maHangID ===');
+    final db = await database;
+    
+    // Use case-insensitive query with rawQuery
+    print('Trying case-insensitive match for uid or sku...');
+    final List<Map<String, dynamic>> results = await db.rawQuery(
+      'SELECT * FROM ${DatabaseTables.dsHangTable} WHERE LOWER(uid) = LOWER(?) OR LOWER(sku) = LOWER(?) LIMIT 1',
+      [maHangID, maHangID]
+    );
+    
+    print('Found ${results.length} matches with case-insensitive query');
+    
+    if (results.isNotEmpty) {
+      final product = results.first;
+      
+      // Debug what the brand is
+      final thuongHieu = product['ThuongHieu'];
+      print('Product found: ${product['TenSanPham']} (Brand: $thuongHieu)');
+      
+      // Print all keys and values to debug
+      print('Product details:');
+      product.forEach((key, value) {
+        print('$key: $value');
+      });
+      
+      return product;
+    }
+    
+    // If still no match found, try a direct lookup by exact maHangID
+    print('Trying exact match for maHangID...');
+    final exactMatches = await db.query(
+      DatabaseTables.dsHangTable,
+      where: 'MaNhapKho = ?',
+      whereArgs: [maHangID],
+      limit: 1
+    );
+    
+    if (exactMatches.isNotEmpty) {
+      print('Found product by exact MaNhapKho match');
+      return exactMatches.first;
+    }
+    
+    // If still no match found, dump some sample products to see what's in the database
+    print('No product found. Checking sample products in database...');
+    final sampleProducts = await db.query(
+      DatabaseTables.dsHangTable,
+      limit: 3
+    );
+    
+    if (sampleProducts.isNotEmpty) {
+      print('Sample products in database:');
+      for (var prod in sampleProducts) {
+        print('uid: ${prod['uid']}, sku: ${prod['sku']}, tenSanPham: ${prod['TenSanPham']}');
+      }
+    } else {
+      print('No products found in database');
+    }
+    
+    // Count total products
+    final countResult = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.dsHangTable}');
+    final count = Sqflite.firstIntValue(countResult) ?? 0;
+    print('Total products in database: $count');
+    
+    print('No product found for maHangID: $maHangID');
+    return null;
+  } catch (e, stackTrace) {
+    print('Error getting product details by maHangID: $e');
+    print('Stack trace: $stackTrace');
+    return null;
+  }
+}
+// Get location details for a khuVucKhoID and position (viTri)
+Future<KhuVucKhoChiTietModel?> getLocationByKhuVucAndViTri(String khuVucKhoID, String? viTri) async {
+  try {
+    final db = await database;
+    List<Map<String, dynamic>> maps;
+    
+    if (viTri != null && viTri.isNotEmpty) {
+      maps = await db.query(
+        DatabaseTables.khuVucKhoChiTietTable,
+        where: 'khuVucKhoID = ? AND viTri = ?',
+        whereArgs: [khuVucKhoID, viTri],
+      );
+    } else {
+      maps = await db.query(
+        DatabaseTables.khuVucKhoChiTietTable,
+        where: 'khuVucKhoID = ?',
+        whereArgs: [khuVucKhoID],
+        limit: 1,
+      );
+    }
+    
+    if (maps.isNotEmpty) {
+      return KhuVucKhoChiTietModel.fromMap(maps.first);
+    }
+    
+    return null;
+  } catch (e) {
+    print('Error getting location details: $e');
+    return null;
+  }
+}
+
 // ==================== KhuVucKhoChiTiet CRUD Operations ====================
 
 Future<List<KhuVucKhoModel>> getUniqueKhoHangIDs() async {
@@ -299,31 +829,211 @@ Future<List<LoHangModel>> getLoHangByKhuVucKhoID(String khuVucKhoID) async {
   }
 }
 Future<List<KhuVucKhoChiTietModel>> getKhuVucKhoChiTietByKhuVucKhoID(String khuVucKhoID) async {
-  final db = await database;
-  
-  final List<Map<String, dynamic>> maps = await db.query(
-    DatabaseTables.khuVucKhoChiTietTable,
-    where: 'khuVucKhoID = ?',
-    whereArgs: [khuVucKhoID],
-  );
-  
-  return List.generate(maps.length, (i) {
-    return KhuVucKhoChiTietModel(
-      chiTietID: maps[i]['chiTietID'],
-      khuVucKhoID: maps[i]['khuVucKhoID'],
-      tang: maps[i]['tang'],
-      tangSize: maps[i]['tangSize'],
-      phong: maps[i]['phong'],
-      ke: maps[i]['ke'],
-      tangKe: maps[i]['tangKe'],
-      gio: maps[i]['gio'],
-      noiDung: maps[i]['noiDung'],
-      viTri: maps[i]['viTri'],
-      dungTich: maps[i]['dungTich'],
+  try {
+    print('=== getKhuVucKhoChiTietByKhuVucKhoID for: $khuVucKhoID ===');
+    
+    final db = await database;
+    
+    // Try an exact match
+    final List<Map<String, dynamic>> maps = await db.query(
+      DatabaseTables.khuVucKhoChiTietTable,
+      where: 'khuVucKhoID = ?',
+      whereArgs: [khuVucKhoID],
     );
-  });
+    
+    print('Found ${maps.length} location details with exact match');
+    
+    if (maps.isNotEmpty) {
+      return maps.map((map) => KhuVucKhoChiTietModel.fromMap(map)).toList();
+    }
+    
+    // No match found, run diagnostics
+    await diagnoseMissingKhuVucKhoID(khuVucKhoID);
+    
+    // Return empty list if no match was found
+    return [];
+  } catch (e, stackTrace) {
+    print('Error getting location details: $e');
+    print('Stack trace: $stackTrace');
+    return [];
+  }
 }
+Future<List<Map<String, dynamic>>> getFullBatchesInfo(String khoHangID) async {
+  final results = <Map<String, dynamic>>[];
+  
+  try {
+    print('==== getFullBatchesInfo starting for khoHangID: $khoHangID ====');
+    
+    // First get all batches in the warehouse
+    final batches = await getLoHangByKhoID(khoHangID);
+    print('Found ${batches.length} batches in warehouse $khoHangID');
+    
+    final db = await database;
+    
+    // DEBUG: Check what's in the KhuVucKhoChiTiet table
+    print('===== DIAGNOSING KhuVucKhoChiTiet TABLE =====');
+    try {
+      // Check if table exists
+      final tableCheck = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='KhuVucKhoChiTiet'"
+      );
+      print('KhuVucKhoChiTiet table exists: ${tableCheck.isNotEmpty}');
+      
+      if (tableCheck.isNotEmpty) {
+        // Check table structure
+        final tableInfo = await db.rawQuery('PRAGMA table_info(KhuVucKhoChiTiet)');
+        print('KhuVucKhoChiTiet columns:');
+        for (var col in tableInfo) {
+          print('${col['name']} (${col['type']})');
+        }
+        
+        // Check for actual records
+        final countCheck = await db.rawQuery('SELECT COUNT(*) as count FROM KhuVucKhoChiTiet');
+        final count = Sqflite.firstIntValue(countCheck) ?? 0;
+        print('KhuVucKhoChiTiet record count: $count');
+        
+        // Get sample records
+        if (count > 0) {
+          final sampleRecords = await db.query('KhuVucKhoChiTiet', limit: 3);
+          print('Sample KhuVucKhoChiTiet records:');
+          for (var record in sampleRecords) {
+            print(record);
+          }
+          
+          // Check what khuVucKhoID values exist
+          final distinctIDs = await db.rawQuery(
+            'SELECT DISTINCT khuVucKhoID FROM KhuVucKhoChiTiet LIMIT 10'
+          );
+          print('Sample distinct khuVucKhoID values:');
+          for (var id in distinctIDs) {
+            print('- ${id['khuVucKhoID']}');
+          }
+        }
+      }
+    } catch (e) {
+      print('Error diagnosing KhuVucKhoChiTiet table: $e');
+    }
+    
+    // For each batch, fetch the product and location info
+    for (var batch in batches) {
+      print('\n--- Processing batch: ${batch.loHangID} ---');
+      
+      // Get product details
+      final product = await getProductDetailsByMaHangID(batch.maHangID ?? '');
+      
+      // Create productInfo map
+      final Map<String, dynamic> productInfo;
+      if (product != null) {
+        productInfo = normalizeProductFields(product);
+      } else {
+        productInfo = {
+          'tenSanPham': batch.maHangID,
+          'thuongHieu': 'Không xác định',
+          'donVi': '',
+          'phanLoai1': '',
+          'xuatXu': '',
+          'moTa': '',
+        };
+      }
+      
+      // Get location info - Try various approaches with detailed logging
+      String locationInfo = 'Khu vực: ${batch.khuVucKhoID ?? ""}';
+      
+      if (batch.khuVucKhoID != null) {
+        print('Looking up location for khuVucKhoID: ${batch.khuVucKhoID}');
+        
+        // Try the table name with exact capitalization from schema
+        try {
+          print('Trying query on table KhuVucKhoChiTiet...');
+          final exactQuery = await db.rawQuery(
+            'SELECT * FROM KhuVucKhoChiTiet WHERE chiTietID = ?',
+            [batch.khuVucKhoID]
+          );
+          print('Query result count: ${exactQuery.length}');
+          
+          if (exactQuery.isNotEmpty) {
+            print('Found location record: ${exactQuery.first}');
+            
+            final location = exactQuery.first;
+            List<String> parts = [];
+            
+            // Try all possible capitalization patterns for columns
+            // You should adjust these based on the actual column names from the diagnostic output
+            Object? tang = location['Tang'] ?? location['tang'] ?? location['TANG'];
+            Object? phong = location['Phong'] ?? location['phong'] ?? location['PHONG'];
+            Object? ke = location['Ke'] ?? location['ke'] ?? location['KE'];
+            Object? tangke = location['TangKe'] ?? location['tangke'] ?? location['TANGKE'];
+            Object? gio = location['Gio'] ?? location['gio'] ?? location['GIO'];
 
+            print('Extracted fields - Tang: $tang, Phong: $phong, Ke: $ke $tangke $gio');
+            
+            if (tang != null && tang.toString().isNotEmpty) {
+              parts.add('$tang');
+            }
+            
+            if (phong != null && phong.toString().isNotEmpty) {
+              parts.add('$phong');
+            }
+            
+            if (ke != null && ke.toString().isNotEmpty) {
+              parts.add('$ke');
+            }
+            if (tangke != null && tangke.toString().isNotEmpty) {
+              parts.add('Tầng kệ: $tangke');
+            }
+            if (gio != null && gio.toString().isNotEmpty) {
+              parts.add('Giỏ: $gio');
+            }
+            if (parts.isNotEmpty) {
+              locationInfo = parts.join(', ');
+              print('Final location info: $locationInfo');
+            } else {
+              print('No location parts found in record');
+            }
+          } else {
+            print('No location record found for khuVucKhoID: ${batch.khuVucKhoID}');
+            
+            // Try with lowercase table name
+            print('Trying query on table khuvuckhochitiet...');
+            final lowercaseQuery = await db.rawQuery(
+              'SELECT * FROM khuvuckhochitiet WHERE khuVucKhoID = ?',
+              [batch.khuVucKhoID]
+            );
+            print('Lowercase query result count: ${lowercaseQuery.length}');
+            
+            if (lowercaseQuery.isNotEmpty) {
+              print('Found location record with lowercase table name: ${lowercaseQuery.first}');
+              // Processing continues similar to above...
+            }
+          }
+        } catch (e) {
+          print('Error querying location: $e');
+        }
+      }
+      
+      // Add to results
+      results.add({
+        'batch': batch,
+        'product': productInfo,
+        'location': locationInfo,
+      });
+    }
+    
+    return results;
+  } catch (e) {
+    print('Error getting full batch info: $e');
+    return [];
+  }
+}
+// Helper function to find field value with various capitalizations
+String? findFieldValueWithVariations(Map<String, dynamic> map, List<String> variations) {
+  for (var variation in variations) {
+    if (map.containsKey(variation) && map[variation] != null) {
+      return map[variation].toString();
+    }
+  }
+  return null;
+}
 Future<KhuVucKhoChiTietModel?> getKhuVucKhoChiTietByID(String chiTietID) async {
   final chiTiets = await query(
     DatabaseTables.khuVucKhoChiTietTable,

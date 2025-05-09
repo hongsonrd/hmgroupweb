@@ -6,9 +6,11 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart'; 
+import 'hs_kho2tim.dart';
 
 class HSKho2Screen extends StatefulWidget {
-    final String? username;
+  final String? username;
+  
   const HSKho2Screen({Key? key, this.username}) : super(key: key);
 
   @override
@@ -274,52 +276,57 @@ class _HSKho2ScreenState extends State<HSKho2Screen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Quản lý Khu vực kho',
-          style: TextStyle(
-            fontSize: 16,
-            color: Colors.white,
-            fontWeight: FontWeight.w500,
-          ),
+Widget build(BuildContext context) {
+  return Scaffold(
+    appBar: AppBar(
+      title: Text(
+        'Quản lý Khu vực kho',
+        style: TextStyle(
+          fontSize: 16,
+          color: Colors.white,
+          fontWeight: FontWeight.w500,
         ),
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Color(0xFFD4AF37), // Gold
-                Color(0xFF8B4513), // Brown
-                Color(0xFFB8860B), // Dark gold
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+      ),
+      flexibleSpace: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFFD4AF37), // Gold
+              Color(0xFF8B4513), // Brown
+              Color(0xFFB8860B), // Dark gold
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
         ),
       ),
-      body: _isLoading
-          ? Center(child: CircularProgressIndicator())
-          : _errorMessage.isNotEmpty
-              ? Center(child: Text(_errorMessage, style: TextStyle(color: Colors.red)))
-              : _buildBody(),
-    );
-  }
+    ),
+    body: _isLoading
+        ? Center(child: CircularProgressIndicator())
+        : _errorMessage.isNotEmpty
+            ? Center(child: Text(_errorMessage, style: TextStyle(color: Colors.red)))
+            : _buildBody(),
+  );
+}
 
-  Widget _buildBody() {
-    return Column(
-      children: [
-        _buildSelectionArea(),
-        _buildStatisticsPanel(),
-        Expanded(
-          child: _gridWidth > 0 && _gridHeight > 0
-              ? _buildFloorGrid()
-              : Center(child: Text('Không có dữ liệu hiển thị')),
-        ),
-      ],
-    );
-  }
+Widget _buildBody() {
+  // Use OrientationBuilder to handle orientation changes
+  return OrientationBuilder(
+    builder: (context, orientation) {
+      return Column(
+        children: [
+          _buildSelectionArea(),
+          _buildStatisticsPanel(),
+          Expanded(
+            child: _gridWidth > 0 && _gridHeight > 0
+                ? _buildFloorGrid()
+                : Center(child: Text('Không có dữ liệu hiển thị')),
+          ),
+        ],
+      );
+    },
+  );
+}
 
   Widget _buildSelectionArea() {
     return Container(
@@ -476,48 +483,188 @@ class _HSKho2ScreenState extends State<HSKho2Screen> {
   }
   
   Widget _buildStatisticsPanel() {
-    return Container(
-      margin: EdgeInsets.fromLTRB(16, 8, 16, 8),
-      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Color(0xFFF5DEB3).withOpacity(0.2),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Color(0xFFD2B48C).withOpacity(0.5)),
+  return Column(
+    children: [
+      Container(
+        margin: EdgeInsets.fromLTRB(16, 8, 16, 8),
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Color(0xFFF5DEB3).withOpacity(0.2),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Color(0xFFD2B48C).withOpacity(0.5)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildStatItem(
+              icon: Icons.layers,
+              label: 'Tầng',
+              value: '$_totalFloors',
+            ),
+            _buildStatItem(
+              icon: Icons.meeting_room,
+              label: 'Phòng',
+              value: '$_totalRooms',
+            ),
+            _buildStatItem(
+              icon: Icons.grid_on,
+              label: 'Kệ',
+              value: '$_totalAisles',
+            ),
+            _buildPieCapacityStat(
+              label: 'Kho',
+              value: _warehouseCapacity / 100,
+            ),
+            _buildPieCapacityStat(
+              label: 'Tầng',
+              value: _floorCapacity / 100,
+            ),
+            _buildPieCapacityStat(
+              label: 'Phòng',
+              value: _roomCapacity / 100,
+            ),
+          ],
+        ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildStatItem(
-            icon: Icons.layers,
-            label: 'Tầng',
-            value: '$_totalFloors',
-          ),
-          _buildStatItem(
-            icon: Icons.meeting_room,
-            label: 'Phòng',
-            value: '$_totalRooms',
-          ),
-          _buildStatItem(
-            icon: Icons.grid_on,
-            label: 'Kệ',
-            value: '$_totalAisles',
-          ),
-          _buildPieCapacityStat(
-            label: 'Kho',
-            value: _warehouseCapacity / 100,
-          ),
-          _buildPieCapacityStat(
-            label: 'Tầng',
-            value: _floorCapacity / 100,
-          ),
-          _buildPieCapacityStat(
-            label: 'Phòng',
-            value: _roomCapacity / 100,
-          ),
-        ],
+      // Add buttons row
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        child: Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                icon: Icon(Icons.dashboard_outlined),
+                label: Text('Xem tổng thể'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFFD4AF37),
+                  foregroundColor: Colors.white,
+                  elevation: 2,
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                ),
+                onPressed: () {
+                  _showOverviewDialog();
+                },
+              ),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton.icon(
+                icon: Icon(Icons.search),
+                label: Text('Tìm hàng'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFFB8860B),
+                  foregroundColor: Colors.white,
+                  elevation: 2,
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                ),
+                onPressed: () {
+                  _openProductSearch();
+                },
+              ),
+            ),
+          ],
+        ),
       ),
-    );
+    ],
+  );
+}
+
+// Add this property to the _HSKho2ScreenState class
+String? _highlightedPosition;
+
+// Add this method to the _HSKho2ScreenState class
+void _openProductSearch() async {
+  final result = await Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => ProductSearchScreen(
+        dbHelper: _dbHelper,
+        khoHangID: _selectedKhoHangID,
+      ),
+    ),
+  );
+  
+  // Handle result when returning from product search screen
+  if (result != null && result is Map<String, dynamic>) {
+    final khuVucKhoID = result['khuVucKhoID'];
+    
+    if (khuVucKhoID != null) {
+      // First check if we need to change warehouse ID
+      final khoID = khuVucKhoID.toString().split('-').first;
+      if (_selectedKhoHangID != khoID) {
+        setState(() {
+          _selectedKhoHangID = khoID;
+        });
+        await _loadFloors(khoID);
+      }
+      
+      // Then set the floor
+      if (_selectedKhuVucKhoID != khuVucKhoID) {
+        setState(() {
+          _selectedKhuVucKhoID = khuVucKhoID;
+        });
+        await _loadFloorDetails(khuVucKhoID);
+      }
+      
+      // Now, let's try to highlight the specific location
+      // First, get all the floor details to find the location
+      final floorDetails = await _dbHelper.getKhuVucKhoChiTietByKhuVucKhoID(khuVucKhoID);
+      
+      // If we have location details, try to highlight a position
+      if (floorDetails.isNotEmpty) {
+        // Let's find a position that's not empty (this is a simplification)
+        KhuVucKhoChiTietModel? locationDetail;
+        String? phong;
+        
+        for (var detail in floorDetails) {
+          if (detail.viTri != null && detail.viTri!.isNotEmpty) {
+            locationDetail = detail;
+            phong = detail.phong;
+            break;
+          }
+        }
+        
+        if (locationDetail != null) {
+          // If we have a room, set it
+          if (phong != null && phong != _selectedPhong) {
+            setState(() {
+              _selectedPhong = phong;
+              _filterDetailsByRoom();
+            });
+          }
+          
+          // Highlight the position
+          _highlightPosition(locationDetail.viTri!);
+        }
+      }
+    }
   }
+}
+
+// Add this method to highlight a position
+void _highlightPosition(String viTri) {
+  // Set the highlighted position
+  setState(() {
+    _highlightedPosition = viTri;
+  });
+  
+  // Show a message
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text('Vị trí tìm kiếm: $viTri'),
+      duration: Duration(seconds: 3),
+    ),
+  );
+  
+  // Clear the highlight after 3 seconds
+  Future.delayed(Duration(seconds: 3), () {
+    if (mounted) {
+      setState(() {
+        _highlightedPosition = null;
+      });
+    }
+  });
+}
   
   Widget _buildStatItem({
     required IconData icon,
@@ -587,110 +734,225 @@ class _HSKho2ScreenState extends State<HSKho2Screen> {
   }
 
   Widget _buildFloorGrid() {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: GridView.builder(
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: _gridWidth,
-          childAspectRatio: 1.0,
-          crossAxisSpacing: 8.0,
-          mainAxisSpacing: 8.0,
-        ),
-        itemCount: _gridWidth * _gridHeight,
-        itemBuilder: (context, index) {
-          // Convert index to x-y coordinates (1-based)
-          // Start from bottom up for Y coordinate
-          final x = (index % _gridWidth) + 1;
-          final y = _gridHeight - (index ~/ _gridWidth); // Flip Y coordinate
-          final position = '$x-$y';
+  // Determine screen size and orientation
+  final screenWidth = MediaQuery.of(context).size.width;
+  final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+  
+  // Always use 12 columns for landscape/tablet
+  final int columnCount = isLandscape || screenWidth > 600 ? 12 : 4;
+  
+  // First, find all positions that have items
+  final Map<String, List<KhuVucKhoChiTietModel>> positionsWithItems = {};
+  final Set<int> usedXCoordinates = {}; // Track unique X values
+  final Set<int> usedYCoordinates = {}; // Track unique Y values
+  
+  // Extract coordinates from all positions
+  for (var item in _filteredFloorDetails) {
+    if (item.viTri != null) {
+      final parts = item.viTri!.split('-');
+      if (parts.length == 2) {
+        final x = int.tryParse(parts[0]);
+        final y = int.tryParse(parts[1]);
+        
+        if (x != null && y != null) {
+          usedXCoordinates.add(x);
+          usedYCoordinates.add(y);
           
-          // Find items at this position
-          final cellItems = _filteredFloorDetails.where(
-            (item) => item.viTri == position
-          ).toList();
-          
-          return _buildGridCell(position, cellItems);
-        },
-      ),
-    );
+          // FIX HERE: Initialize the list if it doesn't exist
+          positionsWithItems.putIfAbsent(item.viTri!, () => []);
+          positionsWithItems[item.viTri!]!.add(item);
+        }
+      }
+    }
   }
+  
+  // Sort coordinates for mapping
+  final sortedX = usedXCoordinates.toList()..sort();
+  final sortedY = usedYCoordinates.toList()..sort();
+  
+  // Create coordinate mappings
+  final Map<int, int> xMapping = {};
+  for (int i = 0; i < sortedX.length; i++) {
+    // Map each original X to a column in our 12-column grid
+    // This distributes the X values evenly across the 12 columns
+    xMapping[sortedX[i]] = (i * columnCount / sortedX.length).floor();
+  }
+  
+  final Map<int, int> yMapping = {};
+  for (int i = 0; i < sortedY.length; i++) {
+    // Keep Y ordering but map to row indices
+    yMapping[sortedY[i]] = sortedY.length - i - 1; // Reverse to start from bottom
+  }
+  
+  return Stack(
+    children: [
+      Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: sortedX.isNotEmpty && sortedY.isNotEmpty ? 
+          GridView.builder(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columnCount,
+              childAspectRatio: 1.0,
+              crossAxisSpacing: 8.0,
+              mainAxisSpacing: 8.0,
+            ),
+            itemCount: columnCount * sortedY.length,
+            itemBuilder: (context, index) {
+              final col = index % columnCount;
+              final row = index ~/ columnCount;
+              
+              // Find if any of our actual positions map to this grid cell
+              String? matchingPosition;
+              for (var position in positionsWithItems.keys) {
+                final parts = position.split('-');
+                if (parts.length == 2) {
+                  final x = int.tryParse(parts[0]);
+                  final y = int.tryParse(parts[1]);
+                  
+                  if (x != null && y != null && 
+                      xMapping[x] == col && 
+                      yMapping[y] == row) {
+                    matchingPosition = position;
+                    break;
+                  }
+                }
+              }
+              
+              // If no position maps to this cell, return empty container
+              if (matchingPosition == null) {
+                return Container();
+              }
+              
+              return _buildGridCell(
+                matchingPosition, 
+                positionsWithItems[matchingPosition]!
+              );
+            },
+          ) : 
+          Center(child: Text('Không có dữ liệu hiển thị')),
+      ),
+      
+      // Wall border and entry arrow
+      Positioned.fill(child: CustomPaint(painter: RoomWallPainter())),
+      
+      Positioned(
+        bottom: 0,
+        left: 0,
+        right: 0,
+        child: Center(
+          child: Container(
+            width: 40,
+            height: 20,
+            decoration: BoxDecoration(
+              color: Colors.red,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+              ),
+            ),
+            child: Icon(Icons.arrow_upward, color: Colors.white, size: 18),
+          ),
+        ),
+      ),
+    ],
+  );
+}
 
   Widget _buildGridCell(String position, List<KhuVucKhoChiTietModel> items) {
-    if (items.isEmpty) {
-      // Empty cell
-      return Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.withOpacity(0.3)),
-          borderRadius: BorderRadius.circular(8),
+  final bool isHighlighted = position == _highlightedPosition;
+  
+  if (items.isEmpty) {
+    // Empty cell
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: isHighlighted ? Colors.red : Colors.grey.withOpacity(0.3),
+          width: isHighlighted ? 2.0 : 1.0,
         ),
-        child: Center(
-          child: Text(position, style: TextStyle(color: Colors.grey)),
-        ),
-      );
-    }
-    
-    // Group items by ke (aisle)
-    final Map<String, List<KhuVucKhoChiTietModel>> aisleGroups = {};
-    
-    for (var item in items) {
-      final ke = item.ke ?? 'Unknown';
-      if (!aisleGroups.containsKey(ke)) {
-        aisleGroups[ke] = [];
-      }
-      aisleGroups[ke]!.add(item);
-    }
-    
-    return InkWell(
-      onTap: () {
-        _showCellDetailsDialog(position, items);
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.blue),
-          borderRadius: BorderRadius.circular(12),
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.blue.withOpacity(0.1),
-              spreadRadius: 1,
-              blurRadius: 2,
-              offset: Offset(0, 1),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(4.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Show position in top-right corner
-              Align(
-                alignment: Alignment.topRight,
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    position,
-                    style: TextStyle(fontSize: 10, color: Colors.black54),
-                  ),
-                ),
-              ),
-              
-              // Show aisle name
-              Expanded(
-                child: aisleGroups.length == 1
-                    ? _buildSingleAisleContent(aisleGroups.values.first)
-                    : _buildMultipleAislesContent(aisleGroups),
-              ),
-            ],
+        borderRadius: BorderRadius.circular(8),
+        color: isHighlighted ? Colors.red.withOpacity(0.1) : null,
+      ),
+      child: Center(
+        child: Text(
+          position,
+          style: TextStyle(
+            color: isHighlighted ? Colors.red : Colors.grey,
+            fontWeight: isHighlighted ? FontWeight.bold : FontWeight.normal,
           ),
         ),
       ),
     );
   }
+  
+  // Group items by ke (aisle)
+  final Map<String, List<KhuVucKhoChiTietModel>> aisleGroups = {};
+  
+  for (var item in items) {
+    final ke = item.ke ?? 'Unknown';
+    if (!aisleGroups.containsKey(ke)) {
+      aisleGroups[ke] = [];
+    }
+    aisleGroups[ke]!.add(item);
+  }
+  
+  return InkWell(
+    onTap: () {
+      _showCellDetailsDialog(position, items);
+    },
+    child: Container(
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: isHighlighted ? Colors.red : Colors.blue,
+          width: isHighlighted ? 2.0 : 1.0,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: isHighlighted ? Colors.red.withOpacity(0.3) : Colors.blue.withOpacity(0.1),
+            spreadRadius: isHighlighted ? 2 : 1,
+            blurRadius: isHighlighted ? 4 : 2,
+            offset: Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(4.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Show position in top-right corner
+            Align(
+              alignment: Alignment.topRight,
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isHighlighted ? Colors.red.withOpacity(0.2) : Colors.grey.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  position,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: isHighlighted ? Colors.red : Colors.black54,
+                    fontWeight: isHighlighted ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+              ),
+            ),
+            
+            // Show aisle name
+            Expanded(
+              child: aisleGroups.length == 1
+                  ? _buildSingleAisleContent(aisleGroups.values.first)
+                  : _buildMultipleAislesContent(aisleGroups),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
   Widget _buildSingleAisleContent(List<KhuVucKhoChiTietModel> items) {
     final item = items.first;
@@ -912,7 +1174,326 @@ Widget _buildCapacityIndicator(double percentValue, {bool mini = false}) {
       },
     );
   }
+void _showOverviewDialog() {
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return Dialog.fullscreen(
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text('Tổng thể kho ${_selectedKhoHangID ?? ""}'),
+            backgroundColor: Color(0xFFD4AF37),
+            leading: IconButton(
+              icon: Icon(Icons.close),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ),
+          body: FutureBuilder<List<KhuVucKhoChiTietModel>>(
+            future: _loadAllWarehouseDetails(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return Center(child: CircularProgressIndicator());
+              }
+              
+              if (snapshot.hasError) {
+                return Center(child: Text('Lỗi: ${snapshot.error}'));
+              }
+              
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return Center(child: Text('Không có dữ liệu hiển thị'));
+              }
+              
+              return _buildWarehouseOverview(snapshot.data!);
+            },
+          ),
+        ),
+      );
+    },
+  );
+}
 
+Future<List<KhuVucKhoChiTietModel>> _loadAllWarehouseDetails() async {
+  List<KhuVucKhoChiTietModel> allDetails = [];
+  
+  // Load details for all floors in the current warehouse
+  try {
+    for (var floor in _floors) {
+      final floorDetails = await _dbHelper.getKhuVucKhoChiTietByKhuVucKhoID(floor.khuVucKhoID!);
+      allDetails.addAll(floorDetails);
+    }
+  } catch (e) {
+    print('Error loading all warehouse details: $e');
+  }
+  
+  return allDetails;
+}
+
+Widget _buildWarehouseOverview(List<KhuVucKhoChiTietModel> allDetails) {
+  // Group details by floor
+  final Map<String, Map<String, List<KhuVucKhoChiTietModel>>> floorRoomGroups = {};
+  
+  for (var detail in allDetails) {
+    if (detail.khuVucKhoID == null || detail.phong == null) continue;
+    
+    if (!floorRoomGroups.containsKey(detail.khuVucKhoID)) {
+      floorRoomGroups[detail.khuVucKhoID!] = {};
+    }
+    
+    if (!floorRoomGroups[detail.khuVucKhoID!]!.containsKey(detail.phong)) {
+      floorRoomGroups[detail.khuVucKhoID!]![detail.phong!] = [];
+    }
+    
+    floorRoomGroups[detail.khuVucKhoID!]![detail.phong!]!.add(detail);
+  }
+  
+  // Sort floors in descending order
+  final sortedFloors = floorRoomGroups.keys.toList()
+    ..sort((a, b) => b.compareTo(a));
+  
+  return ListView.builder(
+    itemCount: sortedFloors.length,
+    itemBuilder: (context, floorIndex) {
+      final floorID = sortedFloors[floorIndex];
+      final roomGroups = floorRoomGroups[floorID]!;
+      
+      // Sort rooms in descending order within each floor
+      final sortedRooms = roomGroups.keys.toList()
+        ..sort((a, b) => b.compareTo(a));
+      
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // More compact floor header
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Reduced padding
+            color: Color(0xFFD4AF37).withOpacity(0.2),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Tầng $floorID',
+                  style: TextStyle(
+                    fontSize: 16, // Smaller font
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF8B4513),
+                  ),
+                ),
+                _buildCompactFloorCapacity(roomGroups),
+              ],
+            ),
+          ),
+          
+          // Rooms grid
+          _buildRoomsGrid(floorID, sortedRooms, roomGroups),
+          
+          // Add a small divider between floors
+          Divider(height: 1, thickness: 1, color: Colors.grey.withOpacity(0.2)),
+        ],
+      );
+    },
+  );
+}
+
+Widget _buildCompactFloorCapacity(Map<String, List<KhuVucKhoChiTietModel>> roomGroups) {
+  // Calculate floor capacity
+  int totalCapacity = 0;
+  int maxCapacity = 0;
+  
+  for (var roomDetails in roomGroups.values) {
+    for (var detail in roomDetails) {
+      totalCapacity += detail.dungTich ?? 0;
+      maxCapacity += 100;
+    }
+  }
+  
+  final floorCapacity = maxCapacity > 0 ? (totalCapacity / maxCapacity) * 100 : 0.0;
+  
+  return Row(
+    children: [
+      Text(
+        '${floorCapacity.toInt()}%',
+        style: TextStyle(
+          fontSize: 14, // Smaller font
+          fontWeight: FontWeight.bold,
+          color: _getCapacityColor(floorCapacity.toInt()),
+        ),
+      ),
+      SizedBox(width: 4),
+      Container(
+        width: 20, height: 20, // Fixed smaller size
+        child: _buildCapacityCircle(floorCapacity / 100, mini: true, showText: false),
+      ),
+    ],
+  );
+}
+
+Widget _buildRoomsGrid(
+  String floorID,
+  List<String> sortedRooms,
+  Map<String, List<KhuVucKhoChiTietModel>> roomGroups
+) {
+  // Determine layout based on screen orientation and size
+  final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+  final screenWidth = MediaQuery.of(context).size.width;
+  
+  // Calculate number of columns based on screen size - increased for more compact layout
+  final columns = isLandscape || screenWidth > 600 ? 
+                 (screenWidth > 1200 ? 6 : (screenWidth > 800 ? 4 : 3)) : 2;
+  
+  return Padding(
+    padding: EdgeInsets.all(8), // Reduced padding
+    child: GridView.builder(
+      shrinkWrap: true,
+      physics: NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: columns,
+        childAspectRatio: 1.1, // Slightly wider than tall
+        crossAxisSpacing: 8,   // Reduced spacing
+        mainAxisSpacing: 8,    // Reduced spacing
+      ),
+      itemCount: sortedRooms.length,
+      itemBuilder: (context, roomIndex) {
+        final roomName = sortedRooms[roomIndex];
+        final roomDetails = roomGroups[roomName]!;
+        return _buildRoomCell(floorID, roomName, roomDetails);
+      },
+    ),
+  );
+}
+
+Widget _buildRoomCell(
+  String floorID, 
+  String roomName, 
+  List<KhuVucKhoChiTietModel> roomDetails
+) {
+  // Count aisles in this room
+  final aisles = <String>{};
+  for (var detail in roomDetails) {
+    if (detail.ke != null) aisles.add(detail.ke!);
+  }
+  
+  // Calculate room capacity
+  int totalCapacity = 0;
+  int maxCapacity = 0;
+  
+  for (var detail in roomDetails) {
+    totalCapacity += detail.dungTich ?? 0;
+    maxCapacity += 100;
+  }
+  
+  final roomCapacity = maxCapacity > 0 ? (totalCapacity / maxCapacity) * 100 : 0.0;
+  
+  return Card(
+    elevation: 2,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    child: InkWell(
+      onTap: () {
+        // Changed: Now navigates to product search instead of the room view
+        Navigator.of(context).pop(); // Close the overview dialog
+        _openProductSearch(); // Open the product search screen
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white,
+              _getCapacityColor(roomCapacity.toInt()).withOpacity(0.15),
+            ],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(8.0), // Reduced padding
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Room header - more compact
+              Row(
+                children: [
+                  Icon(Icons.meeting_room, color: Color(0xFFB8860B), size: 14), // Smaller icon
+                  SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      'P.$roomName', // Shortened prefix
+                      style: TextStyle(
+                        fontSize: 12, // Smaller font
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Container(
+                    width: 24, height: 24, // Fixed size
+                    child: _buildCapacityCircle(roomCapacity / 100, mini: true, showText: false),
+                  ),
+                ],
+              ),
+              
+              // Room stats - simplified
+              Expanded(
+                child: Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildCompactStat(
+                        icon: Icons.grid_on,
+                        value: '${aisles.length}',
+                      ),
+                      SizedBox(width: 8),
+                      _buildCompactStat(
+                        icon: Icons.grid_4x4,
+                        value: '${roomDetails.length}',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              
+              // Capacity indicator
+              Container(
+                height: 4, // Very compact height
+                child: LinearPercentIndicator(
+                  lineHeight: 4,
+                  percent: roomCapacity / 100,
+                  backgroundColor: Colors.grey.withOpacity(0.2),
+                  progressColor: _getCapacityColor(roomCapacity.toInt()),
+                  barRadius: Radius.circular(2),
+                  padding: EdgeInsets.zero,
+                  center: null, // Remove text for more compact look
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+// Helper widget for compact stats
+Widget _buildCompactStat({
+  required IconData icon,
+  required String value,
+}) {
+  return Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, color: Color(0xFFB8860B), size: 14), // Smaller icon
+      SizedBox(width: 2),
+      Text(
+        value,
+        style: TextStyle(
+          fontSize: 14, // Smaller font
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    ],
+  );
+}
   Widget _buildDetailedContent(
     String position, 
     List<KhuVucKhoChiTietModel> items, 
@@ -1406,4 +1987,41 @@ Future<void> _saveEditedValues(Map<String, int> editedValues, List<KhuVucKhoChiT
       return Colors.red;
     }
   }
+}
+class RoomWallPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.brown
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.0;
+    
+    final path = Path();
+    
+    // Calculate entry width (about 20% of the bottom width)
+    final entryWidth = size.width * 0.2;
+    final entryStart = (size.width - entryWidth) / 2;
+    final entryEnd = entryStart + entryWidth;
+    
+    // Start from left side of entry at the very bottom
+    path.moveTo(entryStart, size.height);
+    
+    // Draw left wall from bottom to top
+    path.lineTo(4, size.height);
+    path.lineTo(4, 4);
+    
+    // Draw top wall from left to right
+    path.lineTo(size.width - 4, 4);
+    
+    // Draw right wall from top to bottom
+    path.lineTo(size.width - 4, size.height);
+    
+    // Draw right side of entry
+    path.lineTo(entryEnd, size.height);
+    
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
