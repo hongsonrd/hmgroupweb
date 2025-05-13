@@ -39,13 +39,13 @@ class DBHelper {
     }
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool hasReset = prefs.getBool('db_reset_v23') ?? false;
+    bool hasReset = prefs.getBool('db_reset_v25') ?? false;
     
     if (!hasReset) {
-      print('Forcing database reset for version 23...');
+      print('Forcing database reset for version 25...');
       try {
         await deleteDatabase(path);
-        await prefs.setBool('db_reset_v23', true);
+        await prefs.setBool('db_reset_v25', true);
         print('Database reset successful');
       } catch (e) {
         print('Error during database reset: $e');
@@ -57,7 +57,7 @@ class DBHelper {
     final db = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 23,
+        version: 25,
         onCreate: (Database db, int version) async {
           print('Creating database tables...');
           await db.execute(DatabaseTables.createInteractionTable);
@@ -105,55 +105,16 @@ class DBHelper {
         await db.execute(DatabaseTables.createNewsActivityTable);
         await db.execute(DatabaseTables.createNewsTable);
         await db.execute(DatabaseTables.createKhuVucKhoChiTietTable);
+                  await db.execute(DatabaseTables.createGoCleanCongViecTable);
+          await db.execute(DatabaseTables.createGoCleanTaiKhoanTable);
+          await db.execute(DatabaseTables.createGoCleanYeuCauTable);
           print('Database tables created successfully');
         },
         onUpgrade: (Database db, int oldVersion, int newVersion) async {
-          if (oldVersion < 23) {
-                    await db.execute(DatabaseTables.createInteractionTable);
-          await db.execute(DatabaseTables.createStaffbioTable);
-          await db.execute(DatabaseTables.createChecklistTable);
-          await db.execute(DatabaseTables.createTaskHistoryTable);
-          await db.execute(DatabaseTables.createVTHistoryTable);
-          await db.execute(DatabaseTables.createStaffListTable);
-          await db.execute(DatabaseTables.createPositionListTable);
-          await db.execute(DatabaseTables.createProjectListTable);
-          await db.execute(DatabaseTables.createBaocaoTable);
-          await db.execute(DatabaseTables.createDongPhucTable);
-          await db.execute(DatabaseTables.createChiTietDPTable);
-          await db.execute(DatabaseTables.createOrderMatHangTable);
-          await db.execute(DatabaseTables.createOrderTable);
-          await db.execute(DatabaseTables.createOrderChiTietTable);
-          await db.execute(DatabaseTables.createOrderDinhMucTable);
-          await db.execute(DatabaseTables.createChamCongCNTable);
-          await db.execute(DatabaseTables.createHinhAnhZaloTable);
-          await db.execute(DatabaseTables.createHDDuTruTable); 
-          await db.execute(DatabaseTables.createHDChiTietYCMMTable); 
-          await db.execute(DatabaseTables.createHDYeuCauMMTable); 
-          await db.execute(DatabaseTables.createChamCongTable); 
-          await db.execute(DatabaseTables.createChamCongGioTable); 
-          await db.execute(DatabaseTables.createChamCongLSTable);  
-          await db.execute(DatabaseTables.createChamCongCNThangTable); 
-          await db.execute(DatabaseTables.createChamCongVangNghiTcaTable); 
-          await ChecklistInitializer.initializeChecklistTable(db);
-          await db.execute(DatabaseTables.createMapListTable);
-          await db.execute(DatabaseTables.createMapFloorTable);
-          await db.execute(DatabaseTables.createMapZoneTable);
-          await db.execute(DatabaseTables.createCoinTable);
-          await db.execute(DatabaseTables.createCoinRateTable);
-          await db.execute(DatabaseTables.createMapStaffTable);
-          await db.execute(DatabaseTables.createMapPositionTable);
-                 await db.execute(DatabaseTables.createDonHangTable);
-        await db.execute(DatabaseTables.createChiTietDonTable);
-          await db.execute(DatabaseTables.createDSHangTable);
-        await db.execute(DatabaseTables.createGiaoDichKhoTable);
-        await db.execute(DatabaseTables.createGiaoHangTable);
-        await db.execute(DatabaseTables.createKhoTable);
-        await db.execute(DatabaseTables.createKhuVucKhoTable);
-        await db.execute(DatabaseTables.createLoHangTable);
-        await db.execute(DatabaseTables.createTonKhoTable);
-        await db.execute(DatabaseTables.createNewsActivityTable);
-        await db.execute(DatabaseTables.createNewsTable);
-        await db.execute(DatabaseTables.createKhuVucKhoChiTietTable);
+          if (oldVersion < 25) {
+          await db.execute(DatabaseTables.createGoCleanCongViecTable);
+          await db.execute(DatabaseTables.createGoCleanTaiKhoanTable);
+          await db.execute(DatabaseTables.createGoCleanYeuCauTable);
           }
         },
         onOpen: (db) async {
@@ -175,6 +136,212 @@ class DBHelper {
     rethrow;
   }
 }
+// ==================== GoClean_CongViec CRUD Operations ====================
+
+  /// Inserts a GoCleanCongViec record into the database.
+  Future<int> insertGoCleanCongViec(GoCleanCongViecModel congViec) async {
+    final db = await database;
+    return await db.insert(
+      'GoClean_CongViec', // Using string literal
+      congViec.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Retrieves a GoCleanCongViec record by its LichLamViecID.
+  Future<GoCleanCongViecModel?> getGoCleanCongViecById(String lichLamViecID) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'GoClean_CongViec', // Using string literal
+      where: 'LichLamViecID = ?',
+      whereArgs: [lichLamViecID],
+      limit: 1,
+    );
+    if (maps.isNotEmpty) {
+      return GoCleanCongViecModel.fromMap(maps.first);
+    }
+    return null;
+  }
+
+  /// Retrieves all GoCleanCongViec records from the database.
+  Future<List<GoCleanCongViecModel>> getAllGoCleanCongViec() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('GoClean_CongViec'); // Using string literal
+    return maps.map((map) => GoCleanCongViecModel.fromMap(map)).toList();
+  }
+
+  /// Updates a GoCleanCongViec record in the database.
+  Future<int> updateGoCleanCongViec(GoCleanCongViecModel congViec) async {
+    final db = await database;
+    return await db.update(
+      'GoClean_CongViec', // Using string literal
+      congViec.toMap(),
+      where: 'LichLamViecID = ?',
+      whereArgs: [congViec.lichLamViecID],
+    );
+  }
+
+  /// Deletes a GoCleanCongViec record from the database by its LichLamViecID.
+  Future<int> deleteGoCleanCongViec(String lichLamViecID) async {
+    final db = await database;
+    return await db.delete(
+      'GoClean_CongViec', // Using string literal
+      where: 'LichLamViecID = ?',
+      whereArgs: [lichLamViecID],
+    );
+  }
+
+  /// Clears all records from the GoClean_CongViec table.
+  Future<void> clearGoCleanCongViecTable() async {
+    final db = await database;
+    await db.delete('GoClean_CongViec'); // Using string literal
+    print('Cleared GoClean_CongViec table');
+  }
+
+  /// Gets the total count of records in the GoClean_CongViec table.
+  Future<int> getGoCleanCongViecCount() async {
+    final db = await database;
+    final result = await db.rawQuery('SELECT COUNT(*) as count FROM GoClean_CongViec'); // Using string literal
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  // ==================== GoClean_TaiKhoan CRUD Operations ====================
+
+  /// Inserts a GoCleanTaiKhoan record into the database.
+  Future<int> insertGoCleanTaiKhoan(GoCleanTaiKhoanModel taiKhoan) async {
+    final db = await database;
+    return await db.insert(
+      'GoClean_TaiKhoan', // Using string literal
+      taiKhoan.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Retrieves a GoCleanTaiKhoan record by its UID.
+  Future<GoCleanTaiKhoanModel?> getGoCleanTaiKhoanByUID(String uid) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'GoClean_TaiKhoan', // Using string literal
+      where: 'UID = ?',
+      whereArgs: [uid],
+      limit: 1,
+    );
+    if (maps.isNotEmpty) {
+      return GoCleanTaiKhoanModel.fromMap(maps.first);
+    }
+    return null;
+  }
+
+  /// Retrieves all GoCleanTaiKhoan records from the database.
+  Future<List<GoCleanTaiKhoanModel>> getAllGoCleanTaiKhoan() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('GoClean_TaiKhoan'); // Using string literal
+    return maps.map((map) => GoCleanTaiKhoanModel.fromMap(map)).toList();
+  }
+
+  /// Updates a GoCleanTaiKhoan record in the database.
+  Future<int> updateGoCleanTaiKhoan(GoCleanTaiKhoanModel taiKhoan) async {
+    final db = await database;
+    return await db.update(
+      'GoClean_TaiKhoan', // Using string literal
+      taiKhoan.toMap(),
+      where: 'UID = ?',
+      whereArgs: [taiKhoan.uid],
+    );
+  }
+
+  /// Deletes a GoCleanTaiKhoan record from the database by its UID.
+  Future<int> deleteGoCleanTaiKhoan(String uid) async {
+    final db = await database;
+    return await db.delete(
+      'GoClean_TaiKhoan', // Using string literal
+      where: 'UID = ?',
+      whereArgs: [uid],
+    );
+  }
+
+  /// Clears all records from the GoClean_TaiKhoan table.
+  Future<void> clearGoCleanTaiKhoanTable() async {
+    final db = await database;
+    await db.delete('GoClean_TaiKhoan'); // Using string literal
+    print('Cleared GoClean_TaiKhoan table');
+  }
+
+  /// Gets the total count of records in the GoClean_TaiKhoan table.
+  Future<int> getGoCleanTaiKhoanCount() async {
+    final db = await database;
+    final result = await db.rawQuery('SELECT COUNT(*) as count FROM GoClean_TaiKhoan'); // Using string literal
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  // ==================== GoClean_YeuCau CRUD Operations ====================
+
+  /// Inserts a GoCleanYeuCau record into the database.
+  Future<int> insertGoCleanYeuCau(GoCleanYeuCauModel yeuCau) async {
+    final db = await database;
+    return await db.insert(
+      'GoClean_YeuCau', // Using string literal
+      yeuCau.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Retrieves a GoCleanYeuCau record by its GiaoViecID.
+  Future<GoCleanYeuCauModel?> getGoCleanYeuCauByGiaoViecID(String giaoViecID) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'GoClean_YeuCau', // Using string literal
+      where: 'GiaoViecID = ?',
+      whereArgs: [giaoViecID],
+      limit: 1,
+    );
+    if (maps.isNotEmpty) {
+      return GoCleanYeuCauModel.fromMap(maps.first);
+    }
+    return null;
+  }
+
+  /// Retrieves all GoCleanYeuCau records from the database.
+  Future<List<GoCleanYeuCauModel>> getAllGoCleanYeuCau() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('GoClean_YeuCau'); // Using string literal
+    return maps.map((map) => GoCleanYeuCauModel.fromMap(map)).toList();
+  }
+
+  /// Updates a GoCleanYeuCau record in the database.
+  Future<int> updateGoCleanYeuCau(GoCleanYeuCauModel yeuCau) async {
+    final db = await database;
+    return await db.update(
+      'GoClean_YeuCau', // Using string literal
+      yeuCau.toMap(),
+      where: 'GiaoViecID = ?',
+      whereArgs: [yeuCau.giaoViecID],
+    );
+  }
+
+  /// Deletes a GoCleanYeuCau record from the database by its GiaoViecID.
+  Future<int> deleteGoCleanYeuCau(String giaoViecID) async {
+    final db = await database;
+    return await db.delete(
+      'GoClean_YeuCau', // Using string literal
+      where: 'GiaoViecID = ?',
+      whereArgs: [giaoViecID],
+    );
+  }
+
+  /// Clears all records from the GoClean_YeuCau table.
+  Future<void> clearGoCleanYeuCauTable() async {
+    final db = await database;
+    await db.delete('GoClean_YeuCau'); // Using string literal
+    print('Cleared GoClean_YeuCau table');
+  }
+
+  /// Gets the total count of records in the GoClean_YeuCau table.
+  Future<int> getGoCleanYeuCauCount() async {
+    final db = await database;
+    final result = await db.rawQuery('SELECT COUNT(*) as count FROM GoClean_YeuCau'); // Using string literal
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
 //ADDON:
 // Get all branches from ChiTietDon
 Future<List<String>> getAllBranches() async {

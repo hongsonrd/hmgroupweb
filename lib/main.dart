@@ -383,42 +383,109 @@ class _MainScreenState extends State<MainScreen> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   Timer? _tokenRefreshTimer;
-   UserState get _userState => Provider.of<UserState>(context, listen: false);
+  Timer? _loadingTimeoutTimer;
+  
+  UserState get _userState => Provider.of<UserState>(context, listen: false);
+  
   List<Widget> get _screens => [
-  ProjectRouter(userState: _userState),
-  const WebViewScreen(),
-  const HMAIScreen(), 
-  IntroScreen(userData: _currentUser),
-];
+    ProjectRouter(userState: _userState),
+    const WebViewScreen(),
+    const HMAIScreen(), 
+    IntroScreen(userData: _currentUser),
+  ];
 
   @override
   void initState() {
     super.initState();
-    _initializeAuth();
-    _setupTokenRefresh();
+    
+    // Start a timer to detect if we're stuck in loading state
+    _loadingTimeoutTimer = Timer(const Duration(seconds: 5), () {
+      // If we're still not authenticated after 5 seconds, clear data and force login
+      if (!_isAuthenticated && mounted) {
+        print("Loading timeout reached - forcing new login");
+        _forceNewLogin();
+      }
+    });
+    
+    // Start authentication process
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _initializeAuth();
+      _setupTokenRefresh();
+    });
   }
-  void _setupTokenRefresh() {
+   void _setupTokenRefresh() {
     AppAuthentication.generateToken();
     _tokenRefreshTimer = Timer.periodic(
       const Duration(hours: 23),
       (_) => AppAuthentication.generateToken()
     );
   }
+  // Force new login by clearing all saved data
+  Future<void> _forceNewLogin() async {
+    print("Forcing new login by clearing all saved data");
+    
+    try {
+      // Clear UserState
+      await _userState.clearUser();
+      
+      // Clear UserCredentials
+      final credentials = Provider.of<UserCredentials>(context, listen: false);
+      await credentials.clearCredentials();
+      
+      // Clear SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+      
+      // Update state to show login dialog
+      if (mounted) {
+        setState(() {
+          _isAuthenticated = false;
+          _currentUser = null;
+          _loginStatus = '';
+          _usernameController.clear();
+          _passwordController.clear();
+        });
+        
+        // Show login dialog
+        _showLoginDialog();
+      }
+    } catch (e) {
+      print("Error while forcing new login: $e");
+      // Still try to show login dialog even if clearing data failed
+      if (mounted) {
+        _showLoginDialog();
+      }
+    }
+  }
+  
   @override
   void dispose() {
     _tokenRefreshTimer?.cancel();
+    _loadingTimeoutTimer?.cancel();
     super.dispose();
   }
+  
   Future<void> _initializeAuth() async {
-    await _userState.loadUser();
-    
-    if (_userState.isAuthenticated && _userState.currentUser != null) {
-      setState(() {
-        _isAuthenticated = true;
-        _currentUser = _userState.currentUser;
-      });
-    } else {
-      await _loadSavedCredentials();
+    try {
+      await _userState.loadUser();
+      
+      if (_userState.isAuthenticated && _userState.currentUser != null) {
+        // Successfully authenticated, cancel timeout timer
+        _loadingTimeoutTimer?.cancel();
+        
+        if (mounted) {
+          setState(() {
+            _isAuthenticated = true;
+            _currentUser = _userState.currentUser;
+            print("Authentication successful, setting _isAuthenticated to true");
+          });
+        }
+      } else {
+        await _loadSavedCredentials();
+      }
+    } catch (e) {
+      print('Authentication error: $e');
+      _forceNewLogin();
     }
   }
 
@@ -439,8 +506,19 @@ class _MainScreenState extends State<MainScreen> {
       _usernameController.text = credentials.username;
       _passwordController.text = credentials.password;
     });
-    await _login();
+    
+    try {
+      await _login();
+      // If login successful, cancel the timeout timer
+      _loadingTimeoutTimer?.cancel();
+    } catch (e) {
+      print("Error in _loadSavedCredentials: $e");
+      // If login failed, force new login
+      _forceNewLogin();
+    }
   } else {
+    // No saved credentials, cancel timeout and show login dialog
+    _loadingTimeoutTimer?.cancel();
     _showLoginDialog();
   }
 }
@@ -606,51 +684,86 @@ Future<void> _login() async {
 }
 
 Future<void> processLoginResponse(String responseBody) async {
+  print("Processing login response: $responseBody");
   List<String> responseParts = responseBody.split('@');
   
   if (responseParts.isNotEmpty && responseParts[0] == "OK") {
+    // Login successful, cancel timeout timer
+    _loadingTimeoutTimer?.cancel();
+    
     String name = responseParts.length > 1 ? responseParts[1] : 'Unknown';
     String employeeId = responseParts.length > 2 ? responseParts[2] : 'N/A';
     String chamCong = responseParts.length > 3 ? responseParts[3] : 'N/A';
     String queryType = responseParts.length > 4 ? responseParts[4] : '1';
     
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setString('username', _usernameController.text.trim().toLowerCase());
-    await prefs.setString('password', _passwordController.text.trim().toLowerCase());
-    await prefs.setString('cham_cong', chamCong);
-    await prefs.setBool('is_authenticated', true);
-    
-    final userData = {
-      'username': _usernameController.text.trim().toLowerCase(),
-      'name': name,
-      'employee_id': employeeId,
-      'cham_cong': chamCong,
-      'queryType': queryType
-    };
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setString('username', _usernameController.text.trim().toLowerCase());
+      await prefs.setString('password', _passwordController.text.trim().toLowerCase());
+      await prefs.setString('cham_cong', chamCong);
+      await prefs.setBool('is_authenticated', true);
+      
+      final userData = {
+        'username': _usernameController.text.trim().toLowerCase(),
+        'name': name,
+        'employee_id': employeeId,
+        'cham_cong': chamCong,
+        'queryType': queryType
+      };
 
-    setState(() {
-      _isAuthenticated = true;
-      _currentUser = userData;
-      _loginStatus = '';
-      _selectedIndex = 1;
-    });
+      if (mounted) {
+        setState(() {
+          _isAuthenticated = true;
+          _currentUser = userData;
+          _loginStatus = '';
+          _selectedIndex = 1;
+          print("Login successful, setting _isAuthenticated to true");
+        });
+      }
 
-    await _userState.setUser(userData);
-    await _userState.setLoginResponse(responseBody);
-    await _userState.setUpdateResponses('', '', '', '', chamCong);
+      await _userState.setUser(userData);
+      await _userState.setLoginResponse(responseBody);
+      await _userState.setUpdateResponses('', '', '', '', chamCong);
 
-    if (mounted && Navigator.canPop(context)) {
-      Navigator.of(context).pop();
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      print("Error saving user data: $e");
+      // If saving data fails, still consider the login successful
+      // but show a message to the user
+      if (mounted) {
+        setState(() {
+          _isAuthenticated = true;
+          _loginStatus = 'Đăng nhập thành công nhưng có lỗi lưu dữ liệu.';
+        });
+        
+        if (Navigator.canPop(context)) {
+          Navigator.of(context).pop();
+        }
+      }
     }
   } else if (responseParts.isNotEmpty && responseParts[0] == "WRONG") {
     // Handle WRONG response specifically
-    setState(() {
-      _loginStatus = 'Sai tên đăng nhập hoặc mật khẩu. Vui lòng kiểm tra lại thông tin hoặc sử dụng chức năng đặt lại mật khẩu nếu bạn quên mật khẩu.';
-    });
+    if (mounted) {
+      setState(() {
+        _loginStatus = 'Sai tên đăng nhập hoặc mật khẩu. Vui lòng kiểm tra lại thông tin hoặc sử dụng chức năng đặt lại mật khẩu nếu bạn quên mật khẩu.';
+      });
+    }
+  } else if (responseParts.isEmpty) {
+    // Handle empty response
+    if (mounted) {
+      setState(() {
+        _loginStatus = 'Máy chủ không phản hồi. Vui lòng thử lại sau.';
+      });
+    }
   } else {
-    setState(() {
-      _loginStatus = 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.';
-    });
+    // Handle other error cases
+    if (mounted) {
+      setState(() {
+        _loginStatus = 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.';
+      });
+    }
   }
 }
 void processResponse(String responseBody) async {
@@ -1175,9 +1288,9 @@ Widget build(BuildContext context) {
   // Define which queryTypes can access each tab
   final Map<int, List<String>> allowedQueryTypes = {
     0: [], // Projects tab
-    1: ['1','2'], // Work tab
-    2: ['1','2'], // HM AI tab
-    3: ['1','2'], // Guide tab
+    1: ['1','2', '4'], // Work tab
+    2: ['1','2', '4'], // HM AI tab
+    3: ['1','2', '4'], // Guide tab
   };
   
   // Define permissions for floating action buttons
@@ -1407,42 +1520,42 @@ class _VideoBackgroundState extends State<VideoBackground> {
   }
 
   Future<void> _initializeVideo() async {
-  try {
-    print('Attempting to load video from URL');
-    // Set up the video
-    await player.open(Media(
-      'https://storage.googleapis.com/times1/DocumentApp/lychee.mp4'
-    ));
-    
-    print('Video loaded successfully');
-    
-    player.stream.playing.listen((playing) {
-      print('Video playing state changed: $playing');
-      if (playing && mounted) {
+    try {
+      print('Attempting to load video from URL');
+      
+      // Set up the video with await
+      await player.open(Media(
+        'https://storage.googleapis.com/times1/DocumentApp/appdesktop.mp4'
+      ));
+      
+      print('Video loaded successfully');
+      
+      // Set volume to 0
+      player.setVolume(0);
+      
+      // Mark as initialized right away to prevent UI blocking
+      if (mounted) {
         setState(() {
           _isInitialized = true;
         });
       }
-    });
-    
-    // Set volume to 0
-    player.setVolume(0);
-    
-    // Handle looping through playback ended event
-    player.stream.completed.listen((_) {
-      player.seek(Duration.zero);
-      player.play();
-    });
-    
-  } catch (e) {
-    print('Video initialization error: $e');
-    if (mounted) {
-      setState(() {
-        _isInitialized = false;
+      
+      // Handle looping through playback ended event
+      player.stream.completed.listen((_) {
+        player.seek(Duration.zero);
+        player.play();
       });
+      
+    } catch (e) {
+      print('Video initialization error: $e');
+      // Still mark as initialized so the app can proceed even if video fails
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+        });
+      }
     }
   }
-}
 
   @override
   void dispose() {

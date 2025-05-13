@@ -25,6 +25,7 @@ import 'projectdailyview.dart';
 import 'dart:typed_data' show Uint8List;
 import 'package:sqflite/sqflite.dart';
 import 'http_client.dart';
+import 'package:file_picker/file_picker.dart';
 
 class ProjectManagement2 extends StatefulWidget {
     ProjectManagement2({Key? key}) : super(key: key);
@@ -741,12 +742,6 @@ for (String date in dateRange) {
   }
 }
 
- for (var table in excel.tables.keys) {
-   final sheet = excel.tables[table]!;
-   for (var colIndex = 0; colIndex < sheet.maxCols; colIndex++) {
-     sheet.setColWidth(colIndex, table == 'Báo cáo giám sát' ? 35.0 : 25.0);
-   }
- }
 final weeklySheet = excel['Báo cáo tuần'];
 final monthlySheet = excel['Báo cáo tháng'];
 
@@ -786,10 +781,120 @@ while (currentDate.isBefore(endDate) || currentDate.isAtSameMomentAs(endDate)) {
 
 await _addSupervisorReport(weeklySheet, weeklyGroups, dbHelper);
 await _addSupervisorReport(monthlySheet, monthlyGroups, dbHelper);
- final output = await getTemporaryDirectory();
- final excelFile = File('${output.path}/bao_cao_${_selectedStartDate}_${_selectedEndDate}.xlsx');
- await excelFile.writeAsBytes(excel.encode()!);
- return excelFile;
+
+ for (var table in excel.tables.keys) {
+   final sheet = excel.tables[table]!;
+   for (var colIndex = 0; colIndex < sheet.maxCols; colIndex++) {
+     sheet.setColWidth(colIndex, table == 'Báo cáo giám sát' ? 35.0 : 25.0);
+   }
+ }
+
+ // Generate the Excel file with a unique filename including timestamp
+ final dateStr = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+ final fileName = 'BaoCaoTongHop_${_selectedStartDate}_${_selectedEndDate}_$dateStr.xlsx';
+ final fileBytes = excel.encode()!;
+ 
+ // Platform-specific saving logic
+ if (Platform.isWindows) {
+   try {
+     // First attempt: Use file_picker save dialog to let user choose location
+     String? outputFile = await FilePicker.platform.saveFile(
+       dialogTitle: 'Lưu báo cáo tổng hợp',
+       fileName: fileName,
+       type: FileType.custom,
+       allowedExtensions: ['xlsx'],
+     );
+     
+     if (outputFile != null) {
+       // User selected a location
+       final file = File(outputFile);
+       await file.writeAsBytes(fileBytes);
+       
+       ScaffoldMessenger.of(context).showSnackBar(
+         SnackBar(
+           content: Text('File đã được lưu tại: $outputFile'),
+           backgroundColor: Colors.green,
+         ),
+       );
+       
+       return file;
+     } else {
+       // If user cancels dialog, fall back to saving in Downloads folder
+       return await _saveToDownloadsWindows(fileBytes, fileName);
+     }
+   } catch (e) {
+     // If FilePicker fails, fall back to Documents folder
+     return await _saveToDocumentsWindows(fileBytes, fileName);
+   }
+ } else {
+   // For mobile platforms, save to temp directory and use Share.shareFiles
+   final output = await getTemporaryDirectory();
+   final file = File('${output.path}/$fileName');
+   await file.writeAsBytes(fileBytes);
+   return file;
+ }
+}
+
+// Helper methods for Windows platform
+Future<File> _saveToDownloadsWindows(List<int> fileBytes, String fileName) async {
+  try {
+    final userHome = Platform.environment['USERPROFILE'];
+    if (userHome != null) {
+      final downloadsPath = '$userHome\\Downloads';
+      final directory = Directory(downloadsPath);
+      
+      if (await directory.exists()) {
+        final filePath = '$downloadsPath\\$fileName';
+        final file = File(filePath);
+        await file.writeAsBytes(fileBytes);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('File đã được lưu tại: $filePath'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        return file;
+      }
+    }
+    // If Downloads folder not accessible, fall back to Documents
+    return await _saveToDocumentsWindows(fileBytes, fileName);
+  } catch (e) {
+    print('Error saving to Downloads: $e');
+    return await _saveToDocumentsWindows(fileBytes, fileName);
+  }
+}
+
+Future<File> _saveToDocumentsWindows(List<int> fileBytes, String fileName) async {
+  try {
+    final directory = await getApplicationDocumentsDirectory();
+    final filePath = '${directory.path}\\$fileName';
+    final file = File(filePath);
+    await file.writeAsBytes(fileBytes);
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('File đã được lưu tại: $filePath'),
+        backgroundColor: Colors.green,
+      ),
+    );
+    return file;
+  } catch (e) {
+    print('Error saving to Documents: $e');
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi khi lưu file: $e'),
+        backgroundColor: Colors.red,
+      ),
+    );
+    
+    // Return an empty temporary file in case of error
+    final temp = await getTemporaryDirectory();
+    final file = File('${temp.path}/$fileName');
+    await file.writeAsBytes(fileBytes);
+    return file;
+  }
 }
 
 String _formatStatus(String? trangThai, String? phuongAn, String? hoTro) {

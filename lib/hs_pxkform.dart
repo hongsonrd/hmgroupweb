@@ -277,18 +277,30 @@ class ExportFormGenerator {
                         ],
                       ),
                       
-                      ...items.map((item) => pw.TableRow(
-                        children: [
-                          _buildTableCell(item.idHang ?? 'N/A', ttf, textColor: PdfColors.red),
-                          _buildTableCell(item.maHang ?? 'N/A', ttf),
-                          _buildTableCell(item.donViTinh ?? 'N/A', ttf),
-                          _buildTableCell(item.soLuongYeuCau?.toString() ?? '0', ttf, align: pw.TextAlign.right),
-                          _buildTableCell(item.soLuongThucGiao?.toString() ?? item.soLuongYeuCau?.toString() ?? '0', ttf, align: pw.TextAlign.right),
-                          _buildTableCell(_formatCurrency(item.donGia), ttf, align: pw.TextAlign.right),
-                          _buildTableCell(item.phanTramVAT?.toString() ?? '10%', ttf, align: pw.TextAlign.center),
-                          _buildTableCell(_formatCurrency(item.thanhTien), ttf, align: pw.TextAlign.right, textColor: PdfColors.red),
-                        ],
-                      )).toList(),
+                      ...items.map((item) { // Changed from => to a block body {
+                        // Determine display string for SoLuongThucGiao for the current item
+                        String slThucGiaoDisplay = (item.soLuongThucGiao == null || item.soLuongThucGiao == 0)
+                            ? '' // Show blank if null or 0
+                            : item.soLuongThucGiao!.toString();
+
+                        return pw.TableRow( // Added return statement
+                          children: [
+                            _buildTableCell(
+  (item.idHang != null && item.idHang!.contains(' - ')) 
+      ? item.idHang!.split(' - ')[1].trim() 
+      : (item.idHang ?? 'N/A'), 
+  ttf
+),
+                            _buildTableCell(item.maHang ?? 'N/A', ttf),
+                            _buildTableCell(item.donViTinh ?? 'N/A', ttf),
+                            _buildTableCell(item.soLuongYeuCau?.toString() ?? '0', ttf, align: pw.TextAlign.right),
+                            _buildTableCell(slThucGiaoDisplay, ttf, align: pw.TextAlign.right), // Actual Qty - MODIFIED
+                            _buildTableCell(_formatCurrency(item.donGia), ttf, align: pw.TextAlign.right),
+                            _buildTableCell(item.phanTramVAT?.toString() ?? '10%', ttf, align: pw.TextAlign.center),
+                            _buildTableCell(_formatCurrency(item.thanhTien), ttf, align: pw.TextAlign.right, textColor: PdfColors.red),
+                          ],
+                        );
+                      }).toList(),
                     ],
                   ),
                   

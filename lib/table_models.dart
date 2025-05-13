@@ -3026,6 +3026,282 @@ class NewsModel {
     );
   }
 }
+// Model for GoClean_CongViec table
+class GoCleanCongViecModel {
+  final String? lichLamViecID;
+  final String? giaoViecID;
+  final DateTime? ngay;
+  final String? nguoiThucHien;
+  final String? xacNhan;
+  final String? qrCode;
+  final String? mocBatDau; // Storing TIME as String, parse as needed
+  final String? hinhAnhTruoc;
+  final String? mocKetThuc; // Storing TIME as String, parse as needed
+  final String? hinhAnhSau;
+  final int? thucHienDanhGia;
+  final String? moTaThucHien;
+  final String? khachHang;
+  final int? khachHangDanhGia;
+  final String? thoiGianDanhGia; // Storing TIME as String, parse as needed
+  final String? khachHangMoTa;
+  final String? khachHangChupAnh;
+  final String? trangThai;
+
+  GoCleanCongViecModel({
+    this.lichLamViecID,
+    this.giaoViecID,
+    this.ngay,
+    this.nguoiThucHien,
+    this.xacNhan,
+    this.qrCode,
+    this.mocBatDau,
+    this.hinhAnhTruoc,
+    this.mocKetThuc,
+    this.hinhAnhSau,
+    this.thucHienDanhGia,
+    this.moTaThucHien,
+    this.khachHang,
+    this.khachHangDanhGia,
+    this.thoiGianDanhGia,
+    this.khachHangMoTa,
+    this.khachHangChupAnh,
+    this.trangThai,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'LichLamViecID': lichLamViecID,
+    'GiaoViecID': giaoViecID,
+    'Ngay': ngay?.toIso8601String().split('T').first, // Format as YYYY-MM-DD
+    'NguoiThucHien': nguoiThucHien,
+    'XacNhan': xacNhan,
+    'QRcode': qrCode,
+    'MocBatDau': mocBatDau,
+    'HinhAnhTruoc': hinhAnhTruoc,
+    'MocKetThuc': mocKetThuc,
+    'HinhAnhSau': hinhAnhSau,
+    'ThucHienDanhGia': thucHienDanhGia,
+    'MoTaThucHien': moTaThucHien,
+    'KhachHang': khachHang,
+    'KhachHangDanhGia': khachHangDanhGia,
+    'ThoiGianDanhGia': thoiGianDanhGia,
+    'KhachHangMoTa': khachHangMoTa,
+    'KhachHangChupAnh': khachHangChupAnh,
+    'TrangThai': trangThai,
+  };
+
+  factory GoCleanCongViecModel.fromMap(Map<dynamic, dynamic> map) {
+    return GoCleanCongViecModel(
+      lichLamViecID: map['LichLamViecID']?.toString(),
+      giaoViecID: map['GiaoViecID']?.toString(),
+      ngay: map['Ngay'] != null ? DateTime.tryParse(map['Ngay'].toString()) : null,
+      nguoiThucHien: map['NguoiThucHien']?.toString(),
+      xacNhan: map['XacNhan']?.toString(),
+      qrCode: map['QRcode']?.toString(),
+      mocBatDau: map['MocBatDau']?.toString(),
+      hinhAnhTruoc: map['HinhAnhTruoc']?.toString(),
+      mocKetThuc: map['MocKetThuc']?.toString(),
+      hinhAnhSau: map['HinhAnhSau']?.toString(),
+      thucHienDanhGia: map['ThucHienDanhGia'] != null ? int.tryParse(map['ThucHienDanhGia'].toString()) : null,
+      moTaThucHien: map['MoTaThucHien']?.toString(),
+      khachHang: map['KhachHang']?.toString(),
+      khachHangDanhGia: map['KhachHangDanhGia'] != null ? int.tryParse(map['KhachHangDanhGia'].toString()) : null,
+      thoiGianDanhGia: map['ThoiGianDanhGia']?.toString(),
+      khachHangMoTa: map['KhachHangMoTa']?.toString(),
+      khachHangChupAnh: map['KhachHangChupAnh']?.toString(),
+      trangThai: map['TrangThai']?.toString(),
+    );
+  }
+}
+
+// Model for GoClean_TaiKhoan table
+class GoCleanTaiKhoanModel {
+  final String? uid;
+  final String? taiKhoan;
+  final String? phanLoai;
+  final String? dinhVi;
+  final String? loaiDinhVi;
+  final String? sdt;
+  final String? email;
+  final String? diaDiem;
+  final String? diaChi;
+  final String? hinhAnh;
+  final String? trangThai;
+  final String? nhom;
+  final String? admin;
+
+  GoCleanTaiKhoanModel({
+    this.uid,
+    this.taiKhoan,
+    this.phanLoai,
+    this.dinhVi,
+    this.loaiDinhVi,
+    this.sdt,
+    this.email,
+    this.diaDiem,
+    this.diaChi,
+    this.hinhAnh,
+    this.trangThai,
+    this.nhom,
+    this.admin,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'UID': uid,
+    'TaiKhoan': taiKhoan,
+    'PhanLoai': phanLoai,
+    'DinhVi': dinhVi,
+    'LoaiDinhVi': loaiDinhVi,
+    'SDT': sdt,
+    'Email': email,
+    'DiaDiem': diaDiem,
+    'DiaChi': diaChi,
+    'HinhAnh': hinhAnh,
+    'TrangThai': trangThai,
+    'Nhom': nhom,
+    'Admin': admin,
+  };
+
+  factory GoCleanTaiKhoanModel.fromMap(Map<dynamic, dynamic> map) {
+    return GoCleanTaiKhoanModel(
+      uid: map['UID']?.toString(),
+      taiKhoan: map['TaiKhoan']?.toString(),
+      phanLoai: map['PhanLoai']?.toString(),
+      dinhVi: map['DinhVi']?.toString(),
+      loaiDinhVi: map['LoaiDinhVi']?.toString(),
+      sdt: map['SDT']?.toString(),
+      email: map['Email']?.toString(),
+      diaDiem: map['DiaDiem']?.toString(),
+      diaChi: map['DiaChi']?.toString(),
+      hinhAnh: map['HinhAnh']?.toString(),
+      trangThai: map['TrangThai']?.toString(),
+      nhom: map['Nhom']?.toString(),
+      admin: map['Admin']?.toString(),
+    );
+  }
+}
+
+// Model for GoClean_YeuCau table
+class GoCleanYeuCauModel {
+  final String? giaoViecID;
+  final String? nguoiTao;
+  final String? nguoiNghiemThu;
+  final String? diaDiem;
+  final String? diaChi;
+  final String? dinhVi;
+  final String? lapLai;
+  final DateTime? ngayBatDau;
+  final DateTime? ngayKetThuc;
+  final String? hinhThucNghiemThu;
+  final String? moTaCongViec;
+  final int? soNguoiThucHien;
+  final String? khuVucThucHien;
+  final int? khoiLuongCongViec;
+  final String? yeuCauCongViec;
+  final String? thoiGianBatDau; // Storing TIME as String
+  final String? thoiGianKetThuc; // Storing TIME as String (was text, assuming it might be a formatted time string or duration)
+  final String? loaiMaySuDung;
+  final String? congCuSuDung;
+  final String? hoaChatSuDung;
+  final String? ghiChu;
+  final String? xacNhan;
+  final String? chiDinh;
+  final String? huongDan;
+  final String? nhomThucHien;
+  final String? caNhanThucHien;
+  final String? listNguoiThucHien;
+
+  GoCleanYeuCauModel({
+    this.giaoViecID,
+    this.nguoiTao,
+    this.nguoiNghiemThu,
+    this.diaDiem,
+    this.diaChi,
+    this.dinhVi,
+    this.lapLai,
+    this.ngayBatDau,
+    this.ngayKetThuc,
+    this.hinhThucNghiemThu,
+    this.moTaCongViec,
+    this.soNguoiThucHien,
+    this.khuVucThucHien,
+    this.khoiLuongCongViec,
+    this.yeuCauCongViec,
+    this.thoiGianBatDau,
+    this.thoiGianKetThuc,
+    this.loaiMaySuDung,
+    this.congCuSuDung,
+    this.hoaChatSuDung,
+    this.ghiChu,
+    this.xacNhan,
+    this.chiDinh,
+    this.huongDan,
+    this.nhomThucHien,
+    this.caNhanThucHien,
+    this.listNguoiThucHien,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'GiaoViecID': giaoViecID,
+    'NguoiTao': nguoiTao,
+    'NguoiNghiemThu': nguoiNghiemThu,
+    'DiaDiem': diaDiem,
+    'DiaChi': diaChi,
+    'DinhVi': dinhVi,
+    'LapLai': lapLai,
+    'NgayBatDau': ngayBatDau?.toIso8601String().split('T').first,
+    'NgayKetThuc': ngayKetThuc?.toIso8601String().split('T').first,
+    'HinhThucNghiemThu': hinhThucNghiemThu,
+    'MoTaCongViec': moTaCongViec,
+    'SoNguoiThucHien': soNguoiThucHien,
+    'KhuVucThucHien': khuVucThucHien,
+    'KhoiLuongCongViec': khoiLuongCongViec,
+    'YeuCauCongViec': yeuCauCongViec,
+    'ThoiGianBatDau': thoiGianBatDau,
+    'ThoiGianKetThuc': thoiGianKetThuc,
+    'LoaiMaySuDung': loaiMaySuDung,
+    'CongCuSuDung': congCuSuDung,
+    'HoaChatSuDung': hoaChatSuDung,
+    'GhiChu': ghiChu,
+    'XacNhan': xacNhan,
+    'ChiDinh': chiDinh,
+    'HuongDan': huongDan,
+    'NhomThucHien': nhomThucHien,
+    'CaNhanThucHien': caNhanThucHien,
+    'ListNguoiThucHien': listNguoiThucHien,
+  };
+
+  factory GoCleanYeuCauModel.fromMap(Map<dynamic, dynamic> map) {
+    return GoCleanYeuCauModel(
+      giaoViecID: map['GiaoViecID']?.toString(),
+      nguoiTao: map['NguoiTao']?.toString(),
+      nguoiNghiemThu: map['NguoiNghiemThu']?.toString(),
+      diaDiem: map['DiaDiem']?.toString(),
+      diaChi: map['DiaChi']?.toString(),
+      dinhVi: map['DinhVi']?.toString(),
+      lapLai: map['LapLai']?.toString(),
+      ngayBatDau: map['NgayBatDau'] != null ? DateTime.tryParse(map['NgayBatDau'].toString()) : null,
+      ngayKetThuc: map['NgayKetThuc'] != null ? DateTime.tryParse(map['NgayKetThuc'].toString()) : null,
+      hinhThucNghiemThu: map['HinhThucNghiemThu']?.toString(),
+      moTaCongViec: map['MoTaCongViec']?.toString(),
+      soNguoiThucHien: map['SoNguoiThucHien'] != null ? int.tryParse(map['SoNguoiThucHien'].toString()) : null,
+      khuVucThucHien: map['KhuVucThucHien']?.toString(),
+      khoiLuongCongViec: map['KhoiLuongCongViec'] != null ? int.tryParse(map['KhoiLuongCongViec'].toString()) : null,
+      yeuCauCongViec: map['YeuCauCongViec']?.toString(),
+      thoiGianBatDau: map['ThoiGianBatDau']?.toString(),
+      thoiGianKetThuc: map['ThoiGianKetThuc']?.toString(), // Was text
+      loaiMaySuDung: map['LoaiMaySuDung']?.toString(),
+      congCuSuDung: map['CongCuSuDung']?.toString(),
+      hoaChatSuDung: map['HoaChatSuDung']?.toString(),
+      ghiChu: map['GhiChu']?.toString(),
+      xacNhan: map['XacNhan']?.toString(),
+      chiDinh: map['ChiDinh']?.toString(),
+      huongDan: map['HuongDan']?.toString(),
+      nhomThucHien: map['NhomThucHien']?.toString(),
+      caNhanThucHien: map['CaNhanThucHien']?.toString(),
+      listNguoiThucHien: map['ListNguoiThucHien']?.toString(),
+    );
+  }
+}
 // Database Tables
 class DatabaseTables {
   // Table Names
@@ -3073,7 +3349,79 @@ class DatabaseTables {
   static const String newsActivityTable = 'newsactivity';
   static const String newsTable = 'news';
   static const String khuVucKhoChiTietTable = 'khuvuckhochitiet';
-
+  static const String gocleanCongViecTable = 'GoClean_CongViec';
+  static const String gocleanTaiKhoanTable = 'GoClean_TaiKhoan';
+  static const String gocleanYeuCauTable = 'GoClean_YeuCau';
+  static const String createGoCleanYeuCauTable = '''
+    CREATE TABLE $gocleanYeuCauTable (
+      GiaoViecID VARCHAR(100),
+      NguoiTao VARCHAR(100),
+      NguoiNghiemThu TEXT,
+      DiaDiem TEXT,
+      DiaChi TEXT,
+      DinhVi VARCHAR(100),
+      LapLai VARCHAR(100),
+      NgayBatDau DATE,
+      NgayKetThuc DATE,
+      HinhThucNghiemThu VARCHAR(100),
+      MoTaCongViec TEXT,
+      SoNguoiThucHien INT,
+      KhuVucThucHien TEXT,
+      KhoiLuongCongViec INT,
+      YeuCauCongViec TEXT,
+      ThoiGianBatDau TIME,
+      ThoiGianKetThuc TEXT, 
+      LoaiMaySuDung TEXT,
+      CongCuSuDung TEXT,
+      HoaChatSuDung TEXT,
+      GhiChu TEXT,
+      XacNhan TEXT,
+      ChiDinh VARCHAR(100),
+      HuongDan TEXT,
+      NhomThucHien VARCHAR(255),
+      CaNhanThucHien VARCHAR(100),
+      ListNguoiThucHien TEXT
+    )
+  ''';
+  static const String createGoCleanTaiKhoanTable = '''
+    CREATE TABLE $gocleanTaiKhoanTable (
+      UID VARCHAR(100),
+      TaiKhoan VARCHAR(100),
+      PhanLoai VARCHAR(100),
+      DinhVi VARCHAR(100),
+      LoaiDinhVi VARCHAR(100),
+      SDT VARCHAR(100),
+      Email VARCHAR(100),
+      DiaDiem TEXT,
+      DiaChi TEXT,
+      HinhAnh TEXT,
+      TrangThai VARCHAR(100),
+      Nhom VARCHAR(100),
+      Admin VARCHAR(100)
+    )
+  ''';
+  static const String createGoCleanCongViecTable = '''
+    CREATE TABLE $gocleanCongViecTable (
+      LichLamViecID VARCHAR(100),
+      GiaoViecID VARCHAR(100),
+      Ngay DATE,
+      NguoiThucHien VARCHAR(100),
+      XacNhan VARCHAR(100),
+      QRcode VARCHAR(100),
+      MocBatDau TIME,
+      HinhAnhTruoc TEXT,
+      MocKetThuc TIME,
+      HinhAnhSau TEXT,
+      ThucHienDanhGia INT,
+      MoTaThucHien TEXT,
+      KhachHang VARCHAR(100),
+      KhachHangDanhGia INT,
+      ThoiGianDanhGia TIME,
+      KhachHangMoTa TEXT,
+      KhachHangChupAnh TEXT,
+      TrangThai VARCHAR(100)
+    )
+  ''';
   static const String createDSHangTable = '''
     CREATE TABLE $dsHangTable (
       uid TEXT,

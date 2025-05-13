@@ -50,7 +50,7 @@ class _HSDonHangDailyScreenState extends State<HSDonHangDailyScreen> {
   Timer? _cleanupTimer;
   Set<String> _processingApprovals = {}; 
 final List<String> adminUsers = [
-  'hm.tason', 'hm.manhha', 'hm.kimdung', 'hm.lehoa', 'nvthunghiem',
+  'hm.tason', 'hm.manhha', 'hm.kimdung', 'hm.lehoa','hm.phiminh', 'nvthunghiem',
   'hm.quocchien', 'hm.damchinh', 'hotel.danang', 'hotel.nhatrang'
 ];
   final Map<String, List<String>> locationAdminMap = {

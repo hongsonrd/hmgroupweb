@@ -18,6 +18,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:collection/collection.dart';
 import 'http_client.dart';
 import 'package:dropdown_search/dropdown_search.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:intl/intl.dart';
 
 class ProjectWorkReport extends StatefulWidget {
   final String? selectedDate;
@@ -1289,11 +1291,11 @@ Future<void> _generateReport(DateTime startDate, DateTime endDate) async {
     
     // Filter reports by date range
     final filteredReports = _reports.where((report) {
-  final reportDate = DateTime.parse(report.ngay.toString());
-  return reportDate.isAfter(startDate.subtract(Duration(days: 1))) && 
-         reportDate.isBefore(endDate.add(Duration(days: 1))) &&
-         report.nhom == "Báo cáo";
-}).toList();
+      final reportDate = DateTime.parse(report.ngay.toString());
+      return reportDate.isAfter(startDate.subtract(Duration(days: 1))) && 
+             reportDate.isBefore(endDate.add(Duration(days: 1))) &&
+             report.nhom == "Báo cáo";
+    }).toList();
 
     print('Filtered Reports Count: ${filteredReports.length}');
 
@@ -1306,40 +1308,127 @@ Future<void> _generateReport(DateTime startDate, DateTime endDate) async {
     // Create Excel workbook
     final excel = Excel.createExcel();
     
-    // Daily summary
+    // Create all the sheets
     _createDailySummarySheet(excel, filteredReports);
-    
-    // Weekly summary
     _createWeeklySummarySheet(excel, filteredReports);
-    
-    // Monthly summary
     _createMonthlySummarySheet(excel, filteredReports);
-    
-    // Detailed report
     _createDetailedReportSheet(excel, filteredReports);
-    
-    // Employee summary
     _createEmployeeSummarySheet(excel, filteredReports);
 
-    // Save file
-    final bytes = excel.encode();
-    final tempDir = await getTemporaryDirectory();
-    final file = File('${tempDir.path}/report.xlsx');
-    await file.writeAsBytes(bytes!);
+    // Format date for file naming
+    final dateStr = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    final fileName = 'BaoCaoCongViec_${startDate.toString().split(' ')[0]}_${endDate.toString().split(' ')[0]}_$dateStr.xlsx';
+    final fileBytes = excel.encode()!;
+    
+    // Platform-specific saving logic
+    if (Platform.isWindows) {
+      try {
+        // First attempt: Use file_picker save dialog to let user choose location
+        String? outputFile = await FilePicker.platform.saveFile(
+          dialogTitle: 'Lưu báo cáo công việc',
+          fileName: fileName,
+          type: FileType.custom,
+          allowedExtensions: ['xlsx'],
+        );
+        
+        if (outputFile != null) {
+          // User selected a location
+          final file = File(outputFile);
+          await file.writeAsBytes(fileBytes);
+          
+          // Hide loading dialog
+          Navigator.of(context).pop();
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('File đã được lưu tại: $outputFile'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          // If user cancels dialog, fall back to saving in Downloads folder
+          await _saveToDownloadsWindows(fileBytes, fileName);
+          Navigator.of(context).pop(); // Hide loading dialog
+        }
+      } catch (e) {
+        // If FilePicker fails, fall back to Documents folder
+        await _saveToDocumentsWindows(fileBytes, fileName);
+        Navigator.of(context).pop(); // Hide loading dialog
+      }
+    } else {
+      // For mobile platforms, save to temp directory and use Share.shareFiles
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/$fileName');
+      await file.writeAsBytes(fileBytes);
 
-    // Hide loading dialog
-    Navigator.of(context).pop();
-
-    // Share file
-    await Share.shareXFiles(
-      [XFile(file.path)],
-      text: 'Báo cáo công việc',
-    );
-
+      // Hide loading dialog
+      Navigator.of(context).pop();
+      
+      // Share file
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Báo cáo công việc',
+      );
+    }
   } catch (e) {
     print('Error generating report: $e');
     Navigator.of(context).pop(); // Hide loading
     _showError('Lỗi tạo báo cáo: $e');
+  }
+}
+
+// Helper methods for Windows platform
+Future<void> _saveToDownloadsWindows(List<int> fileBytes, String fileName) async {
+  try {
+    final userHome = Platform.environment['USERPROFILE'];
+    if (userHome != null) {
+      final downloadsPath = '$userHome\\Downloads';
+      final directory = Directory(downloadsPath);
+      
+      if (await directory.exists()) {
+        final filePath = '$downloadsPath\\$fileName';
+        final file = File(filePath);
+        await file.writeAsBytes(fileBytes);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('File đã được lưu tại: $filePath'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        return;
+      }
+    }
+    // If Downloads folder not accessible, fall back to Documents
+    await _saveToDocumentsWindows(fileBytes, fileName);
+  } catch (e) {
+    print('Error saving to Downloads: $e');
+    await _saveToDocumentsWindows(fileBytes, fileName);
+  }
+}
+
+Future<void> _saveToDocumentsWindows(List<int> fileBytes, String fileName) async {
+  try {
+    final directory = await getApplicationDocumentsDirectory();
+    final filePath = '${directory.path}\\$fileName';
+    final file = File(filePath);
+    await file.writeAsBytes(fileBytes);
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('File đã được lưu tại: $filePath'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  } catch (e) {
+    print('Error saving to Documents: $e');
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi khi lưu file: $e'),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
 }
 void _showDateRangeDialog() {

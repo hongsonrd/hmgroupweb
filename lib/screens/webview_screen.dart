@@ -12,6 +12,7 @@ import '../location_provider.dart';
 import '../user_credentials.dart';
 import '../hs_page.dart';
 import '../news_section.dart'; 
+import '../projectmanagement4.dart';
 
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
@@ -28,6 +29,7 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
   final List<Map<String, dynamic>> gridData = [
     {'icon': 'assets/timelogo.png', 'name': 'HM Time', 'link': 'https://www.appsheet.com/start/bd11e9cb-0d5c-423f-bead-3c07f1eae0a3','userAccess':[]},
     {'icon': 'assets/hotellogo.png', 'name': 'HM Hotel', 'link': 'hotel_link','userAccess':[]},
+    {'icon': 'assets/logogoclean.png', 'name': 'HM GoClean', 'link': 'goclean_link','userAccess':[]},
     {'icon': 'assets/linklogo.png', 'name': 'HM Link', 'link': 'https://www.appsheet.com/start/28785d83-62f3-4ec6-8ddd-2780d413dfa7','userAccess':[]},
     {'icon': 'assets/logokt.png', 'name': 'HM Kỹ thuật', 'link': 'https://www.appsheet.com/start/f2040b99-7558-4e2c-9e02-df100c83d8ce','userAccess':[]},
     {'icon': 'assets/goodslogo.png', 'name': 'HM Goods', 'link': 'https://www.appsheet.com/start/a97dcdb4-806c-47ac-9277-714e392b2d1b','userAccess':[]},
@@ -74,7 +76,19 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
       );
       return;
     }
+     // Special case for HM GoClean - navigate to ProjectManagement4
+  if (title == 'HM GoClean') {
+    // Get user data from UserState provider
+    final userState = Provider.of<UserState>(context, listen: false);
+    final userData = userState.currentUser;
     
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ProjectManagement4(),
+      ),
+    );
+    return;
+  }
     // Rest of your existing code
     final Uri uri = Uri.parse(url);
     
