@@ -561,30 +561,49 @@ class ExportFormGenerator {
   }
   
   static pw.Widget _buildSignatureBox(String title, pw.Font font) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.center,
-      children: [
-        pw.Text(
-          title,
-          style: pw.TextStyle(
-            font: font,
-            fontSize: 10,
-            fontWeight: pw.FontWeight.bold,
-          ),
-        ),
-        pw.SizedBox(height: 2),
-        pw.Text(
-          '(ký, ghi rõ họ tên)',
-          style: pw.TextStyle(
-            font: font,
-            fontSize: 8,
-            fontStyle: pw.FontStyle.italic,
-          ),
-        ),
-        pw.SizedBox(height: 40),
-      ],
-    );
+  // Define the name based on the title
+  String name = '';
+  if (title == 'Người giao hàng') {
+    name = 'Phan Anh Viết';
+  } else if (title == 'Phòng kế toán') {
+    name = 'Lê Thị Thanh Hoa';
+  } else if (title == 'Thủ kho') {
+    name = 'Phí Thị Minh';
   }
+  
+  return pw.Column(
+    crossAxisAlignment: pw.CrossAxisAlignment.center,
+    children: [
+      pw.Text(
+        title,
+        style: pw.TextStyle(
+          font: font,
+          fontSize: 10,
+          fontWeight: pw.FontWeight.bold,
+        ),
+      ),
+      pw.SizedBox(height: 2),
+      pw.Text(
+        '(ký, ghi rõ họ tên)',
+        style: pw.TextStyle(
+          font: font,
+          fontSize: 8,
+          fontStyle: pw.FontStyle.italic,
+        ),
+      ),
+      pw.SizedBox(height: 30), // Reduced from 40 to make room for the name
+      // Only add the name if it's not empty (for "Người nhận" which doesn't have a predefined name)
+      if (name.isNotEmpty)
+        pw.Text(
+          name,
+          style: pw.TextStyle(
+            font: font,
+            fontSize: 9,
+          ),
+        ),
+    ],
+  );
+}
   
   static String _formatCurrency(int? value) {
     if (value == null) return '0';

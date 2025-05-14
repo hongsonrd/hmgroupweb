@@ -309,15 +309,22 @@ class DBHelper {
   }
 
   /// Updates a GoCleanYeuCau record in the database.
-  Future<int> updateGoCleanYeuCau(GoCleanYeuCauModel yeuCau) async {
-    final db = await database;
-    return await db.update(
-      'GoClean_YeuCau', // Using string literal
-      yeuCau.toMap(),
-      where: 'GiaoViecID = ?',
-      whereArgs: [yeuCau.giaoViecID],
-    );
+  Future<void> updateGoCleanYeuCau(GoCleanYeuCauModel yeuCau) async {
+  final db = await database;
+  
+  if (yeuCau.giaoViecID == null) {
+    throw Exception('Cannot update record without a giaoViecID');
   }
+  
+  await db.update(
+    'GoCleanYeuCau',
+    yeuCau.toMap(),
+    where: 'GiaoViecID = ?',
+    whereArgs: [yeuCau.giaoViecID],
+  );
+  
+  print('Updated GoCleanYeuCau with ID: ${yeuCau.giaoViecID}');
+}
 
   /// Deletes a GoCleanYeuCau record from the database by its GiaoViecID.
   Future<int> deleteGoCleanYeuCau(String giaoViecID) async {
