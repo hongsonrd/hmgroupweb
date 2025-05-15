@@ -73,7 +73,7 @@ final List<String> altStatusOrderUsers = [
   'hm.phiminh' ,'hm.damchinh','hm.quocchien'
 ];
 final List<String> allowedStatuses = [
-  'duyệt', 'cần xuất', 'đang xử lý', 'xuất nội bộ xong'
+  'duyệt', 'cần xuất', 'đang xử lý', 'xuất nội bộ xong', 'hoàn thành'
 ];
   // List of statuses that need approval
   final List<String> pendingStatuses = ['gửi', 'gửi xuất nội bộ'];
@@ -252,8 +252,9 @@ bool _canUserApproveOrderLocation(DonHangModel order) {
     
     // Filter orders by allowed statuses
     _orders = allOrders.where((order) => 
-      allowedStatuses.contains((order.trangThai ?? '').toLowerCase())
-    ).toList();
+  allowedStatuses.contains((order.trangThai ?? '').toLowerCase()) &&
+  _canUserApproveOrderLocation(order)
+).toList();
     
     // Sort by status priority based on user group
     _sortOrdersByUserGroup();
@@ -1356,7 +1357,7 @@ void _generatePXK(DonHangModel order) async {
                     children: [
                       Expanded(
                         child: Text(
-                          'Số phiếu: ${order.soPhieu ?? 'N/A'}',
+                          '✨${order.tenKhachHang2 ?? 'N/A'}',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: titleSize,
@@ -1384,7 +1385,7 @@ void _generatePXK(DonHangModel order) async {
                   ),
                   SizedBox(height: 8),
                   Text(
-                    'Khách hàng: ${order.tenKhachHang2 ?? 'N/A'}',
+                    'Số phiếu: ${order.soPhieu ?? 'N/A'}',
                     style: TextStyle(fontSize: normalSize),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
@@ -1889,7 +1890,7 @@ Future<void> _showQrCode(String soPhieu, String khachHang) async {
               _buildDetailRow('Khách hàng', order.tenKhachHang),
               _buildDetailRow('Số điện thoại', order.sdtKhachHang),
               _buildDetailRow('Số PO', order.soPO),
-              _buildDetailRow('Địa chỉ', order.diaChi),
+              _buildDetailRow('Địa chỉ giao', order.diaChiGiaoHang),
               _buildDetailRow('MST', order.mst),
               _buildDetailRow('Phương thức thanh toán', order.phuongThucThanhToan),
               _buildDetailRow('Trạng thái', order.trangThai),
@@ -2173,29 +2174,33 @@ Future<void> _showQrCode(String soPhieu, String khachHang) async {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  item.tenHang ?? 'N/A',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ),
-                              SizedBox(width: 8),
-                              Text(
-                                _formatCurrency(item.thanhTien),
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                  color: Colors.green[700],
-                                ),
-                              ),
-                            ],
-                          ),
+                           Row(
+  crossAxisAlignment: CrossAxisAlignment.start,
+  children: [
+    Expanded(
+      child: Text(
+        item.idHang != null 
+            ? item.idHang!.contains(" - ") 
+                ? item.idHang!.split(" - ")[1]  
+                : item.idHang!  
+            : 'N/A',
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 16,
+        ),
+      ),
+    ),
+    SizedBox(width: 8),
+    Text(
+      _formatCurrency(item.thanhTien),
+      style: TextStyle(
+        fontWeight: FontWeight.bold,
+        fontSize: 16,
+        color: Colors.green[700],
+      ),
+    ),
+  ],
+),
                           SizedBox(height: 8),
                           Row(
                             children: [
@@ -2450,6 +2455,8 @@ Widget _buildDetailItem(String label, String? value) {
       return 'Đang xử lý';
     case 'xuất nội bộ xong':
       return 'Xuất nội bộ xong';
+    case 'hoàn thành':
+      return 'Hoàn thành';
     default:
       return status;
   }

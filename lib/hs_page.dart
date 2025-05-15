@@ -593,7 +593,7 @@ Future<void> _checkForUpdates() async {
     final currentVersion = AppVersion(packageInfo.version, int.parse(packageInfo.buildNumber));
     
     final response = await AuthenticatedHttpClient.get(
-      Uri.parse('https://yourworldtravel.vn/api/document/versionhotel.txt'),
+      Uri.parse('https://yourworldtravel.vn/api/document/versionhotel2.txt'),
       headers: {'Cache-Control': 'no-cache'}
     ).timeout(Duration(seconds: 5));
     

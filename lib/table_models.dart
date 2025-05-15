@@ -3203,12 +3203,12 @@ class GoCleanYeuCauModel {
   final String? congCuSuDung;
   final String? hoaChatSuDung;
   final String? ghiChu;
-  final String? xacNhan;
-  final String? chiDinh;
-  final String? huongDan;
-  final String? nhomThucHien;
-  final String? caNhanThucHien;
-  final String? listNguoiThucHien;
+   String? xacNhan;
+   String? chiDinh;
+   String? huongDan;
+   String? nhomThucHien;
+   String? caNhanThucHien;
+   String? listNguoiThucHien;
 
   GoCleanYeuCauModel({
     this.giaoViecID,

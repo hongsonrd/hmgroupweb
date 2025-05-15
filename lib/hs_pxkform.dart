@@ -286,12 +286,21 @@ class ExportFormGenerator {
                         return pw.TableRow( // Added return statement
                           children: [
                             _buildTableCell(
-  (item.idHang != null && item.idHang!.contains(' - ')) 
-      ? item.idHang!.split(' - ')[1].trim() 
-      : (item.idHang ?? 'N/A'), 
+  (item.idHang == "KHAC") 
+      ? (item.tenHang ?? 'N/A') 
+      : ((item.idHang != null && item.idHang!.contains(' - ')) 
+          ? item.idHang!.split(' - ')[1].trim() 
+          : (item.idHang ?? 'N/A')), 
   ttf
 ),
-                            _buildTableCell(item.maHang ?? 'N/A', ttf),
+                           _buildTableCell(
+  (item.idHang == "KHAC") 
+      ? (item.tenHang ?? 'N/A') 
+      : ((item.idHang != null && item.idHang!.contains(' - ')) 
+          ? item.idHang!.split(' - ')[0].trim() 
+          : (item.idHang ?? 'N/A')), 
+  ttf
+),
                             _buildTableCell(item.donViTinh ?? 'N/A', ttf),
                             _buildTableCell(item.soLuongYeuCau?.toString() ?? '0', ttf, align: pw.TextAlign.right),
                             _buildTableCell(slThucGiaoDisplay, ttf, align: pw.TextAlign.right), // Actual Qty - MODIFIED
