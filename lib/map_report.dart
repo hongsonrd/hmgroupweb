@@ -3,13 +3,14 @@ import 'package:flutter/material.dart';
 import 'db_helper.dart';
 import 'table_models.dart';
 import 'package:intl/intl.dart';
-import 'http_client.dart'; 
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
 import 'package:sqflite/sqflite.dart';
 import 'dart:async';
 import 'package:uuid/uuid.dart';
+import 'package:http/http.dart' as http;
+import 'http_client.dart'; 
 
 class MapReportScreen extends StatefulWidget {
   final String mapUID;
@@ -29,11 +30,11 @@ class _MapReportScreenState extends State<MapReportScreen> with TickerProviderSt
   final DBHelper dbHelper = DBHelper();
   final Map<String, Widget> zoneWidgetCache = {};
   bool _isSyncing = false;
-final Map<String, List<PositionDot>> zonePositionDots = {};
+  final Map<String, List<PositionDot>> zonePositionDots = {};
   late AnimationController _dotsAnimationController;
   Random random = Random();
-Timer? _dotAnimationTimer;
-Timer? _dotTargetTimer;
+  Timer? _dotAnimationTimer;
+  Timer? _dotTargetTimer;
   MapListModel? mapData;
   List<MapFloorModel> floors = [];
   String? selectedFloorUID;
@@ -41,6 +42,11 @@ Timer? _dotTargetTimer;
   bool isLoading = false;
   String statusMessage = '';
   Set<String> visibleFloors = {};
+  
+  // Add new variables to track sync times
+  DateTime? _lastSyncTime;
+  bool _hasPerformedMorningSync = false;
+  bool _hasPerformedAfternoonSync = false;
 List<Map<String, dynamic>> hoverStats = [
   {
     'title': 'Vị trí đã báo cáo/tổng',
@@ -72,39 +78,43 @@ List<Map<String, dynamic>> hoverStats = [
   },
 ];
 bool _statsLoaded = false;
-//bool _initialSyncDone = false;
-
- @override
-void initState() {
-  super.initState();
-  print("MapReportScreen: initState called");
-  _loadMapData();
-  _loadFloors().then((_) {
-    _preloadZones();
-    // Trigger sync if not done yet
-    //if (!_initialSyncDone) {
-    //  _initialSyncDone = true;
-    //  _syncMapReports();
-    //}
-  });
-  _loadHoverStats();
-  
-  // Animation controller setup remains the same
-  _dotsAnimationController = AnimationController(
-    vsync: this,
-    duration: Duration(seconds: 5), 
-  );
-  _dotsAnimationController.addListener(() {
-    print("Animation value: ${_dotsAnimationController.value}");
-  });
-  
-  Future.delayed(Duration(milliseconds: 500), () {
-    if (mounted) {
-      print("Starting animation");
-      _dotsAnimationController.repeat(reverse: true);
-    }
-  });
-}
+  @override
+@override
+  void initState() {
+    super.initState();
+    print("MapReportScreen: initState called");
+    _loadMapData();
+    _loadFloors().then((_) => _preloadZones());
+    _loadHoverStats();
+    
+    // Initialize animation controller
+    print("Setting up animation controller");
+    _dotsAnimationController = AnimationController(
+      vsync: this,
+      duration: Duration(seconds: 5), 
+    );
+    _dotsAnimationController.addListener(() {
+      print("Animation value: ${_dotsAnimationController.value}");
+    });
+    
+    // Start the animation after a short delay
+    Future.delayed(Duration(milliseconds: 500), () {
+      if (mounted) {
+        print("Starting animation");
+        _dotsAnimationController.repeat(reverse: true);
+      }
+    });
+    
+    // Load the last sync time from SharedPreferences
+    _loadLastSyncTime();
+  }
+   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    
+    // Check if we should perform automatic sync
+    _checkAndPerformAutoSync();
+  }
   @override
 void dispose() {
   _dotsAnimationController.dispose();
@@ -112,6 +122,80 @@ void dispose() {
   _dotTargetTimer?.cancel();
   super.dispose();
 }
+Future<void> _loadLastSyncTime() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastSyncTimeStr = prefs.getString('last_map_report_sync_time');
+      if (lastSyncTimeStr != null) {
+        _lastSyncTime = DateTime.parse(lastSyncTimeStr);
+        _checkSyncPeriodStatus();
+      }
+    } catch (e) {
+      print('Error loading last sync time: $e');
+    }
+  }
+  
+  // New method to save last sync time to SharedPreferences
+  Future<void> _saveLastSyncTime() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final now = DateTime.now();
+      await prefs.setString('last_map_report_sync_time', now.toIso8601String());
+      _lastSyncTime = now;
+      _checkSyncPeriodStatus();
+    } catch (e) {
+      print('Error saving last sync time: $e');
+    }
+  }
+  
+  // Check which sync period (morning/afternoon) we're in
+  void _checkSyncPeriodStatus() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    
+    // Check if last sync was today
+    if (_lastSyncTime != null) {
+      final lastSyncDay = DateTime(_lastSyncTime!.year, _lastSyncTime!.month, _lastSyncTime!.day);
+      final lastSyncHour = _lastSyncTime!.hour;
+      
+      // If sync was today, mark morning or afternoon sync as done
+      if (lastSyncDay.isAtSameMomentAs(today)) {
+        if (lastSyncHour < 12) {
+          _hasPerformedMorningSync = true;
+        } else {
+          _hasPerformedAfternoonSync = true;
+        }
+      } else {
+        // Reset sync flags for a new day
+        _hasPerformedMorningSync = false;
+        _hasPerformedAfternoonSync = false;
+      }
+    }
+  }
+  
+  // Method to check if auto-sync should be performed
+  Future<void> _checkAndPerformAutoSync() async {
+    if (_isSyncing) return;
+    
+    final now = DateTime.now();
+    final currentHour = now.hour;
+    
+    // Morning sync (before noon) if not already done today
+    if (currentHour < 12 && !_hasPerformedMorningSync) {
+      print('Performing automatic morning sync');
+      await _syncMapReports();
+      _hasPerformedMorningSync = true;
+      return;
+    }
+    
+    // Afternoon sync (after noon) if not already done today
+    if (currentHour >= 12 && !_hasPerformedAfternoonSync) {
+      print('Performing automatic afternoon sync');
+      await _syncMapReports();
+      _hasPerformedAfternoonSync = true;
+      return;
+    }
+  }
 Future<void> _loadHoverStats() async {
   if (_statsLoaded) return;
   
@@ -233,147 +317,176 @@ Future<String> _getReportHoursCount() async {
   }
 }
   Future<void> _syncMapReports() async {
-  if (_isSyncing) return;
-  
-  setState(() {
-    _isSyncing = true;
-    statusMessage = 'Đang đồng bộ báo cáo bản đồ...';
-  });
-  
-  try {
-    final String baseUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app';
+    if (_isSyncing) return;
     
-    // Step 1: Clear existing map reports - do this in a separate transaction
-    setState(() => statusMessage = 'Đang xóa dữ liệu cũ...');
-    final db = await dbHelper.database;
+    setState(() {
+      _isSyncing = true;
+      statusMessage = 'Đang đồng bộ báo cáo bản đồ...';
+    });
     
-    await db.transaction((txn) async {
-      final deleteCount = await txn.delete(
-        DatabaseTables.taskHistoryTable,
-        where: "PhanLoai = ?",
-        whereArgs: ['map_report']
+    try {
+      final String baseUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app';
+      
+      // Step 1: Clear existing map reports
+      setState(() => statusMessage = 'Đang xóa dữ liệu cũ...');
+      final db = await dbHelper.database;
+      
+      await db.transaction((txn) async {
+        final deleteCount = await txn.delete(
+          DatabaseTables.taskHistoryTable,
+          where: "PhanLoai = ?",
+          whereArgs: ['map_report']
+        );
+        print('Deleted $deleteCount existing map reports');
+      });
+      
+      // Step 2: Fetch new data
+      setState(() => statusMessage = 'Đang lấy báo cáo bản đồ từ server...');
+      final mapReportResponse = await AuthenticatedHttpClient.get(
+        Uri.parse('$baseUrl/mapreport')
       );
-      print('Deleted $deleteCount existing map reports');
-    });
-    
-    // Step 2: Fetch new data
-    setState(() => statusMessage = 'Đang lấy báo cáo bản đồ từ server...');
-    final mapReportResponse = await AuthenticatedHttpClient.get(
-      Uri.parse('$baseUrl/mapreport')
-    );
-    
-    if (mapReportResponse.statusCode != 200) {
-      throw Exception('Failed to load map reports: ${mapReportResponse.statusCode}');
-    }
+      
+      if (mapReportResponse.statusCode != 200) {
+        throw Exception('Failed to load map reports: ${mapReportResponse.statusCode}');
+      }
 
-    final String responseText = mapReportResponse.body;
-    final List<dynamic> mapReportData = json.decode(responseText);
-    
-    print('Retrieved ${mapReportData.length} map reports from server');
-    
-    // Step 3: Process and insert data
-    setState(() => statusMessage = 'Đang lưu ${mapReportData.length} báo cáo vào cơ sở dữ liệu...');
-    
-    // Create TaskHistory models from map report data
-    final List<Map<String, dynamic>> taskHistories = [];
-    final Set<String> processedUIDs = {}; // Track UIDs to avoid duplicates
-    
-    for (var report in mapReportData) {
-      try {
-        final uid = report['UID']?.toString() ?? '';
+      final String responseText = mapReportResponse.body;
+      final List<dynamic> mapReportData = json.decode(responseText);
+      
+      print('Retrieved ${mapReportData.length} map reports from server');
+      
+      // Step 3: Process and insert data
+      setState(() => statusMessage = 'Đang lưu ${mapReportData.length} báo cáo vào cơ sở dữ liệu...');
+      
+      // Create TaskHistory models from map report data
+      final List<Map<String, dynamic>> taskHistories = [];
+      final Set<String> processedUIDs = {};
+      
+      for (var report in mapReportData) {
+        try {
+          final uid = report['UID']?.toString() ?? '';
+          
+          if (uid.isEmpty || processedUIDs.contains(uid)) {
+            continue;
+          }
+          
+          processedUIDs.add(uid);
+          final reportDate = report['Ngay'] ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+          final Map<String, dynamic> taskMap = {
+            'UID': uid,
+            'NguoiDung': report['NguoiDung'] ?? '',
+            'TaskID': report['TaskID'] ?? '',
+            'KetQua': report['KetQua'] ?? '',
+            'Ngay': _normalizeDateString(reportDate),
+            'Gio': report['Gio'] ?? DateFormat('HH:mm:ss').format(DateTime.now()),
+            'ChiTiet': report['ChiTiet'] ?? '',
+            'ChiTiet2': report['ChiTiet2'] ?? '',
+            'ViTri': report['ViTri'] ?? '',
+            'BoPhan': report['BoPhan'] ?? '',
+            'PhanLoai': 'map_report',
+            'HinhAnh': report['HinhAnh'] ?? '',
+            'GiaiPhap': report['GiaiPhap'] ?? '',
+          };
+          taskHistories.add(taskMap);
+        } catch (e) {
+          print('Error processing map report: $e');
+          print('Problematic data: $report');
+        }
+      }
+
+      // Step 4: Insert in batches to handle large datasets
+      if (taskHistories.isNotEmpty) {
+        int successCount = 0;
         
-        // Skip if UID is empty or we've already processed this UID
-        if (uid.isEmpty || processedUIDs.contains(uid)) {
-          continue;
+        for (int i = 0; i < taskHistories.length; i += 50) {
+          final int end = min(i + 50, taskHistories.length);
+          final batch = db.batch();
+          
+          for (int j = i; j < end; j++) {
+            batch.insert(
+              DatabaseTables.taskHistoryTable, 
+              taskHistories[j],
+              conflictAlgorithm: ConflictAlgorithm.replace
+            );
+          }
+          
+          await batch.commit(noResult: true);
+          successCount += end - i;
+          
+          setState(() {
+            statusMessage = 'Đã lưu $successCount/${taskHistories.length} báo cáo...';
+          });
         }
         
-        processedUIDs.add(uid);
-        final reportDate = report['Ngay'] ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
-
-        final Map<String, dynamic> taskMap = {
-  'UID': uid,
-  'NguoiDung': report['NguoiDung'] ?? '',
-  'TaskID': report['TaskID'] ?? '',
-  'KetQua': report['KetQua'] ?? '',
-  'Ngay': _normalizeDateString(reportDate),
-  'Gio': report['Gio'] ?? DateFormat('HH:mm:ss').format(DateTime.now()),
-          'ChiTiet': report['ChiTiet'] ?? '',
-          'ChiTiet2': report['ChiTiet2'] ?? '',
-          'ViTri': report['ViTri'] ?? '',
-          'BoPhan': report['BoPhan'] ?? '',
-          'PhanLoai': 'map_report', // Force the correct value
-          'HinhAnh': report['HinhAnh'] ?? '',
-          'GiaiPhap': report['GiaiPhap'] ?? '',
-        };
-        taskHistories.add(taskMap);
-      } catch (e) {
-        print('Error processing map report: $e');
-        print('Problematic data: $report');
-        // Continue with other records instead of throwing
-      }
-    }
-
-    // Step 4: Insert in batches to handle large datasets
-    if (taskHistories.isNotEmpty) {
-      int successCount = 0;
-      
-      // Insert in smaller batches of 50 records
-      for (int i = 0; i < taskHistories.length; i += 50) {
-        final int end = min(i + 50, taskHistories.length);
-        final batch = db.batch();
-        
-        for (int j = i; j < end; j++) {
-          batch.insert(
-            DatabaseTables.taskHistoryTable, 
-            taskHistories[j],
-            conflictAlgorithm: ConflictAlgorithm.replace // Replace if duplicate
-          );
-        }
-        
-        await batch.commit(noResult: true);
-        successCount += end - i;
-        
-        // Update progress
-        setState(() {
-          statusMessage = 'Đã lưu $successCount/${taskHistories.length} báo cáo...';
-        });
+        print('Successfully inserted $successCount map reports');
       }
       
-      print('Successfully inserted $successCount map reports');
+      // Step 5: Sync checklist data
+      setState(() => statusMessage = 'Đang đồng bộ lịch công việc (checklist)...');
+      await _syncChecklist();
+      
+      // Save last sync date and time
+      final prefs = await SharedPreferences.getInstance();
+      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      await prefs.setString('last_map_report_sync_date', today);
+      
+      // Save the sync time to track morning/afternoon syncs
+      await _saveLastSyncTime();
+      
+      setState(() {
+        statusMessage = 'Đồng bộ hoàn tất: ${taskHistories.length} báo cáo';
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Đồng bộ dữ liệu báo cáo bản đồ thành công: ${taskHistories.length} báo cáo'))
+      );
+      
+      // Refresh the screen after successful sync
+      await _refreshAfterSync();
+      
+    } catch (e) {
+      print('Error syncing map reports: $e');
+      setState(() {
+        statusMessage = 'Lỗi đồng bộ báo cáo: $e';
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi đồng bộ dữ liệu báo cáo: $e'))
+      );
+    } finally {
+      setState(() {
+        _isSyncing = false;
+      });
     }
-    
-    // Step 5: Sync checklist data
-    setState(() => statusMessage = 'Đang đồng bộ lịch công việc (checklist)...');
-    await _syncChecklist();
-    
-    // Save last sync date
-    final prefs = await SharedPreferences.getInstance();
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    await prefs.setString('last_map_report_sync_date', today);
-    
-    setState(() {
-      statusMessage = 'Đồng bộ hoàn tất: ${taskHistories.length} báo cáo';
-    });
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Đồng bộ dữ liệu báo cáo bản đồ thành công: ${taskHistories.length} báo cáo'))
-    );
-    
-  } catch (e) {
-    print('Error syncing map reports: $e');
-    setState(() {
-      statusMessage = 'Lỗi đồng bộ báo cáo: $e';
-    });
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Lỗi đồng bộ dữ liệu báo cáo: $e'))
-    );
-  } finally {
-    setState(() {
-      _isSyncing = false;
-    });
   }
-}
+  Future<void> _refreshAfterSync() async {
+    try {
+      // Clear all caches to ensure fresh data is loaded
+      zoneWidgetCache.clear();
+      
+      // Reset animation
+      _dotAnimationTimer?.cancel();
+      _dotTargetTimer?.cancel();
+      
+      // Reload stats
+      await _loadHoverStats();
+      
+      // Reload zones with fresh data
+      await _preloadZones();
+      
+      // Refresh the screen
+      setState(() {
+        _statsLoaded = false; // Force stats reload
+      });
+      
+      // Start animation again
+      _startDotMovement();
+      
+    } catch (e) {
+      print('Error refreshing screen after sync: $e');
+    }
+  }
 
 // Add this new method to sync checklist data
 Future<void> _syncChecklist() async {
@@ -453,6 +566,9 @@ Future<void> _syncChecklist() async {
   Future<void> _preloadZones() async {
   if (floors.isEmpty) return;
   
+  // Check if map name contains "VMáy" to determine default icon type
+  final bool defaultMachineMap = widget.mapName.contains('VMáy');
+  
   for (final floor in floors) {
     if (floor.floorUID != null) {
       try {
@@ -472,82 +588,73 @@ Future<void> _syncChecklist() async {
             // Get today's date for report comparison
             final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
             
+            // Parse zone boundary points
+            List<Offset> zonePoints = [];
+            try {
+              final pointsData = json.decode(zone.cacDiemMoc ?? '[]') as List;
+              zonePoints = pointsData.map((point) {
+                return Offset(
+                  (point['x'] as num).toDouble(),
+                  (point['y'] as num).toDouble(),
+                );
+              }).toList();
+            } catch (e) {
+              print('Error parsing zone points: $e');
+              continue;
+            }
+            
+            if (zonePoints.length < 3) continue;
+            
             // For each position, create initial dots
             List<PositionDot> dots = [];
             
             for (final position in positions) {
-  // Get reports for this position to determine color
-  final reports = await dbHelper.getReportsByPosition(position.viTri ?? '');
-  final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-  
-  // Check if has report today
-  final hasReportToday = reports.any((report) {
-    final reportDate = report['Ngay']?.toString() ?? '';
-    if (reportDate.isEmpty) return false;
-    
-    try {
-      DateTime date;
-      if (reportDate.contains('T')) {
-        date = DateTime.parse(reportDate.split('.')[0]);
-      } else {
-        date = DateTime.parse(reportDate);
-      }
-      date = date.add(Duration(days: 1));
-      final adjustedDateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
-      return adjustedDateStr == today;
-    } catch (e) {
-      return false;
-    }
-  });
-  
-  // Check if has machine reports
-  final hasMachineReports = reports.any((report) => 
-    report['BoPhan']?.toString() == 'Máy móc'
-  );
+              // Get reports for this position to determine color
+              final reports = await dbHelper.getReportsByPosition(position.viTri ?? '');
+              final hasReportToday = reports.any((report) {
+                final reportDate = report['Ngay']?.toString() ?? '';
+                if (reportDate.isEmpty) return false;
+                
+                try {
+                  DateTime date;
+                  if (reportDate.contains('T')) {
+                    date = DateTime.parse(reportDate.split('.')[0]);
+                  } else {
+                    date = DateTime.parse(reportDate);
+                  }
+                  date = date.add(Duration(days: 1));
+                  final adjustedDateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+                  return adjustedDateStr == today;
+                } catch (e) {
+                  return false;
+                }
+              });
               
-              // Parse zone boundary points
-              List<Offset> zonePoints = [];
-              try {
-                final pointsData = json.decode(zone.cacDiemMoc ?? '[]') as List;
-                zonePoints = pointsData.map((point) {
-                  return Offset(
-                    (point['x'] as num).toDouble(),
-                    (point['y'] as num).toDouble(),
-                  );
-                }).toList();
-              } catch (e) {
-                print('Error parsing zone points: $e');
-                continue;
-              }
-              
-              if (zonePoints.length < 3) continue;
-              
-              // Calculate a random initial position within the zone
-              double centerX = 0, centerY = 0;
-              for (var point in zonePoints) {
-                centerX += point.dx;
-                centerY += point.dy;
-              }
-              centerX /= zonePoints.length;
-              centerY /= zonePoints.length;
-              
-              // Initial position is close to center
-              final initialPos = Offset(
-                centerX + (random.nextDouble() - 0.5) * 20,
-                centerY + (random.nextDouble() - 0.5) * 20
+              // Check if has machine reports
+              final hasMachineReports = reports.any((report) => 
+                report['BoPhan']?.toString() == 'Máy móc'
               );
               
-              final dot = PositionDot(
-    positionName: position.viTri ?? 'Vị trí không tên',
-    zoneUID: zone.zoneUID!,
-    floorUID: floor.floorUID!, 
-    position: initialPos,
-    hasReportToday: hasReportToday,
-    isMachine: hasMachineReports,
-    random: Random(),
-  );
+              // Determine if this is a machine position based on position name or map name
+              bool isMachine = hasMachineReports || 
+                            defaultMachineMap ||
+                            (position.viTri?.contains('Máy') ?? false) ||
+                            (position.viTri?.contains('Robot') ?? false);
               
-              // Set initial target
+              // Generate a truly random position within the zone using the triangle method
+              final initialPos = _generateRandomPointInPolygon(zonePoints);
+              
+              final dot = PositionDot(
+                positionName: position.viTri ?? 'Vị trí không tên',
+                zoneUID: zone.zoneUID!,
+                floorUID: floor.floorUID!, 
+                position: initialPos,
+                hasReportToday: hasReportToday,
+                isMachine: isMachine,
+                random: Random(),
+              );
+              
+              // Set initial target different from current position
               dot.setNewTarget(zonePoints, random);
               dots.add(dot);
             }
@@ -564,6 +671,61 @@ Future<void> _syncChecklist() async {
   
   // Start dot movement updates
   _startDotMovement();
+}
+
+// Add this new method to generate random points in a polygon
+Offset _generateRandomPointInPolygon(List<Offset> polygon) {
+  if (polygon.length < 3) {
+    throw Exception('A polygon must have at least 3 vertices');
+  }
+  
+  // Calculate bounding box
+  double minX = double.infinity, maxX = double.negativeInfinity;
+  double minY = double.infinity, maxY = double.negativeInfinity;
+  
+  for (var point in polygon) {
+    minX = min(minX, point.dx);
+    maxX = max(maxX, point.dx);
+    minY = min(minY, point.dy);
+    maxY = max(maxY, point.dy);
+  }
+  
+  // Ray casting algorithm to check if point is in polygon
+  bool isPointInPolygon(Offset point, List<Offset> polygon) {
+    bool isInside = false;
+    int j = polygon.length - 1;
+    
+    for (int i = 0; i < polygon.length; i++) {
+      if ((polygon[i].dy > point.dy) != (polygon[j].dy > point.dy) &&
+          (point.dx < (polygon[j].dx - polygon[i].dx) * (point.dy - polygon[i].dy) / 
+          (polygon[j].dy - polygon[i].dy) + polygon[i].dx)) {
+        isInside = !isInside;
+      }
+      j = i;
+    }
+    
+    return isInside;
+  }
+  
+  // Adjusted random point generation with wider distribution
+  // Try up to 50 times to find a point inside the polygon
+  for (int attempt = 0; attempt < 50; attempt++) {
+    final x = minX + random.nextDouble() * (maxX - minX);
+    final y = minY + random.nextDouble() * (maxY - minY);
+    final point = Offset(x, y);
+    
+    if (isPointInPolygon(point, polygon)) {
+      return point;
+    }
+  }
+  
+  // Fallback: If we couldn't find a point inside the polygon after 50 attempts,
+  // return a point near a random vertex of the polygon
+  int vertexIndex = random.nextInt(polygon.length);
+  return Offset(
+    polygon[vertexIndex].dx + (random.nextDouble() - 0.5) * 10,
+    polygon[vertexIndex].dy + (random.nextDouble() - 0.5) * 10
+  );
 }
 
 void _startDotMovement() {
@@ -1265,8 +1427,8 @@ void _handleFloorChange(String floorUID) {
         _showPositionChecklist(dot.positionName);
       },
       child: Container(
-        width: 20,
-        height: 20, 
+        width: 29,
+        height: 29, 
         decoration: BoxDecoration(
           color: dot.hasReportToday ? Colors.green.shade600 : Colors.red.shade600,
           shape: dot.isMachine ? BoxShape.rectangle : BoxShape.circle,
@@ -1283,7 +1445,7 @@ void _handleFloorChange(String floorUID) {
         ),
         child: Center(
           child: Icon(
-            dot.isMachine ? Icons.build : Icons.person,
+            dot.iconData, 
             size: 12,
             color: Colors.white,
           ),
@@ -1547,23 +1709,23 @@ void _handleFloorChange(String floorUID) {
         return AlertDialog(
           title: Row(
             children: [
-              Expanded(child: Text(zone.tenKhuVuc ?? 'Khu vực không tên')),
-              Container(
-                padding: EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.blue,
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Text(
-                  '$positionCount vị trí',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
+      Expanded(child: Text(zone.tenKhuVuc ?? 'Khu vực không tên')),
+      Container(
+        padding: EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.blue,
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Text(
+          '$positionCount vị trí',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
           ),
+        ),
+      ),
+    ],
+  ),
           content: Container(
             width: double.maxFinite,
             constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
@@ -1591,95 +1753,7 @@ void _handleFloorChange(String floorUID) {
                     Text(' ${zone.mauSac ?? '#3388FF80'}'),
                   ],
                 ),
-                FutureBuilder<List<String>>(
-                  future: _getAllPositionImagesInZone(positions),
-                  builder: (context, imagesSnapshot) {
-                    if (imagesSnapshot.connectionState == ConnectionState.waiting) {
-                      return Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Center(child: CircularProgressIndicator()),
-                      );
-                    }
-                    
-                    final images = imagesSnapshot.data ?? [];
-                    
-                    if (images.isEmpty) {
-                      return SizedBox.shrink(); // No images to show
-                    }
-                    
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(height: 16),
-                        Text('Hình ảnh vị trí (${images.length}):', 
-                             style: TextStyle(fontWeight: FontWeight.bold)),
-                        SizedBox(height: 8),
-                        Container(
-                          height: 120,
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: images.length,
-                            itemBuilder: (context, index) {
-                              return GestureDetector(
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => Scaffold(
-                                        appBar: AppBar(
-                                          title: Text('Hình ảnh báo cáo'),
-                                          backgroundColor: Colors.black,
-                                        ),
-                                        body: Center(
-                                          child: InteractiveViewer(
-                                            panEnabled: true,
-                                            boundaryMargin: EdgeInsets.all(20),
-                                            minScale: 0.5,
-                                            maxScale: 4,
-                                            child: Image.network(
-                                              images[index],
-                                              fit: BoxFit.contain,
-                                              errorBuilder: (context, error, stackTrace) {
-                                                return Text('Không thể tải hình ảnh: $error');
-                                              },
-                                            ),
-                                          ),
-                                        ),
-                                        backgroundColor: Colors.black,
-                                      ),
-                                    ),
-                                  );
-                                },
-                                child: Container(
-                                  width: 100,
-                                  margin: EdgeInsets.only(right: 8),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(color: Colors.grey.shade300),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(7),
-                                    child: Image.network(
-                                      images[index],
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return Container(
-                                          color: Colors.grey.shade200,
-                                          child: Icon(Icons.broken_image, color: Colors.grey),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        Divider(height: 24),
-                      ],
-                    );
-                  },
-                ),
+                
                 SizedBox(height: 16),
                 
                 // Zone statistics
@@ -1852,24 +1926,6 @@ void _handleFloorChange(String floorUID) {
       },
     ),
   );
-}
-Future<List<String>> _getAllPositionImagesInZone(List<MapPositionModel> positions) async {
-  final Set<String> uniqueImages = {};
-  
-  for (var position in positions) {
-    if (position.viTri != null && position.viTri!.isNotEmpty) {
-      final reports = await dbHelper.getReportsByPosition(position.viTri!);
-      
-      for (var report in reports) {
-        final imageUrl = report['HinhAnh']?.toString() ?? '';
-        if (imageUrl.isNotEmpty) {
-          uniqueImages.add(imageUrl);
-        }
-      }
-    }
-  }
-  
-  return uniqueImages.toList();
 }
 Future<Map<String, String>?> _getStaffInfo(String username) async {
   if (username.isEmpty) return null;
@@ -2297,7 +2353,8 @@ class PositionDot {
   Offset position;
   Offset targetPosition;
   bool hasReportToday;
-  bool isMachine; // New property to track if this is a machine position
+  bool isMachine; 
+  IconData iconData; 
   Color color;
   Random random;
   
@@ -2311,7 +2368,17 @@ class PositionDot {
     required this.random,
   }) : 
     targetPosition = position,
-    color = hasReportToday ? Colors.green.shade600 : Colors.red.shade600;
+    color = hasReportToday ? Colors.green.shade600 : Colors.red.shade600,
+    iconData = Icons.person {
+      // Determine the appropriate icon based on position name
+      if (positionName.contains('Máy')) {
+        iconData = Icons.ice_skating;
+      } else if (positionName.contains('Robot')) {
+        iconData = Icons.auto_awesome;
+      } else if (isMachine) {
+        iconData = Icons.ice_skating;
+      }
+    }
   
   void updatePosition(double t) {
   // Skip the animation controller value and just move directly toward target
