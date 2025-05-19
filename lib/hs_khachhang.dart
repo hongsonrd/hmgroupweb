@@ -9,6 +9,8 @@ import 'package:url_launcher/url_launcher.dart' as url_launcher;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:math';
+import 'http_client.dart';
+
 class HSKhachHangScreen extends StatefulWidget {
   @override
   _HSKhachHangScreenState createState() => _HSKhachHangScreenState();
@@ -202,7 +204,7 @@ Future<void> _syncKhachHang(String username) async {
   final String requestUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelkhachhang/$username';
   print('Making request to: $requestUrl');
   
-  final response = await http.get(
+  final response = await AuthenticatedHttpClient.get(
     Uri.parse(requestUrl),
     headers: {'Content-Type': 'application/json'},
   );
@@ -231,7 +233,7 @@ Future<void> _syncKhachHangContact(String username) async {
   final String requestUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelkhachhangcontact/$username';
   print('Making request to: $requestUrl');
   
-  final response = await http.get(
+  final response = await AuthenticatedHttpClient.get(
     Uri.parse(requestUrl),
     headers: {'Content-Type': 'application/json'},
   );

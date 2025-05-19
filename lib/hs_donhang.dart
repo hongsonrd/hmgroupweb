@@ -1173,6 +1173,7 @@ Widget build(BuildContext context) {
           DataColumn(label: Text('Người tạo')),
           DataColumn(label: Text('Thao tác')), // Actions column
         ],
+        
         rows: orders.map((order) {
           final formattedDate = order.ngay != null
               ? DateFormat('dd/MM/yyyy').format(DateTime.parse(order.ngay!))
@@ -1183,7 +1184,8 @@ Widget build(BuildContext context) {
               pendingStatuses.contains(lowerStatus);
           final isProcessingApproval = order.soPhieu != null &&
               _processingApprovals.contains(order.soPhieu!);
-
+          final isOrderCreator = (order.nguoiTao?.toLowerCase() ?? '') == _username.toLowerCase();
+final isHmGroup = (order.phuongThucGiaoHang?.toUpperCase() ?? '') == 'HMGROUP';
           return DataRow(
             cells: [
               DataCell(Text(order.soPhieu ?? 'N/A')),
@@ -1210,102 +1212,128 @@ Widget build(BuildContext context) {
               ),
               DataCell(Text(order.nguoiTao ?? 'N/A')),
               DataCell(
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (order.soPhieu != null && (order.trangThai?.toLowerCase() ?? '') != 'nháp')
-                      IconButton(
-                        icon: Icon(Icons.receipt_long, size: 18, color: Color(0xFF534b0d)),
-                        tooltip: 'Xuất PXK',
-                        onPressed: () => _generatePXK(order),
-                      ),
-                      if (order.soPhieu != null && (order.trangThai?.toLowerCase() ?? '') != 'nháp')
-                      IconButton(
-                        icon: Icon(Icons.receipt_long, size: 18, color: Color(0xFF564b0d)),
-                        tooltip: 'Xuất PYC',
-                        onPressed: () => _generatePYC(order),
-                      ),
-                      if (order.soPhieu != null && (order.trangThai?.toLowerCase() ?? '') != 'nháp')
-                    IconButton(
-                      icon: Icon(Icons.qr_code, size: 18, color: Color(0xFF534b0d)),
-                      tooltip: 'Hiện mã QR',
-                      onPressed: () {
-                        _showQrCode(order.soPhieu!, order.tenKhachHang2 ?? '');
-                      },
-                    ),
-                    if (canApprove)
-                      IconButton(
-                        icon: isProcessingApproval
-                            ? SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
-                                ),
-                              )
-                            : Icon(Icons.check, size: 18, color: Colors.green),
-                        tooltip: isProcessingApproval ? 'Đang xử lý...' : 'Duyệt đơn',
-                        onPressed: isProcessingApproval
-                            ? null
-                            : () async {
-                                final confirm = await showDialog<bool>(
-                                      context: context,
-                                      builder: (context) => AlertDialog(
-                                        title: Text('Xác nhận duyệt đơn'),
-                                        content: Text('Xác nhận duyệt đơn hàng ${order.soPhieu}?'),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(context, false),
-                                            child: Text('Huỷ'),
-                                          ),
-                                          ElevatedButton(
-                                            onPressed: () => Navigator.pop(context, true),
-                                            child: Text('Duyệt', style: TextStyle(color: Colors.white)),
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: Colors.green,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ) ??
-                                    false;
-
-                                if (confirm && order.soPhieu != null) {
-                                  final success = await _approveOrder(order.soPhieu!);
-                                  if (success) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Đã duyệt đơn hàng ${order.soPhieu}'),
-                                        backgroundColor: Colors.green,
-                                      ),
-                                    );
-                                    Future.delayed(Duration(seconds: 3), () {
-                                      _loadOrders();
-                                    });
-                                  } else {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Lỗi khi duyệt đơn hàng ${order.soPhieu}'),
-                                        backgroundColor: Colors.red,
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
-                      ),
-                    IconButton(
-                      icon: Icon(Icons.info_outline, size: 18, color: Colors.blue),
-                      tooltip: 'Xem chi tiết',
-                      onPressed: () {
-                        if (order.soPhieu != null) {
-                          _loadOrderItems(order.soPhieu!);
-                        }
-                      },
-                    ),
-                  ],
+  Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      // Check if user is the creator of the order and it's an HMGROUP order with specific status
+      if (isOrderCreator && isHmGroup && 
+          ((order.trangThai?.toLowerCase() ?? '') == 'chưa xong' || 
+           (order.trangThai?.toLowerCase() ?? '') == 'xuất nội bộ'))
+        IconButton(
+          icon: Icon(Icons.send, size: 18, color: Colors.blue),
+          tooltip: 'Gửi đơn',
+          onPressed: () => _sendHMGroupOrder(order.soPhieu!),
+        ),
+        
+      if (order.soPhieu != null && (order.trangThai?.toLowerCase() ?? '') != 'nháp')
+        IconButton(
+          icon: Icon(Icons.receipt_long, size: 18, color: Color(0xFF534b0d)),
+          tooltip: 'Xuất PXK',
+          onPressed: () => _generatePXK(order),
+        ),
+        
+      if (order.soPhieu != null && (order.trangThai?.toLowerCase() ?? '') != 'nháp')
+        IconButton(
+          icon: Icon(Icons.receipt_long, size: 18, color: Color(0xFF564b0d)),
+          tooltip: 'Xuất PYC',
+          onPressed: () => _generatePYC(order),
+        ),
+        
+      if (order.soPhieu != null && (order.trangThai?.toLowerCase() ?? '') != 'nháp')
+        IconButton(
+          icon: Icon(Icons.qr_code, size: 18, color: Color(0xFF534b0d)),
+          tooltip: 'Hiện mã QR',
+          onPressed: () {
+            _showQrCode(order.soPhieu!, order.tenKhachHang2 ?? '');
+          },
+        ),
+        
+      if (canApprove)
+        IconButton(
+          icon: isProcessingApproval
+              ? SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(isHmGroup ? Colors.orange : Colors.green),
+                  ),
+                )
+              : Icon(
+                  Icons.check, 
+                  size: 18, 
+                  color: isHmGroup ? Colors.orange : Colors.green
                 ),
-              ),
+          tooltip: isProcessingApproval 
+              ? 'Đang xử lý...' 
+              : (isHmGroup ? 'Duyệt nhanh' : 'Duyệt đơn'),
+          onPressed: isProcessingApproval
+              ? null
+              : () async {
+                  if (isHmGroup) {
+                    // Quick approve for HMGROUP orders
+                    _quickApproveHMGroupOrder(order.soPhieu!);
+                  } else {
+                    // Regular approval process
+                    final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: Text('Xác nhận duyệt đơn'),
+                            content: Text('Xác nhận duyệt đơn hàng ${order.soPhieu}?'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: Text('Huỷ'),
+                              ),
+                              ElevatedButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                child: Text('Duyệt', style: TextStyle(color: Colors.white)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ) ??
+                        false;
+
+                    if (confirm && order.soPhieu != null) {
+                      final success = await _approveOrder(order.soPhieu!);
+                      if (success) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Đã duyệt đơn hàng ${order.soPhieu}'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                        Future.delayed(Duration(seconds: 3), () {
+                          _loadOrders();
+                        });
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Lỗi khi duyệt đơn hàng ${order.soPhieu}'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  }
+                },
+        ),
+        
+      IconButton(
+        icon: Icon(Icons.info_outline, size: 18, color: Colors.blue),
+        tooltip: 'Xem chi tiết',
+        onPressed: () {
+          if (order.soPhieu != null) {
+            _loadOrderItems(order.soPhieu!);
+          }
+        },
+      ),
+    ],
+  ),
+),
             ],
           );
         }).toList(),
@@ -1493,245 +1521,287 @@ Widget build(BuildContext context) {
   }
 
   Widget _buildOrderItem(DonHangModel order, int columnCount) {
-    final isProcessingApproval = order.soPhieu != null &&
-        _processingApprovals.contains(order.soPhieu!);
-    final formattedDate = order.ngay != null
-        ? DateFormat('dd/MM/yyyy').format(DateTime.parse(order.ngay!))
-        : 'N/A';
+  final isProcessingApproval = order.soPhieu != null &&
+      _processingApprovals.contains(order.soPhieu!);
+  final formattedDate = order.ngay != null
+      ? DateFormat('dd/MM/yyyy').format(DateTime.parse(order.ngay!))
+      : 'N/A';
 
-    final statusColor = _getStatusColor(order.trangThai);
-    final lowerStatus = (order.trangThai ?? '').toLowerCase();
-    final canApprove =
-        adminUsers.contains(_username) && pendingStatuses.contains(lowerStatus);
-    final showQrButton =
-        order.soPhieu != null && (order.trangThai?.toLowerCase() ?? '') != 'nháp';
+  final statusColor = _getStatusColor(order.trangThai);
+  final lowerStatus = (order.trangThai ?? '').toLowerCase();
+  
+  // Check if user is the creator of the order
+  final isOrderCreator = (order.nguoiTao?.toLowerCase() ?? '') == _username.toLowerCase();
+  
+  // Check if order is for HMGROUP and needs "Gửi" button
+  final isHmGroup = (order.phuongThucGiaoHang?.toUpperCase() ?? '') == 'HMGROUP';
+  final needsGuiButton = isOrderCreator && isHmGroup && 
+      (lowerStatus == 'chưa xong' || lowerStatus == 'xuất nội bộ');
+  
+  // Check if admin should see "Duyệt nhanh" instead of "Duyệt đơn"
+  final canApprove = adminUsers.contains(_username) && pendingStatuses.contains(lowerStatus);
+  final shouldShowQuickApprove = canApprove && isHmGroup;
+  
+  final showQrButton =
+      order.soPhieu != null && (order.trangThai?.toLowerCase() ?? '') != 'nháp';
 
-    // Adjust font sizes based on column count
-    final double titleSize = columnCount == 3 ? 13 : (columnCount == 2 ? 14 : 16);
-    final double normalSize = columnCount == 3 ? 12 : (columnCount == 2 ? 13 : 14);
-    final double smallSize = columnCount == 3 ? 11 : (columnCount == 2 ? 12 : 13);
-    final double microSize = columnCount == 3 ? 10 : (columnCount == 2 ? 11 : 12);
+  // Adjust font sizes based on column count
+  final double titleSize = columnCount == 3 ? 13 : (columnCount == 2 ? 14 : 16);
+  final double normalSize = columnCount == 3 ? 12 : (columnCount == 2 ? 13 : 14);
+  final double smallSize = columnCount == 3 ? 11 : (columnCount == 2 ? 12 : 13);
+  final double microSize = columnCount == 3 ? 10 : (columnCount == 2 ? 11 : 12);
 
-    return Card(
-      margin:
-          EdgeInsets.symmetric(horizontal: columnCount > 1 ? 4 : 8, vertical: 4),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Expanded(
-            child: InkWell(
-              onTap: () {
-                if (order.soPhieu != null) {
-                  _loadOrderItems(order.soPhieu!);
-                }
-              },
-              child: Padding(
-                padding: EdgeInsets.all(columnCount == 3 ? 10 : 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '✨${order.tenKhachHang2 ?? 'N/A'}',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: titleSize,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Container(
-                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: statusColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: statusColor, width: 1),
-                          ),
-                          child: Text(
-                            _getStatusDisplayName(order.trangThai ?? 'N/A'),
-                            style: TextStyle(
-                              color: statusColor,
-                              fontSize: microSize,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Số phiếu: ${order.soPhieu ?? 'N/A'}',
-                      style: TextStyle(fontSize: normalSize),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
-                    SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Ngày: $formattedDate',
-                            style: TextStyle(
-                              fontSize: smallSize,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ),
-                        Text(
-                          _formatCurrency(order.tongCong),
+  return Card(
+    margin:
+        EdgeInsets.symmetric(horizontal: columnCount > 1 ? 4 : 8, vertical: 4),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Expanded(
+          child: InkWell(
+            onTap: () {
+              if (order.soPhieu != null) {
+                _loadOrderItems(order.soPhieu!);
+              }
+            },
+            child: Padding(
+              padding: EdgeInsets.all(columnCount == 3 ? 10 : 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '✨${order.tenKhachHang2 ?? 'N/A'}',
                           style: TextStyle(
-                            fontSize: normalSize,
                             fontWeight: FontWeight.bold,
-                            color: Colors.green[700],
+                            fontSize: titleSize,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: statusColor, width: 1),
+                        ),
+                        child: Text(
+                          _getStatusDisplayName(order.trangThai ?? 'N/A'),
+                          style: TextStyle(
+                            color: statusColor,
+                            fontSize: microSize,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ],
-                    ),
-                    Spacer(), // This will push the next row to the bottom
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Người tạo: ${order.nguoiTao ?? 'N/A'}',
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Số phiếu: ${order.soPhieu ?? 'N/A'}',
+                    style: TextStyle(fontSize: normalSize),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                  SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Ngày: $formattedDate',
+                          style: TextStyle(
+                            fontSize: smallSize,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ),
+                      Text(
+                        _formatCurrency(order.tongCong),
+                        style: TextStyle(
+                          fontSize: normalSize,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                  Spacer(), // This will push the next row to the bottom
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Người tạo: ${order.nguoiTao ?? 'N/A'}',
+                          style: TextStyle(
+                            fontSize: smallSize,
+                            color: Colors.grey[600],
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.info_outline, size: microSize, color: Colors.blue),
+                          SizedBox(width: 2),
+                          Text(
+                            'Chi tiết',
                             style: TextStyle(
-                              fontSize: smallSize,
-                              color: Colors.grey[600],
+                              fontSize: microSize,
+                              color: Colors.blue,
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.info_outline, size: microSize, color: Colors.blue),
-                            SizedBox(width: 2),
-                            Text(
-                              'Chi tiết',
-                              style: TextStyle(
-                                fontSize: microSize,
-                                color: Colors.blue,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ),
+        ),
 
-          // Bottom buttons container
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(4)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                if (showQrButton)
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      // Generate PXK for order
-                      _generatePXK(order);
-                    },
-                    icon: Icon(
-                      Icons.receipt_long,
-                      size: columnCount == 3 ? 12 : (columnCount == 2 ? 14 : 16),
+        // Bottom buttons container
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(4)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              // New "Gửi" button for HMGROUP orders with specific status
+              if (needsGuiButton)
+                ElevatedButton.icon(
+                  onPressed: () {
+                    _sendHMGroupOrder(order.soPhieu!);
+                  },
+                  icon: Icon(
+                    Icons.send,
+                    size: columnCount == 3 ? 12 : (columnCount == 2 ? 14 : 16),
+                    color: Colors.white,
+                  ),
+                  label: Text(
+                    'Gửi',
+                    style: TextStyle(
                       color: Colors.white,
-                    ),
-                    label: Text(
-                      'PXK',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: microSize,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFF534b0d),
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      textStyle: TextStyle(fontSize: microSize),
-                      minimumSize: Size(0, 28),
+                      fontSize: microSize,
                     ),
                   ),
-                SizedBox(width: 8),
-                if (showQrButton)
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      // Generate PYC for order
-                      _generatePYC(order);
-                    },
-                    icon: Icon(
-                      Icons.receipt_long,
-                      size: columnCount == 3 ? 12 : (columnCount == 2 ? 14 : 16),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    textStyle: TextStyle(fontSize: microSize),
+                    minimumSize: Size(0, 28),
+                  ),
+                ),
+              if (needsGuiButton) SizedBox(width: 8),
+              
+              if (showQrButton)
+                ElevatedButton.icon(
+                  onPressed: () {
+                    // Generate PXK for order
+                    _generatePXK(order);
+                  },
+                  icon: Icon(
+                    Icons.receipt_long,
+                    size: columnCount == 3 ? 12 : (columnCount == 2 ? 14 : 16),
+                    color: Colors.white,
+                  ),
+                  label: Text(
+                    'PXK',
+                    style: TextStyle(
                       color: Colors.white,
-                    ),
-                    label: Text(
-                      'PYC',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: microSize,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFF564b0d),
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      textStyle: TextStyle(fontSize: microSize),
-                      minimumSize: Size(0, 28),
+                      fontSize: microSize,
                     ),
                   ),
-                SizedBox(width: 8),
-                if (showQrButton)
-                  ElevatedButton.icon(
-                    icon: Icon(
-                      Icons.qr_code,
-                      size: columnCount == 3 ? 12 : (columnCount == 2 ? 14 : 16),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFF534b0d),
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    textStyle: TextStyle(fontSize: microSize),
+                    minimumSize: Size(0, 28),
+                  ),
+                ),
+              SizedBox(width: 8),
+              if (showQrButton)
+                ElevatedButton.icon(
+                  onPressed: () {
+                    // Generate PYC for order
+                    _generatePYC(order);
+                  },
+                  icon: Icon(
+                    Icons.receipt_long,
+                    size: columnCount == 3 ? 12 : (columnCount == 2 ? 14 : 16),
+                    color: Colors.white,
+                  ),
+                  label: Text(
+                    'PYC',
+                    style: TextStyle(
                       color: Colors.white,
-                    ),
-                    label: Text(
-                      'QR',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: microSize,
-                      ),
-                    ),
-                    onPressed: () {
-                      _showQrCode(order.soPhieu!, order.tenKhachHang2 ?? '');
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFF534b0d),
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      textStyle: TextStyle(fontSize: microSize),
-                      minimumSize: Size(0, 28),
+                      fontSize: microSize,
                     ),
                   ),
-                if (showQrButton && canApprove) SizedBox(width: 8),
-                if (canApprove)
-                  ElevatedButton.icon(
-                    icon: Icon(
-                      isProcessingApproval ? Icons.hourglass_top : Icons.check,
-                      size: columnCount == 3 ? 12 : (columnCount == 2 ? 14 : 16),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFF564b0d),
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    textStyle: TextStyle(fontSize: microSize),
+                    minimumSize: Size(0, 28),
+                  ),
+                ),
+              SizedBox(width: 8),
+              if (showQrButton)
+                ElevatedButton.icon(
+                  icon: Icon(
+                    Icons.qr_code,
+                    size: columnCount == 3 ? 12 : (columnCount == 2 ? 14 : 16),
+                    color: Colors.white,
+                  ),
+                  label: Text(
+                    'QR',
+                    style: TextStyle(
                       color: Colors.white,
+                      fontSize: microSize,
                     ),
-                    label: Text(
-                      isProcessingApproval ? 'Đang xử lý...' : 'Duyệt đơn',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: microSize,
-                      ),
+                  ),
+                  onPressed: () {
+                    _showQrCode(order.soPhieu!, order.tenKhachHang2 ?? '');
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFF534b0d),
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    textStyle: TextStyle(fontSize: microSize),
+                    minimumSize: Size(0, 28),
+                  ),
+                ),
+              if (canApprove) SizedBox(width: 8),
+              if (canApprove)
+                ElevatedButton.icon(
+                  icon: Icon(
+                    isProcessingApproval ? Icons.hourglass_top : Icons.check,
+                    size: columnCount == 3 ? 12 : (columnCount == 2 ? 14 : 16),
+                    color: Colors.white,
+                  ),
+                  label: Text(
+                    isProcessingApproval ? 'Đang xử lý...' : (shouldShowQuickApprove ? 'Duyệt nhanh' : 'Duyệt đơn'),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: microSize,
                     ),
-                    onPressed: isProcessingApproval
-                        ? null
-                        : () async {
-                            // Approval code remains the same
+                  ),
+                  onPressed: isProcessingApproval
+                      ? null
+                      : () async {
+                          if (shouldShowQuickApprove) {
+                            // Handle quick approval for HMGROUP
+                            _quickApproveHMGroupOrder(order.soPhieu!);
+                          } else {
+                            // Regular approval process
                             final confirm = await showDialog<bool>(
                                   context: context,
                                   builder: (context) => AlertDialog(
@@ -1777,22 +1847,293 @@ Widget build(BuildContext context) {
                                 );
                               }
                             }
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isProcessingApproval ? Colors.grey : Colors.green,
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      textStyle: TextStyle(fontSize: microSize),
-                      minimumSize: Size(0, 28),
-                    ),
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isProcessingApproval ? Colors.grey : (shouldShowQuickApprove ? Colors.orange : Colors.green),
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    textStyle: TextStyle(fontSize: microSize),
+                    minimumSize: Size(0, 28),
                   ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+// Method to send HMGROUP order
+Future<void> _sendHMGroupOrder(String soPhieu) async {
+  setState(() {
+    _processingApprovals.add(soPhieu);
+    _processingOrders[soPhieu] = 'processing';
+  });
+
+  try {
+    final url = Uri.parse(
+      'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hoteldonhangnhanh/$soPhieu'
+    );
+    
+    print('Sending request to: ${url.toString()}');
+
+    final response = await http.get(url);
+    
+    print('Response status code: ${response.statusCode}');
+    print('Response body: ${response.body}');
+
+    if (response.statusCode == 200) {
+      // Success
+      setState(() {
+        _processingOrders[soPhieu] = 'success';
+      });
+
+      // Show success dialog
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Thành công'),
+          content: Text('Đơn hàng đã được gửi thành công. Vui lòng làm mới hoặc đồng bộ lại để xem kết quả.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _loadOrders(); // Refresh orders
+              },
+              child: Text('Làm mới ngay'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Đóng'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color(0xFF534b0d),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // Error
+      setState(() {
+        _processingOrders[soPhieu] = 'error';
+        _processingApprovals.remove(soPhieu);
+      });
+      
+      // Show error dialog with more details
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Lỗi'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Không thể gửi đơn hàng. Vui lòng thử lại sau.'),
+                SizedBox(height: 8),
+                Text('URL: ${url.toString()}', style: TextStyle(fontSize: 12)),
+                Text('Mã lỗi: ${response.statusCode}', style: TextStyle(fontSize: 12)),
+                Text('Phản hồi: ${response.body}', style: TextStyle(fontSize: 12)),
               ],
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Đóng'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+  } catch (e) {
+    print('Exception sending order: $e');
+    setState(() {
+      _processingOrders[soPhieu] = 'error';
+      _processingApprovals.remove(soPhieu);
+    });
+    
+    // Show error dialog with more details
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Lỗi'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Không thể gửi đơn hàng.'),
+              SizedBox(height: 8),
+              Text('Chi tiết lỗi: $e', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Đóng'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
             ),
           ),
         ],
       ),
     );
   }
+}
 
+// Method to quick approve HMGROUP order
+Future<void> _quickApproveHMGroupOrder(String soPhieu) async {
+  // Show confirmation dialog
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('Duyệt nhanh'),
+      content: Text('Xác nhận duyệt nhanh đơn hàng HMGROUP $soPhieu?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: Text('Huỷ'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: Text('Duyệt nhanh', style: TextStyle(color: Colors.white)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.orange,
+          ),
+        ),
+      ],
+    ),
+  ) ?? false;
+
+  if (!confirm) return;
+
+  setState(() {
+    _processingApprovals.add(soPhieu);
+    _processingOrders[soPhieu] = 'processing';
+  });
+
+  try {
+    final url = Uri.parse(
+      'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hoteldonhangnhanh/$soPhieu'
+    );
+    
+    print('Sending request to: ${url.toString()}');
+
+    final response = await http.get(url);
+    
+    print('Response status code: ${response.statusCode}');
+    print('Response body: ${response.body}');
+
+    if (response.statusCode == 200) {
+      // Success
+      setState(() {
+        _processingOrders[soPhieu] = 'success';
+      });
+
+      // Show success dialog
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Thành công'),
+          content: Text('Đơn hàng đã được duyệt nhanh thành công. Vui lòng làm mới hoặc đồng bộ lại để xem kết quả.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _loadOrders(); // Refresh orders
+              },
+              child: Text('Làm mới ngay'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Đóng'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color(0xFF534b0d),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // Error
+      setState(() {
+        _processingOrders[soPhieu] = 'error';
+        _processingApprovals.remove(soPhieu);
+      });
+      
+      // Show error dialog with more details
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Lỗi'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Không thể duyệt nhanh đơn hàng. Vui lòng thử lại sau.'),
+                SizedBox(height: 8),
+                Text('URL: ${url.toString()}', style: TextStyle(fontSize: 12)),
+                Text('Mã lỗi: ${response.statusCode}', style: TextStyle(fontSize: 12)),
+                Text('Phản hồi: ${response.body}', style: TextStyle(fontSize: 12)),
+              ],
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Đóng'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+  } catch (e) {
+    print('Exception quick approving order: $e');
+    setState(() {
+      _processingOrders[soPhieu] = 'error';
+      _processingApprovals.remove(soPhieu);
+    });
+    
+    // Show error dialog with more details
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Lỗi'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Không thể duyệt nhanh đơn hàng.'),
+              SizedBox(height: 8),
+              Text('Chi tiết lỗi: $e', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Đóng', style: TextStyle(
+            color: Colors.white,
+          ),),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
   Future<void> _showQrCode(String soPhieu, String khachHang) async {
     // Create a PDF document for printing
     final pdf = pw.Document();

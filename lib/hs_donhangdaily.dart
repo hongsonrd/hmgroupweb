@@ -1329,6 +1329,9 @@ void _generatePXK(DonHangModel order) async {
   final showQrButton = order.soPhieu != null && 
                      (order.trangThai?.toLowerCase() ?? '') != 'nháp';
   
+  // Check if order is for HMGROUP
+  final isHmGroup = (order.phuongThucGiaoHang?.toUpperCase() ?? '') == 'HMGROUP';
+  
   // Adjust font sizes based on column count
   final double titleSize = columnCount == 3 ? 13 : (columnCount == 2 ? 14 : 16);
   final double normalSize = columnCount == 3 ? 12 : (columnCount == 2 ? 13 : 14);
@@ -1461,57 +1464,57 @@ void _generatePXK(DonHangModel order) async {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 if (showQrButton)
-  ElevatedButton.icon(
-    onPressed: () {
-      // Generate PXK for order
-      _generatePXK(order);
-    },
-    icon: Icon(
-      Icons.receipt_long,
-      size: columnCount == 3 ? 12 : (columnCount == 2 ? 14 : 16),
-      color: Colors.white,
-    ),
-    label: Text(
-      'PXK',
-      style: TextStyle(
-        color: Colors.white,
-        fontSize: microSize,
-      ),
-    ),
-    style: ElevatedButton.styleFrom(
-      backgroundColor: Color(0xFF534b0d),
-      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      textStyle: TextStyle(fontSize: microSize),
-      minimumSize: Size(0, 28),
-    ),
-  ),
-                        SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      // Generate PXK for order
+                      _generatePXK(order);
+                    },
+                    icon: Icon(
+                      Icons.receipt_long,
+                      size: columnCount == 3 ? 12 : (columnCount == 2 ? 14 : 16),
+                      color: Colors.white,
+                    ),
+                    label: Text(
+                      'PXK',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: microSize,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFF534b0d),
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      textStyle: TextStyle(fontSize: microSize),
+                      minimumSize: Size(0, 28),
+                    ),
+                  ),
+                SizedBox(width: 8),
                 if (showQrButton)
-  ElevatedButton.icon(
-    onPressed: () {
-      // Generate PXK for order
-      _generatePYC(order);
-    },
-    icon: Icon(
-      Icons.receipt_long,
-      size: columnCount == 3 ? 12 : (columnCount == 2 ? 14 : 16),
-      color: Colors.white,
-    ),
-    label: Text(
-      'PYC',
-      style: TextStyle(
-        color: Colors.white,
-        fontSize: microSize,
-      ),
-    ),
-    style: ElevatedButton.styleFrom(
-      backgroundColor: Color(0xFF564b0d),
-      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      textStyle: TextStyle(fontSize: microSize),
-      minimumSize: Size(0, 28),
-    ),
-  ),
-                        SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      // Generate PXK for order
+                      _generatePYC(order);
+                    },
+                    icon: Icon(
+                      Icons.receipt_long,
+                      size: columnCount == 3 ? 12 : (columnCount == 2 ? 14 : 16),
+                      color: Colors.white,
+                    ),
+                    label: Text(
+                      'PYC',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: microSize,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFF564b0d),
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      textStyle: TextStyle(fontSize: microSize),
+                      minimumSize: Size(0, 28),
+                    ),
+                  ),
+                SizedBox(width: 8),
                 if (showQrButton)
                   ElevatedButton.icon(
                     icon: Icon(
@@ -1546,7 +1549,7 @@ void _generatePXK(DonHangModel order) async {
                       color: Colors.white,
                     ),
                     label: Text(
-                      isProcessingApproval ? 'Đang xử lý...' : 'Chuyển TT',
+                      isProcessingApproval ? 'Đang xử lý...' : (isHmGroup ? 'Chuyển TT nhanh' : 'Chuyển TT'),
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: microSize,
@@ -1555,53 +1558,58 @@ void _generatePXK(DonHangModel order) async {
                     onPressed: isProcessingApproval 
                       ? null
                       : () async {
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: Text('Xác nhận chuyển trạng thái'),
-                              content: Text('Xác nhận chuyển trạng thái đơn hàng ${order.soPhieu}?'),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context, false),
-                                  child: Text('Huỷ'),
-                                ),
-                                ElevatedButton(
-                                  onPressed: () => Navigator.pop(context, true),
-                                  child: Text('Chuyển', style: TextStyle(color: Colors.white)),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.blue,
+                          if (isHmGroup) {
+                            // Use the quick approve method for HMGROUP orders
+                            await _quickApproveOrder(order.soPhieu!);
+                          } else {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: Text('Xác nhận chuyển trạng thái'),
+                                content: Text('Xác nhận chuyển trạng thái đơn hàng ${order.soPhieu}?'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context, false),
+                                    child: Text('Huỷ'),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ) ?? false;
-                          
-                          if (confirm && order.soPhieu != null) {
-                            final currentStatus = order.trangThai?.toLowerCase() ?? '';
-                            final success = await _approveOrder(order.soPhieu!, currentStatus);
+                                  ElevatedButton(
+                                    onPressed: () => Navigator.pop(context, true),
+                                    child: Text('Chuyển', style: TextStyle(color: Colors.white)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.blue,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ) ?? false;
                             
-                            if (success) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Đã chuyển trạng thái đơn hàng ${order.soPhieu}'),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                              Future.delayed(Duration(seconds: 3), () {
-                                _loadOrders();
-                              });
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Lỗi khi chuyển trạng thái đơn hàng ${order.soPhieu}'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
+                            if (confirm && order.soPhieu != null) {
+                              final currentStatus = order.trangThai?.toLowerCase() ?? '';
+                              final success = await _approveOrder(order.soPhieu!, currentStatus);
+                              
+                              if (success) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Đã chuyển trạng thái đơn hàng ${order.soPhieu}'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                                Future.delayed(Duration(seconds: 3), () {
+                                  _loadOrders();
+                                });
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Lỗi khi chuyển trạng thái đơn hàng ${order.soPhieu}'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
                             }
                           }
                         },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: isProcessingApproval ? Colors.grey : Colors.blue,
+                      backgroundColor: isProcessingApproval ? Colors.grey : (isHmGroup ? Colors.orange : Colors.blue),
                       padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       textStyle: TextStyle(fontSize: microSize),
                       minimumSize: Size(0, 28),
@@ -1613,6 +1621,102 @@ void _generatePXK(DonHangModel order) async {
       ],
     ),
   );
+}
+Future<void> _quickApproveOrder(String soPhieu) async {
+  setState(() {
+    _processingApprovals.add(soPhieu);
+    _processingOrders[soPhieu] = 'processing';
+  });
+
+  try {
+    final url = Uri.parse(
+      'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hoteldonhangnhanh/$soPhieu'
+    );
+
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      // Success
+      setState(() {
+        _processingOrders[soPhieu] = 'success';
+      });
+
+      // Show success dialog
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Thành công'),
+          content: Text('Đơn hàng đã được chuyển trạng thái thành công. Vui lòng làm mới hoặc đồng bộ lại để xem kết quả.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _loadOrders(); // Refresh orders
+              },
+              child: Text('Làm mới ngay'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Đóng',style: TextStyle(
+            color: Colors.white,
+          ),),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color(0xFF534b0d),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // Error
+      setState(() {
+        _processingOrders[soPhieu] = 'error';
+        _processingApprovals.remove(soPhieu);
+      });
+      
+      // Show error dialog
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Lỗi'),
+          content: Text('Không thể chuyển trạng thái đơn hàng. Vui lòng thử lại sau. [Mã lỗi: ${response.statusCode}]'),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Đóng'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+  } catch (e) {
+    print('Exception updating order status: $e');
+    setState(() {
+      _processingOrders[soPhieu] = 'error';
+      _processingApprovals.remove(soPhieu);
+    });
+    
+    // Show error dialog
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Lỗi'),
+        content: Text('Không thể chuyển trạng thái đơn hàng. Lỗi: $e'),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Đóng'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 Future<void> _showQrCode(String soPhieu, String khachHang) async {
   // Create a PDF document for printing
@@ -2332,46 +2436,62 @@ Future<void> _showQrCode(String soPhieu, String khachHang) async {
           color: Colors.white
         ),
         label: Text(
-          _processingApprovals.contains(soPhieu) ? 'Đang xử lý...' : 'Chuyển trạng thái',
+          _processingApprovals.contains(soPhieu) 
+            ? 'Đang xử lý...' 
+            : ((order.phuongThucGiaoHang?.toUpperCase() ?? '') == 'HMGROUP' 
+                ? 'Chuyển TT nhanh' 
+                : 'Chuyển trạng thái'),
           style: TextStyle(color: Colors.white)
         ),
         style: ElevatedButton.styleFrom(
-          backgroundColor: _processingApprovals.contains(soPhieu) ? Colors.grey : Colors.blue,
+          backgroundColor: _processingApprovals.contains(soPhieu) 
+            ? Colors.grey 
+            : ((order.phuongThucGiaoHang?.toUpperCase() ?? '') == 'HMGROUP' 
+                ? Colors.orange 
+                : Colors.blue),
           padding: EdgeInsets.symmetric(vertical: 12),
         ),
         onPressed: _processingApprovals.contains(soPhieu)
           ? null
           : () async {
               Navigator.pop(context);
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: Text('Xác nhận chuyển trạng thái'),
-                  content: Text('Xác nhận chuyển trạng thái đơn hàng ${order.soPhieu}?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: Text('Huỷ'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      child: Text('Chuyển'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                      ),
-                    ),
-                  ],
-                ),
-              ) ?? false;
               
-              if (confirm) {
-                final currentStatus = order.trangThai?.toLowerCase() ?? '';
-                final success = await _approveOrder(soPhieu, currentStatus);
-                if (success) {
-                  // Reload orders after a slight delay to allow the server to process
-                  Future.delayed(Duration(seconds: 3), () {
-                    _loadOrders();
-                  });
+              // Check if this is an HMGROUP order
+              if ((order.phuongThucGiaoHang?.toUpperCase() ?? '') == 'HMGROUP') {
+                // Use quick approve method for HMGROUP orders
+                await _quickApproveOrder(soPhieu);
+              } else {
+                // Regular approval process
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: Text('Xác nhận chuyển trạng thái'),
+                    content: Text('Xác nhận chuyển trạng thái đơn hàng ${order.soPhieu}?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: Text('Huỷ'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: Text('Chuyển'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                        ),
+                      ),
+                    ],
+                  ),
+                ) ?? false;
+                
+                if (confirm) {
+                  final currentStatus = order.trangThai?.toLowerCase() ?? '';
+                  final success = await _approveOrder(soPhieu, currentStatus);
+                  if (success) {
+                    // Reload orders after a slight delay to allow the server to process
+                    Future.delayed(Duration(seconds: 3), () {
+                      _loadOrders();
+                    });
+                  }
                 }
               }
             },
