@@ -1379,81 +1379,111 @@ Future<void> _printOrderQRCode(DonHangModel order) async {
     
     // Parse the SoPhieu into parts
     List<String> parts = order.soPhieu!.split('-');
-    String displayText = '';
     
-    // Make sure we display number2-number3 as specified
-    if (parts.length >= 3) {
-      displayText = '${parts[1]}-${parts[2]}';
-    } else if (parts.length == 2) {
-      displayText = parts.join('-');
-    } else {
-      displayText = order.soPhieu!;
+    // Extract the last 2 digits
+    String lastTwoDigits = "";
+    if (parts.length >= 1) {
+      String lastPart = parts.last;
+      if (lastPart.length >= 2) {
+        lastTwoDigits = lastPart.substring(lastPart.length - 2);
+      } else if (lastPart.length == 1) {
+        lastTwoDigits = "0" + lastPart; // Pad with 0 if only one digit
+      }
     }
     
-    // Create 5x3cm (50mm x 30mm) horizontal page
+    // Create a map of digits to keycap emojis that work well on thermal printers
+    Map<String, String> digitToEmoji = {
+      '0': '0⃣', // Keycap Digit Zero
+      '1': '❤️', // Keycap Digit One
+      '2': '2⃣', // Keycap Digit Two
+      '3': '3⃣', // Keycap Digit Three
+      '4': '4⃣', // Keycap Digit Four
+      '5': '5⃣', // Keycap Digit Five
+      '6': '6⃣', // Keycap Digit Six
+      '7': '7⃣', // Keycap Digit Seven
+      '8': '8⃣', // Keycap Digit Eight
+      '9': '9⃣', // Keycap Digit Nine
+    };
+    
+    // Alternative simpler symbols in case keycap emojis don't print well
+    Map<String, String> digitToBackupSymbol = {
+      '0': '⓪', // Circled Digit Zero
+      '1': '❤️', // Circled Digit One
+      '2': '②', // Circled Digit Two
+      '3': '③', // Circled Digit Three
+      '4': '④', // Circled Digit Four
+      '5': '⑤', // Circled Digit Five
+      '6': '⑥', // Circled Digit Six
+      '7': '⑦', // Circled Digit Seven
+      '8': '⑧', // Circled Digit Eight
+      '9': '⑨', // Circled Digit Nine
+    };
+    
+    // Create 5x3cm (50mm x 30mm) vertical page
     pdf.addPage(
       pw.Page(
-        pageFormat: pdfx.PdfPageFormat(50 * pdfx.PdfPageFormat.mm, 30 * pdfx.PdfPageFormat.mm, marginAll: 2 * pdfx.PdfPageFormat.mm),
+        pageFormat: pdfx.PdfPageFormat(30 * pdfx.PdfPageFormat.mm, 50 * pdfx.PdfPageFormat.mm, marginAll: 2 * pdfx.PdfPageFormat.mm),
         build: (pw.Context context) {
           return pw.Center(
-            child: pw.Row(
+            child: pw.Column(
               mainAxisAlignment: pw.MainAxisAlignment.center,
-              crossAxisAlignment: pw.CrossAxisAlignment.center,
               children: [
-                // QR Code on the left
-                pw.Container(
+                // QR Code using BarcodeWidget
+                pw.BarcodeWidget(
+                  barcode: pw.Barcode.qrCode(),
+                  data: order.soPhieu!,
                   width: 26 * pdfx.PdfPageFormat.mm,
                   height: 26 * pdfx.PdfPageFormat.mm,
-                  child: pw.BarcodeWidget(
-                    barcode: pw.Barcode.qrCode(),
-                    data: order.soPhieu!,
-                    width: 26 * pdfx.PdfPageFormat.mm,
-                    height: 26 * pdfx.PdfPageFormat.mm,
-                  ),
                 ),
+                pw.SizedBox(height: 4 * pdfx.PdfPageFormat.mm),
                 
-                pw.SizedBox(width: 4 * pdfx.PdfPageFormat.mm),
-                
-                // Text information - no rotation, with wrapping
+                // Black pill with ONLY the last two digits as large symbols
                 pw.Container(
-                  width: 16 * pdfx.PdfPageFormat.mm,
-                  child: pw.Column(
+                  padding: pw.EdgeInsets.symmetric(
+                    horizontal: 6 * pdfx.PdfPageFormat.mm,
+                    vertical: 2 * pdfx.PdfPageFormat.mm,
+                  ),
+                  decoration: pw.BoxDecoration(
+                    color: pdfx.PdfColors.black,
+                    borderRadius: pw.BorderRadius.circular(10),
+                  ),
+                  child: pw.Row(
+                    mainAxisSize: pw.MainAxisSize.min,
                     mainAxisAlignment: pw.MainAxisAlignment.center,
-                    crossAxisAlignment: pw.CrossAxisAlignment.center,
                     children: [
-                      // Black pill with identifier
-                      pw.Container(
-                        width: 16 * pdfx.PdfPageFormat.mm,
-                        padding: pw.EdgeInsets.symmetric(
-                          horizontal: 2 * pdfx.PdfPageFormat.mm,
-                          vertical: 2 * pdfx.PdfPageFormat.mm,
-                        ),
-                        decoration: pw.BoxDecoration(
-                          color: pdfx.PdfColors.black,
-                          borderRadius: pw.BorderRadius.circular(8),
-                        ),
-                        child: pw.Text(
-                          displayText,
-                          style: pw.TextStyle(
-                            color: pdfx.PdfColors.white,
-                            fontSize: 10,
-                            fontWeight: pw.FontWeight.bold,
-                          ),
-                          textAlign: pw.TextAlign.center,
+                      // First digit symbol
+                      pw.Text(
+                        lastTwoDigits.isNotEmpty 
+                            ? digitToBackupSymbol[lastTwoDigits[0]] ?? lastTwoDigits[0]
+                            : "",
+                        style: pw.TextStyle(
+                          color: pdfx.PdfColors.white,
+                          fontSize: 14, // Larger font for better visibility
+                          fontWeight: pw.FontWeight.bold,
                         ),
                       ),
-                      
-                      pw.SizedBox(height: 4 * pdfx.PdfPageFormat.mm),
-                      
-                      // Order number text with wrapping
+                      pw.SizedBox(width: 2 * pdfx.PdfPageFormat.mm),
+                      // Second digit symbol
                       pw.Text(
-                        'Đơn: ${order.soPhieu}',
-                        style: pw.TextStyle(fontSize: 6),
-                        textAlign: pw.TextAlign.center,
-                        maxLines: 3, // Allow multiple lines
+                        lastTwoDigits.length > 1 
+                            ? digitToBackupSymbol[lastTwoDigits[1]] ?? lastTwoDigits[1]
+                            : "",
+                        style: pw.TextStyle(
+                          color: pdfx.PdfColors.white,
+                          fontSize: 14, // Larger font for better visibility
+                          fontWeight: pw.FontWeight.bold,
+                        ),
                       ),
                     ],
                   ),
+                ),
+                
+                pw.SizedBox(height: 2 * pdfx.PdfPageFormat.mm),
+                
+                // Order number text at bottom
+                pw.Text(
+                  'Đơn: ${order.soPhieu}',
+                  style: pw.TextStyle(fontSize: 6),
                 ),
               ],
             ),
@@ -1465,7 +1495,7 @@ Future<void> _printOrderQRCode(DonHangModel order) async {
     // Print the document
     await Printing.layoutPdf(
       onLayout: (pdfx.PdfPageFormat format) async => pdf.save(),
-      format: pdfx.PdfPageFormat(50 * pdfx.PdfPageFormat.mm, 30 * pdfx.PdfPageFormat.mm),
+      format: pdfx.PdfPageFormat(30 * pdfx.PdfPageFormat.mm, 50 * pdfx.PdfPageFormat.mm),
       name: 'ORDER_QR_${order.soPhieu}.pdf',
     );
     

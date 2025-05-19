@@ -23,6 +23,7 @@ import 'package:flutter/rendering.dart';
 import 'hs_pxkform.dart';
 import 'hs_pycform.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'hs_donhangmoi.dart';
 
 class HSDonHangScreen extends StatefulWidget {
   final String? username;
@@ -727,10 +728,18 @@ Widget build(BuildContext context) {
             );
           },
         ),
-        //IconButton(
-        //  icon: Icon(Icons.refresh),
-        //  onPressed: _loadOrders,
-        //),
+       IconButton(
+                            padding: EdgeInsets.zero,
+                            icon: Icon(Icons.add, color: Colors.black, size: 18),
+                            onPressed: () {
+                              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => HSDonHangMoiScreen(),
+                ),
+              );
+                            },
+                          ),
       ],
     ),
     body: Column(
@@ -2268,7 +2277,7 @@ Widget build(BuildContext context) {
                             ),
                           ),
                           SizedBox(height: 10),
-                          _buildDetailItem('Tên khách hàng', order.tenKhachHang),
+                          _buildDetailItem('Tên khách hàng', order.tenKhachHang2),
                           _buildDetailItem('Số điện thoại', order.sdtKhachHang),
                           _buildDetailItem('Địa chỉ', order.diaChi),
                           _buildDetailItem('Mã số thuế', order.mst),

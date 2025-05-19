@@ -39,13 +39,13 @@ class DBHelper {
     }
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool hasReset = prefs.getBool('db_reset_v25') ?? false;
+    bool hasReset = prefs.getBool('db_reset_v26') ?? false;
     
     if (!hasReset) {
-      print('Forcing database reset for version 25...');
+      print('Forcing database reset for version 26...');
       try {
         await deleteDatabase(path);
-        await prefs.setBool('db_reset_v25', true);
+        await prefs.setBool('db_reset_v26', true);
         print('Database reset successful');
       } catch (e) {
         print('Error during database reset: $e');
@@ -57,7 +57,7 @@ class DBHelper {
     final db = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 25,
+        version: 26,
         onCreate: (Database db, int version) async {
           print('Creating database tables...');
           await db.execute(DatabaseTables.createInteractionTable);
@@ -93,7 +93,7 @@ class DBHelper {
           await db.execute(DatabaseTables.createCoinRateTable);
           await db.execute(DatabaseTables.createMapStaffTable);
           await db.execute(DatabaseTables.createMapPositionTable);
-                 await db.execute(DatabaseTables.createDonHangTable);
+          await db.execute(DatabaseTables.createDonHangTable);
         await db.execute(DatabaseTables.createChiTietDonTable);
           await db.execute(DatabaseTables.createDSHangTable);
         await db.execute(DatabaseTables.createGiaoDichKhoTable);
@@ -105,16 +105,20 @@ class DBHelper {
         await db.execute(DatabaseTables.createNewsActivityTable);
         await db.execute(DatabaseTables.createNewsTable);
         await db.execute(DatabaseTables.createKhuVucKhoChiTietTable);
-                  await db.execute(DatabaseTables.createGoCleanCongViecTable);
+       await db.execute(DatabaseTables.createGoCleanCongViecTable);
           await db.execute(DatabaseTables.createGoCleanTaiKhoanTable);
           await db.execute(DatabaseTables.createGoCleanYeuCauTable);
+          await db.execute(DatabaseTables.createKhachHangTable);
+          await db.execute(DatabaseTables.createKhachHangContactTable);
           print('Database tables created successfully');
         },
         onUpgrade: (Database db, int oldVersion, int newVersion) async {
-          if (oldVersion < 25) {
+          if (oldVersion < 26) {
           await db.execute(DatabaseTables.createGoCleanCongViecTable);
           await db.execute(DatabaseTables.createGoCleanTaiKhoanTable);
           await db.execute(DatabaseTables.createGoCleanYeuCauTable);
+          await db.execute(DatabaseTables.createKhachHangTable);
+          await db.execute(DatabaseTables.createKhachHangContactTable);
           }
         },
         onOpen: (db) async {
@@ -135,6 +139,280 @@ class DBHelper {
     print('Stack trace: $stackTrace');
     rethrow;
   }
+}
+// ==================== KhachHangContact CRUD Operations ====================
+
+/// Inserts a KhachHangContact record into the database.
+Future<int> insertKhachHangContact(KhachHangContactModel contact) async {
+  final db = await database;
+  return await db.insert(
+    DatabaseTables.khachHangContactTable,
+    contact.toMap(),
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
+}
+
+/// Retrieves a KhachHangContact record by its uid.
+Future<KhachHangContactModel?> getKhachHangContactById(String uid) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.khachHangContactTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+    limit: 1,
+  );
+  if (maps.isNotEmpty) {
+    return KhachHangContactModel.fromMap(maps.first);
+  }
+  return null;
+}
+
+/// Retrieves all KhachHangContact records from the database.
+Future<List<KhachHangContactModel>> getAllKhachHangContacts() async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(DatabaseTables.khachHangContactTable);
+  return maps.map((map) => KhachHangContactModel.fromMap(map)).toList();
+}
+
+/// Updates a KhachHangContact record in the database.
+Future<int> updateKhachHangContact(KhachHangContactModel contact) async {
+  final db = await database;
+  return await db.update(
+    DatabaseTables.khachHangContactTable,
+    contact.toMap(),
+    where: 'uid = ?',
+    whereArgs: [contact.uid],
+  );
+}
+
+/// Deletes a KhachHangContact record from the database by its uid.
+Future<int> deleteKhachHangContact(String uid) async {
+  final db = await database;
+  return await db.delete(
+    DatabaseTables.khachHangContactTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
+}
+
+/// Clears all records from the KhachHangContact table.
+Future<void> clearKhachHangContactTable() async {
+  final db = await database;
+  await db.delete(DatabaseTables.khachHangContactTable);
+  print('Cleared KhachHangContact table');
+}
+
+/// Gets the total count of records in the KhachHangContact table.
+Future<int> getKhachHangContactCount() async {
+  final db = await database;
+  final result = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.khachHangContactTable}');
+  return Sqflite.firstIntValue(result) ?? 0;
+}
+
+/// Search KhachHangContact by name or phone number
+Future<List<KhachHangContactModel>> searchKhachHangContacts(String searchTerm) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.khachHangContactTable,
+    where: 'hoTen LIKE ? OR soDienThoai LIKE ? OR soDienThoai2 LIKE ? OR email LIKE ?',
+    whereArgs: ['%$searchTerm%', '%$searchTerm%', '%$searchTerm%', '%$searchTerm%'],
+  );
+  return maps.map((map) => KhachHangContactModel.fromMap(map)).toList();
+}
+
+/// Get KhachHangContact records filtered by boPhan and tinhTrang
+Future<List<KhachHangContactModel>> getFilteredKhachHangContacts({String? boPhan, String? tinhTrang}) async {
+  final db = await database;
+  String whereClause = '';
+  List<String> whereArgs = [];
+  
+  if (boPhan != null) {
+    whereClause += 'boPhan = ?';
+    whereArgs.add(boPhan);
+  }
+  
+  if (tinhTrang != null) {
+    if (whereClause.isNotEmpty) {
+      whereClause += ' AND ';
+    }
+    whereClause += 'tinhTrang = ?';
+    whereArgs.add(tinhTrang);
+  }
+  
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.khachHangContactTable,
+    where: whereClause.isNotEmpty ? whereClause : null,
+    whereArgs: whereArgs.isNotEmpty ? whereArgs : null,
+  );
+  
+  return maps.map((map) => KhachHangContactModel.fromMap(map)).toList();
+}
+
+/// Get KhachHangContact records by a specific user (nguoiDung)
+Future<List<KhachHangContactModel>> getKhachHangContactsByUser(String username) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.khachHangContactTable,
+    where: 'nguoiDung = ? OR chiaSe LIKE ?',
+    whereArgs: [username, '%$username%'],
+  );
+  return maps.map((map) => KhachHangContactModel.fromMap(map)).toList();
+}
+
+/// Get KhachHangContact records with upcoming birthdays (within next 30 days)
+Future<List<KhachHangContactModel>> getUpcomingBirthdays() async {
+  final db = await database;
+  final now = DateTime.now();
+  
+  // Get the month and day for the next 30 days
+  final List<String> dates = [];
+  for (int i = 0; i < 30; i++) {
+    final date = now.add(Duration(days: i));
+    // Format as MM-DD for comparison
+    final formattedDate = "${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+    dates.add(formattedDate);
+  }
+  
+  // Build the SQL query to match birthdays regardless of year
+  final List<Map<String, dynamic>> maps = await db.rawQuery('''
+    SELECT * FROM ${DatabaseTables.khachHangContactTable}
+    WHERE sinhNhat IS NOT NULL
+    AND (
+      ${dates.map((date) => "strftime('%m-%d', sinhNhat) = '$date'").join(' OR ')}
+    )
+  ''');
+  
+  return maps.map((map) => KhachHangContactModel.fromMap(map)).toList();
+}
+// ==================== KhachHang CRUD Operations ====================
+
+/// Inserts a KhachHang record into the database.
+Future<int> insertKhachHang(KhachHangModel khachHang) async {
+  final db = await database;
+  return await db.insert(
+    DatabaseTables.khachHangTable,
+    khachHang.toMap(),
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
+}
+
+/// Retrieves a KhachHang record by its uid.
+Future<KhachHangModel?> getKhachHangById(String uid) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.khachHangTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+    limit: 1,
+  );
+  if (maps.isNotEmpty) {
+    return KhachHangModel.fromMap(maps.first);
+  }
+  return null;
+}
+
+/// Retrieves all KhachHang records from the database.
+Future<List<KhachHangModel>> getAllKhachHang() async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(DatabaseTables.khachHangTable);
+  return maps.map((map) => KhachHangModel.fromMap(map)).toList();
+}
+
+/// Updates a KhachHang record in the database.
+Future<int> updateKhachHang(KhachHangModel khachHang) async {
+  final db = await database;
+  return await db.update(
+    DatabaseTables.khachHangTable,
+    khachHang.toMap(),
+    where: 'uid = ?',
+    whereArgs: [khachHang.uid],
+  );
+}
+
+/// Deletes a KhachHang record from the database by its uid.
+Future<int> deleteKhachHang(String uid) async {
+  final db = await database;
+  return await db.delete(
+    DatabaseTables.khachHangTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
+}
+
+/// Clears all records from the KhachHang table.
+Future<void> clearKhachHangTable() async {
+  final db = await database;
+  await db.delete(DatabaseTables.khachHangTable);
+  print('Cleared KhachHang table');
+}
+
+/// Gets the total count of records in the KhachHang table.
+Future<int> getKhachHangCount() async {
+  final db = await database;
+  final result = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.khachHangTable}');
+  return Sqflite.firstIntValue(result) ?? 0;
+}
+
+/// Searches KhachHang by tenDuAn, tenKyThuat, or tenRutGon
+Future<List<KhachHangModel>> searchKhachHang(String searchTerm) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.khachHangTable,
+    where: 'tenDuAn LIKE ? OR tenKyThuat LIKE ? OR tenRutGon LIKE ?',
+    whereArgs: ['%$searchTerm%', '%$searchTerm%', '%$searchTerm%'],
+  );
+  return maps.map((map) => KhachHangModel.fromMap(map)).toList();
+}
+
+/// Get KhachHang records filtered by vungMien and phanLoai
+Future<List<KhachHangModel>> getFilteredKhachHang({String? vungMien, String? phanLoai}) async {
+  final db = await database;
+  String whereClause = '';
+  List<String> whereArgs = [];
+  
+  if (vungMien != null) {
+    whereClause += 'vungMien = ?';
+    whereArgs.add(vungMien);
+  }
+  
+  if (phanLoai != null) {
+    if (whereClause.isNotEmpty) {
+      whereClause += ' AND ';
+    }
+    whereClause += 'phanLoai = ?';
+    whereArgs.add(phanLoai);
+  }
+  
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.khachHangTable,
+    where: whereClause.isNotEmpty ? whereClause : null,
+    whereArgs: whereArgs.isNotEmpty ? whereArgs : null,
+  );
+  
+  return maps.map((map) => KhachHangModel.fromMap(map)).toList();
+}
+
+/// Get KhachHang records by loaiHinh
+Future<List<KhachHangModel>> getKhachHangByLoaiHinh(String loaiHinh) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.khachHangTable,
+    where: 'loaiHinh = ?',
+    whereArgs: [loaiHinh],
+  );
+  return maps.map((map) => KhachHangModel.fromMap(map)).toList();
+}
+
+/// Get KhachHang records with pagination
+Future<List<KhachHangModel>> getKhachHangPaginated(int limit, int offset) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.khachHangTable,
+    limit: limit,
+    offset: offset,
+    orderBy: 'tenDuAn ASC',
+  );
+  return maps.map((map) => KhachHangModel.fromMap(map)).toList();
 }
 // ==================== GoClean_CongViec CRUD Operations ====================
 

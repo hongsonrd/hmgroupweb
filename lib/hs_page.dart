@@ -21,6 +21,8 @@ import 'hs_dshang.dart';
 import 'http_client.dart';
 import 'hs_kho2.dart';
 import 'hs_stat.dart';
+import 'hs_donhangmoi.dart';
+
 class AppVersion {
   final String version;
   final int buildNumber;
@@ -1312,7 +1314,12 @@ Future<void> _syncKhuVucKhoChiTietData() async {
                             padding: EdgeInsets.zero,
                             icon: Icon(Icons.add, color: Colors.white, size: 18),
                             onPressed: () {
-                              _showComingSoonDialog('Thêm đơn hàng mới nhanh');
+                              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => HSDonHangMoiScreen(),
+                ),
+              );
                             },
                           ),
                         ),

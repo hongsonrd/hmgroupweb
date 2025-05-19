@@ -3302,6 +3302,324 @@ class GoCleanYeuCauModel {
     );
   }
 }
+class KhachHangModel {
+  final String? uid;
+  final String? nguoiDung;
+  final String? chiaSe;
+  final String? danhDau;
+  final String? vungMien;
+  final String? phanLoai;
+  final String? loaiHinh;
+  final String? loaiCongTrinh;
+  final String? maBP;
+  final String? maKT;
+  final String? maKD;
+  final String? trangThaiHopDong;
+  final String? tenDuAn;
+  final String? tenKyThuat;
+  final String? tenRutGon;
+  final String? tenVatTu;
+  final String? giamSat;
+  final String? qldv;
+  final String? ghiChu;
+  final String? diaChi;
+  final String? diaChiVanPhong;
+  final String? sdtDuAn;
+  final double? nhanSuTheoHopDong;
+  final double? nhanSuDuocCo;
+  final String? hinhAnh;
+  final String? maSoThue;
+  final String? soDienThoai;
+  final String? fax;
+  final String? website;
+  final String? email;
+  final double? soTaiKhoan;
+  final double? nganHang;
+  final DateTime? ngayCapNhatCuoi;
+  final DateTime? ngayKhoiTao;
+  final String? loaiMuaHang;
+  final String? tinhThanh;
+  final String? quanHuyen;
+  final String? phuongXa;
+  final String? kenhTiepCan;
+  final String? duKienTrienKhai;
+  final String? tiemNangDVTM;
+  final String? yeuCauNhanSu;
+  final String? cachThucTuyen;
+  final String? mucLuongTuyen;
+  final String? luongBP;
+
+  KhachHangModel({
+    this.uid,
+    this.nguoiDung,
+    this.chiaSe,
+    this.danhDau,
+    this.vungMien,
+    this.phanLoai,
+    this.loaiHinh,
+    this.loaiCongTrinh,
+    this.maBP,
+    this.maKT,
+    this.maKD,
+    this.trangThaiHopDong,
+    this.tenDuAn,
+    this.tenKyThuat,
+    this.tenRutGon,
+    this.tenVatTu,
+    this.giamSat,
+    this.qldv,
+    this.ghiChu,
+    this.diaChi,
+    this.diaChiVanPhong,
+    this.sdtDuAn,
+    this.nhanSuTheoHopDong,
+    this.nhanSuDuocCo,
+    this.hinhAnh,
+    this.maSoThue,
+    this.soDienThoai,
+    this.fax,
+    this.website,
+    this.email,
+    this.soTaiKhoan,
+    this.nganHang,
+    this.ngayCapNhatCuoi,
+    this.ngayKhoiTao,
+    this.loaiMuaHang,
+    this.tinhThanh,
+    this.quanHuyen,
+    this.phuongXa,
+    this.kenhTiepCan,
+    this.duKienTrienKhai,
+    this.tiemNangDVTM,
+    this.yeuCauNhanSu,
+    this.cachThucTuyen,
+    this.mucLuongTuyen,
+    this.luongBP,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'uid': uid,
+    'nguoiDung': nguoiDung,
+    'chiaSe': chiaSe,
+    'danhDau': danhDau,
+    'vungMien': vungMien,
+    'phanLoai': phanLoai,
+    'loaiHinh': loaiHinh,
+    'loaiCongTrinh': loaiCongTrinh,
+    'maBP': maBP,
+    'maKT': maKT,
+    'maKD': maKD,
+    'trangThaiHopDong': trangThaiHopDong,
+    'tenDuAn': tenDuAn,
+    'tenKyThuat': tenKyThuat,
+    'tenRutGon': tenRutGon,
+    'tenVatTu': tenVatTu,
+    'giamSat': giamSat,
+    'qldv': qldv,
+    'ghiChu': ghiChu,
+    'diaChi': diaChi,
+    'diaChiVanPhong': diaChiVanPhong,
+    'sdtDuAn': sdtDuAn,
+    'nhanSuTheoHopDong': nhanSuTheoHopDong,
+    'nhanSuDuocCo': nhanSuDuocCo,
+    'hinhAnh': hinhAnh,
+    'maSoThue': maSoThue,
+    'soDienThoai': soDienThoai,
+    'fax': fax,
+    'website': website,
+    'email': email,
+    'soTaiKhoan': soTaiKhoan,
+    'nganHang': nganHang,
+    'ngayCapNhatCuoi': ngayCapNhatCuoi?.toIso8601String().split('T').first,
+    'ngayKhoiTao': ngayKhoiTao?.toIso8601String().split('T').first,
+    'loaiMuaHang': loaiMuaHang,
+    'tinhThanh': tinhThanh,
+    'quanHuyen': quanHuyen,
+    'phuongXa': phuongXa,
+    'kenhTiepCan': kenhTiepCan,
+    'duKienTrienKhai': duKienTrienKhai,
+    'tiemNangDVTM': tiemNangDVTM,
+    'yeuCauNhanSu': yeuCauNhanSu,
+    'cachThucTuyen': cachThucTuyen,
+    'mucLuongTuyen': mucLuongTuyen,
+    'luongBP': luongBP,
+  };
+
+  factory KhachHangModel.fromMap(Map<dynamic, dynamic> map) {
+    return KhachHangModel(
+      uid: map['uid']?.toString(),
+      nguoiDung: map['nguoiDung']?.toString(),
+      chiaSe: map['chiaSe']?.toString(),
+      danhDau: map['danhDau']?.toString(),
+      vungMien: map['vungMien']?.toString(),
+      phanLoai: map['phanLoai']?.toString(),
+      loaiHinh: map['loaiHinh']?.toString(),
+      loaiCongTrinh: map['loaiCongTrinh']?.toString(),
+      maBP: map['maBP']?.toString(),
+      maKT: map['maKT']?.toString(),
+      maKD: map['maKD']?.toString(),
+      trangThaiHopDong: map['trangThaiHopDong']?.toString(),
+      tenDuAn: map['tenDuAn']?.toString(),
+      tenKyThuat: map['tenKyThuat']?.toString(),
+      tenRutGon: map['tenRutGon']?.toString(),
+      tenVatTu: map['tenVatTu']?.toString(),
+      giamSat: map['giamSat']?.toString(),
+      qldv: map['qldv']?.toString(),
+      ghiChu: map['ghiChu']?.toString(),
+      diaChi: map['diaChi']?.toString(),
+      diaChiVanPhong: map['diaChiVanPhong']?.toString(),
+      sdtDuAn: map['sdtDuAn']?.toString(),
+      nhanSuTheoHopDong: map['nhanSuTheoHopDong'] != null ? double.tryParse(map['nhanSuTheoHopDong'].toString()) : null,
+      nhanSuDuocCo: map['nhanSuDuocCo'] != null ? double.tryParse(map['nhanSuDuocCo'].toString()) : null,
+      hinhAnh: map['hinhAnh']?.toString(),
+      maSoThue: map['maSoThue']?.toString(),
+      soDienThoai: map['soDienThoai']?.toString(),
+      fax: map['fax']?.toString(),
+      website: map['website']?.toString(),
+      email: map['email']?.toString(),
+      soTaiKhoan: map['soTaiKhoan'] != null ? double.tryParse(map['soTaiKhoan'].toString()) : null,
+      nganHang: map['nganHang'] != null ? double.tryParse(map['nganHang'].toString()) : null,
+      ngayCapNhatCuoi: map['ngayCapNhatCuoi'] != null ? DateTime.tryParse(map['ngayCapNhatCuoi'].toString()) : null,
+      ngayKhoiTao: map['ngayKhoiTao'] != null ? DateTime.tryParse(map['ngayKhoiTao'].toString()) : null,
+      loaiMuaHang: map['loaiMuaHang']?.toString(),
+      tinhThanh: map['tinhThanh']?.toString(),
+      quanHuyen: map['quanHuyen']?.toString(),
+      phuongXa: map['phuongXa']?.toString(),
+      kenhTiepCan: map['kenhTiepCan']?.toString(),
+      duKienTrienKhai: map['duKienTrienKhai']?.toString(),
+      tiemNangDVTM: map['tiemNangDVTM']?.toString(),
+      yeuCauNhanSu: map['yeuCauNhanSu']?.toString(),
+      cachThucTuyen: map['cachThucTuyen']?.toString(),
+      mucLuongTuyen: map['mucLuongTuyen']?.toString(),
+      luongBP: map['luongBP']?.toString(),
+    );
+  }
+}
+class KhachHangContactModel {
+  final String? uid;
+  final String? boPhan;
+  final String? hinhAnh;
+  final String? nguoiDung;
+  final String? chiaSe;
+  final DateTime? ngayTao;
+  final DateTime? ngayCapNhat;
+  final String? hoSoYeuCau;
+  final String? hoTen;
+  final String? gioiTinh;
+  final String? chucDanh;
+  final String? tinhTrang;
+  final String? chucNang;
+  final String? thoiGianLamViec;
+  final String? soDienThoai;
+  final String? email;
+  final String? soThich;
+  final String? khongThich;
+  final String? tinhCach;
+  final String? yeuCauRiengVeDV;
+  final String? gioLam;
+  final String? nguyenTac;
+  final String? kyVong;
+  final String? soDienThoai2;
+  final DateTime? sinhNhat;
+  final String? diaChi;
+  final String? tenNick;
+  final String? nguonGoc;
+
+  KhachHangContactModel({
+    this.uid,
+    this.boPhan,
+    this.hinhAnh,
+    this.nguoiDung,
+    this.chiaSe,
+    this.ngayTao,
+    this.ngayCapNhat,
+    this.hoSoYeuCau,
+    this.hoTen,
+    this.gioiTinh,
+    this.chucDanh,
+    this.tinhTrang,
+    this.chucNang,
+    this.thoiGianLamViec,
+    this.soDienThoai,
+    this.email,
+    this.soThich,
+    this.khongThich,
+    this.tinhCach,
+    this.yeuCauRiengVeDV,
+    this.gioLam,
+    this.nguyenTac,
+    this.kyVong,
+    this.soDienThoai2,
+    this.sinhNhat,
+    this.diaChi,
+    this.tenNick,
+    this.nguonGoc,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'uid': uid,
+    'boPhan': boPhan,
+    'hinhAnh': hinhAnh,
+    'nguoiDung': nguoiDung,
+    'chiaSe': chiaSe,
+    'ngayTao': ngayTao?.toIso8601String().split('T').first,
+    'ngayCapNhat': ngayCapNhat?.toIso8601String().split('T').first,
+    'hoSoYeuCau': hoSoYeuCau,
+    'hoTen': hoTen,
+    'gioiTinh': gioiTinh,
+    'chucDanh': chucDanh,
+    'tinhTrang': tinhTrang,
+    'chucNang': chucNang,
+    'thoiGianLamViec': thoiGianLamViec,
+    'soDienThoai': soDienThoai,
+    'email': email,
+    'soThich': soThich,
+    'khongThich': khongThich,
+    'tinhCach': tinhCach,
+    'yeuCauRiengVeDV': yeuCauRiengVeDV,
+    'gioLam': gioLam,
+    'nguyenTac': nguyenTac,
+    'kyVong': kyVong,
+    'soDienThoai2': soDienThoai2,
+    'sinhNhat': sinhNhat?.toIso8601String().split('T').first,
+    'diaChi': diaChi,
+    'tenNick': tenNick,
+    'nguonGoc': nguonGoc,
+  };
+
+  factory KhachHangContactModel.fromMap(Map<dynamic, dynamic> map) {
+    return KhachHangContactModel(
+      uid: map['uid']?.toString(),
+      boPhan: map['boPhan']?.toString(),
+      hinhAnh: map['hinhAnh']?.toString(),
+      nguoiDung: map['nguoiDung']?.toString(),
+      chiaSe: map['chiaSe']?.toString(),
+      ngayTao: map['ngayTao'] != null ? DateTime.tryParse(map['ngayTao'].toString()) : null,
+      ngayCapNhat: map['ngayCapNhat'] != null ? DateTime.tryParse(map['ngayCapNhat'].toString()) : null,
+      hoSoYeuCau: map['hoSoYeuCau']?.toString(),
+      hoTen: map['hoTen']?.toString(),
+      gioiTinh: map['gioiTinh']?.toString(),
+      chucDanh: map['chucDanh']?.toString(),
+      tinhTrang: map['tinhTrang']?.toString(),
+      chucNang: map['chucNang']?.toString(),
+      thoiGianLamViec: map['thoiGianLamViec']?.toString(),
+      soDienThoai: map['soDienThoai']?.toString(),
+      email: map['email']?.toString(),
+      soThich: map['soThich']?.toString(),
+      khongThich: map['khongThich']?.toString(),
+      tinhCach: map['tinhCach']?.toString(),
+      yeuCauRiengVeDV: map['yeuCauRiengVeDV']?.toString(),
+      gioLam: map['gioLam']?.toString(),
+      nguyenTac: map['nguyenTac']?.toString(),
+      kyVong: map['kyVong']?.toString(),
+      soDienThoai2: map['soDienThoai2']?.toString(),
+      sinhNhat: map['sinhNhat'] != null ? DateTime.tryParse(map['sinhNhat'].toString()) : null,
+      diaChi: map['diaChi']?.toString(),
+      tenNick: map['tenNick']?.toString(),
+      nguonGoc: map['nguonGoc']?.toString(),
+    );
+  }
+}
 // Database Tables
 class DatabaseTables {
   // Table Names
@@ -3352,6 +3670,89 @@ class DatabaseTables {
   static const String gocleanCongViecTable = 'GoClean_CongViec';
   static const String gocleanTaiKhoanTable = 'GoClean_TaiKhoan';
   static const String gocleanYeuCauTable = 'GoClean_YeuCau';
+  static const String khachHangTable = 'KhachHang';
+  static const String khachHangContactTable = 'KhachHangContact';
+static const String createKhachHangContactTable = '''
+  CREATE TABLE $khachHangContactTable (
+    uid VARCHAR(255),
+    boPhan TEXT,
+    hinhAnh TEXT,
+    nguoiDung VARCHAR(255),
+    chiaSe TEXT,
+    ngayTao DATE,
+    ngayCapNhat DATE,
+    hoSoYeuCau TEXT,
+    hoTen VARCHAR(255),
+    gioiTinh VARCHAR(255),
+    chucDanh VARCHAR(255),
+    tinhTrang VARCHAR(255),
+    chucNang VARCHAR(255),
+    thoiGianLamViec TEXT,
+    soDienThoai VARCHAR(255),
+    email VARCHAR(255),
+    soThich TEXT,
+    khongThich TEXT,
+    tinhCach TEXT,
+    yeuCauRiengVeDV TEXT,
+    gioLam TEXT,
+    nguyenTac TEXT, 
+    kyVong TEXT,
+    soDienThoai2 VARCHAR(255),
+    sinhNhat DATE,
+    diaChi TEXT,
+    tenNick VARCHAR(255),
+    nguonGoc VARCHAR(255)
+  )
+''';
+static const String createKhachHangTable = '''
+  CREATE TABLE $khachHangTable (
+    uid VARCHAR(100),
+    nguoiDung VARCHAR(100),
+    chiaSe TEXT,
+    danhDau VARCHAR(100),
+    vungMien VARCHAR(100),
+    phanLoai VARCHAR(100),
+    loaiHinh VARCHAR(100),
+    loaiCongTrinh VARCHAR(100),
+    maBP VARCHAR(100),
+    maKT VARCHAR(100),
+    maKD VARCHAR(100),
+    trangThaiHopDong VARCHAR(100),
+    tenDuAn TEXT,
+    tenKyThuat TEXT,
+    tenRutGon TEXT,
+    tenVatTu TEXT,
+    giamSat VARCHAR(100),
+    qldv VARCHAR(100),
+    ghiChu TEXT,
+    diaChi TEXT,
+    diaChiVanPhong TEXT,
+    sdtDuAn VARCHAR(100),
+    nhanSuTheoHopDong DOUBLE,
+    nhanSuDuocCo DOUBLE,
+    hinhAnh TEXT,
+    maSoThue VARCHAR(100),
+    soDienThoai VARCHAR(100),
+    fax VARCHAR(100),
+    website TEXT,
+    email TEXT,
+    soTaiKhoan DOUBLE,
+    nganHang DOUBLE,
+    ngayCapNhatCuoi DATE,
+    ngayKhoiTao DATE,
+    loaiMuaHang VARCHAR(100),
+    tinhThanh VARCHAR(100),
+    quanHuyen VARCHAR(100),
+    phuongXa VARCHAR(100),
+    kenhTiepCan VARCHAR(100),
+    duKienTrienKhai TEXT,
+    tiemNangDVTM TEXT,
+    yeuCauNhanSu TEXT,
+    cachThucTuyen TEXT,
+    mucLuongTuyen TEXT,
+    luongBP TEXT
+  )
+''';
   static const String createGoCleanYeuCauTable = '''
     CREATE TABLE $gocleanYeuCauTable (
       GiaoViecID VARCHAR(100),
