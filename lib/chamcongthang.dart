@@ -41,12 +41,13 @@ class _ChamCongThangScreenState extends State<ChamCongThangScreen> {
     'hm.nguyengiang': ['MIENBAC'],
     'hm.lethihoa': ['LYCHEE'],
     'hm.vovy': ['LYCHEE'],
-    'hm.nguyenlua': ['MIENTRUNG'],
+    'hm.nguyenthilua': ['MIENTRUNG'],
     'hm.nguyentoan2': ['SANXUAT', 'LYCHEE'],
     'hm.anhmanh': ['SANXUAT'],
     'hm.doannga': ['DANANG'],
     'hm.damlinh': ['MIENNAM', 'LYCHEE'],
     'hm.ngochuyen': ['MIENNAM'],
+    'hm.lehang': ['MIENNAM'],
   };
 
   // Admin users who can see all branches

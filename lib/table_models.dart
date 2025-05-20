@@ -3333,8 +3333,8 @@ class KhachHangModel {
   final String? fax;
   final String? website;
   final String? email;
-  final double? soTaiKhoan;
-  final double? nganHang;
+  final String? soTaiKhoan;
+  final String? nganHang;
   final DateTime? ngayCapNhatCuoi;
   final DateTime? ngayKhoiTao;
   final String? loaiMuaHang;
@@ -3477,8 +3477,8 @@ class KhachHangModel {
       fax: map['fax']?.toString(),
       website: map['website']?.toString(),
       email: map['email']?.toString(),
-      soTaiKhoan: map['soTaiKhoan'] != null ? double.tryParse(map['soTaiKhoan'].toString()) : null,
-      nganHang: map['nganHang'] != null ? double.tryParse(map['nganHang'].toString()) : null,
+      soTaiKhoan: map['soTaiKhoan']?.toString(),
+      nganHang: map['nganHang']?.toString(),
       ngayCapNhatCuoi: map['ngayCapNhatCuoi'] != null ? DateTime.tryParse(map['ngayCapNhatCuoi'].toString()) : null,
       ngayKhoiTao: map['ngayKhoiTao'] != null ? DateTime.tryParse(map['ngayKhoiTao'].toString()) : null,
       loaiMuaHang: map['loaiMuaHang']?.toString(),
@@ -3736,8 +3736,8 @@ static const String createKhachHangTable = '''
     fax VARCHAR(100),
     website TEXT,
     email TEXT,
-    soTaiKhoan DOUBLE,
-    nganHang DOUBLE,
+    soTaiKhoan TEXT,
+    nganHang TEXT,
     ngayCapNhatCuoi DATE,
     ngayKhoiTao DATE,
     loaiMuaHang VARCHAR(100),

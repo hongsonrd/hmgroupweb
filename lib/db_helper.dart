@@ -39,13 +39,13 @@ class DBHelper {
     }
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool hasReset = prefs.getBool('db_reset_v26') ?? false;
+    bool hasReset = prefs.getBool('db_reset_v27') ?? false;
     
     if (!hasReset) {
-      print('Forcing database reset for version 26...');
+      print('Forcing database reset for version 27...');
       try {
         await deleteDatabase(path);
-        await prefs.setBool('db_reset_v26', true);
+        await prefs.setBool('db_reset_v27', true);
         print('Database reset successful');
       } catch (e) {
         print('Error during database reset: $e');
@@ -57,7 +57,7 @@ class DBHelper {
     final db = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 26,
+        version: 27,
         onCreate: (Database db, int version) async {
           print('Creating database tables...');
           await db.execute(DatabaseTables.createInteractionTable);
@@ -113,7 +113,7 @@ class DBHelper {
           print('Database tables created successfully');
         },
         onUpgrade: (Database db, int oldVersion, int newVersion) async {
-          if (oldVersion < 26) {
+          if (oldVersion < 27) {
           await db.execute(DatabaseTables.createGoCleanCongViecTable);
           await db.execute(DatabaseTables.createGoCleanTaiKhoanTable);
           await db.execute(DatabaseTables.createGoCleanYeuCauTable);

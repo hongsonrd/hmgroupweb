@@ -64,7 +64,7 @@ class _HSDonHangScreenState extends State<HSDonHangScreen> {
   ];
 
   // List of statuses that need approval
-  final List<String> pendingStatuses = ['gửi', 'gửi xuất nội bộ'];
+  final List<String> pendingStatuses = ['gửi', 'gửi xuất nội bộ', 'dự trù'];
 
   @override
   void initState() {
@@ -276,10 +276,11 @@ class _HSDonHangScreenState extends State<HSDonHangScreen> {
     final Map<String, int> statusPriority = {
       'gửi': 0,
       'gửi xuất nội bộ': 1,
-      'chờ duyệt': 2,
-      'đã duyệt': 3,
-      'đã giao': 4,
-      'đã huỷ': 5,
+      'dự trù': 2,
+      'chờ duyệt': 3,
+      'đã duyệt': 4,
+      'đã giao': 5,
+      'đã huỷ': 6,
     };
 
     _orders.sort((a, b) {
@@ -453,10 +454,11 @@ class _HSDonHangScreenState extends State<HSDonHangScreen> {
     final Map<String, int> statusPriority = {
       'gửi': 0,
       'gửi xuất nội bộ': 1,
-      'chờ duyệt': 2,
-      'đã duyệt': 3,
-      'đã giao': 4,
-      'đã huỷ': 5,
+      'dự trù': 2,
+      'chờ duyệt': 3,
+      'đã duyệt': 4,
+      'đã giao': 5,
+      'đã huỷ': 6,
     };
 
     statuses.sort((a, b) {
@@ -1043,10 +1045,11 @@ Widget build(BuildContext context) {
     final Map<String, int> statusPriority = {
       'gửi': 0,
       'gửi xuất nội bộ': 1,
-      'chờ duyệt': 2,
-      'đã duyệt': 3,
-      'đã giao': 4,
-      'đã huỷ': 5,
+      'dự trù': 2,
+      'chờ duyệt': 3,
+      'đã duyệt': 4,
+      'đã giao': 5,
+      'đã huỷ': 6,
     };
 
     sortedStatuses.sort((a, b) {
@@ -1904,7 +1907,9 @@ Future<void> _sendHMGroupOrder(String soPhieu) async {
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(context),
-              child: Text('Đóng'),
+              child: Text('Đóng', style: TextStyle(
+            color: Colors.grey,
+          ),),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Color(0xFF534b0d),
               ),
@@ -2977,6 +2982,7 @@ Future<void> _quickApproveHMGroupOrder(String soPhieu) async {
     switch (status.toLowerCase()) {
       case 'gửi':
       case 'gửi xuất nội bộ':
+      case 'dự trù':
       case 'chờ duyệt':
         return Colors.orange;
       case 'đã duyệt':
@@ -2996,6 +3002,8 @@ Future<void> _quickApproveHMGroupOrder(String soPhieu) async {
         return 'Chờ duyệt';
       case 'gửi xuất nội bộ':
         return 'Chờ duyệt (Nội bộ)';
+      case 'dự trù':
+        return 'Chờ duyệt (Dự trù)';
       case 'chờ duyệt':
         return 'Đang xử lý';
       case 'đã duyệt':

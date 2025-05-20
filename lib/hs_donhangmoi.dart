@@ -244,26 +244,27 @@ class _HSDonHangMoiScreenState extends State<HSDonHangMoiScreen> {
     }
   }
   
-  void _selectCustomer(KhachHangModel customer) async {
-    setState(() {
-      _isLoading = true;
-      _selectedCustomer = customer;
-    });
-    
-    // Load customer contacts
-    await _loadCustomerContacts(customer.uid ?? '');
-    
-    // Set default values
-    _diaChiController.text = customer.diaChi ?? '';
-    _sdtKhachHangController.text = customer.sdtDuAn ?? '';
-    _diaChiGiaoHangController.text = customer.diaChi ?? '';
-    _tenKhachHang2Controller.text = customer.tenDuAn ?? '';
-    
-    setState(() {
-      _isLoading = false;
-      _currentStep = 1; // Move to order details step
-    });
-  }
+  void _selectCustomer(KhachHangModel customer, {String orderType = 'Tạo đơn'}) async {
+  setState(() {
+    _isLoading = true;
+    _selectedCustomer = customer;
+    _orderType = orderType; // Change _isBaoGia to _orderType
+  });
+  
+  // Load customer contacts
+  await _loadCustomerContacts(customer.uid ?? '');
+  
+  // Set default values
+  _diaChiController.text = customer.diaChi ?? '';
+  _sdtKhachHangController.text = customer.sdtDuAn ?? '';
+  _diaChiGiaoHangController.text = customer.diaChi ?? '';
+  _tenKhachHang2Controller.text = customer.tenDuAn ?? '';
+  
+  setState(() {
+    _isLoading = false;
+    _currentStep = 1; // Move to order details step
+  });
+}
   
   Future<void> _loadCustomerContacts(String customerUid) async {
     try {
@@ -405,69 +406,77 @@ class _HSDonHangMoiScreenState extends State<HSDonHangMoiScreen> {
       },
     );
   }
-  
+  bool _isBaoGia = false;
+  String _orderType = 'Tạo đơn'; 
   void _createOrder() {
-    if (_selectedCustomer == null) return;
-    
-    final soPhieu = _generateSoPhieu();
-    final now = DateTime.now();
-    final formattedDate = DateFormat('yyyy-MM-dd').format(now);
-    final currentDateTime = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
-    final userCredentials = Provider.of<UserCredentials>(context, listen: false);
-    final thoiGianDatHang = _getThoiGianDatHang();
-    
-    // Determine trangThai based on tenKhachHang
+  if (_selectedCustomer == null) return;
+  
+  final soPhieu = _generateSoPhieu();
+  final now = DateTime.now();
+  final formattedDate = DateFormat('yyyy-MM-dd').format(now);
+  final currentDateTime = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
+  final userCredentials = Provider.of<UserCredentials>(context, listen: false);
+  final thoiGianDatHang = _getThoiGianDatHang();
+  
+  // Determine trangThai based on _orderType and customer name
+  String trangThai;
+  if (_orderType == 'Báo giá') {
+    trangThai = 'Báo giá';
+  } else if (_orderType == 'Dự trù') {
+    trangThai = 'Dự trù';
+  } else {
+    // Default 'Tạo đơn' behavior
     final bool isNoiBo = (_selectedCustomer!.tenDuAn ?? '').toLowerCase().contains('nội bộ');
-    final String trangThai = isNoiBo ? 'Xuất Nội bộ' : 'Chưa xong';
-    
-    // Create the order
-    _newOrder = DonHangModel(
-      soPhieu: soPhieu,
-      nguoiTao: userCredentials.username,
-      ngay: formattedDate,
-      tenKhachHang: _selectedCustomer!.tenDuAn,
-      sdtKhachHang: _sdtKhachHangController.text,
-      soPO: _poController.text,
-      diaChi: _diaChiController.text,
-      mst: _selectedCustomer!.maSoThue,
-      tapKH: _tapKH,
-      tenNguoiGiaoDich: _tenNguoiGiaoDichController.text,
-      boPhanGiaoDich: _boPhanGiaoDichController.text,
-      sdtNguoiGiaoDich: _sdtNguoiGiaoDichController.text,
-      thoiGianDatHang: thoiGianDatHang,
-      ngayYeuCauGiao: DateFormat('yyyy-MM-dd').format(_ngayYeuCauGiao),
-      thoiGianCapNhatTrangThai: currentDateTime,
-      phuongThucThanhToan: _phuongThucThanhToan,
-      thanhToanSauNhanHangXNgay: _thanhToanSauNhanHangXNgay,
-      datCocSauXNgay: _datCocSauXNgay,
-      giayToCanKhiGiaoHang: _giayToCanKhiGiaoHangController.text,
-      thoiGianVietHoaDon: _thoiGianVietHoaDonController.text,
-      thongTinVietHoaDon: _thongTinVietHoaDonController.text,
-      diaChiGiaoHang: _diaChiGiaoHangController.text,
-      hoTenNguoiNhanHoaHong: _hoTenNguoiNhanHoaHongController.text,
-      sdtNguoiNhanHoaHong: _sdtNguoiNhanHoaHongController.text,
-      hinhThucChuyenHoaHong: _hinhThucChuyenHoaHongController.text,
-      thongTinNhanHoaHong: _thongTinNhanHoaHongController.text,
-      ngaySeGiao: '',
-      thoiGianCapNhatMoiNhat: currentDateTime,
-      phuongThucGiaoHang: 'HMGROUP',
-      phuongTienGiaoHang: _phuongTienGiaoHangController.text,
-      hoTenNguoiGiaoHang: _hoTenNguoiGiaoHangController.text,
-      ghiChu: _ghiChuController.text,
-      giaNet: _giaNetController.text.isNotEmpty ? int.tryParse(_giaNetController.text) : null,
-      trangThai: trangThai,
-      tenKhachHang2: _tenKhachHang2Controller.text,
-    );
-    
-    // Load product data
-    _loadProductData();
-    
-    // Move to product selection step
-    setState(() {
-      _currentStep = 2;
-    });
+    trangThai = isNoiBo ? 'Xuất Nội bộ' : 'Chưa xong';
   }
   
+  // Create the order
+  _newOrder = DonHangModel(
+    soPhieu: soPhieu,
+    nguoiTao: userCredentials.username,
+    ngay: formattedDate,
+    tenKhachHang: _selectedCustomer!.tenDuAn,
+    sdtKhachHang: _sdtKhachHangController.text,
+    soPO: _poController.text,
+    diaChi: _diaChiController.text,
+    mst: _selectedCustomer!.maSoThue,
+    tapKH: _tapKH,
+    tenNguoiGiaoDich: _tenNguoiGiaoDichController.text,
+    boPhanGiaoDich: _boPhanGiaoDichController.text,
+    sdtNguoiGiaoDich: _sdtNguoiGiaoDichController.text,
+    thoiGianDatHang: thoiGianDatHang,
+    ngayYeuCauGiao: DateFormat('yyyy-MM-dd').format(_ngayYeuCauGiao),
+    thoiGianCapNhatTrangThai: currentDateTime,
+    phuongThucThanhToan: _phuongThucThanhToan,
+    thanhToanSauNhanHangXNgay: _thanhToanSauNhanHangXNgay,
+    datCocSauXNgay: _datCocSauXNgay,
+    giayToCanKhiGiaoHang: _giayToCanKhiGiaoHangController.text,
+    thoiGianVietHoaDon: _thoiGianVietHoaDonController.text,
+    thongTinVietHoaDon: _thongTinVietHoaDonController.text,
+    diaChiGiaoHang: _diaChiGiaoHangController.text,
+    hoTenNguoiNhanHoaHong: _hoTenNguoiNhanHoaHongController.text,
+    sdtNguoiNhanHoaHong: _sdtNguoiNhanHoaHongController.text,
+    hinhThucChuyenHoaHong: _hinhThucChuyenHoaHongController.text,
+    thongTinNhanHoaHong: _thongTinNhanHoaHongController.text,
+    ngaySeGiao: '',
+    thoiGianCapNhatMoiNhat: currentDateTime,
+    phuongThucGiaoHang: 'HMGROUP',
+    phuongTienGiaoHang: _phuongTienGiaoHangController.text,
+    hoTenNguoiGiaoHang: _hoTenNguoiGiaoHangController.text,
+    ghiChu: _ghiChuController.text,
+    giaNet: _giaNetController.text.isNotEmpty ? int.tryParse(_giaNetController.text) : null,
+    trangThai: trangThai,
+    tenKhachHang2: _tenKhachHang2Controller.text,
+  );
+  
+  // Load product data
+  _loadProductData();
+  
+  // Move to product selection step
+  setState(() {
+    _currentStep = 2;
+  });
+}
   // ===== PRODUCT SELECTION METHODS =====
   
   Future<void> _loadProductData() async {
@@ -770,12 +779,19 @@ class _HSDonHangMoiScreenState extends State<HSDonHangMoiScreen> {
                       );
                       return;
                     }
-                    
+                    String itemTrangThai;
+if (_orderType == 'Báo giá') {
+  itemTrangThai = 'Báo giá';
+} else if (_orderType == 'Dự trù') {
+  itemTrangThai = 'Dự trù';
+} else {
+  itemTrangThai = 'Nháp';
+}
                     // Create a new ChiTietDonModel
                     final newChiTiet = ChiTietDonModel(
                      uid: 'TEMP-${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(10000)}',
                       soPhieu: _newOrder?.soPhieu,
-                      trangThai: 'Nháp',
+                      trangThai: itemTrangThai,
                       tenHang: tenHangController.text,
                       maHang: maHangController.text,
                       donViTinh: donViTinhController.text,
@@ -1060,12 +1076,19 @@ class _HSDonHangMoiScreenState extends State<HSDonHangMoiScreen> {
                       );
                       return;
                     }
-                    
+                    String itemTrangThai;
+if (_orderType == 'Báo giá') {
+  itemTrangThai = 'Báo giá';
+} else if (_orderType == 'Dự trù') {
+  itemTrangThai = 'Dự trù';
+} else {
+  itemTrangThai = chiTietDon.trangThai ?? 'Nháp';
+}
                     // Update the ChiTietDonModel
                     final updatedChiTiet = ChiTietDonModel(
                       uid: chiTietDon.uid,
                       soPhieu: chiTietDon.soPhieu,
-                      trangThai: chiTietDon.trangThai,
+                      trangThai: itemTrangThai,
                       tenHang: tenHangController.text,
                       maHang: maHangController.text,
                       donViTinh: donViTinhController.text,
@@ -1989,33 +2012,63 @@ void _showBatchOperationsDialog() {
   }
 
   Widget _buildCustomerCard(KhachHangModel customer) {
-    return Card(
-      margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: ListTile(
-        title: Text(
-          customer.tenDuAn ?? 'Không có tên',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  return Card(
+    margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    child: ListTile(
+      title: Text(
+        customer.tenDuAn ?? 'Không có tên',
+        style: TextStyle(fontWeight: FontWeight.bold),
+      ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (customer.diaChi != null && customer.diaChi!.isNotEmpty)
+            Text(customer.diaChi!, maxLines: 1, overflow: TextOverflow.ellipsis),
+          if (customer.sdtDuAn != null && customer.sdtDuAn!.isNotEmpty)
+            Text('ĐT: ${customer.sdtDuAn}'),
+        ],
+      ),
+      trailing: Container(
+        width: 240, // Adjust width to fit all three buttons
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            if (customer.diaChi != null && customer.diaChi!.isNotEmpty)
-              Text(customer.diaChi!, maxLines: 1, overflow: TextOverflow.ellipsis),
-            if (customer.sdtDuAn != null && customer.sdtDuAn!.isNotEmpty)
-              Text('ĐT: ${customer.sdtDuAn}'),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: 8), // Smaller padding
+              ),
+              child: Text('Dự trù', style: TextStyle(fontSize: 13)), // Smaller text
+              onPressed: () => _selectCustomer(customer, orderType: 'Dự trù'),
+            ),
+            SizedBox(width: 4),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: 8), // Smaller padding
+              ),
+              child: Text('Báo giá', style: TextStyle(fontSize: 13)), // Smaller text
+              onPressed: () => _selectCustomer(customer, orderType: 'Báo giá'),
+            ),
+            SizedBox(width: 4),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: buttonColor,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: 8), // Smaller padding
+              ),
+              child: Text('Tạo đơn', style: TextStyle(fontSize: 13)), // Smaller text
+              onPressed: () => _selectCustomer(customer, orderType: 'Tạo đơn'),
+            ),
           ],
         ),
-        trailing: ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: buttonColor,
-            foregroundColor: Colors.white,
-          ),
-          child: Text('Tạo đơn'),
-          onPressed: () => _selectCustomer(customer),
-        ),
       ),
-    );
-  }
+    ),
+  );
+}
   
   Widget _buildOrderDetailsStep() {
     return SingleChildScrollView(

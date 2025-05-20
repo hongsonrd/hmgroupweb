@@ -9,8 +9,6 @@ import 'package:url_launcher/url_launcher.dart' as url_launcher;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:math';
-import 'http_client.dart';
-
 class HSKhachHangScreen extends StatefulWidget {
   @override
   _HSKhachHangScreenState createState() => _HSKhachHangScreenState();
@@ -204,7 +202,7 @@ Future<void> _syncKhachHang(String username) async {
   final String requestUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelkhachhang/$username';
   print('Making request to: $requestUrl');
   
-  final response = await AuthenticatedHttpClient.get(
+  final response = await http.get(
     Uri.parse(requestUrl),
     headers: {'Content-Type': 'application/json'},
   );
@@ -233,7 +231,7 @@ Future<void> _syncKhachHangContact(String username) async {
   final String requestUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelkhachhangcontact/$username';
   print('Making request to: $requestUrl');
   
-  final response = await AuthenticatedHttpClient.get(
+  final response = await http.get(
     Uri.parse(requestUrl),
     headers: {'Content-Type': 'application/json'},
   );
@@ -277,50 +275,73 @@ Future<void> _syncKhachHangContact(String username) async {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [appBarTop, appBarBottom],
-            ),
+Widget build(BuildContext context) {
+  return Scaffold(
+    appBar: AppBar(
+      flexibleSpace: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [appBarTop, appBarBottom],
           ),
         ),
-        title: Text('DS khách hàng', style: TextStyle(color: Colors.white),),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.filter_list),
-            onPressed: () {
-              _showFilterDialog();
-            },
-          ),
-          IconButton(
-            icon: Icon(Icons.sort),
-            onPressed: () {
-              _showSortDialog();
-            },
-          ),
-        ],
       ),
-      body: Column(
-        children: [
-          _buildSearchBar(),
-          _buildFilterChips(),
-          Expanded(
-            child: _buildCustomerList(),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: buttonColor,
-        child: Icon(Icons.refresh),
-        onPressed: _refreshData,
-      ),
-    );
-  }
+      title: Text('DS khách hàng', style: TextStyle(color: Colors.white),),
+      actions: [
+        IconButton(
+          icon: Icon(Icons.filter_list),
+          onPressed: () {
+            _showFilterDialog();
+          },
+        ),
+        IconButton(
+          icon: Icon(Icons.sort),
+          onPressed: () {
+            _showSortDialog();
+          },
+        ),
+      ],
+    ),
+    body: Column(
+      children: [
+        _buildSearchBar(),
+        _buildFilterChips(),
+        Expanded(
+          child: _buildCustomerList(),
+        ),
+      ],
+    ),
+    floatingActionButton: Column(
+  mainAxisAlignment: MainAxisAlignment.end,
+  children: [
+    FloatingActionButton(
+      backgroundColor: buttonColor,
+      heroTag: "add",
+      child: Icon(Icons.add),
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => AddKhachHangScreen()),
+        ).then((value) {
+          if (value == true) {
+            // Refresh data if customer was added successfully
+            _refreshData();
+          }
+        });
+      },
+    ),
+    SizedBox(height: 16),
+    FloatingActionButton(
+      backgroundColor: buttonColor,
+      heroTag: "refresh",
+      child: Icon(Icons.refresh),
+      onPressed: _refreshData,
+    ),
+  ],
+),
+  );
+}
 
   Widget _buildSearchBar() {
     return Container(
@@ -705,3 +726,1241 @@ Future<void> _syncKhachHangContact(String username) async {
     );
   }
 }
+class AddKhachHangScreen extends StatefulWidget {
+  @override
+  _AddKhachHangScreenState createState() => _AddKhachHangScreenState();
+}
+
+class _AddKhachHangScreenState extends State<AddKhachHangScreen> 
+    with SingleTickerProviderStateMixin { 
+  final _formKey = GlobalKey<FormState>();
+  final _contactFormKey = GlobalKey<FormState>();
+  
+  // Customer data
+  Map<String, dynamic> newCustomer = {};
+  
+  // Contact list
+  List<KhachHangContactDraft> contacts = [];
+  
+  // Current contact being edited
+  KhachHangContactDraft? currentContact;
+  
+  // Contact form controllers
+  TextEditingController hoTenController = TextEditingController();
+  TextEditingController chucDanhController = TextEditingController();
+  TextEditingController soDienThoaiContactController = TextEditingController();
+  TextEditingController emailContactController = TextEditingController();
+  
+  // Contact form values
+  String? selectedGioiTinh;
+  String? selectedNguonGoc;
+  
+  // Special usernames list for phanLoai auto-selection
+  final List<String> thuongMaiUsers = [
+    'hm.trangiang', 'hm.tranly', 'hm.nguyenhanh2', 'hm.dinhmai', 
+    'hm.hoangthao', 'hm.vutoan', 'hm.lehoa', 'hm.lemanh', 
+    'hm.nguyentoan', 'hm.nguyendung', 'hm.nguyennga', 'hm.conghai', 
+    'hm.thuytrang', 'hm.nguyenvy', 'hm.baoha', 'hm.trantien', 
+    'hm.myha', 'hm.phiminh', 'hm.thanhhao', 'hm.luongtrang', 
+    'hm.damlinh', 'hm.thanhthao', 'hm.damchinh', 'hm.quocchien', 
+    'hm.thuyvan', 'hotel.danang', 'hotel.nhatrang', 'hm.doanly'
+  ];
+  
+  // Predefined subject names for Dịch vụ type
+  final List<String> predefinedSubjects = [
+    "1. Nhân sự", 
+    "2. Tuyển dụng/ Chính sách", 
+    "10. Đối thủ", 
+    "5. Kiểm soát, ĐG Chất lượng DV", 
+    "8. Báo giá, đấu thầu", 
+    "6. Ý kiến KH", 
+    "4. Máy móc", 
+    "3. Vật tư", 
+    "7. HĐ, PL, Giải trình, CV", 
+    "9. Công nợ", 
+    "11. Khảo sát", 
+    "12. Phát triển TT", 
+    "14. Đánh giá KH"
+  ];
+  
+  // Main form controllers
+  TextEditingController tenDuAnController = TextEditingController();
+  TextEditingController ghiChuController = TextEditingController();
+  TextEditingController diaChiController = TextEditingController();
+  TextEditingController maSoThueController = TextEditingController();
+  TextEditingController soDienThoaiController = TextEditingController();
+  TextEditingController faxController = TextEditingController();
+  TextEditingController websiteController = TextEditingController();
+  TextEditingController emailController = TextEditingController();
+  TextEditingController soTaiKhoanController = TextEditingController();
+  TextEditingController nganHangController = TextEditingController();
+  TextEditingController tinhThanhController = TextEditingController();
+  TextEditingController quanHuyenController = TextEditingController();
+  TextEditingController phuongXaController = TextEditingController();
+  TextEditingController duKienTrienKhaiController = TextEditingController();
+  TextEditingController tiemNangDVTMController = TextEditingController();
+  TextEditingController yeuCauNhanSuController = TextEditingController();
+  TextEditingController cachThucTuyenController = TextEditingController();
+  TextEditingController mucLuongTuyenController = TextEditingController();
+  TextEditingController luongBPController = TextEditingController();
+  
+  // Dropdown values
+  String? selectedDanhDau = '';
+  String? selectedVungMien;
+  String selectedLoaiHinh = 'Dự án';
+  String? selectedLoaiCongTrinh;
+  String? selectedTrangThaiHopDong;
+  String? selectedLoaiMuaHang;
+  String? selectedKenhTiepCan;
+  
+  // App theme colors
+  final Color appBarTop = Color(0xFF024965);
+  final Color appBarBottom = Color(0xFF03a6cf);
+  final Color buttonColor = Color(0xFF33a7ce);
+  
+  // Tab controller for switching between customer and contact info
+  late TabController _tabController;
+  
+  // Loading state for API calls
+  bool _isSubmitting = false;
+  
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    
+    // Set initial values
+    final userCredentials = Provider.of<UserCredentials>(context, listen: false);
+    final username = userCredentials.username;
+    
+    // Generate new UUID
+    newCustomer['uid'] = _generateUuid();
+    newCustomer['nguoiDung'] = username;
+    
+    // Set phanLoai based on username
+    if (thuongMaiUsers.contains(username)) {
+      newCustomer['phanLoai'] = 'Thương mại';
+    } else {
+      newCustomer['phanLoai'] = 'Dịch vụ';
+    }
+    
+    // Set default values
+    newCustomer['loaiHinh'] = 'Dự án';
+    
+    // Set current datetime for creation and update fields
+    final now = DateTime.now();
+    String formattedDateTime = _formatDateTimeForDb(now);
+    newCustomer['ngayCapNhatCuoi'] = formattedDateTime;
+    newCustomer['ngayKhoiTao'] = formattedDateTime;
+  }
+  
+  @override
+  void dispose() {
+    // Dispose all controllers
+    tenDuAnController.dispose();
+    ghiChuController.dispose();
+    diaChiController.dispose();
+    maSoThueController.dispose();
+    soDienThoaiController.dispose();
+    faxController.dispose();
+    websiteController.dispose();
+    emailController.dispose();
+    soTaiKhoanController.dispose();
+    nganHangController.dispose();
+    tinhThanhController.dispose();
+    quanHuyenController.dispose();
+    phuongXaController.dispose();
+    duKienTrienKhaiController.dispose();
+    tiemNangDVTMController.dispose();
+    yeuCauNhanSuController.dispose();
+    cachThucTuyenController.dispose();
+    mucLuongTuyenController.dispose();
+    luongBPController.dispose();
+    
+    // Dispose contact controllers
+    hoTenController.dispose();
+    chucDanhController.dispose();
+    soDienThoaiContactController.dispose();
+    emailContactController.dispose();
+    
+    // Dispose tab controller
+    _tabController.dispose();
+    
+    super.dispose();
+  }
+  
+  String _generateUuid() {
+    var random = Random();
+    return 'cus_${DateTime.now().millisecondsSinceEpoch}_${random.nextInt(10000)}';
+  }
+  
+  String _generateContactUuid() {
+    var random = Random();
+    return 'con_${DateTime.now().millisecondsSinceEpoch}_${random.nextInt(10000)}';
+  }
+  
+  String _formatDateTimeForDb(DateTime dateTime) {
+    // Format to MariaDB datetime format (YYYY-MM-DD HH:MM:SS)
+    return "${dateTime.year}-${_twoDigits(dateTime.month)}-${_twoDigits(dateTime.day)} "
+           "${_twoDigits(dateTime.hour)}:${_twoDigits(dateTime.minute)}:${_twoDigits(dateTime.second)}";
+  }
+  
+  String _twoDigits(int n) {
+    if (n >= 10) return "$n";
+    return "0$n";
+  }
+  
+  void _saveCustomerForm() {
+    if (_formKey.currentState!.validate()) {
+      // Update customer data with form values
+      newCustomer['tenDuAn'] = tenDuAnController.text;
+      newCustomer['ghiChu'] = ghiChuController.text;
+      newCustomer['diaChi'] = diaChiController.text;
+      newCustomer['maSoThue'] = maSoThueController.text;
+      newCustomer['soDienThoai'] = soDienThoaiController.text;
+      newCustomer['fax'] = faxController.text;
+      newCustomer['website'] = websiteController.text;
+      newCustomer['email'] = emailController.text;
+      newCustomer['soTaiKhoan'] = soTaiKhoanController.text;
+      newCustomer['nganHang'] = nganHangController.text;
+      newCustomer['tinhThanh'] = tinhThanhController.text;
+      newCustomer['quanHuyen'] = quanHuyenController.text;
+      newCustomer['phuongXa'] = phuongXaController.text;
+      newCustomer['duKienTrienKhai'] = duKienTrienKhaiController.text;
+      newCustomer['tiemNangDVTM'] = tiemNangDVTMController.text;
+      newCustomer['yeuCauNhanSu'] = yeuCauNhanSuController.text;
+      newCustomer['cachThucTuyen'] = cachThucTuyenController.text;
+      newCustomer['mucLuongTuyen'] = mucLuongTuyenController.text;
+      newCustomer['luongBP'] = luongBPController.text;
+      
+      // Add dropdown values
+      newCustomer['danhDau'] = selectedDanhDau;
+      newCustomer['vungMien'] = selectedVungMien;
+      newCustomer['loaiCongTrinh'] = selectedLoaiCongTrinh;
+      newCustomer['trangThaiHopDong'] = selectedTrangThaiHopDong;
+      newCustomer['loaiMuaHang'] = selectedLoaiMuaHang;
+      newCustomer['kenhTiepCan'] = selectedKenhTiepCan;
+      
+      // Move to contacts tab
+      _tabController.animateTo(1);
+      
+      // If it's a "Dịch vụ" type customer and no contacts yet, offer to create predefined subjects
+      if (newCustomer['phanLoai'] == 'Dịch vụ' && contacts.isEmpty) {
+        _offerPredefinedSubjects();
+      }
+    }
+  }
+  
+  void _offerPredefinedSubjects() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Tạo danh mục (DỊCH VỤ))'),
+        content: Text(
+          'Bạn có muốn tạo các danh mục chủ đề mặc định cho khách hàng dịch vụ không?'
+        ),
+        actions: [
+          TextButton(
+            child: Text('Không'),
+            onPressed: () => Navigator.pop(context),
+          ),
+          ElevatedButton(
+            child: Text('Có, tạo danh mục'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: buttonColor,
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              _createPredefinedSubjects();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _createPredefinedSubjects() {
+    final userCredentials = Provider.of<UserCredentials>(context, listen: false);
+    final username = userCredentials.username;
+    final now = _formatDateTimeForDb(DateTime.now());
+    
+    setState(() {
+      for (String subject in predefinedSubjects) {
+        contacts.add(
+          KhachHangContactDraft(
+            uid: _generateContactUuid(),
+            boPhan: newCustomer['uid'],
+            nguoiDung: username,
+            ngayTao: now,
+            ngayCapNhat: now,
+            hoTen: subject,
+          )
+        );
+      }
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Đã tạo ${predefinedSubjects.length} danh mục người liên hệ'))
+    );
+  }
+  
+  void _addNewContact() {
+    // Clear form fields
+    hoTenController.clear();
+    chucDanhController.clear();
+    soDienThoaiContactController.clear();
+    emailContactController.clear();
+    selectedGioiTinh = null;
+    selectedNguonGoc = null;
+    
+    // Reset current contact
+    setState(() {
+      currentContact = null;
+    });
+    
+    // Show contact form dialog
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Thêm người liên hệ mới'),
+        content: SingleChildScrollView(
+          child: Form(
+            key: _contactFormKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Họ tên
+                _buildTextField(
+                  'Họ tên *',
+                  hoTenController,
+                  validator: (value) => value == null || value.isEmpty ? 'Vui lòng nhập họ tên' : null,
+                ),
+                
+                // Giới tính
+                _buildDropdownField(
+                  'Giới tính',
+                  ['Nam', 'Nữ'],
+                  selectedGioiTinh,
+                  (value) => setState(() => selectedGioiTinh = value),
+                ),
+                
+                // Chức danh
+                _buildTextField('Chức danh', chucDanhController),
+                
+                // Số điện thoại
+                _buildTextField(
+                  'Số điện thoại', 
+                  soDienThoaiContactController,
+                  keyboardType: TextInputType.phone
+                ),
+                
+                // Email
+                _buildTextField(
+                  'Email', 
+                  emailContactController,
+                  keyboardType: TextInputType.emailAddress
+                ),
+                
+                // Nguồn gốc
+                _buildDropdownField(
+                  'Nguồn gốc',
+                  [
+                    'Trực tiếp', 'Giới thiệu', 'Facebook', 'Zalo', 'Website',
+                    'Shopee', 'Tiki', 'Email', 'Viber', 'Telesale', 'Quảng cáo',
+                    'Nhắn tin', 'Khảo sát/ Form'
+                  ],
+                  selectedNguonGoc,
+                  (value) => setState(() => selectedNguonGoc = value),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: Text('Hủy'),
+            onPressed: () => Navigator.pop(context),
+          ),
+          ElevatedButton(
+            child: Text('Lưu'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: buttonColor,
+            ),
+            onPressed: () {
+              if (_contactFormKey.currentState!.validate()) {
+                final userCredentials = Provider.of<UserCredentials>(context, listen: false);
+                final username = userCredentials.username;
+                final now = _formatDateTimeForDb(DateTime.now());
+                
+                final newContact = KhachHangContactDraft(
+                  uid: _generateContactUuid(),
+                  boPhan: newCustomer['uid'],
+                  nguoiDung: username,
+                  ngayTao: now,
+                  ngayCapNhat: now,
+                  hoTen: hoTenController.text,
+                  gioiTinh: selectedGioiTinh ?? '',
+                  chucDanh: chucDanhController.text,
+                  soDienThoai: soDienThoaiContactController.text,
+                  email: emailContactController.text,
+                  nguonGoc: selectedNguonGoc ?? '',
+                );
+                
+                setState(() {
+                  contacts.add(newContact);
+                });
+                
+                Navigator.pop(context);
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _editContact(int index) {
+    final contact = contacts[index];
+    
+    // Set form values
+    hoTenController.text = contact.hoTen;
+    chucDanhController.text = contact.chucDanh;
+    soDienThoaiContactController.text = contact.soDienThoai;
+    emailContactController.text = contact.email;
+    
+    setState(() {
+      selectedGioiTinh = contact.gioiTinh.isNotEmpty ? contact.gioiTinh : null;
+      selectedNguonGoc = contact.nguonGoc.isNotEmpty ? contact.nguonGoc : null;
+      currentContact = contact;
+    });
+    
+    // Show contact form dialog
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Chỉnh sửa người liên hệ'),
+        content: SingleChildScrollView(
+          child: Form(
+            key: _contactFormKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Họ tên
+                _buildTextField(
+                  'Họ tên *',
+                  hoTenController,
+                  validator: (value) => value == null || value.isEmpty ? 'Vui lòng nhập họ tên' : null,
+                ),
+                
+                // Giới tính
+                _buildDropdownField(
+                  'Giới tính',
+                  ['Nam', 'Nữ'],
+                  selectedGioiTinh,
+                  (value) => setState(() => selectedGioiTinh = value),
+                ),
+                
+                // Chức danh
+                _buildTextField('Chức danh', chucDanhController),
+                
+                // Số điện thoại
+                _buildTextField(
+                  'Số điện thoại', 
+                  soDienThoaiContactController,
+                  keyboardType: TextInputType.phone
+                ),
+                
+                // Email
+                _buildTextField(
+                  'Email', 
+                  emailContactController,
+                  keyboardType: TextInputType.emailAddress
+                ),
+                
+                // Nguồn gốc
+                _buildDropdownField(
+                  'Nguồn gốc',
+                  [
+                    'Trực tiếp', 'Giới thiệu', 'Facebook', 'Zalo', 'Website',
+                    'Shopee', 'Tiki', 'Email', 'Viber', 'Telesale', 'Quảng cáo',
+                    'Nhắn tin', 'Khảo sát/ Form'
+                  ],
+                  selectedNguonGoc,
+                  (value) => setState(() => selectedNguonGoc = value),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: Text('Hủy'),
+            onPressed: () => Navigator.pop(context),
+          ),
+          ElevatedButton(
+            child: Text('Cập nhật'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: buttonColor,
+            ),
+            onPressed: () {
+              if (_contactFormKey.currentState!.validate()) {
+                final now = _formatDateTimeForDb(DateTime.now());
+                
+                setState(() {
+                  // Update the contact fields
+                  contact.hoTen = hoTenController.text;
+                  contact.gioiTinh = selectedGioiTinh ?? '';
+                  contact.chucDanh = chucDanhController.text;
+                  contact.soDienThoai = soDienThoaiContactController.text;
+                  contact.email = emailContactController.text;
+                  contact.nguonGoc = selectedNguonGoc ?? '';
+                  contact.ngayCapNhat = now;
+                  
+                  contacts[index] = contact;
+                });
+                
+                Navigator.pop(context);
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _deleteContact(int index) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Xóa người liên hệ'),
+        content: Text('Bạn có chắc chắn muốn xóa "${contacts[index].hoTen}"?'),
+        actions: [
+          TextButton(
+            child: Text('Hủy'),
+            onPressed: () => Navigator.pop(context),
+          ),
+          ElevatedButton(
+            child: Text('Xóa'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            onPressed: () {
+              setState(() {
+                contacts.removeAt(index);
+              });
+              Navigator.pop(context);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Future<void> _submitData() async {
+    // Final validation
+    if (contacts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Vui lòng thêm ít nhất một người liên hệ'))
+      );
+      return;
+    }
+    
+    setState(() {
+      _isSubmitting = true;
+    });
+    
+    try {
+      // Submit khachhang record
+      final customerResponse = await _submitCustomer();
+      
+      // Submit khachhangcontact records
+      final contactResponses = await _submitContacts();
+      
+      // Show recap and success message
+      _showSubmitRecapDialog(customerResponse, contactResponses);
+    } catch (e) {
+      print('Error submitting data: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi khi gửi dữ liệu: $e'))
+      );
+    } finally {
+      setState(() {
+        _isSubmitting = false;
+      });
+    }
+  }
+  
+  Future<Map<String, dynamic>> _submitCustomer() async {
+    final String endpoint = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelkhachhangmoi';
+    
+    final response = await http.post(
+      Uri.parse(endpoint),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(newCustomer),
+    );
+    
+    print('Customer request body: ${json.encode(newCustomer)}');
+    print('Customer response code: ${response.statusCode}');
+    print('Customer response body: ${response.body}');
+    
+    if (response.statusCode == 200) {
+      return {
+        'success': true,
+        'message': 'Dữ liệu khách hàng đã được gửi thành công',
+        'response': response.body,
+      };
+    } else {
+      throw Exception('Failed to submit customer data: ${response.statusCode}, ${response.body}');
+    }
+  }
+  
+  Future<List<Map<String, dynamic>>> _submitContacts() async {
+    final String endpoint = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelcontactmoi';
+    List<Map<String, dynamic>> results = [];
+    
+    for (var contact in contacts) {
+      final requestBody = contact.toMap();
+      
+      final response = await http.post(
+        Uri.parse(endpoint),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(requestBody),
+      );
+      
+      print('Contact request body: ${json.encode(requestBody)}');
+      print('Contact response code: ${response.statusCode}');
+      print('Contact response body: ${response.body}');
+      
+      results.add({
+        'contact': contact.hoTen,
+        'success': response.statusCode == 200,
+        'message': response.statusCode == 200 
+          ? 'Thành công' 
+          : 'Lỗi: ${response.statusCode}',
+        'response': response.body,
+      });
+    }
+    
+    return results;
+  }
+  
+  void _showSubmitRecapDialog(
+    Map<String, dynamic> customerResult,
+    List<Map<String, dynamic>> contactResults
+  ) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text('Kết quả đồng bộ dữ liệu'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Customer result
+              Text(
+                'Khách hàng: ${customerResult['success'] ? '✅ Thành công' : '❌ Thất bại'}',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Text(customerResult['message']),
+              SizedBox(height: 16),
+              
+              // Contact results
+              Text(
+                'Người liên hệ:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              ...contactResults.map((result) => Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: Text(
+                  '${result['contact']}: ${result['success'] ? '✅' : '❌'} ${result['message']}',
+                ),
+              )),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            child: Text('Hoàn tất'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: buttonColor,
+            ),
+            onPressed: () {
+              Navigator.pop(context); // Close dialog
+              Navigator.pop(context, true); // Return to customer list with success indicator
+            },
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _showTenDuAnConfirmDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Xác nhận tên dự án'),
+        content: Text(
+          'Tên dự án "${tenDuAnController.text}" sẽ không thể thay đổi sau khi lưu. Bạn có chắc chắn muốn sử dụng tên này không?'
+        ),
+        actions: [
+          TextButton(
+            child: Text('Chỉnh sửa lại'),
+            onPressed: () => Navigator.pop(context),
+          ),
+          ElevatedButton(
+            child: Text('Xác nhận'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: buttonColor,
+            ),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          flexibleSpace: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [appBarTop, appBarBottom],
+              ),
+            ),
+          ),
+          title: Text('Thêm khách hàng mới'),
+          bottom: TabBar(
+            controller: _tabController,
+            indicatorColor: Colors.white,
+            tabs: [
+              Tab(text: 'Thông tin khách hàng'),
+              Tab(text: 'Người liên hệ'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          controller: _tabController,
+          children: [
+            // Tab 1: Customer Information Form
+            SingleChildScrollView(
+              padding: EdgeInsets.all(16.0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // UID field (non-editable)
+                    _buildInfoField('UID (tự động)', newCustomer['uid'] ?? '', enabled: false),
+                    SizedBox(height: 16),
+                    
+                    // Người dùng (username - non-editable)
+                    _buildInfoField('Người dùng', newCustomer['nguoiDung'] ?? '', enabled: false),
+                    SizedBox(height: 16),
+                    
+                    // Đánh dấu dropdown
+                    _buildDropdownField(
+                      'Đánh dấu',
+                      ['', '1'],
+                      selectedDanhDau,
+                      (value) => setState(() => selectedDanhDau = value),
+                    ),
+                    
+                    // Vùng miền dropdown
+                    _buildDropdownField(
+                      'Vùng miền *',
+                      ['Bắc', 'Trung', 'Nam'],
+                      selectedVungMien,
+                      (value) => setState(() => selectedVungMien = value),
+                      validator: (value) => value == null ? 'Vui lòng chọn vùng miền' : null,
+                    ),
+                    
+                    // Phân loại (non-editable)
+                    _buildInfoField('Phân loại', newCustomer['phanLoai'] ?? '', enabled: false),
+                    SizedBox(height: 16),
+                    
+                    // Loại hình (non-editable)
+                    _buildInfoField('Loại hình', selectedLoaiHinh, enabled: false),
+                    SizedBox(height: 16),
+                    
+                    // Loại công trình dropdown
+                    _buildDropdownField(
+                      'Loại công trình *',
+                      [
+                        'Đại lý', 'Khách hàng lẻ', 'Khách sạn 5*', 'Khách sạn 4*',
+                        'Khách sạn 3*', 'Nhà hàng', 'Giặt là', 'Resort', 'Nhà máy KCN',
+                        'Bệnh viện', 'Tòa nhà', 'Trường học', 'Sân bay Bến xe',
+                        'Khách thương mại', 'Du thuyền', 'Cty Dịch vụ', 'Căn hộ dịch vụ',
+                        'Khu đô thị', 'Chung cư', 'Tòa nhà cao cấp', 'VP lẻ',
+                        'Trung tâm thương mại', 'Homestay', 'Khách sạn'
+                      ],
+                      selectedLoaiCongTrinh,
+                      (value) => setState(() => selectedLoaiCongTrinh = value),
+                      validator: (value) => value == null ? 'Vui lòng chọn loại công trình' : null,
+                    ),
+                    
+                    // Trạng thái hợp đồng dropdown
+                    _buildDropdownField(
+                      'Trạng thái hợp đồng *',
+                      ['Tiếp cận', 'Quan tâm', 'Báo giá', 'Đã ký', 'Dừng', 'Thất bại'],
+                      selectedTrangThaiHopDong,
+                      (value) => setState(() => selectedTrangThaiHopDong = value),
+                      validator: (value) => value == null ? 'Vui lòng chọn trạng thái hợp đồng' : null,
+                    ),
+                    
+                    // Tên dự án (with warning)
+                    _buildTextField(
+                      'Tên dự án *',
+                      tenDuAnController,
+                      validator: (value) => value == null || value.isEmpty ? 'Vui lòng nhập tên dự án' : null,
+                      helperText: 'Lưu ý: Tên dự án không thể thay đổi sau khi lưu. Hãy kiểm tra kỹ trước khi nhập.',
+                      onEditingComplete: () {
+                        // Show confirmation dialog when user completes editing
+                        if (tenDuAnController.text.isNotEmpty) {
+                          _showTenDuAnConfirmDialog();
+                        }
+                      },
+                    ),
+                    
+                    // Ghi chú
+                    _buildTextField('Ghi chú', ghiChuController, maxLines: 3),
+                    
+                    // Địa chỉ
+                    _buildTextField('Địa chỉ', diaChiController),
+                    
+                    // Mã số thuế
+                    _buildTextField('Mã số thuế', maSoThueController),
+                    
+                    // Số điện thoại
+                    _buildTextField(
+                      'Số điện thoại', 
+                      soDienThoaiController,
+                      keyboardType: TextInputType.phone
+                    ),
+                    
+                    // Fax
+                    _buildTextField('Fax', faxController),
+                    
+                    // Website
+                    _buildTextField('Website', websiteController),
+                    
+                    // Email
+                    _buildTextField(
+                      'Email', 
+                      emailController,
+                      keyboardType: TextInputType.emailAddress
+                    ),
+                    
+                    // Số tài khoản
+                    _buildTextField('Số tài khoản', soTaiKhoanController),
+                    
+                    // Ngân hàng
+                    _buildTextField('Ngân hàng', nganHangController),
+                    
+                    // Loại mua hàng dropdown
+                    _buildDropdownField(
+                      'Loại mua hàng',
+                      ['C1 Khách hàng mở mới', 'C1 Khách dự án', 'C1 Khách chăm sóc lại', 'C2 Khách truyền thống'],
+                      selectedLoaiMuaHang,
+                      (value) => setState(() => selectedLoaiMuaHang = value),
+                    ),
+                    
+                    // Tỉnh thành
+                    _buildTextField('Tỉnh thành', tinhThanhController),
+                    
+                    // Quận huyện
+                    _buildTextField('Quận huyện', quanHuyenController),
+                    
+                    // Phường xã
+                    _buildTextField('Phường xã', phuongXaController),
+                    
+                    // Kênh tiếp cận dropdown
+                    _buildDropdownField(
+                      'Kênh tiếp cận',
+                      [
+                        'Trực tiếp', 'Giới thiệu', 'Facebook', 'Zalo', 'Website',
+                        'Shopee', 'Tiki', 'Email', 'Viber', 'Telesale', 'Quảng cáo',
+                        'Nhắn tin', 'Khảo sát/ Form'
+                      ],
+                      selectedKenhTiepCan,
+                      (value) => setState(() => selectedKenhTiepCan = value),
+                    ),
+                    
+                    // Dự kiến triển khai
+                    _buildTextField('Dự kiến triển khai', duKienTrienKhaiController),
+                    
+                    // Tiềm năng DVTM
+                    _buildTextField('Tiềm năng DVTM', tiemNangDVTMController),
+                    
+                    // Yêu cầu nhân sự
+                    _buildTextField('Yêu cầu nhân sự', yeuCauNhanSuController),
+                    
+                    // Cách thức tuyển
+                    _buildTextField('Cách thức tuyển', cachThucTuyenController),
+                    
+                    // Mức lương tuyển
+                    _buildTextField('Mức lương tuyển', mucLuongTuyenController),
+                    
+                    // Lương BP
+                    _buildTextField('Lương BP', luongBPController),
+                    
+                    SizedBox(height: 24),
+                    
+                    // Save and proceed button
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: buttonColor,
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      onPressed: _saveCustomerForm,
+                      child: Text(
+                        'Lưu và tiếp tục',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            // Tab 2: Contact Management
+            Stack(
+              children: [
+                Column(
+                  children: [
+                    // Contacts list
+                    Expanded(
+                      child: _buildContactsList(),
+                    ),
+                    
+                    // Action buttons
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Row(
+                        children: [
+                          // Add predefined subjects
+                          if (newCustomer['phanLoai'] == 'Dịch vụ')
+                            Expanded(
+                              flex: 1,
+                              child: ElevatedButton.icon(
+                                icon: Icon(Icons.list),
+                                label: Text('Tạo danh mục'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.amber[700],
+                                  padding: EdgeInsets.symmetric(vertical: 12),
+                                ),
+                                onPressed: contacts.isEmpty ? _offerPredefinedSubjects : null,
+                              ),
+                            ),
+                          
+                          SizedBox(width: 8),
+                          
+                          // Add new contact
+                          Expanded(
+                            flex: 1,
+                            child: ElevatedButton.icon(
+                              icon: Icon(Icons.person_add),
+                              label: Text('Thêm liên hệ'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: buttonColor,
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              onPressed: _addNewContact,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    // Submit button
+                    Padding(
+                      padding: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 16.0),
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        onPressed: _isSubmitting ? null : _submitData,
+                        child: _isSubmitting 
+                          ? Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                                SizedBox(width: 10),
+                                Text(
+                                  'Đang gửi dữ liệu...',
+                                  style: TextStyle(fontSize: 16),
+                                ),
+                              ],
+                            )
+                          : Text(
+                              'Gửi dữ liệu lên server',
+                              style: TextStyle(fontSize: 16),
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
+                
+                // Loading overlay
+                if (_isSubmitting)
+                  Container(
+                    color: Colors.black.withOpacity(0.3),
+                    child: Center(
+                      child: Card(
+                        elevation: 8,
+                        child: Padding(
+                          padding: const EdgeInsets.all(20.0),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircularProgressIndicator(color: buttonColor),
+                              SizedBox(height: 16),
+                              Text('Đang gửi dữ liệu...', style: TextStyle(fontSize: 16)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildContactsList() {
+    if (contacts.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.people_alt_outlined, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text(
+              'Chưa có người liên hệ',
+              style: TextStyle(fontSize: 18, color: Colors.grey),
+            ),
+            Text(
+              'Vui lòng thêm ít nhất một người liên hệ',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    return ListView.builder(
+      itemCount: contacts.length,
+      itemBuilder: (context, index) {
+        final contact = contacts[index];
+        
+        return Card(
+          margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: ListTile(
+            title: Text(
+              contact.hoTen,
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (contact.chucDanh.isNotEmpty)
+                  Text(contact.chucDanh),
+                if (contact.soDienThoai.isNotEmpty || contact.email.isNotEmpty)
+                  Text(
+                    [
+                      if (contact.soDienThoai.isNotEmpty) contact.soDienThoai,
+                      if (contact.email.isNotEmpty) contact.email,
+                    ].join(' • '),
+                    style: TextStyle(fontSize: 12),
+                  ),
+              ],
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: Icon(Icons.edit, color: buttonColor),
+                  onPressed: () => _editContact(index),
+                ),
+                IconButton(
+                  icon: Icon(Icons.delete, color: Colors.red),
+                  onPressed: () => _deleteContact(index),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+  
+  Widget _buildInfoField(String label, String value, {bool enabled = true}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
+        SizedBox(height: 4),
+        TextField(
+          controller: TextEditingController(text: value),
+          enabled: enabled,
+          decoration: InputDecoration(
+            border: OutlineInputBorder(),
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            filled: !enabled,
+            fillColor: enabled ? null : Colors.grey[200],
+          ),
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildTextField(
+    String label, 
+    TextEditingController controller, {
+    int maxLines = 1,
+    String? Function(String?)? validator,
+    String? helperText,
+    TextInputType keyboardType = TextInputType.text,
+    Function()? onEditingComplete,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+          SizedBox(height: 4),
+          TextFormField(
+            controller: controller,
+            decoration: InputDecoration(
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              helperText: helperText,
+              helperMaxLines: 3,
+            ),
+            maxLines: maxLines,
+            validator: validator,
+            keyboardType: keyboardType,
+            onEditingComplete: onEditingComplete,
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildDropdownField(
+    String label,
+    List<String> items,
+    String? selectedValue,
+    Function(String?) onChanged, {
+    String? Function(String?)? validator,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+          SizedBox(height: 4),
+          DropdownButtonFormField<String>(
+            value: selectedValue,
+            decoration: InputDecoration(
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
+            items: items.map((String value) {
+              return DropdownMenuItem<String>(
+                value: value,
+                child: Text(value),
+              );
+            }).toList(),
+            onChanged: onChanged,
+            validator: validator,
+          ),
+        ],
+      ),
+    );
+  }
+}
+class KhachHangContactDraft {
+  String uid;
+  String boPhan; // references KhachHang uid
+  String nguoiDung;
+  String ngayTao;
+  String ngayCapNhat;
+  String hoTen;
+  String gioiTinh;
+  String chucDanh;
+  String soDienThoai;
+  String email;
+  String nguonGoc;
+  
+  KhachHangContactDraft({
+    required this.uid,
+    required this.boPhan,
+    required this.nguoiDung,
+    required this.ngayTao,
+    required this.ngayCapNhat,
+    required this.hoTen,
+    this.gioiTinh = '',
+    this.chucDanh = '',
+    this.soDienThoai = '',
+    this.email = '',
+    this.nguonGoc = '',
+  });
+  
+  Map<String, dynamic> toMap() {
+    return {
+      'uid': uid,
+      'boPhan': boPhan,
+      'nguoiDung': nguoiDung,
+      'ngayTao': ngayTao,
+      'ngayCapNhat': ngayCapNhat,
+      'hoTen': hoTen,
+      'gioiTinh': gioiTinh,
+      'chucDanh': chucDanh,
+      'soDienThoai': soDienThoai,
+      'email': email,
+      'nguonGoc': nguonGoc,
+    };
+  }
+}
+

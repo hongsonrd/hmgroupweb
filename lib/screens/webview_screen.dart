@@ -381,7 +381,7 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
         Padding(
           padding: EdgeInsets.only(top: 11),
           child: Text(
-            'Lượt vào mỗi ngày sẽ tự động chấm nếu hợp lệ',
+              'Chọn Báo/Duyệt khác từ mục Chấm công để báo nghỉ/ vắng',
             style: TextStyle(
               fontSize: 9,
               color: Colors.white,
@@ -474,7 +474,7 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
     children: [
       // Column 1 (40%): AppBar + Video + Welcome section
       Expanded(
-        flex: 40,
+        flex: 60,
         child: Column(
           children: [
             _buildAppBar(),
@@ -508,9 +508,9 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
         ),
       ),
       
-      // Column 2 (60%): Tab view with both tabs
+      // Column 2 (40%): Tab view with both tabs
       Expanded(
-        flex: 60,
+        flex: 40,
         child: Container(
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.9),

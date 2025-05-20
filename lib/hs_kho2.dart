@@ -72,6 +72,7 @@ class _HSKho2ScreenState extends State<HSKho2Screen> {
   
   final Map<String, List<String>> warehousePermissions = {
     "HN": ['nvthunghiem', 'hm.tason', 'hm.manhha', 'hm.phiminh', 'hm.lehoa'],
+    "HN2": ['nvthunghiem', 'hm.tason', 'hm.manhha', 'hm.phiminh', 'hm.lehoa'],
     "ĐN": ['nvthunghiem', 'hm.tason', 'hm.manhha', 'hotel.danang'],
     "NT": ['nvthunghiem', 'hm.tason', 'hm.manhha', 'hotel.nhatrang'],
     "SG": ['nvthunghiem', 'hm.tason', 'hm.manhha', 'hm.damchinh', 'hm.quocchien'],

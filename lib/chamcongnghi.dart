@@ -118,7 +118,7 @@ class _ChamCongNghiScreenState extends State<ChamCongNghiScreen> with SingleTick
         _truongHopOptions = ['Vắng sáng', 'Vắng chiều', 'Vắng cả ngày'];
         break;
       case ChamCongScreenType.nghi:
-        _truongHopOptions = ['Nghỉ phép','Nghỉ phép 1/2 ngày', 'Nghỉ ốm', 'Nghỉ không lương', 'Nghỉ bù'];
+        _truongHopOptions = ['Nghỉ phép','Nghỉ phép 1/2 ngày', 'Nghỉ ốm', 'Nghỉ không lương', 'Nghỉ bù', 'Nghỉ chế độ'];
         break;
       case ChamCongScreenType.tangCa:
         _truongHopOptions = ['Tăng ca thường', 'Tăng ca cuối tuần', 'Tăng ca lễ', 'Khác'];
@@ -142,7 +142,7 @@ void _setGiaTriNgayBasedOnTruongHop(String? truongHop, StateSetter setState, dou
     newValue = 1.0;
   } else if (truongHop == 'Nghỉ phép 1/2 ngày') {
     newValue = 0.5;
-  } else if (truongHop == 'Nghỉ ốm' || truongHop == 'Nghỉ không lương') {
+  } else if (truongHop == 'Nghỉ ốm' || truongHop == 'Nghỉ không lương' || truongHop =='Nghỉ chế độ') {
     newValue = 0.0;
   }
   
@@ -601,7 +601,7 @@ double _calculateGiaTriNgay(String? truongHop) {
     return 1.0;
   } else if (truongHop == 'Nghỉ phép 1/2 ngày') {
     return 0.5;
-  } else if (truongHop == 'Nghỉ ốm' || truongHop == 'Nghỉ không lương') {
+  } else if (truongHop == 'Nghỉ ốm' || truongHop == 'Nghỉ không lương' || truongHop == 'Nghỉ chế độ') {
     return 0.0;
   }
   

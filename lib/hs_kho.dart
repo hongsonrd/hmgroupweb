@@ -52,6 +52,14 @@ class _HSKhoScreenState extends State<HSKhoScreen> with SingleTickerProviderStat
       {'name': 'hm.phiminh', 'position': 'Quản lý kho', 'canImport': true, 'canExport': true},
       {'name': 'hm.lehoa', 'position': 'Quản lý kho', 'canImport': true, 'canExport': true},
     ],
+        "HN2": [
+      {'name': 'nvthunghiem', 'position': 'TEST', 'canImport': true, 'canExport': true},
+      {'name': 'hm.tason', 'position': 'TEST', 'canImport': true, 'canExport': true},
+      {'name': 'hm.kimdung', 'position': 'TEST', 'canImport': true, 'canExport': true},
+      {'name': 'hm.manhha', 'position': 'TEST', 'canImport': true, 'canExport': true},
+      {'name': 'hm.phiminh', 'position': 'Quản lý kho', 'canImport': true, 'canExport': true},
+      {'name': 'hm.lehoa', 'position': 'Quản lý kho', 'canImport': true, 'canExport': true},
+    ],
     "ĐN": [
       {'name': 'nvthunghiem', 'position': 'TEST', 'canImport': true, 'canExport': true},
       {'name': 'hm.tason', 'position': 'TEST', 'canImport': true, 'canExport': true},
@@ -2181,6 +2189,14 @@ class _WarehouseDetailsDialogState extends State<WarehouseDetailsDialog> {
   // Direct mapping of warehouse IDs to authorized users
   final Map<String, List<Map<String, dynamic>>> _warehousePermissions = {
     "HN": [
+      {'name': 'nvthunghiem', 'position': 'TEST', 'canImport': true, 'canExport': true},
+      {'name': 'hm.tason', 'position': 'TEST', 'canImport': true, 'canExport': true},
+      {'name': 'hm.kimdung', 'position': 'TEST', 'canImport': true, 'canExport': true},
+      {'name': 'hm.manhha', 'position': 'TEST', 'canImport': true, 'canExport': true},
+      {'name': 'hm.phiminh', 'position': 'Quản lý kho', 'canImport': true, 'canExport': true},
+      {'name': 'hm.lehoa', 'position': 'Quản lý kho', 'canImport': true, 'canExport': true},
+    ],
+    "HN2": [
       {'name': 'nvthunghiem', 'position': 'TEST', 'canImport': true, 'canExport': true},
       {'name': 'hm.tason', 'position': 'TEST', 'canImport': true, 'canExport': true},
       {'name': 'hm.kimdung', 'position': 'TEST', 'canImport': true, 'canExport': true},
