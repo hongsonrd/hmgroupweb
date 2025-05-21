@@ -343,7 +343,8 @@ class _HSDonHangScreenState extends State<HSDonHangScreen> {
       result = result
           .where((order) =>
               (order.soPhieu?.toLowerCase() ?? '').contains(searchText) ||
-              (order.tenKhachHang?.toLowerCase() ?? '').contains(searchText))
+              (order.tenKhachHang?.toLowerCase() ?? '').contains(searchText) ||
+              (order.tenKhachHang2?.toLowerCase() ?? '').contains(searchText))
           .toList();
     }
 

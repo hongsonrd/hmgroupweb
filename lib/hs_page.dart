@@ -653,8 +653,11 @@ Future<void> _syncDonHangData() async {
     final prefs = await SharedPreferences.getInstance();
     final lastSync = prefs.getString('last_donhang_sync') ?? '2023-01-01 00:00:00';
     
-    final response = await AuthenticatedHttpClient.get(
-      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/hoteldonhang/?last_sync=$lastSync')
+    // Encode the username for safe inclusion in URL
+    final encodedUsername = Uri.encodeComponent(_username);
+    
+    final response = await http.get(
+      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/hoteldonhang/$encodedUsername?last_sync=$lastSync')
     );
     
     if (response.statusCode == 200) {
@@ -689,8 +692,11 @@ Future<void> _syncChiTietDonData() async {
     final prefs = await SharedPreferences.getInstance();
     final lastSync = prefs.getString('last_chitietdon_sync') ?? '2023-01-01 00:00:00';
     
-    final response = await AuthenticatedHttpClient.get(
-      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelchitietdon/?last_sync=$lastSync')
+    // Encode the username for safe inclusion in URL
+    final encodedUsername = Uri.encodeComponent(_username);
+    
+    final response = await http.get(
+      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelchitietdon/$encodedUsername?last_sync=$lastSync')
     );
     
     if (response.statusCode == 200) {
@@ -819,10 +825,10 @@ Widget build(BuildContext context) {
     'route': 'tracuu',
   },
   {
-    'title': 'Báo giá khách hàng',
+    'title': 'XNK đặt hàng',
     'icon': Icons.price_check,
     'colors': iconGradients[5],
-    'route': 'baogia',
+    'route': 'xnk',
   },
   {
     'title': 'Dự trù mặt hàng',
@@ -895,8 +901,13 @@ Widget build(BuildContext context) {
         MaterialPageRoute(builder: (context) => HSKho2Screen(username: _username)),
       );
       break;
-    case 'baogia':
-      _showComingSoonDialog('Báo giá khách hàng');
+    case 'xnk':
+      Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => HSDonHangMoiScreen(),
+                ),
+              );
       break;
     case 'dutru':
       _showComingSoonDialog('Dự trù mặt hàng');
