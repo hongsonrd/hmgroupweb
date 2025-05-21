@@ -759,7 +759,7 @@ void _highlightPosition(String viTri) {
           usedXCoordinates.add(x);
           usedYCoordinates.add(y);
           
-          // FIX HERE: Initialize the list if it doesn't exist
+          // Initialize the list if it doesn't exist
           positionsWithItems.putIfAbsent(item.viTri!, () => []);
           positionsWithItems[item.viTri!]!.add(item);
         }
@@ -833,25 +833,32 @@ void _highlightPosition(String viTri) {
           Center(child: Text('Không có dữ liệu hiển thị')),
       ),
       
-      // Wall border and entry arrow
-      Positioned.fill(child: CustomPaint(painter: RoomWallPainter())),
+      // Wall border with IgnorePointer to allow clicks to pass through
+      Positioned.fill(
+        child: IgnorePointer(
+          child: CustomPaint(painter: RoomWallPainter())
+        )
+      ),
       
+      // Entry arrow
       Positioned(
         bottom: 0,
         left: 0,
         right: 0,
         child: Center(
-          child: Container(
-            width: 40,
-            height: 20,
-            decoration: BoxDecoration(
-              color: Colors.red,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(4),
-                topRight: Radius.circular(4),
+          child: IgnorePointer(  // Also make the arrow ignore pointer events
+            child: Container(
+              width: 40,
+              height: 20,
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
+                ),
               ),
+              child: Icon(Icons.arrow_upward, color: Colors.white, size: 18),
             ),
-            child: Icon(Icons.arrow_upward, color: Colors.white, size: 18),
           ),
         ),
       ),
