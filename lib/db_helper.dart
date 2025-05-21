@@ -140,6 +140,29 @@ class DBHelper {
     rethrow;
   }
 }
+//ADDON DSHANG
+Future<int> getMaxCounter() async {
+  final db = await database;
+  final result = await db.rawQuery('SELECT MAX(Counter) as maxCounter FROM DSHang');
+  final maxCounter = result.isNotEmpty && result.first['maxCounter'] != null 
+      ? int.tryParse(result.first['maxCounter'].toString()) 
+      : 0;
+  return maxCounter ?? 0;
+} 
+  // Get a DSHang record by UID
+  Future<DSHangModel?> getDSHangByUID(String uid) async {
+    final db = await database;
+    final result = await db.query(
+      'DSHang',
+      where: 'UID = ?',
+      whereArgs: [uid],
+    );
+    
+    if (result.isNotEmpty) {
+      return DSHangModel.fromMap(result.first);
+    }
+    return null;
+  }
 // ==================== KhachHangContact CRUD Operations ====================
 
 /// Inserts a KhachHangContact record into the database.
@@ -1550,18 +1573,6 @@ Future<List<DSHangModel>> getAllDSHang() async {
   }
 }
 
-Future<DSHangModel?> getDSHangByUID(String uid) async {
-  final dshangs = await query(
-    DatabaseTables.dsHangTable,
-    where: 'uid = ?',
-    whereArgs: [uid],
-  );
-  if (dshangs.isNotEmpty) {
-    return DSHangModel.fromMap(dshangs.first);
-  }
-  return null;
-}
-
 Future<DSHangModel?> getDSHangBySKU(String sku) async {
   final dshangs = await query(
     DatabaseTables.dsHangTable,
@@ -1573,20 +1584,44 @@ Future<DSHangModel?> getDSHangBySKU(String sku) async {
   }
   return null;
 }
-
-Future<void> insertDSHang(DSHangModel dshang) async {
-  await insert(DatabaseTables.dsHangTable, dshang.toMap());
+Future<int> insertDSHang(DSHangModel item) async {
+  final db = await database;
+  
+  // Convert boolean values to integer for SQLite
+  final map = item.toMap();
+  
+  // Make sure boolean values are converted to integers
+  if (map['CoThoiHan'] != null) {
+    map['CoThoiHan'] = map['CoThoiHan'] == true ? 1 : 0;
+  }
+  if (map['HangTieuHao'] != null) {
+    map['HangTieuHao'] = map['HangTieuHao'] == true ? 1 : 0;
+  }
+  
+  return await db.insert('DSHang', map);
 }
 
-Future<void> updateDSHang(DSHangModel dshang) async {
-  await update(
-    DatabaseTables.dsHangTable,
-    dshang.toMap(),
-    where: 'uid = ?',
-    whereArgs: [dshang.uid],
+Future<int> updateDSHang(DSHangModel item) async {
+  final db = await database;
+  
+  // Convert boolean values to integer for SQLite
+  final map = item.toMap();
+  
+  // Make sure boolean values are converted to integers
+  if (map['CoThoiHan'] != null) {
+    map['CoThoiHan'] = map['CoThoiHan'] == true ? 1 : 0;
+  }
+  if (map['HangTieuHao'] != null) {
+    map['HangTieuHao'] = map['HangTieuHao'] == true ? 1 : 0;
+  }
+  
+  return await db.update(
+    'DSHang',
+    map,
+    where: 'UID = ?',
+    whereArgs: [item.uid],
   );
 }
-
 Future<void> deleteDSHang(String uid) async {
   await delete(
     DatabaseTables.dsHangTable,
@@ -1879,12 +1914,12 @@ Future<void> deleteLoHang(String loHangID) async {
     whereArgs: [loHangID],
   );
 }
-Future<List<LoHangModel>> getLoHangForProduct(String productId, String warehouseId) async {
+Future<List<LoHangModel>> getLoHangForProduct(String maHangID, String khoHangID) async {
   final db = await database;
   final List<Map<String, dynamic>> maps = await db.query(
-    DatabaseTables.loHangTable,
-    where: 'maHangID = ? AND khoHangID = ?',
-    whereArgs: [productId, warehouseId],
+    'lohang',
+    where: 'MaHangID = ? AND KhoHangID = ?',
+    whereArgs: [maHangID, khoHangID],
   );
   
   return List.generate(maps.length, (i) {

@@ -600,7 +600,7 @@ class ExportFormGenerator {
           fontStyle: pw.FontStyle.italic,
         ),
       ),
-      pw.SizedBox(height: 30), // Reduced from 40 to make room for the name
+      pw.SizedBox(height: 55), 
       // Only add the name if it's not empty (for "Người nhận" which doesn't have a predefined name)
       if (name.isNotEmpty)
         pw.Text(

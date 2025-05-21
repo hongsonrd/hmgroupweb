@@ -994,60 +994,33 @@ Future<void> _printBatchQRCode(String loHangID, String maHangID) async {
   try {
     final pdf = pw.Document();
     
-    // Use horizontal page format (5x3cm)
+    // Use the barcode widget from pdf package directly
     pdf.addPage(
       pw.Page(
-        pageFormat: pdfx.PdfPageFormat(50 * pdfx.PdfPageFormat.mm, 30 * pdfx.PdfPageFormat.mm, marginAll: 2 * pdfx.PdfPageFormat.mm),
+        pageFormat: pdfx.PdfPageFormat(30 * pdfx.PdfPageFormat.mm, 50 * pdfx.PdfPageFormat.mm, marginAll: 2 * pdfx.PdfPageFormat.mm),
         build: (pw.Context context) {
           return pw.Center(
-            child: pw.Row(
+            child: pw.Column(
               mainAxisAlignment: pw.MainAxisAlignment.center,
-              crossAxisAlignment: pw.CrossAxisAlignment.center,
               children: [
-                // QR Code on the left
-                pw.Container(
+                // QR Code using BarcodeWidget
+                pw.BarcodeWidget(
+                  barcode: pw.Barcode.qrCode(),
+                  data: loHangID,
                   width: 26 * pdfx.PdfPageFormat.mm,
                   height: 26 * pdfx.PdfPageFormat.mm,
-                  child: pw.BarcodeWidget(
-                    barcode: pw.Barcode.qrCode(),
-                    data: loHangID,
-                    width: 26 * pdfx.PdfPageFormat.mm,
-                    height: 26 * pdfx.PdfPageFormat.mm,
-                  ),
                 ),
-                
-                pw.SizedBox(width: 4 * pdfx.PdfPageFormat.mm),
-                
-                // Rotated text information on the right
-                pw.Container(
-                  width: 16 * pdfx.PdfPageFormat.mm,
-                  height: 26 * pdfx.PdfPageFormat.mm,
-                  alignment: pw.Alignment.center,
-                  child: pw.Transform.rotate(
-                    angle: 90 * 3.1415927 / 180, // Rotate 90 degrees (counter-clockwise)
-                    child: pw.Container(
-                      width: 26 * pdfx.PdfPageFormat.mm, // Height of the original container becomes width
-                      height: 16 * pdfx.PdfPageFormat.mm, // Width of the original container becomes height
-                      child: pw.Column(
-                        mainAxisAlignment: pw.MainAxisAlignment.center,
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          // Lot ID text
-                          pw.Text(
-                            'Mã lô: $loHangID',
-                            style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold),
-                          ),
-                          pw.SizedBox(height: 2 * pdfx.PdfPageFormat.mm),
-                          
-                          // Product ID text
-                          pw.Text(
-                            'Mã SP: $maHangID',
-                            style: pw.TextStyle(fontSize: 6),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                pw.SizedBox(height: 3 * pdfx.PdfPageFormat.mm),
+                // Lot ID text
+                pw.Text(
+                  'Mã lô: $loHangID',
+                  style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold),
+                ),
+                pw.SizedBox(height: 1 * pdfx.PdfPageFormat.mm),
+                // Product ID text
+                pw.Text(
+                  'Mã SP: $maHangID',
+                  style: pw.TextStyle(fontSize: 6),
                 ),
               ],
             ),
@@ -1059,7 +1032,7 @@ Future<void> _printBatchQRCode(String loHangID, String maHangID) async {
     // Print the document
     await Printing.layoutPdf(
       onLayout: (pdfx.PdfPageFormat format) async => pdf.save(),
-      format: pdfx.PdfPageFormat(50 * pdfx.PdfPageFormat.mm, 30 * pdfx.PdfPageFormat.mm),
+      format: pdfx.PdfPageFormat(30 * pdfx.PdfPageFormat.mm, 50 * pdfx.PdfPageFormat.mm),
       name: 'QR_${loHangID}.pdf',
     );
     
@@ -1388,7 +1361,7 @@ Future<void> _printOrderQRCode(DonHangModel order) async {
     // Parse the SoPhieu into parts
     List<String> parts = order.soPhieu!.split('-');
     
-    // Extract the last 2 digits
+    // Extract the last 2 digits for the black pill
     String lastTwoDigits = "";
     if (parts.length >= 1) {
       String lastPart = parts.last;
@@ -1398,34 +1371,6 @@ Future<void> _printOrderQRCode(DonHangModel order) async {
         lastTwoDigits = "0" + lastPart; // Pad with 0 if only one digit
       }
     }
-    
-    // Create a map of digits to keycap emojis that work well on thermal printers
-    Map<String, String> digitToEmoji = {
-      '0': '0⃣', // Keycap Digit Zero
-      '1': '❤️', // Keycap Digit One
-      '2': '2⃣', // Keycap Digit Two
-      '3': '3⃣', // Keycap Digit Three
-      '4': '4⃣', // Keycap Digit Four
-      '5': '5⃣', // Keycap Digit Five
-      '6': '6⃣', // Keycap Digit Six
-      '7': '7⃣', // Keycap Digit Seven
-      '8': '8⃣', // Keycap Digit Eight
-      '9': '9⃣', // Keycap Digit Nine
-    };
-    
-    // Alternative simpler symbols in case keycap emojis don't print well
-    Map<String, String> digitToBackupSymbol = {
-      '0': '⓪', // Circled Digit Zero
-      '1': '❤️', // Circled Digit One
-      '2': '②', // Circled Digit Two
-      '3': '③', // Circled Digit Three
-      '4': '④', // Circled Digit Four
-      '5': '⑤', // Circled Digit Five
-      '6': '⑥', // Circled Digit Six
-      '7': '⑦', // Circled Digit Seven
-      '8': '⑧', // Circled Digit Eight
-      '9': '⑨', // Circled Digit Nine
-    };
     
     // Create 5x3cm (50mm x 30mm) vertical page
     pdf.addPage(
@@ -1445,7 +1390,7 @@ Future<void> _printOrderQRCode(DonHangModel order) async {
                 ),
                 pw.SizedBox(height: 4 * pdfx.PdfPageFormat.mm),
                 
-                // Black pill with ONLY the last two digits as large symbols
+                // Black pill with the last two digits in large font
                 pw.Container(
                   padding: pw.EdgeInsets.symmetric(
                     horizontal: 6 * pdfx.PdfPageFormat.mm,
@@ -1455,34 +1400,13 @@ Future<void> _printOrderQRCode(DonHangModel order) async {
                     color: pdfx.PdfColors.black,
                     borderRadius: pw.BorderRadius.circular(10),
                   ),
-                  child: pw.Row(
-                    mainAxisSize: pw.MainAxisSize.min,
-                    mainAxisAlignment: pw.MainAxisAlignment.center,
-                    children: [
-                      // First digit symbol
-                      pw.Text(
-                        lastTwoDigits.isNotEmpty 
-                            ? digitToBackupSymbol[lastTwoDigits[0]] ?? lastTwoDigits[0]
-                            : "",
-                        style: pw.TextStyle(
-                          color: pdfx.PdfColors.white,
-                          fontSize: 14, // Larger font for better visibility
-                          fontWeight: pw.FontWeight.bold,
-                        ),
-                      ),
-                      pw.SizedBox(width: 2 * pdfx.PdfPageFormat.mm),
-                      // Second digit symbol
-                      pw.Text(
-                        lastTwoDigits.length > 1 
-                            ? digitToBackupSymbol[lastTwoDigits[1]] ?? lastTwoDigits[1]
-                            : "",
-                        style: pw.TextStyle(
-                          color: pdfx.PdfColors.white,
-                          fontSize: 14, // Larger font for better visibility
-                          fontWeight: pw.FontWeight.bold,
-                        ),
-                      ),
-                    ],
+                  child: pw.Text(
+                    lastTwoDigits,
+                    style: pw.TextStyle(
+                      color: pdfx.PdfColors.white,
+                      fontSize: 20, // Larger font size for better visibility
+                      fontWeight: pw.FontWeight.bold,
+                    ),
                   ),
                 ),
                 

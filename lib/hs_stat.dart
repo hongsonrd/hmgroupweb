@@ -167,7 +167,21 @@ class _HSStatScreenState extends State<HSStatScreen> {
                       ),
                     ),
                     SizedBox(height: 16),
-                    
+                                                            
+                    // Button 3
+                    _buildActionButton(
+  icon: Icons.timeline,  
+  title: 'Dự đoán xu hướng hàng',  
+  subtitle: 'Phân tích và dự báo xu hướng tiêu thụ hàng hóa', 
+  onTap: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => HSXuHuongScreen()),
+    );
+  },
+  textColor: Colors.orange, 
+),                    SizedBox(height: 16),
+
                     // Button 1
                     _buildActionButton(
                       icon: Icons.pie_chart,
@@ -189,22 +203,7 @@ class _HSStatScreenState extends State<HSStatScreen> {
                         _showComingSoonDialog('Doanh số theo nhóm hàng');
                       },
                     ),
-                    
-                    SizedBox(height: 16),
-                    
-                    // Button 3
-                    _buildActionButton(
-  icon: Icons.timeline,  
-  title: 'Dự đoán xu hướng hàng',  
-  subtitle: 'Phân tích và dự báo xu hướng tiêu thụ hàng hóa', 
-  onTap: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => HSXuHuongScreen()),
-    );
-  },
-  textColor: Colors.orange, 
-),
+
                     SizedBox(height: 24),
                     
                     // Summary card

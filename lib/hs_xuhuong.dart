@@ -679,7 +679,14 @@ class _HSXuHuongScreenState extends State<HSXuHuongScreen> with SingleTickerProv
                 '💎ExponentialSmoothing: Làm mịn theo hàm mũ phù hợp với các sản phẩm hay có tính lặp lại theo mùa, theo thời gian (dự báo 1-3 tháng)\n'
                 '💎ARIMA: Phương pháp tiêu chuẩn, dự đoán nhiều chiều (dự báo 1-6 tháng\n'
                 '💎NeuralNetwork: Phương pháp thực nghiệm dự đoán sử dụng AI (dự báo 1-12 tháng)\n'
-                '💎Bấm 1 điểm trên thanh thời gian để chọn khoảng dự báo (0-90 ngày), dữ liệu dự báo là 800 đơn hàng gần nhất',
+                '💎Bấm 1 điểm trên thanh thời gian để chọn khoảng dự báo (0-90 ngày), dữ liệu dự báo là 800 đơn hàng gần nhất\n'
+                'Các nội dung khác:\n'
+                '-Độ co giãn theo giá: mức độ biến động của lượng bán tương quan với giá bán\n'
+                '-Điểm xu hướng: -100 (xu hướng giảm) > +100 (xu hướng tăng)\n'
+                '-Độ tin cậy dự báo: 0-100%, càng cao càng chính xác\n'
+                '-Biểu đồ đường xanh = lượng bán lịch sử\n'
+                '-Biểu đồ đường vàng = lượng bán dự kiến\n'
+                '-1 điểm trên biểu đồ = ngày dự kiến trong tương lai, số dự báo-số dự báo tối đa-số dự báo tối thiểu',
                 style: TextStyle(fontSize: 12, color: Colors.red),
               ),
             ),

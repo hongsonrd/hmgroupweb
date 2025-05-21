@@ -719,6 +719,7 @@ static pw.Widget _buildSignatureBox(
         ),
       ),
       pw.SizedBox(height: spaceHeight),
+      pw.SizedBox(height: spaceHeight),
       if (signatureName != null)
         pw.Text(
           signatureName,

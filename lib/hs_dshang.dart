@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'db_helper.dart';
 import 'table_models.dart';
 import 'dart:async';
@@ -16,13 +18,15 @@ class HSDSHangScreen extends StatefulWidget {
 class _HSDSHangScreenState extends State<HSDSHangScreen> with SingleTickerProviderStateMixin {
   final DBHelper _dbHelper = DBHelper();
   late TabController _tabController;
-  
+  String _currentUser = '';
+  bool _canEditItems = false; 
   // Danh sách hàng tab variables
   List<DSHangModel> _allDSHang = [];
   List<DSHangModel> _filteredDSHang = [];
   bool _isLoadingDSHang = true;
   String _searchQueryDSHang = '';
-  
+    List<String> _phanLoai1List = [];
+  List<String> _donViList = [];
   // Tồn kho tab variables
   List<TonKhoModel> _allTonKho = [];
   List<TonKhoModel> _filteredTonKho = [];
@@ -48,7 +52,29 @@ class _HSDSHangScreenState extends State<HSDSHangScreen> with SingleTickerProvid
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_handleTabChange);
+    _loadCurrentUser();
     _loadDSHangData();
+  }
+  Future<void> _loadCurrentUser() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final username = prefs.getString('username') ?? '';
+      
+      setState(() {
+        _currentUser = username;
+        // Check if user has edit permissions - specifically for the authorized users
+        _canEditItems = ['hm.tason', 'hm.manhha', 'hm.lehoa', 'hm.phiminh', 'hm.dinhmai']
+            .contains(_currentUser);
+      });
+      
+      print('Current user: $_currentUser, Can edit items: $_canEditItems');
+    } catch (e) {
+      print('Error loading user credentials: $e');
+      setState(() {
+        _currentUser = '';
+        _canEditItems = false;
+      });
+    }
   }
 
   void _handleTabChange() {
@@ -72,16 +98,11 @@ class _HSDSHangScreenState extends State<HSDSHangScreen> with SingleTickerProvid
       final dshangList = await _dbHelper.getAllDSHang();
       print("Loaded ${dshangList.length} DSHang items from database");
       
-      if (dshangList.isNotEmpty) {
-        // Print a few records for debugging
-        for (int i = 0; i < min(5, dshangList.length); i++) {
-          print("DSHang item $i - UID: ${dshangList[i].uid}, tenSanPham: ${dshangList[i].tenSanPham}");
-        }
-      }
-      
-      // Extract unique supplier and brand values for filters
+      // Extract unique values for filters and dropdowns
       final nhaCungCapSet = <String>{};
       final thuongHieuSet = <String>{};
+      final phanLoai1Set = <String>{};
+      final donViSet = <String>{};
       
       for (var item in dshangList) {
         if (item.nhaCungCap != null && item.nhaCungCap!.isNotEmpty) {
@@ -90,13 +111,24 @@ class _HSDSHangScreenState extends State<HSDSHangScreen> with SingleTickerProvid
         if (item.thuongHieu != null && item.thuongHieu!.isNotEmpty) {
           thuongHieuSet.add(item.thuongHieu!);
         }
+        if (item.phanLoai1 != null && item.phanLoai1!.isNotEmpty) {
+          phanLoai1Set.add(item.phanLoai1!);
+        }
+        if (item.donVi != null && item.donVi!.isNotEmpty) {
+          donViSet.add(item.donVi!);
+        }
       }
       
       setState(() {
         _allDSHang = dshangList;
         _applyDSHangFilters();
+        
+        // Update all dropdown lists
         _nhaCungCapList = nhaCungCapSet.toList()..sort();
         _thuongHieuList = thuongHieuSet.toList()..sort();
+        _phanLoai1List = phanLoai1Set.toList()..sort();
+        _donViList = donViSet.toList()..sort();
+        
         _isLoadingDSHang = false;
       });
     } catch (e) {
@@ -112,7 +144,6 @@ class _HSDSHangScreenState extends State<HSDSHangScreen> with SingleTickerProvid
       );
     }
   }
-
   Future<void> _loadTonKhoData() async {
     setState(() {
       _isLoadingTonKho = true;
@@ -259,7 +290,7 @@ class _HSDSHangScreenState extends State<HSDSHangScreen> with SingleTickerProvid
     
     return Scaffold(
       appBar: AppBar(
-        title: Text('Hàng & Tồn kho', style: TextStyle(color: Colors.white),),
+        title: Text('Hàng & Tồn kho', style: TextStyle(color: Colors.white)),
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -280,8 +311,22 @@ class _HSDSHangScreenState extends State<HSDSHangScreen> with SingleTickerProvid
           ],
         ),
         actions: [
+          // Add "Thêm hàng" button for authorized users when in the first tab
+          if (_canEditItems && _tabController.index == 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: OutlinedButton(
+                onPressed: () => _showEditItemDialog(null), // Pass null for new item
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: BorderSide(color: Colors.white),
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                ),
+                child: Text('Thêm hàng'),
+              ),
+            ),
           IconButton(
-            icon: Icon(Icons.refresh, color: Colors.white,),
+            icon: Icon(Icons.refresh, color: Colors.white),
             onPressed: () {
               _tabController.index == 0 ? _loadDSHangData() : _loadTonKhoData();
             },
@@ -650,37 +695,527 @@ class _HSDSHangScreenState extends State<HSDSHangScreen> with SingleTickerProvid
   Widget buildItemCard(DSHangModel item) {
     return Card(
       margin: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      child: ListTile(
-        title: Text(
-          item.tenSanPham ?? 'Không có tên',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(height: 4),
-            // Show XuatXu instead of mã
-            Text('Xuất xứ: ${item.xuatXu ?? 'Chưa có thông tin'}'),
-            SizedBox(height: 2),
-            Text('Phân loại: ${item.phanLoai1 ?? 'Chưa phân loại'}'),
-          ],
-        ),
-        trailing: item.mauSac != null && item.mauSac!.isNotEmpty
-            ? Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
-                  borderRadius: BorderRadius.circular(4),
-                  color: _getColorFromName(item.mauSac!),
-                ),
-              )
-            : null,
-        onTap: () => _showItemDetails(item),
+      child: Column(
+        children: [
+          ListTile(
+            title: Text(
+              item.tenSanPham ?? 'Không có tên',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(height: 4),
+                Text('Xuất xứ: ${item.xuatXu ?? 'Chưa có thông tin'}'),
+                SizedBox(height: 2),
+                Text('Phân loại: ${item.phanLoai1 ?? 'Chưa phân loại'}'),
+              ],
+            ),
+            trailing: item.mauSac != null && item.mauSac!.isNotEmpty
+                ? Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(4),
+                      color: _getColorFromName(item.mauSac!),
+                    ),
+                  )
+                : null,
+            onTap: () => _showItemDetails(item),
+          ),
+          
+          // Show "Sửa hàng" button for authorized users
+          if (_canEditItems) 
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0, right: 8.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    icon: Icon(Icons.edit, size: 16),
+                    label: Text('Sửa hàng'),
+                    onPressed: () => _showEditItemDialog(item),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.blue,
+                      backgroundColor: Colors.blue.withOpacity(0.1),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }
-
+  Future<void> _showEditItemDialog(DSHangModel? item) async {
+  final bool isNewItem = item == null;
+  
+  // Generate temporary random UID for new items
+  String? tempUid;
+  if (isNewItem) {
+    tempUid = 'SP${DateTime.now().millisecondsSinceEpoch}';
+  }
+  
+  // Define controllers for text fields with existing values if editing
+  final TextEditingController maNhapKhoController = TextEditingController(text: item?.maNhapKho ?? '');
+  final TextEditingController skuController = TextEditingController(text: item?.sku ?? '');
+  final TextEditingController tenSanPhamController = TextEditingController(text: item?.tenSanPham ?? '');
+  final TextEditingController chatLieuController = TextEditingController(text: item?.chatLieu ?? '');
+  final TextEditingController mauSacController = TextEditingController(text: item?.mauSac ?? '');
+  final TextEditingController xuatXuController = TextEditingController(text: item?.xuatXu ?? '');
+  final TextEditingController uidController = TextEditingController(text: item?.uid ?? tempUid);
+  
+  // Initial values for dropdowns
+  String? selectedPhanLoai = item?.phanLoai1;
+  String? selectedThuongHieu = item?.thuongHieu;
+  String? selectedNhaCungCap = item?.nhaCungCap;
+  String? selectedDonVi = item?.donVi;
+  
+  // Initial values for checkboxes (converted from int/boolean)
+  bool hasExpiration = item?.coThoiHan == true;
+  bool isConsumable = item?.hangTieuHao == true;
+  
+  // Title of the dialog based on whether we're adding or editing
+  final String dialogTitle = isNewItem ? 'Thêm hàng mới' : 'Sửa thông tin hàng';
+  
+  // Function to update UID based on MaNhapKho and TenSanPham
+  void updateUID() {
+    final maNhapKho = maNhapKhoController.text.trim();
+    final tenSanPham = tenSanPhamController.text.trim();
+    
+    // Only update UID if both fields have values and it's a new item,
+    // or if we're editing and the UID follows the expected pattern
+    if (maNhapKho.isNotEmpty && tenSanPham.isNotEmpty) {
+      if (isNewItem || (item?.uid == null) || !item!.uid!.contains(' - ')) {
+        uidController.text = '$maNhapKho - $tenSanPham';
+      }
+    }
+  }
+  
+  // Show the dialog
+  await showDialog(
+    context: context,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: Text(dialogTitle),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // UID field (read-only)
+                  TextField(
+                    controller: uidController,
+                    readOnly: true, // Always read-only
+                    decoration: InputDecoration(
+                      labelText: 'Mã sản phẩm (UID)',
+                      border: OutlineInputBorder(),
+                      filled: true,
+                      fillColor: Colors.grey[200],
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  
+                  // MaNhapKho field (required)
+                  TextField(
+                    controller: maNhapKhoController,
+                    decoration: InputDecoration(
+                      labelText: 'Mã nhập kho *',
+                      border: OutlineInputBorder(),
+                      hintText: 'Nhập mã nhập kho',
+                    ),
+                    onChanged: (value) {
+                      updateUID();
+                    },
+                  ),
+                  SizedBox(height: 16),
+                  
+                  // SKU field
+                  TextField(
+                    controller: skuController,
+                    decoration: InputDecoration(
+                      labelText: 'SKU',
+                      border: OutlineInputBorder(),
+                      hintText: 'Nhập mã SKU',
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  
+                  // Product name field (required)
+                  TextField(
+                    controller: tenSanPhamController,
+                    decoration: InputDecoration(
+                      labelText: 'Tên sản phẩm *',
+                      border: OutlineInputBorder(),
+                      hintText: 'Nhập tên sản phẩm',
+                    ),
+                    onChanged: (value) {
+                      updateUID();
+                    },
+                  ),
+                  SizedBox(height: 16),
+                  
+                  // Category dropdown (PhanLoai1) - now required
+                  DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Phân loại *',  // Added asterisk to indicate it's required
+                      border: OutlineInputBorder(),
+                      errorText: selectedPhanLoai == null ? 'Vui lòng chọn phân loại' : null,
+                    ),
+                    value: selectedPhanLoai,
+                    hint: Text('Chọn phân loại'),
+                    items: _phanLoai1List.isEmpty 
+                        ? [DropdownMenuItem<String>(value: 'Chưa phân loại', child: Text('Chưa phân loại'))]
+                        : _phanLoai1List.map((value) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            );
+                          }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        selectedPhanLoai = value;
+                      });
+                    },
+                  ),
+                  SizedBox(height: 16),
+                  
+                  // Material field
+                  TextField(
+                    controller: chatLieuController,
+                    decoration: InputDecoration(
+                      labelText: 'Chất liệu',
+                      border: OutlineInputBorder(),
+                      hintText: 'Nhập chất liệu',
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  
+                  // Color field
+                  TextField(
+                    controller: mauSacController,
+                    decoration: InputDecoration(
+                      labelText: 'Màu sắc',
+                      border: OutlineInputBorder(),
+                      hintText: 'Nhập màu sắc',
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  
+                  // Brand dropdown - now required
+                  DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Thương hiệu *',  // Added asterisk to indicate it's required
+                      border: OutlineInputBorder(),
+                      errorText: selectedThuongHieu == null ? 'Vui lòng chọn thương hiệu' : null,
+                    ),
+                    value: selectedThuongHieu,
+                    hint: Text('Chọn thương hiệu'),
+                    items: _thuongHieuList.isEmpty 
+                        ? [DropdownMenuItem<String>(value: 'Chưa xác định', child: Text('Chưa xác định'))]
+                        : _thuongHieuList.map((value) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            );
+                          }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        selectedThuongHieu = value;
+                      });
+                    },
+                  ),
+                  SizedBox(height: 16),
+                  
+                  // Supplier dropdown
+                  DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Nhà cung cấp',
+                      border: OutlineInputBorder(),
+                    ),
+                    value: selectedNhaCungCap,
+                    hint: Text('Chọn nhà cung cấp'),
+                    items: _nhaCungCapList.isEmpty 
+                        ? [DropdownMenuItem<String>(value: 'Chưa xác định', child: Text('Chưa xác định'))]
+                        : _nhaCungCapList.map((value) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            );
+                          }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        selectedNhaCungCap = value;
+                      });
+                    },
+                  ),
+                  SizedBox(height: 16),
+                  
+                  // DonVi dropdown - now required
+                  DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Đơn vị *',  // Added asterisk to indicate it's required
+                      border: OutlineInputBorder(),
+                      errorText: selectedDonVi == null ? 'Vui lòng chọn đơn vị' : null,
+                    ),
+                    value: selectedDonVi,
+                    hint: Text('Chọn đơn vị'),
+                    items: _donViList.isEmpty 
+                        ? [DropdownMenuItem<String>(value: 'Cái', child: Text('Cái'))]
+                        : _donViList.map((value) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            );
+                          }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        selectedDonVi = value;
+                      });
+                    },
+                  ),
+                  SizedBox(height: 16),
+                  
+                  // Origin field
+                  TextField(
+                    controller: xuatXuController,
+                    decoration: InputDecoration(
+                      labelText: 'Xuất xứ',
+                      border: OutlineInputBorder(),
+                      hintText: 'Nhập xuất xứ',
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  
+                  // Checkbox for expiration
+                  CheckboxListTile(
+                    title: Text('Có thời hạn sử dụng'),
+                    value: hasExpiration,
+                    onChanged: (value) {
+                      setState(() {
+                        hasExpiration = value ?? false;
+                      });
+                    },
+                  ),
+                  
+                  // Checkbox for consumable
+                  CheckboxListTile(
+                    title: Text('Hàng tiêu hao'),
+                    value: isConsumable,
+                    onChanged: (value) {
+                      setState(() {
+                        isConsumable = value ?? false;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('Hủy'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  // Validate required fields
+                  if (maNhapKhoController.text.trim().isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Vui lòng nhập mã nhập kho'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                    return;
+                  }
+                  
+                  if (tenSanPhamController.text.trim().isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Vui lòng nhập tên sản phẩm'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                    return;
+                  }
+                  
+                  // Validate the newly required fields
+                  if (selectedPhanLoai == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Vui lòng chọn phân loại'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                    return;
+                  }
+                  
+                  if (selectedThuongHieu == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Vui lòng chọn thương hiệu'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                    return;
+                  }
+                  
+                  if (selectedDonVi == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Vui lòng chọn đơn vị'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                    return;
+                  }
+                  
+                  // Create a product object
+                  final updatedProduct = DSHangModel(
+                    uid: uidController.text,
+                    sku: skuController.text.trim(),
+                    counter: item?.counter,
+                    maNhapKho: maNhapKhoController.text.trim(),
+                    tenSanPham: tenSanPhamController.text.trim(),
+                    phanLoai1: selectedPhanLoai,
+                    chatLieu: chatLieuController.text.trim(),
+                    mauSac: mauSacController.text.trim(),
+                    thuongHieu: selectedThuongHieu,
+                    nhaCungCap: selectedNhaCungCap,
+                    xuatXu: xuatXuController.text.trim(),
+                    donVi: selectedDonVi,
+                    coThoiHan: hasExpiration,
+                    hangTieuHao: isConsumable,
+                    // Preserve other fields if editing
+                    tenModel: item?.tenModel,
+                    sanPhamGoc: item?.sanPhamGoc,
+                    congDung: item?.congDung,
+                    kichThuoc: item?.kichThuoc,
+                    dungTich: item?.dungTich,
+                    khoiLuong: item?.khoiLuong,
+                    quyCachDongGoi: item?.quyCachDongGoi,
+                    soLuongDongGoi: item?.soLuongDongGoi,
+                    kichThuocDongGoi: item?.kichThuocDongGoi,
+                    moTa: item?.moTa,
+                    hinhAnh: item?.hinhAnh,
+                    thoiHanSuDung: item?.thoiHanSuDung,
+                  );
+                  
+                  // Send to server and save to database
+                  _saveItemToServerAndDatabase(updatedProduct, isNewItem);
+                  
+                  Navigator.pop(context);
+                },
+                child: Text(isNewItem ? 'Thêm' : 'Lưu'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFF837826),
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+  
+  // Clean up controllers
+  maNhapKhoController.dispose();
+  skuController.dispose();
+  tenSanPhamController.dispose();
+  chatLieuController.dispose();
+  mauSacController.dispose();
+  xuatXuController.dispose();
+  uidController.dispose();
+}
+  Future<void> _saveItemToServerAndDatabase(DSHangModel item, bool isNewItem) async {
+  setState(() {
+    _isLoadingDSHang = true;
+  });
+  
+  try {
+    // Show progress dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text('🧡 Đang xử lý'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            LinearProgressIndicator(
+              backgroundColor: Colors.grey[200],
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+            ),
+            SizedBox(height: 16),
+            Text(isNewItem ? 'Đang thêm sản phẩm mới...' : 'Đang cập nhật sản phẩm...'),
+          ],
+        ),
+      ),
+    );
+    
+    // Encode UID for URL
+    final encodedUID = Uri.encodeComponent(item.uid!);
+    
+    // Prepare request body
+    final Map<String, dynamic> requestBody = item.toMap();
+    print(jsonEncode(requestBody));
+    // Send to server
+    final response = await http.post(
+      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/hoteldshangupdate/$encodedUID'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(requestBody),
+    );
+    
+    // Close progress dialog
+    Navigator.pop(context);
+    
+    if (response.statusCode == 200) {
+      // Save to local database
+      if (isNewItem) {
+        await _dbHelper.insertDSHang(item);
+      } else {
+        await _dbHelper.updateDSHang(item);
+      }
+      
+      // Reload data
+      _loadDSHangData();
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isNewItem ? 'Thêm sản phẩm thành công' : 'Cập nhật sản phẩm thành công'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      throw Exception('Server responded with status code ${response.statusCode}. Message: ${response.body}');
+    }
+  } catch (e) {
+    print('Error saving item to server: $e');
+    
+    // Close progress dialog if still showing
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
+    
+    setState(() {
+      _isLoadingDSHang = false;
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi: ${e.toString()}'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+}
   Widget buildTonKhoCard(TonKhoModel tonKhoItem, DSHangModel? productInfo) {
     // Determine color based on stock level
     Color stockLevelColor = Colors.green;
@@ -736,58 +1271,58 @@ class _HSDSHangScreenState extends State<HSDSHangScreen> with SingleTickerProvid
     );
   }
 
-  // Method to display LoHang (batch) information for a product
   Future<void> _showTonKhoDetails(TonKhoModel tonKhoItem, DSHangModel? productInfo) async {
+  setState(() {
+    _isLoadingTonKho = true;
+  });
+  
+  try {
+    // Fetch batches for this product in this warehouse
+    final batches = await _dbHelper.getLoHangForProduct(tonKhoItem.maHangID!, tonKhoItem.khoHangID!);
+    
+    // Sort batches by current quantity (lowest first)
+    batches.sort((a, b) => (a.soLuongHienTai ?? 0).compareTo(b.soLuongHienTai ?? 0));
+    
     setState(() {
-      _isLoadingTonKho = true;
+      _isLoadingTonKho = false;
     });
     
-    try {
-      // Fetch batches for this product in this warehouse
-      final batches = await _dbHelper.getLoHangForProduct(tonKhoItem.maHangID!, tonKhoItem.khoHangID!);
-      
-      // Sort batches by current quantity (lowest first)
-      batches.sort((a, b) => (a.soLuongHienTai ?? 0).compareTo(b.soLuongHienTai ?? 0));
-      
-      setState(() {
-        _isLoadingTonKho = false;
-      });
-      
-      _showTonKhoDetailsBottomSheet(tonKhoItem, productInfo, batches);
-    } catch (e) {
-      print('Error loading batch data: $e');
-      setState(() {
-        _isLoadingTonKho = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Lỗi tải dữ liệu lô hàng: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
+    _showTonKhoDetailsBottomSheet(tonKhoItem, productInfo, batches);
+  } catch (e) {
+    print('Error loading batch data: $e');
+    setState(() {
+      _isLoadingTonKho = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi tải dữ liệu lô hàng: ${e.toString()}'),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
+}
   
   void _showTonKhoDetailsBottomSheet(TonKhoModel tonKhoItem, DSHangModel? productInfo, List<LoHangModel> batches) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.8,
-          maxChildSize: 0.95,
-          minChildSize: 0.5,
-          expand: false,
-          builder: (_, scrollController) {
-            return SingleChildScrollView(
-              controller: scrollController,
-              padding: EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (context) {
+      return DraggableScrollableSheet(
+        initialChildSize: 0.8,
+        maxChildSize: 0.95,
+        minChildSize: 0.5,
+        expand: false,
+        builder: (_, scrollController) {
+          return SingleChildScrollView(
+            controller: scrollController,
+            padding: EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+
                   Center(
                     child: Container(
                       width: 40,

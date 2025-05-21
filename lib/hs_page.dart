@@ -22,6 +22,7 @@ import 'http_client.dart';
 import 'hs_kho2.dart';
 import 'hs_stat.dart';
 import 'hs_donhangmoi.dart';
+import 'hs_donhangxnkdaily.dart';
 
 class AppVersion {
   final String version;
@@ -905,7 +906,7 @@ Widget build(BuildContext context) {
       Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => HSDonHangMoiScreen(),
+                  builder: (context) => HSDonHangXNKDailyScreen(username: _username),
                 ),
               );
       break;

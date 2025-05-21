@@ -50,11 +50,11 @@ class _HSDonHangDailyScreenState extends State<HSDonHangDailyScreen> {
   Timer? _cleanupTimer;
   Set<String> _processingApprovals = {}; 
 final List<String> adminUsers = [
-  'hm.tason', 'hm.manhha', 'hm.kimdung', 'hm.lehoa','hm.phiminh', 'nvthunghiem',
+  'hm.tason', 'hm.manhha', 'hm.lehoa','hm.phiminh', 'nvthunghiem',
   'hm.quocchien', 'hm.damchinh', 'hotel.danang', 'hotel.nhatrang'
 ];
   final Map<String, List<String>> locationAdminMap = {
-  'HN': ['hm.tason', 'hm.manhha', 'hm.kimdung', 'hm.lehoa', 'nvthunghiem'],
+  'HN': ['hm.tason', 'hm.manhha','hm.lehoa', 'nvthunghiem'],
   'SG': ['hm.quocchien', 'hm.damchinh'],
   'DN': ['hotel.danang'],
   'NT': ['hotel.nhatrang']
@@ -63,11 +63,11 @@ final List<String> approveableStatuses = ['duyệt', 'cần xuất', 'đang xử
 
   final List<String> specialUsers = [
   'hm.tason', 'hm.luukinh', 'hm.trangiang', 'hm.damlinh', 'nvthunghiem', 'hm.phiminh',
-  'hm.manhha', 'hm.kimdung', 'hm.lehoa', 'hotel.nhatrang', 'hotel.danang' ,'hm.damchinh','hm.quocchien'
+  'hm.manhha', 'hm.lehoa', 'hotel.nhatrang', 'hotel.danang' ,'hm.damchinh','hm.quocchien'
 ];
 final List<String> defaultStatusOrderUsers = [
   'hm.tason', 'hm.luukinh', 'hm.trangiang', 'hm.damlinh', 'nvthunghiem',
-  'hm.manhha', 'hm.kimdung', 'hm.lehoa', 'hotel.nhatrang', 'hotel.danang'
+  'hm.manhha', 'hm.lehoa', 'hotel.nhatrang', 'hotel.danang'
 ];
 final List<String> altStatusOrderUsers = [
   'hm.phiminh' ,'hm.damchinh','hm.quocchien'
