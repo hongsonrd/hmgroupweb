@@ -39,13 +39,13 @@ class DBHelper {
     }
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool hasReset = prefs.getBool('db_reset_v27') ?? false;
+    bool hasReset = prefs.getBool('db_reset_v28') ?? false;
     
     if (!hasReset) {
-      print('Forcing database reset for version 27...');
+      print('Forcing database reset for version 28...');
       try {
         await deleteDatabase(path);
-        await prefs.setBool('db_reset_v27', true);
+        await prefs.setBool('db_reset_v28', true);
         print('Database reset successful');
       } catch (e) {
         print('Error during database reset: $e');
@@ -57,7 +57,7 @@ class DBHelper {
     final db = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 27,
+        version: 28,
         onCreate: (Database db, int version) async {
           print('Creating database tables...');
           await db.execute(DatabaseTables.createInteractionTable);
@@ -113,7 +113,7 @@ class DBHelper {
           print('Database tables created successfully');
         },
         onUpgrade: (Database db, int oldVersion, int newVersion) async {
-          if (oldVersion < 27) {
+          if (oldVersion < 28) {
           await db.execute(DatabaseTables.createGoCleanCongViecTable);
           await db.execute(DatabaseTables.createGoCleanTaiKhoanTable);
           await db.execute(DatabaseTables.createGoCleanYeuCauTable);
@@ -141,6 +141,7 @@ class DBHelper {
   }
 }
 //ADDONXNK
+
 Future<List<TonKhoModel>> getTonKhoByMaHangAndKho(String maHangID, List<String> khoHangIDs) async {
   final db = await database;
   String placeholders = khoHangIDs.map((_) => '?').join(',');

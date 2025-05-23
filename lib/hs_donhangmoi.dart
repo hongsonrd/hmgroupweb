@@ -841,10 +841,9 @@ void _showRecipientContactSelectionDialog() {
                       return;
                     }
                     
-                    if (donGiaController.text.isEmpty || 
-                        int.tryParse(donGiaController.text) == 0) {
+                    if (donGiaController.text.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Đơn giá phải lớn hơn 0'))
+                        SnackBar(content: Text('Đơn giá phải không được trống'))
                       );
                       return;
                     }

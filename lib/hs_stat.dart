@@ -497,5 +497,4 @@ class _HSStatScreenState extends State<HSStatScreen> {
       ),
     );
   }
-
 }

@@ -19,6 +19,10 @@ class _HSXuHuongKDScreenState extends State<HSXuHuongKDScreen> {
   String? _selectedSaleAgent; // Nullable for 'Tất cả'
   List<String> _availableSaleAgents = ['Tất cả']; // List of NguoiTao
 
+  // New state for product brand filter
+  String? _selectedProductBrandFilter;
+  List<String> _availableBrandsForProductFilter = ['Tất cả thương hiệu'];
+
   DateTime? _startDate;
   DateTime? _endDate;
 
@@ -28,10 +32,18 @@ class _HSXuHuongKDScreenState extends State<HSXuHuongKDScreen> {
   int _uniqueCompletedItems = 0;
 
   // Data for charts and insights
-  // Use a map to preserve order for the chart
-  Map<String, double> _chartDataRevenue = {}; // For chart: { '2024-01': 1000.0 } or { '2024-Q1': 5000.0 }
-  Map<String, double> _revenueByBrand = {}; // For brand insights: { 'Brand A': 500.0 }
-  Map<String, int> _itemsSoldByBrand = {}; // For brand insights: { 'Brand A': 10 }
+  Map<String, double> _chartDataRevenue = {}; // For chart: { '2024-05-01': 100.0 } or { '2024-04': 500.0 }
+  Map<String, double> _revenueByBrand = {};
+  Map<String, double> _totalQuantitySoldByBrand = {}; // To calculate average price
+  Map<String, double> _avgPriceByBrand = {}; // Average price for each brand
+
+  Map<String, double> _revenueByProduct = {};
+  Map<String, double> _totalQuantitySoldByProduct = {}; // To calculate average price
+  Map<String, double> _avgPriceByProduct = {}; // Average price for each product
+
+  // Store all DSHangModels after fetching once per calculation cycle
+  List<DSHangModel> _allDSHangItems = [];
+
   List<DonHangModel> _completedOrders = []; // For detailed table
   List<ChiTietDonModel> _completedOrderDetails = []; // For detailed table
 
@@ -43,6 +55,10 @@ class _HSXuHuongKDScreenState extends State<HSXuHuongKDScreen> {
 
   Future<void> _loadInitialData() async {
     await _loadAvailableSaleAgents();
+    // Set initial product brand filter default here before calculations
+    setState(() {
+      _selectedProductBrandFilter = 'Tất cả thương hiệu';
+    });
     _setInitialPeriod(); // This will also trigger _calculateStats
   }
 
@@ -74,7 +90,6 @@ class _HSXuHuongKDScreenState extends State<HSXuHuongKDScreen> {
   }
 
   Future<void> _setAndCalculateDateRange(String periodType, String periodValue) async {
-    DateTime now = DateTime.now();
     DateTime tempStartDate;
     DateTime tempEndDate;
 
@@ -109,14 +124,20 @@ class _HSXuHuongKDScreenState extends State<HSXuHuongKDScreen> {
       _uniqueCompletedItems = 0;
       _chartDataRevenue = {}; // Reset chart data
       _revenueByBrand = {};
-      _itemsSoldByBrand = {};
+      _totalQuantitySoldByBrand = {};
+      _avgPriceByBrand = {};
+      _revenueByProduct = {};
+      _totalQuantitySoldByProduct = {};
+      _avgPriceByProduct = {};
+      _availableBrandsForProductFilter = ['Tất cả thương hiệu']; // Reset for product filter
       _completedOrders = [];
       _completedOrderDetails = [];
+      _allDSHangItems = []; // Reset cached DSHang items here before fetching
     });
 
     try {
       final allOrders = await _dbHelper.getAllDonHang();
-      final allItems = await _dbHelper.getAllDSHang(); // Fetch all master item data
+      _allDSHangItems = await _dbHelper.getAllDSHang(); // <--- Fetch all DSHangModels here
 
       final completedOrdersInPeriod = allOrders.where((order) {
         final orderStatus = order.trangThai?.toLowerCase();
@@ -151,6 +172,8 @@ class _HSXuHuongKDScreenState extends State<HSXuHuongKDScreen> {
       _completedOrders = completedOrdersInPeriod; // Store for detailed table
 
       final Set<String> uniqueItemIds = {};
+      final Set<String> uniqueBrands = {}; // To populate product filter brands
+
       for (var order in completedOrdersInPeriod) {
         if (order.soPhieu != null) {
           final items = await _dbHelper.getChiTietDonBySoPhieu(order.soPhieu!);
@@ -160,32 +183,84 @@ class _HSXuHuongKDScreenState extends State<HSXuHuongKDScreen> {
             if (item.idHang != null) {
               uniqueItemIds.add(item.idHang!);
 
-              // Aggregate revenue and items sold by brand
-              final dsHangItem = allItems.firstWhere(
+              // Find the corresponding DSHangModel from the cached _allDSHangItems list
+              final dsHangItem = _allDSHangItems.firstWhere(
                 (dsItem) => dsItem.uid == item.idHang,
                 orElse: () => DSHangModel(), // Provide a default empty model if not found
               );
+
+              // Get actual quantity and unit price for calculations
+              final itemQuantity = item.soLuongYeuCau ?? 0.0; // <--- Use soLuongYeuCau for quantity
+              final itemTotalAmount = (item.thanhTien ?? 0).toDouble(); // <--- Use thanhTien for total amount
+
+              // Aggregate revenue and total quantity sold by brand
               final brand = dsHangItem.thuongHieu ?? 'Không rõ thương hiệu';
-              _revenueByBrand[brand] = (_revenueByBrand[brand] ?? 0.0) + (item.thanhTien ?? 0).toDouble();
-              _itemsSoldByBrand[brand] = (_itemsSoldByBrand[brand] ?? 0) + (item.soLuongKhachNhan ?? 0).toInt();
+              uniqueBrands.add(brand); // Add to unique brands list
+              _revenueByBrand[brand] = (_revenueByBrand[brand] ?? 0.0) + itemTotalAmount;
+              _totalQuantitySoldByBrand[brand] = (_totalQuantitySoldByBrand[brand] ?? 0.0) + itemQuantity;
+
+              // Aggregate revenue and total quantity sold by product
+              final productName = dsHangItem.tenSanPham ?? 'Không rõ sản phẩm';
+              _revenueByProduct[productName] = (_revenueByProduct[productName] ?? 0.0) + itemTotalAmount;
+              _totalQuantitySoldByProduct[productName] = (_totalQuantitySoldByProduct[productName] ?? 0.0) + itemQuantity;
             }
           }
         }
       }
       _uniqueCompletedItems = uniqueItemIds.length;
 
-      // Populate _chartDataRevenue for bar chart
+      // Calculate Average Price for Brands
+      _revenueByBrand.forEach((brand, revenue) {
+        final totalQty = _totalQuantitySoldByBrand[brand] ?? 0.0;
+        // Ensure totalQty is greater than 0 to avoid division by zero
+        _avgPriceByBrand[brand] = (totalQty > 0) ? (revenue / totalQty) : 0.0;
+      });
+
+      // Calculate Average Price for Products
+      _revenueByProduct.forEach((product, revenue) {
+        final totalQty = _totalQuantitySoldByProduct[product] ?? 0.0;
+        // Ensure totalQty is greater than 0 to avoid division by zero
+        _avgPriceByProduct[product] = (totalQty > 0) ? (revenue / totalQty) : 0.0;
+      });
+
+      // Sort brands alphabetically for the product filter dropdown
+      final sortedBrands = uniqueBrands.toList()..sort();
+      _availableBrandsForProductFilter = ['Tất cả thương hiệu', ...sortedBrands];
+
+      // If the previously selected product brand filter is no longer available, reset it
+      if (_selectedProductBrandFilter != null && !_availableBrandsForProductFilter.contains(_selectedProductBrandFilter)) {
+        _selectedProductBrandFilter = 'Tất cả thương hiệu';
+      }
+
+
+      // Populate _chartDataRevenue for bar chart based on selected period type
       if (_selectedPeriodType == 'Tháng') {
-        // Only one month selected, so represent it directly
-        _chartDataRevenue[_selectedPeriodValue] = _totalRevenue;
-      } else { // Quý - break down by month
+        // Daily breakdown for the selected month
+        final int daysInMonth = DateTime(_startDate!.year, _startDate!.month + 1, 0).day;
+        for (int i = 1; i <= daysInMonth; i++) {
+          final day = DateTime(_startDate!.year, _startDate!.month, i);
+          final dayKey = DateFormat('yyyy-MM-dd').format(day);
+          double dayRevenue = 0.0;
+          final ordersInThisDay = completedOrdersInPeriod.where((order) {
+            try {
+              final orderDate = DateTime.parse(order.thoiGianCapNhatTrangThai!);
+              return orderDate.year == day.year && orderDate.month == day.month && orderDate.day == day.day;
+            } catch (e) {
+              return false;
+            }
+          });
+          dayRevenue = ordersInThisDay.fold(0.0, (sum, order) => sum + (order.tongCong ?? 0).toDouble());
+          _chartDataRevenue[dayKey] = dayRevenue;
+        }
+      } else { // Quý - Monthly breakdown for the selected quarter
         final startMonth = _startDate!.month;
         final endMonth = _endDate!.month;
         // Ensure months are collected in order for the chart
         List<String> quarterMonths = [];
         for (int m = startMonth; m <= endMonth; m++) {
           final monthDate = DateTime(_startDate!.year, m, 1);
-          if (monthDate.isAfter(_endDate!)) break; // Stop if we exceed the quarter boundary
+          // Only add months that are actually within the quarter's end date (e.g., Q4 goes into next year for calculation of end date)
+          if (monthDate.isAfter(_endDate!)) break;
           quarterMonths.add(DateFormat('yyyy-MM').format(monthDate));
         }
 
@@ -266,6 +341,16 @@ class _HSXuHuongKDScreenState extends State<HSXuHuongKDScreen> {
     return formatter.format(amount);
   }
 
+  // Formatter for average price (can have decimals)
+  String _formatAveragePrice(double amount) {
+    final formatter = NumberFormat.currency(
+      locale: 'vi_VN',
+      symbol: 'đ',
+      decimalDigits: amount < 1000 ? 2 : 0, // Show decimals for small amounts
+    );
+    return formatter.format(amount);
+  }
+
   String _formatDate(String? dateString) {
     if (dateString == null || dateString.isEmpty) return 'N/A';
     try {
@@ -281,6 +366,28 @@ class _HSXuHuongKDScreenState extends State<HSXuHuongKDScreen> {
     final Color appBarTop = const Color(0xFF534b0d);
     final Color appBarBottom = const Color(0xFFb2a41f);
     final Color cardBgColor = const Color(0xFFFAFAFA);
+
+    // Filtered products for display
+    final List<MapEntry<String, double>> filteredProducts = _revenueByProduct.entries
+        .where((entry) {
+          if (_selectedProductBrandFilter == 'Tất cả thương hiệu') {
+            return true;
+          }
+          // Find the brand for the product to filter from the _allDSHangItems list
+          // Ensure _allDSHangItems is not empty before trying to find
+          if (_allDSHangItems.isEmpty) return false;
+
+          final correspondingItem = _allDSHangItems.firstWhere(
+            (dsItem) => dsItem.tenSanPham == entry.key, // Assuming tenSanPham is unique per product
+            orElse: () => DSHangModel(), // Return empty model if not found
+          );
+          return correspondingItem.thuongHieu == _selectedProductBrandFilter;
+        })
+        .toList();
+
+    // Sort products by revenue descending
+    filteredProducts.sort((a, b) => b.value.compareTo(a.value));
+
 
     return Scaffold(
       appBar: AppBar(
@@ -446,7 +553,7 @@ class _HSXuHuongKDScreenState extends State<HSXuHuongKDScreen> {
                                         BarChartRodData(
                                           toY: entry.value / 1000000, // Display in millions for better scale
                                           color: Colors.indigoAccent,
-                                          width: _selectedPeriodType == 'Tháng' ? 60 : 20, // Wider bar for single month
+                                          width: _selectedPeriodType == 'Tháng' ? 10 : 20, // Narrower for daily, wider for monthly in quarter
                                           borderRadius: BorderRadius.circular(4),
                                         ),
                                       ],
@@ -460,17 +567,18 @@ class _HSXuHuongKDScreenState extends State<HSXuHuongKDScreen> {
                                         getTitlesWidget: (value, meta) {
                                           final index = value.toInt();
                                           if (index >= 0 && index < _chartDataRevenue.keys.length) {
-                                            String label = _chartDataRevenue.keys.toList()[index];
+                                            String labelKey = _chartDataRevenue.keys.toList()[index];
                                             if (_selectedPeriodType == 'Tháng') {
+                                              // Daily breakdown for the selected month
                                               return SideTitleWidget(
                                                 axisSide: meta.axisSide,
-                                                child: Text(DateFormat('MM/yyyy').format(DateTime.parse('$label-01'))), // Show full month/year for single month
+                                                child: Text(DateFormat('dd').format(DateTime.parse(labelKey))), // Just the day
                                               );
                                             }
-                                            // For Quarterly view, break down by month
+                                            // Monthly breakdown for the selected quarter
                                             return SideTitleWidget(
                                               axisSide: meta.axisSide,
-                                              child: Text(DateFormat('MM/yy').format(DateTime.parse('$label-01'))),
+                                              child: Text(DateFormat('MM/yy').format(DateTime.parse('$labelKey-01'))), // Month/Year
                                             );
                                           }
                                           return const Text('');
@@ -491,7 +599,7 @@ class _HSXuHuongKDScreenState extends State<HSXuHuongKDScreen> {
                                   borderData: FlBorderData(show: false),
                                   gridData: const FlGridData(show: true, drawVerticalLine: false),
                                   alignment: BarChartAlignment.spaceAround,
-                                  maxY: (_totalRevenue / 1000000) * 1.2, // Max Y slightly above max revenue
+                                  maxY: (_chartDataRevenue.values.isNotEmpty ? (_chartDataRevenue.values.reduce((a, b) => a > b ? a : b) / 1000000) * 1.2 : 1), // Dynamic max Y, min 1 for empty
                                   minY: 0,
                                 ),
                               ),
@@ -513,26 +621,44 @@ class _HSXuHuongKDScreenState extends State<HSXuHuongKDScreen> {
                             padding: const EdgeInsets.all(16.0),
                             child: Column(
                               children: _revenueByBrand.entries.map((entry) {
+                                final brand = entry.key;
+                                final revenue = entry.value;
+                                final totalUnits = _totalQuantitySoldByBrand[brand] ?? 0.0;
+                                final avgPrice = _avgPriceByBrand[brand] ?? 0.0;
                                 return Padding(
                                   padding: const EdgeInsets.symmetric(vertical: 4.0),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Expanded(
-                                        child: Text(
-                                          entry.key,
-                                          style: const TextStyle(fontWeight: FontWeight.bold),
-                                        ),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              brand,
+                                              style: const TextStyle(fontWeight: FontWeight.bold),
+                                            ),
+                                          ),
+                                          Column(
+                                            crossAxisAlignment: CrossAxisAlignment.end,
+                                            children: [
+                                              Text(
+                                                'Doanh thu: ${_formatCurrency(revenue)}',
+                                                style: const TextStyle(color: Colors.green),
+                                              ),
+                                              Text(
+                                                'Tổng SP bán: ${totalUnits.toInt()} sp',
+                                                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                                              ),
+                                              Text(
+                                                'Giá TB: ${_formatAveragePrice(avgPrice)}',
+                                                style: TextStyle(color: Colors.blueGrey, fontSize: 12),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
                                       ),
-                                      Text(
-                                        _formatCurrency(entry.value),
-                                        style: const TextStyle(color: Colors.green),
-                                      ),
-                                      SizedBox(width: 10),
-                                      Text(
-                                        '(${_itemsSoldByBrand[entry.key] ?? 0} sp)',
-                                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                                      ),
+                                      if (_revenueByBrand.keys.last != brand) const Divider(), // Add divider between items
                                     ],
                                   ),
                                 );
@@ -541,6 +667,92 @@ class _HSXuHuongKDScreenState extends State<HSXuHuongKDScreen> {
                           ),
                         ),
                   const SizedBox(height: 24),
+
+                  _buildSectionTitle('Doanh thu theo sản phẩm'),
+                  Card(
+                    elevation: 2,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Product Brand Filter Dropdown
+                          DropdownButtonFormField<String>(
+                            value: _selectedProductBrandFilter,
+                            decoration: const InputDecoration(
+                              labelText: 'Lọc theo thương hiệu',
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            ),
+                            items: _availableBrandsForProductFilter.map((brand) {
+                              return DropdownMenuItem(value: brand, child: Text(brand));
+                            }).toList(),
+                            onChanged: (value) {
+                              if (value != null) {
+                                setState(() {
+                                  _selectedProductBrandFilter = value;
+                                });
+                                // No need to recalculate _calculateStats(), just rebuilds with filter
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          filteredProducts.isEmpty
+                              ? const Center(child: Padding(
+                                  padding: EdgeInsets.all(16.0),
+                                  child: Text('Không có dữ liệu sản phẩm để hiển thị với bộ lọc này.'),
+                                ))
+                              : Column(
+                                  children: filteredProducts.map((entry) {
+                                    final productName = entry.key;
+                                    final revenue = entry.value;
+                                    final totalUnits = _totalQuantitySoldByProduct[productName] ?? 0.0;
+                                    final avgPrice = _avgPriceByProduct[productName] ?? 0.0;
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  productName,
+                                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                                ),
+                                              ),
+                                              Column(
+                                                crossAxisAlignment: CrossAxisAlignment.end,
+                                                children: [
+                                                  Text(
+                                                    'Doanh thu: ${_formatCurrency(revenue)}',
+                                                    style: const TextStyle(color: Colors.green),
+                                                  ),
+                                                  Text(
+                                                    'Tổng SP bán: ${totalUnits.toInt()} sp',
+                                                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                                                  ),
+                                                  Text(
+                                                    'Giá TB: ${_formatAveragePrice(avgPrice)}',
+                                                    style: TextStyle(color: Colors.blueGrey, fontSize: 12),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                          if (filteredProducts.last.key != productName) const Divider(), // Add divider between items
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
 
                   _buildSectionTitle('Chi tiết đơn hàng hoàn thành'),
                   _completedOrders.isEmpty
@@ -680,7 +892,8 @@ class _HSXuHuongKDScreenState extends State<HSXuHuongKDScreen> {
                   ...orderDetails.map((detail) => Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4.0),
                         child: Text(
-                          '  - ${detail.tenHang ?? 'N/A'} (SL: ${detail.soLuongKhachNhan ?? detail.soLuongThucGiao ?? 'N/A'} ${detail.donViTinh ?? ''}) - ${_formatCurrency((detail.thanhTien ?? 0).toDouble())}',
+                          // Use soLuongYeuCau for quantity in details display
+                          '  - ${detail.tenHang ?? 'N/A'} (SL: ${detail.soLuongYeuCau ?? 'N/A'} ${detail.donViTinh ?? ''}) - ${_formatCurrency((detail.thanhTien ?? 0).toDouble())}',
                           style: TextStyle(fontSize: 14, color: Colors.grey[700]),
                         ),
                       )).toList(),

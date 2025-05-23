@@ -73,9 +73,47 @@ class _HSPageState extends State<HSPage> with SingleTickerProviderStateMixin {
     _playVibrationPattern();
     _tabController = TabController(length: 2, vsync: this);
     _checkAndPerformDailySync();
-    _currentWidget = _buildBlankWidget(); // Initialize with blank widget
+    _currentWidget = _buildBlankWidget();
+    _syncDonHangAndChiTietOnEnter();
   }
-
+Future<void> _syncDonHangAndChiTietOnEnter() async {
+  try {
+    // Only show loading for user feedback, but don't block UI
+    setState(() {
+      _isLoading = true;
+      _message = 'Đang tải dữ liệu đơn hàng...';
+    });
+    
+    // Sync DonHang data
+    await _syncDonHangData();
+    
+    // Sync ChiTietDon data
+    await _syncChiTietDonData();
+    
+    // Update state
+    setState(() {
+      _isLoading = false;
+      _message = 'Đã cập nhật dữ liệu đơn hàng';
+    });
+    
+    // Optional: Show a brief success indicator
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đã cập nhật dữ liệu đơn hàng'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 1),
+        ),
+      );
+    }
+  } catch (e) {
+    print('Error syncing DonHang data on enter: $e');
+    setState(() {
+      _isLoading = false;
+      _message = 'Lỗi tải dữ liệu: ${e.toString()}';
+    });
+  }
+}
   // [Keep all your existing methods unchanged - _checkAndPerformDailySync, _playVibrationPattern, etc.]
   Future<void> _checkAndPerformDailySync() async {
     final prefs = await SharedPreferences.getInstance();
