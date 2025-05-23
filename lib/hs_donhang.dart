@@ -1152,7 +1152,38 @@ Widget build(BuildContext context) {
       },
     );
   }
-
+Future<void> _editOrder(String soPhieu) async {
+  try {
+    // Navigate to the order creation screen in edit mode
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => HSDonHangMoiScreen(
+          editMode: true,
+          soPhieu: soPhieu,
+        ),
+      ),
+    );
+    
+    // If the edit was successful, refresh the orders list
+    if (result != null && result['status'] == 'success') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đơn hàng đã được cập nhật thành công'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      _loadOrders(); // Refresh the orders list
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi khi mở form sửa đơn: $e'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+}
   Widget _buildTableOrderList() {
     // Sort orders by date for table view, or keep the default sort
     final orders = List.from(_filteredOrders);
@@ -1219,7 +1250,6 @@ final isHmGroup = (order.phuongThucGiaoHang?.toUpperCase() ?? '') == 'HMGROUP';
   Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      // Check if user is the creator of the order and it's an HMGROUP order with specific status
       if (isOrderCreator && isHmGroup && 
           ((order.trangThai?.toLowerCase() ?? '') == 'chưa xong' || 
            (order.trangThai?.toLowerCase() ?? '') == 'xuất nội bộ'))
@@ -1228,7 +1258,11 @@ final isHmGroup = (order.phuongThucGiaoHang?.toUpperCase() ?? '') == 'HMGROUP';
           tooltip: 'Gửi đơn',
           onPressed: () => _sendHMGroupOrder(order.soPhieu!),
         ),
-        
+          IconButton(
+          icon: Icon(Icons.edit, size: 18, color: Colors.blue),
+          tooltip: 'Sửa đơn',
+          onPressed: () => _editOrder(order.soPhieu!),
+        ),
       if (order.soPhieu != null && (order.trangThai?.toLowerCase() ?? '') != 'nháp')
         IconButton(
           icon: Icon(Icons.receipt_long, size: 18, color: Color(0xFF534b0d)),
@@ -1671,41 +1705,69 @@ final isHmGroup = (order.phuongThucGiaoHang?.toUpperCase() ?? '') == 'HMGROUP';
 
         // Bottom buttons container
         Container(
-          width: double.infinity,
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.grey[100],
-            borderRadius: BorderRadius.vertical(bottom: Radius.circular(4)),
+  width: double.infinity,
+  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+  decoration: BoxDecoration(
+    color: Colors.grey[100],
+    borderRadius: BorderRadius.vertical(bottom: Radius.circular(4)),
+  ),
+  child: Row(
+    mainAxisAlignment: MainAxisAlignment.end,
+    children: [
+      // Add Edit button for order creators
+      if (isOrderCreator && (lowerStatus == 'chưa xong' || lowerStatus == 'xuất nội bộ' || lowerStatus == 'nháp'))
+        ElevatedButton.icon(
+          onPressed: () {
+            _editOrder(order.soPhieu!);
+          },
+          icon: Icon(
+            Icons.edit,
+            size: columnCount == 3 ? 12 : (columnCount == 2 ? 14 : 16),
+            color: Colors.white,
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              // New "Gửi" button for HMGROUP orders with specific status
-              if (needsGuiButton)
-                ElevatedButton.icon(
-                  onPressed: () {
-                    _sendHMGroupOrder(order.soPhieu!);
-                  },
-                  icon: Icon(
-                    Icons.send,
-                    size: columnCount == 3 ? 12 : (columnCount == 2 ? 14 : 16),
-                    color: Colors.white,
-                  ),
-                  label: Text(
-                    'Gửi',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: microSize,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    textStyle: TextStyle(fontSize: microSize),
-                    minimumSize: Size(0, 28),
-                  ),
-                ),
-              if (needsGuiButton) SizedBox(width: 8),
+          label: Text(
+            'Sửa',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: microSize,
+            ),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.orange,
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            textStyle: TextStyle(fontSize: microSize),
+            minimumSize: Size(0, 28),
+          ),
+        ),
+      if (isOrderCreator && (lowerStatus == 'chưa xong' || lowerStatus == 'xuất nội bộ' || lowerStatus == 'nháp')) 
+        SizedBox(width: 8),
+      
+      // Existing "Gửi" button for HMGROUP orders with specific status
+      if (needsGuiButton)
+        ElevatedButton.icon(
+          onPressed: () {
+            _sendHMGroupOrder(order.soPhieu!);
+          },
+          icon: Icon(
+            Icons.send, // This is correct for "Send"
+            size: columnCount == 3 ? 12 : (columnCount == 2 ? 14 : 16),
+            color: Colors.white,
+          ),
+          label: Text(
+            'Gửi',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: microSize,
+            ),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue,
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            textStyle: TextStyle(fontSize: microSize),
+            minimumSize: Size(0, 28),
+          ),
+        ),
+      if (needsGuiButton) SizedBox(width: 8),
               
               if (showQrButton)
                 ElevatedButton.icon(

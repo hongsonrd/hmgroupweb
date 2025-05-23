@@ -792,7 +792,6 @@ void _showWarehouseInputDialog() async {
   );
 }
 
-// Add method to build transaction card
 Widget _buildTransactionCard(GiaoDichKhoModel transaction, {required bool isInputHistory}) {
   String formattedDate = 'N/A';
   if (transaction.ngay != null) {
@@ -867,7 +866,7 @@ Widget _buildTransactionCard(GiaoDichKhoModel transaction, {required bool isInpu
           isThreeLine: true,
         ),
         
-        // QR Code button
+        // Action buttons
         if (transaction.loHangID != null && transaction.loHangID!.isNotEmpty)
           Container(
             width: double.infinity,
@@ -879,6 +878,22 @@ Widget _buildTransactionCard(GiaoDichKhoModel transaction, {required bool isInpu
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                // Phiếu tổng button
+                ElevatedButton.icon(
+                  onPressed: () => _generatePhieuTong(transaction),
+                  icon: Icon(Icons.summarize, size: 16, color: Colors.white),
+                  label: Text('Phiếu tổng', style: TextStyle(color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.purple[700],
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 8),
+                
+                // QR Code button
                 ElevatedButton.icon(
                   onPressed: () => _showTransactionQRCode(transaction),
                   icon: Icon(Icons.qr_code, size: 16, color: Colors.white),
@@ -898,7 +913,402 @@ Widget _buildTransactionCard(GiaoDichKhoModel transaction, {required bool isInpu
     ),
   );
 }
+Future<void> _generatePhieuTong(GiaoDichKhoModel selectedTransaction) async {
+  if (selectedTransaction.ngay == null) {
+    _showErrorSnackBar('Không thể tạo phiếu tổng: Ngày giao dịch không hợp lệ');
+    return;
+  }
+  
+  setState(() {
+    _isLoading = true;
+  });
+  
+  try {
+    // Get all transactions from the same date
+    final allTransactions = await _dbHelper.getAllGiaoDichKho();
+    final sameDateTransactions = allTransactions.where((transaction) {
+      return transaction.ngay == selectedTransaction.ngay && 
+             transaction.trangThai == selectedTransaction.trangThai; // Same type (+ or -)
+    }).toList();
+    
+    // Group transactions by warehouse
+    Map<String, List<GiaoDichKhoModel>> warehouseGroups = {};
+    for (var transaction in sameDateTransactions) {
+      // Get warehouse info for each transaction
+      if (transaction.loHangID != null) {
+        final loHang = await _dbHelper.getLoHangById(transaction.loHangID!);
+        final warehouseKey = loHang?.khoHangID ?? 'Unknown';
+        
+        if (!warehouseGroups.containsKey(warehouseKey)) {
+          warehouseGroups[warehouseKey] = [];
+        }
+        warehouseGroups[warehouseKey]!.add(transaction);
+      }
+    }
+    
+    // Get current user name
+    final prefs = await SharedPreferences.getInstance();
+    final username = prefs.getString('username') ?? 'User';
+    
+    // Create PDF
+    await _createPhieuTongPDF(
+      selectedTransaction.ngay!,
+      selectedTransaction.trangThai!,
+      warehouseGroups,
+      username,
+    );
+    
+    setState(() {
+      _isLoading = false;
+    });
+    
+  } catch (e) {
+    setState(() {
+      _isLoading = false;
+    });
+    _showErrorSnackBar('Lỗi khi tạo phiếu tổng: ${e.toString()}');
+  }
+}
 
+Future<void> _createPhieuTongPDF(
+  String date,
+  String transactionType,
+  Map<String, List<GiaoDichKhoModel>> warehouseGroups,
+  String createdBy,
+) async {
+  try {
+    final pdf = pw.Document();
+    
+    // Format the date
+    String formattedDate = '';
+    try {
+      final parsedDate = DateTime.parse(date);
+      formattedDate = DateFormat('dd/MM/yyyy').format(parsedDate);
+    } catch (e) {
+      formattedDate = date;
+    }
+    
+    final isInput = transactionType == '+';
+    final title = isInput ? 'PHIẾU TỔNG NHẬP KHO' : 'PHIẾU TỔNG XUẤT KHO';
+    
+    // Calculate totals
+    int totalBatches = 0;
+    double totalQuantity = 0;
+    int totalItems = 0;
+    
+    for (var warehouseTransactions in warehouseGroups.values) {
+      totalBatches += warehouseTransactions.length;
+      for (var transaction in warehouseTransactions) {
+        totalQuantity += transaction.soLuong ?? 0;
+        totalItems++;
+      }
+    }
+    
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: pw.EdgeInsets.all(20),
+        build: (pw.Context context) {
+          return [
+            // Header
+            pw.Container(
+              width: double.infinity,
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
+                children: [
+                  pw.Text(
+                    title,
+                    style: pw.TextStyle(
+                      fontSize: 24,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 10),
+                  pw.Text(
+                    'Ngày: $formattedDate',
+                    style: pw.TextStyle(
+                      fontSize: 16,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 20),
+                ],
+              ),
+            ),
+            
+            // Summary section
+            pw.Container(
+              width: double.infinity,
+              padding: pw.EdgeInsets.all(15),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(width: 1),
+                borderRadius: pw.BorderRadius.circular(8),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'TỔNG QUAN',
+                    style: pw.TextStyle(
+                      fontSize: 16,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 10),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text('Tổng số kho:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      pw.Text('${warehouseGroups.length}'),
+                    ],
+                  ),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text('Tổng số lô hàng:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      pw.Text('$totalBatches'),
+                    ],
+                  ),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text('Tổng số giao dịch:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      pw.Text('$totalItems'),
+                    ],
+                  ),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text('Tổng số lượng:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      pw.Text('${totalQuantity.toStringAsFixed(2)}'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            
+            pw.SizedBox(height: 20),
+            
+            // Details by warehouse
+            ...warehouseGroups.entries.map((warehouseEntry) {
+              final warehouseId = warehouseEntry.key;
+              final transactions = warehouseEntry.value;
+              
+              return pw.Container(
+                width: double.infinity,
+                margin: pw.EdgeInsets.only(bottom: 20),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    // Warehouse header
+                    pw.Container(
+                      width: double.infinity,
+                      padding: pw.EdgeInsets.all(10),
+                      decoration: pw.BoxDecoration(
+                        color: PdfColors.grey300,
+                        border: pw.Border.all(width: 1),
+                      ),
+                      child: pw.Text(
+                        'KHO: $warehouseId (${transactions.length} giao dịch)',
+                        style: pw.TextStyle(
+                          fontSize: 14,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    
+                    // Transactions table
+                    pw.Table(
+                      border: pw.TableBorder.all(width: 0.5),
+                      columnWidths: {
+                        0: pw.FixedColumnWidth(30),   // STT
+                        1: pw.FlexColumnWidth(3),     // Mã lô hàng
+                        2: pw.FlexColumnWidth(2),     // Số lượng
+                        3: pw.FlexColumnWidth(2),     // Giờ
+                        4: pw.FlexColumnWidth(2),     // Người thực hiện
+                        5: pw.FlexColumnWidth(3),     // Ghi chú
+                      },
+                      children: [
+                        // Table header
+                        pw.TableRow(
+                          decoration: pw.BoxDecoration(color: PdfColors.grey200),
+                          children: [
+                            pw.Container(
+                              padding: pw.EdgeInsets.all(5),
+                              child: pw.Text('STT', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                            ),
+                            pw.Container(
+                              padding: pw.EdgeInsets.all(5),
+                              child: pw.Text('Mã lô hàng', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                            ),
+                            pw.Container(
+                              padding: pw.EdgeInsets.all(5),
+                              child: pw.Text('Số lượng', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                            ),
+                            pw.Container(
+                              padding: pw.EdgeInsets.all(5),
+                              child: pw.Text('Giờ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                            ),
+                            pw.Container(
+                              padding: pw.EdgeInsets.all(5),
+                              child: pw.Text('Người thực hiện', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                            ),
+                            pw.Container(
+                              padding: pw.EdgeInsets.all(5),
+                              child: pw.Text('Ghi chú', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                        
+                        // Table rows
+                        ...transactions.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final transaction = entry.value;
+                          
+                          return pw.TableRow(
+                            children: [
+                              pw.Container(
+                                padding: pw.EdgeInsets.all(5),
+                                child: pw.Text('${index + 1}'),
+                              ),
+                              pw.Container(
+                                padding: pw.EdgeInsets.all(5),
+                                child: pw.Text(transaction.loHangID ?? 'N/A'),
+                              ),
+                              pw.Container(
+                                padding: pw.EdgeInsets.all(5),
+                                child: pw.Text((transaction.soLuong ?? 0).toString()),
+                              ),
+                              pw.Container(
+                                padding: pw.EdgeInsets.all(5),
+                                child: pw.Text(transaction.gio ?? 'N/A'),
+                              ),
+                              pw.Container(
+                                padding: pw.EdgeInsets.all(5),
+                                child: pw.Text(transaction.nguoiDung ?? 'N/A'),
+                              ),
+                              pw.Container(
+                                padding: pw.EdgeInsets.all(5),
+                                child: pw.Text(transaction.ghiChu ?? ''),
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                        
+                        // Warehouse subtotal
+                        pw.TableRow(
+                          decoration: pw.BoxDecoration(color: PdfColors.grey100),
+                          children: [
+                            pw.Container(
+                              padding: pw.EdgeInsets.all(5),
+                              child: pw.Text(''),
+                            ),
+                            pw.Container(
+                              padding: pw.EdgeInsets.all(5),
+                              child: pw.Text(
+                                'Tổng kho:',
+                                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                              ),
+                            ),
+                            pw.Container(
+                              padding: pw.EdgeInsets.all(5),
+                              child: pw.Text(
+                                transactions.fold<double>(0, (sum, t) => sum + (t.soLuong ?? 0)).toString(),
+                                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                              ),
+                            ),
+                            pw.Container(padding: pw.EdgeInsets.all(5), child: pw.Text('')),
+                            pw.Container(padding: pw.EdgeInsets.all(5), child: pw.Text('')),
+                            pw.Container(padding: pw.EdgeInsets.all(5), child: pw.Text('')),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+            
+            pw.SizedBox(height: 30),
+            
+            // Footer
+            pw.Container(
+              width: double.infinity,
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'Thông tin tạo phiếu:',
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.SizedBox(height: 5),
+                  pw.Text('Người tạo: $createdBy'),
+                  pw.Text('Thời gian tạo: ${DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now())}'),
+                  pw.SizedBox(height: 30),
+                  
+                  // Signature section
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.center,
+                        children: [
+                          pw.Text('Người lập phiếu'),
+                          pw.SizedBox(height: 50),
+                          pw.Text('(Ký và ghi rõ họ tên)'),
+                        ],
+                      ),
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.center,
+                        children: [
+                          pw.Text('Thủ kho'),
+                          pw.SizedBox(height: 50),
+                          pw.Text('(Ký và ghi rõ họ tên)'),
+                        ],
+                      ),
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.center,
+                        children: [
+                          pw.Text('Kế toán trưởng'),
+                          pw.SizedBox(height: 50),
+                          pw.Text('(Ký và ghi rõ họ tên)'),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ];
+        },
+      ),
+    );
+    
+    // Print the document
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+      name: 'PhieuTong_${isInput ? "Nhap" : "Xuat"}_${formattedDate.replaceAll('/', '-')}.pdf',
+    );
+    
+    // Show success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Đã tạo phiếu tổng thành công'),
+        backgroundColor: Colors.green,
+      ),
+    );
+    
+  } catch (e) {
+    // Show error message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi khi tạo phiếu tổng: ${e.toString()}'),
+        backgroundColor: Colors.red,
+      ),
+    );
+    print('Error creating comprehensive report: $e');
+  }
+}
 // Add method to show transaction QR code
 void _showTransactionQRCode(GiaoDichKhoModel transaction) async {
   final loHangID = transaction.loHangID!;

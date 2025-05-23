@@ -22,6 +22,7 @@ import 'hs_pxkform.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'hs_pycform.dart';
 import 'hs_donhangxnk.dart';
+import 'package:table_calendar/table_calendar.dart';
 
 class HSDonHangXNKDailyScreen extends StatefulWidget {
   final String? username;
@@ -33,24 +34,6 @@ class HSDonHangXNKDailyScreen extends StatefulWidget {
 }
 
 class _HSDonHangXNKDailyScreenState extends State<HSDonHangXNKDailyScreen> {
-  Future<double> _getInventoryQuantity(String? idHang) async {
-  if (idHang == null || idHang.isEmpty) return 0;
-  try {
-    // Extract the product code from idHang if it contains " - "
-    String productCode = idHang.contains(" - ") ? idHang.split(" - ")[0] : idHang;
-    // Query TonKho table for HN or HN2 warehouses
-    final inventoryItems = await _dbHelper.getTonKhoByMaHangAndKho(productCode, ['HN', 'HN2']);
-    // Sum up quantities from both warehouses
-    double totalQuantity = 0;
-    for (var item in inventoryItems) {
-      totalQuantity += item.soLuongHienTai ?? 0;
-    }
-    return totalQuantity;
-  } catch (e) {
-    print('Error getting inventory quantity: $e');
-    return 0;
-  }
-}
   final DBHelper _dbHelper = DBHelper();
   late String _username = '';
   List<DonHangModel> _orders = [];
@@ -114,7 +97,355 @@ class _HSDonHangXNKDailyScreenState extends State<HSDonHangXNKDailyScreen> {
     _cleanupTimer?.cancel();
     super.dispose();
   }
+Future<void> _scheduleDeliveryDate(ChiTietDonModel item, int itemIndex) async {
+  DateTime selectedDate = DateTime.now();
+  
+  showDialog(
+    context: context,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: Text('Hẹn ngày nhập'),
+            content: Container(
+              width: double.maxFinite,
+              height: 400,
+              child: Column(
+                children: [
+                  Text(
+                    'Chọn ngày nhập cho: ${item.tenHang ?? 'N/A'}',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: 16),
+                  Expanded(
+                    child: TableCalendar<DateTime>(
+                      firstDay: DateTime.now(),
+                      lastDay: DateTime.now().add(Duration(days: 365)),
+                      focusedDay: selectedDate,
+                      calendarFormat: CalendarFormat.month,
+                      selectedDayPredicate: (day) {
+                        return isSameDay(selectedDate, day);
+                      },
+                      onDaySelected: (selectedDay, focusedDay) {
+                        if (selectedDay.isBefore(DateTime.now().subtract(Duration(days: 1)))) {
+                          // Don't allow selection of past dates
+                          return;
+                        }
+                        setState(() {
+                          selectedDate = selectedDay;
+                        });
+                      },
+                      calendarStyle: CalendarStyle(
+                        outsideDaysVisible: false,
+                        selectedDecoration: BoxDecoration(
+                          color: Color(0xFF534b0d),
+                          shape: BoxShape.circle,
+                        ),
+                        todayDecoration: BoxDecoration(
+                          color: Color(0xFF837826),
+                          shape: BoxShape.circle,
+                        ),
+                        disabledDecoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      headerStyle: HeaderStyle(
+                        formatButtonVisible: false,
+                        titleCentered: true,
+                        titleTextStyle: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      enabledDayPredicate: (day) {
+                        // Disable past dates
+                        return !day.isBefore(DateTime.now().subtract(Duration(days: 1)));
+                      },
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.calendar_today, color: Color(0xFF534b0d)),
+                        SizedBox(width: 8),
+                        Text(
+                          'Ngày đã chọn: ${DateFormat('dd/MM/yyyy').format(selectedDate)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                child: Text('Hủy'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _confirmAndSubmitDeliveryDate(item, selectedDate);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFF534b0d),
+                  foregroundColor: Colors.white,
+                ),
+                child: Text('Xác nhận'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
 
+Future<void> _confirmAndSubmitDeliveryDate(ChiTietDonModel item, DateTime selectedDate) async {
+  final formattedDate = DateFormat('yyyy-MM-dd').format(selectedDate);
+  final displayDate = DateFormat('dd/MM/yyyy').format(selectedDate);
+  
+  showDialog(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: Text('Xác nhận hẹn ngày nhập'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Sản phẩm: ${item.tenHang ?? 'N/A'}'),
+            SizedBox(height: 8),
+            Text('Mã hàng: ${item.maHang ?? 'N/A'}'),
+            SizedBox(height: 8),
+            Text('Số phiếu: ${item.soPhieu ?? 'N/A'}'),
+            SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue[200]!),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.event, color: Colors.blue[700]),
+                  SizedBox(width: 8),
+                  Text(
+                    'Ngày nhập dự kiến: $displayDate',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue[700],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Bạn có chắc chắn muốn hẹn ngày nhập này?',
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: Text('Hủy'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _submitDeliveryDate(item, formattedDate);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFF534b0d),
+              foregroundColor: Colors.white,
+            ),
+            child: Text('Xác nhận'),
+          ),
+        ],
+      );
+    },
+  );
+}
+Future<void> _submitDeliveryDate(ChiTietDonModel item, String formattedDate) async {
+  // Show loading dialog
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) {
+      return AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Đang cập nhật ngày nhập...'),
+          ],
+        ),
+      );
+    },
+  );
+
+  try {
+    // Prepare the update data using the EXACT same structure as your existing submission
+    final itemData = {
+      'UID': item.uid,
+      'SoPhieu': item.soPhieu,
+      'TrangThai': item.trangThai,
+      'TenHang': item.tenHang,
+      'MaHang': item.maHang,
+      'DonViTinh': item.donViTinh,
+      'SoLuongYeuCau': item.soLuongYeuCau,
+      'DonGia': item.donGia,
+      'ThanhTien': item.thanhTien,
+      'SoLuongThucGiao': item.soLuongThucGiao,
+      'ChiNhanh': item.chiNhanh,
+      'IdHang': item.idHang,
+      'SoLuongKhachNhan': item.soLuongKhachNhan,
+      'Duyet': item.duyet,
+      'XuatXuHangKhac': item.xuatXuHangKhac,
+      'BaoGia': item.baoGia,
+      'HinhAnh': item.hinhAnh,
+      'GhiChu': formattedDate, // Update GhiChu with the selected date
+      'PhanTramVAT': item.phanTramVAT,
+      'VAT': item.vat,
+      'TenKhachHang': item.tenKhachHang,
+      'UpdateTime': DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
+    };
+
+    final response = await http.post(
+      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelchitietdonmoi'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(itemData),
+    );
+
+    // Close loading dialog
+    Navigator.pop(context);
+
+    if (response.statusCode == 200) {
+      // Success
+      showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green),
+                SizedBox(width: 8),
+                Text('Thành công'),
+              ],
+            ),
+            content: Text('Đã cập nhật ngày nhập thành công!'),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  // Refresh the data
+                  _loadOrders();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+                child: Text('OK'),
+              ),
+            ],
+          );
+        },
+      );
+    } else {
+      // Error
+      showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.error, color: Colors.red),
+                SizedBox(width: 8),
+                Text('Lỗi'),
+              ],
+            ),
+            content: Text('Không thể cập nhật ngày nhập. Mã lỗi: ${response.statusCode}'),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                ),
+                child: Text('OK'),
+              ),
+            ],
+          );
+        },
+      );
+    }
+  } catch (e) {
+    // Close loading dialog
+    Navigator.pop(context);
+    
+    // Show error dialog
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.error, color: Colors.red),
+              SizedBox(width: 8),
+              Text('Lỗi'),
+            ],
+          ),
+          content: Text('Đã xảy ra lỗi: $e'),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+// Helper method to check if GhiChu contains a date
+bool _isDateInGhiChu(String? ghiChu) {
+  if (ghiChu == null || ghiChu.trim().isEmpty) {
+    return false;
+  }
+  
+  // Check if GhiChu contains a date pattern (YYYY-MM-DD)
+  final dateRegex = RegExp(r'\d{4}-\d{2}-\d{2}');
+  return dateRegex.hasMatch(ghiChu);
+}
   Future<void> _exportToExcel() async {
     try {
       setState(() {
@@ -2051,7 +2382,20 @@ class _HSDonHangXNKDailyScreenState extends State<HSDonHangXNKDailyScreen> {
       }
     });
   }
-
+String _formatDateFromGhiChu(String ghiChu) {
+  final dateRegex = RegExp(r'(\d{4}-\d{2}-\d{2})');
+  final match = dateRegex.firstMatch(ghiChu);
+  
+  if (match != null) {
+    try {
+      final date = DateTime.parse(match.group(1)!);
+      return DateFormat('dd/MM/yyyy').format(date);
+    } catch (e) {
+      return ghiChu;
+    }
+  }
+  return ghiChu;
+}
   Future<void> _loadOrderItems(String soPhieu) async {
     // Show loading indicator
     showDialog(
@@ -2260,145 +2604,174 @@ class _HSDonHangXNKDailyScreenState extends State<HSDonHangXNKDailyScreen> {
                     ),
 
                     // List of items
-                    ...items.map((item) => Card(
-                      margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      child: Padding(
-                        padding: EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    item.idHang != null
-                                        ? item.idHang!.contains(" - ")
-                                        ? item.idHang!.split(" - ")[1]
-                                        : item.idHang!
-                                        : 'N/A',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(width: 8),
-                                Text(
-                                  _formatCurrency(item.thanhTien),
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: Colors.green[700],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Text(
-                                  'Mã hàng: ',
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                Text(
-                                  item.maHang ?? 'N/A',
-                                  style: TextStyle(fontSize: 14),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Row(
-                                    children: [
-                                      Text(
-                                        'SL: ',
-                                        style: TextStyle(
-                                          color: Colors.grey[600],
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                      Text(
-                                        '${item.soLuongYeuCau ?? 0} ${item.donViTinh ?? ''}',
-                                        style: TextStyle(fontSize: 14),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Row(
+                    ...items.asMap().entries.map((entry) {
+  final int itemIndex = entry.key;
+  final ChiTietDonModel item = entry.value;
+  
+  // Check if we should show the "Hẹn ngày nhập" button
+  final shouldShowScheduleButton = 
+      (order.trangThai?.toLowerCase() ?? '') == 'xnk đặt hàng đã duyệt' &&
+      !_isDateInGhiChu(item.ghiChu);
+  
+  return Card(
+    margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    child: Padding(
+      padding: EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  item.idHang != null
+                      ? item.idHang!.contains(" - ")
+                      ? item.idHang!.split(" - ")[1]
+                      : item.idHang!
+                      : 'N/A',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+              SizedBox(width: 8),
+              Text(
+                _formatCurrency(item.thanhTien),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: Colors.green[700],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8),
+          Row(
             children: [
               Text(
-                'NVKD: ',
+                'Mã hàng: ',
                 style: TextStyle(
                   color: Colors.grey[600],
                   fontSize: 14,
                 ),
               ),
               Text(
-                item.baoGia ?? '?',
+                item.maHang ?? 'N/A',
                 style: TextStyle(fontSize: 14),
               ),
             ],
           ),
-        ],
-      ),
-      SizedBox(height: 4),
-      // Add inventory information here
-      FutureBuilder<double>(
-        future: _getInventoryQuantity(item.idHang),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Row(
-              children: [
-                Text(
-                  'Tồn kho HN: ',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
-                  ),
-                ),
-                SizedBox(
-                  width: 12,
-                  height: 12,
-                  child: CircularProgressIndicator(strokeWidth: 1),
-                ),
-              ], 
-            );
-          }
-          
-          double inventoryQty = snapshot.data ?? 0;
-          Color inventoryColor = inventoryQty > 0 ? Colors.blue[700]! : Colors.red[700]!;
-          
-          return Row(
+          SizedBox(height: 4),
+          Row(
             children: [
-              Text(
-                'Tồn kho HN: ',
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 14,
+              Expanded(
+                child: Row(
+                  children: [
+                    Text(
+                      'SL: ',
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 14,
+                      ),
+                    ),
+                    Text(
+                      '${item.soLuongYeuCau ?? 0} ${item.donViTinh ?? ''}',
+                      style: TextStyle(fontSize: 14),
+                    ),
+                  ],
                 ),
               ),
-              Text(
-                '${inventoryQty.toStringAsFixed(0)} ${item.donViTinh ?? ''}',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: inventoryColor,
-                ),
+              Row(
+                children: [
+                  Text(
+                    'NVKD: ',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 14,
+                    ),
+                  ),
+                  Text(
+                    item.baoGia ?? '?',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ],
               ),
             ],
-          );
-        },
+          ),
+          
+          // Show GhiChu if it exists
+          if (item.ghiChu != null && item.ghiChu!.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: _isDateInGhiChu(item.ghiChu) ? Colors.green[50] : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: _isDateInGhiChu(item.ghiChu) ? Colors.green[200]! : Colors.grey[300]!,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _isDateInGhiChu(item.ghiChu) ? Icons.event : Icons.note,
+                      size: 16,
+                      color: _isDateInGhiChu(item.ghiChu) ? Colors.green[700] : Colors.grey[600],
+                    ),
+                    SizedBox(width: 4),
+                    Text(
+                      _isDateInGhiChu(item.ghiChu) ? 'Ngày nhập: ' : 'Ghi chú: ',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _isDateInGhiChu(item.ghiChu) ? Colors.green[700] : Colors.grey[600],
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        _isDateInGhiChu(item.ghiChu) 
+                            ? _formatDateFromGhiChu(item.ghiChu!)
+                            : item.ghiChu!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: _isDateInGhiChu(item.ghiChu) ? FontWeight.bold : FontWeight.normal,
+                          color: _isDateInGhiChu(item.ghiChu) ? Colors.green[700] : Colors.grey[700],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          
+          // Show "Hẹn ngày nhập" button if conditions are met
+          if (shouldShowScheduleButton)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: Icon(Icons.event_available, size: 16),
+                  label: Text('Hẹn ngày nhập'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[600],
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  onPressed: () {
+                    _scheduleDeliveryDate(item, itemIndex);
+                  },
+                ),
+              ),
+            ),
+        ],
       ),
-    ],
-  ),
-),
-)).toList(),
+    ),
+  );
+}).toList(),
+
                     // Footer with totals
                     Container(
                       padding: EdgeInsets.all(16),

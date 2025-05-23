@@ -190,8 +190,10 @@ class _HSXuHuongKDScreenState extends State<HSXuHuongKDScreen> {
               );
 
               // Get actual quantity and unit price for calculations
-              final itemQuantity = item.soLuongYeuCau ?? 0.0; // <--- Use soLuongYeuCau for quantity
-              final itemTotalAmount = (item.thanhTien ?? 0).toDouble(); // <--- Use thanhTien for total amount
+              // Use soLuongYeuCau for quantity
+              final itemQuantity = item.soLuongYeuCau ?? 0.0;
+              // Use thanhTien for total amount, as it's directly available from item
+              final itemTotalAmount = (item.thanhTien ?? 0).toDouble();
 
               // Aggregate revenue and total quantity sold by brand
               final brand = dsHangItem.thuongHieu ?? 'Không rõ thương hiệu';
@@ -361,266 +363,364 @@ class _HSXuHuongKDScreenState extends State<HSXuHuongKDScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final Color appBarTop = const Color(0xFF534b0d);
-    final Color appBarBottom = const Color(0xFFb2a41f);
-    final Color cardBgColor = const Color(0xFFFAFAFA);
+  // Helper for generating pie chart sections
+  List<PieChartSectionData> _getPieChartSections(Map<String, double> dataMap, double totalRevenue, {bool isBrandChart = true}) {
+    List<Color> pieColors = [
+      Colors.blue, Colors.green, Colors.orange, Colors.purple, Colors.red,
+      Colors.teal, Colors.brown, Colors.indigo, Colors.cyan, Colors.deepOrange
+    ];
 
-    // Filtered products for display
-    final List<MapEntry<String, double>> filteredProducts = _revenueByProduct.entries
-        .where((entry) {
-          if (_selectedProductBrandFilter == 'Tất cả thương hiệu') {
-            return true;
-          }
-          // Find the brand for the product to filter from the _allDSHangItems list
-          // Ensure _allDSHangItems is not empty before trying to find
-          if (_allDSHangItems.isEmpty) return false;
-
-          final correspondingItem = _allDSHangItems.firstWhere(
-            (dsItem) => dsItem.tenSanPham == entry.key, // Assuming tenSanPham is unique per product
-            orElse: () => DSHangModel(), // Return empty model if not found
-          );
-          return correspondingItem.thuongHieu == _selectedProductBrandFilter;
-        })
-        .toList();
-
-    // Sort products by revenue descending
-    filteredProducts.sort((a, b) => b.value.compareTo(a.value));
-
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Xu hướng kinh doanh & bán hàng',
-          style: TextStyle(fontSize: 18, color: Colors.yellow),
+    if (dataMap.isEmpty || totalRevenue == 0) { // Added check for totalRevenue == 0
+      return [
+        PieChartSectionData(
+          color: Colors.grey,
+          value: 100, // Represent 100% of no data
+          title: 'Không có dữ liệu',
+          radius: 60,
+          titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+          // Removed badgeRadian
         ),
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [appBarTop, appBarBottom],
-            ),
-          ),
+      ];
+    }
+
+    // Sort entries by revenue descending
+    final sortedEntries = dataMap.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    // Show top N slices and group the rest as 'Other'
+    const int maxSlices = 5; // Adjust as needed
+    double otherRevenue = 0.0;
+    List<MapEntry<String, double>> topSlices = [];
+
+    if (sortedEntries.length > maxSlices) {
+      topSlices = sortedEntries.sublist(0, maxSlices -1); // leave one slot for 'Other'
+      otherRevenue = sortedEntries.sublist(maxSlices -1).fold(0.0, (sum, entry) => sum + entry.value);
+    } else {
+      topSlices = sortedEntries;
+    }
+
+
+    List<PieChartSectionData> sections = [];
+    int colorIndex = 0;
+
+    for (var entry in topSlices) {
+      final percentage = (entry.value / totalRevenue * 100).toStringAsFixed(1);
+      sections.add(
+        PieChartSectionData(
+          color: pieColors[colorIndex % pieColors.length],
+          value: entry.value,
+          title: '${entry.key}\n${percentage}%',
+          radius: 80,
+          titleStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+          badgeWidget: null, // No badge for simplicity
+          // Removed badgeRadian
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _isLoading ? null : () => _setAndCalculateDateRange(_selectedPeriodType, _selectedPeriodValue),
-          ),
-        ],
+      );
+      colorIndex++;
+    }
+
+    if (otherRevenue > 0) {
+      final otherPercentage = (otherRevenue / totalRevenue * 100).toStringAsFixed(1);
+      sections.add(
+        PieChartSectionData(
+          color: Colors.grey, // Consistent color for 'Other'
+          value: otherRevenue,
+          title: 'Khác\n${otherPercentage}%',
+          radius: 80,
+          titleStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+          badgeWidget: null,
+          // Removed badgeRadian
+        ),
+      );
+    }
+
+    return sections;
+  }
+
+@override
+Widget build(BuildContext context) {
+  final Color appBarTop = const Color(0xFF534b0d);
+  final Color appBarBottom = const Color(0xFFb2a41f);
+  final Color cardBgColor = const Color(0xFFFAFAFA);
+
+  // Filtered products for display
+  final List<MapEntry<String, double>> filteredProducts = _revenueByProduct.entries
+      .where((entry) {
+        if (_selectedProductBrandFilter == 'Tất cả thương hiệu') {
+          return true;
+        }
+        // Find the brand for the product to filter from the _allDSHangItems list
+        // Ensure _allDSHangItems is not empty before trying to find
+        if (_allDSHangItems.isEmpty) return false;
+
+        final correspondingItem = _allDSHangItems.firstWhere(
+          (dsItem) => dsItem.tenSanPham == entry.key, // Assuming tenSanPham is unique per product
+          orElse: () => DSHangModel(), // Return empty model if not found
+        );
+        return correspondingItem.thuongHieu == _selectedProductBrandFilter;
+      })
+      .toList();
+
+  // Sort products by revenue descending
+  filteredProducts.sort((a, b) => b.value.compareTo(a.value));
+
+  // Calculate total revenue for filtered products to get correct percentages for product pie chart
+  final double totalFilteredProductRevenue = filteredProducts.fold(0.0, (sum, entry) => sum + entry.value);
+
+  return Scaffold(
+    appBar: AppBar(
+      title: const Text(
+        'Xu hướng kinh doanh & bán hàng',
+        style: TextStyle(fontSize: 18, color: Colors.yellow),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildSectionTitle('Lọc dữ liệu'),
-                  Card(
-                    elevation: 2,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: DropdownButtonFormField<String>(
-                                  value: _selectedPeriodType,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Loại kỳ',
-                                    border: OutlineInputBorder(),
-                                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                  ),
-                                  items: const [
-                                    DropdownMenuItem(value: 'Tháng', child: Text('Theo tháng')),
-                                    DropdownMenuItem(value: 'Quý', child: Text('Theo quý')),
-                                  ],
-                                  onChanged: (value) {
-                                    if (value != null) {
-                                      _selectedPeriodType = value;
-                                      // Reset period value to a default for the new type (most recent)
-                                      _setAndCalculateDateRange(value, _generatePeriods(value).first);
-                                    }
-                                  },
+      flexibleSpace: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [appBarTop, appBarBottom],
+          ),
+        ),
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.refresh),
+          onPressed: _isLoading ? null : () => _setAndCalculateDateRange(_selectedPeriodType, _selectedPeriodValue),
+        ),
+      ],
+    ),
+    body: _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildSectionTitle('Lọc dữ liệu'),
+                Card(
+                  elevation: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: _selectedPeriodType,
+                                decoration: const InputDecoration(
+                                  labelText: 'Loại kỳ',
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                 ),
+                                items: const [
+                                  DropdownMenuItem(value: 'Tháng', child: Text('Theo tháng')),
+                                  DropdownMenuItem(value: 'Quý', child: Text('Theo quý')),
+                                ],
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    _selectedPeriodType = value;
+                                    // Reset period value to a default for the new type (most recent)
+                                    _setAndCalculateDateRange(value, _generatePeriods(value).first);
+                                  }
+                                },
                               ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: DropdownButtonFormField<String>(
-                                  value: _selectedPeriodValue,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Chọn kỳ',
-                                    border: OutlineInputBorder(),
-                                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                  ),
-                                  items: _generatePeriods(_selectedPeriodType).map((period) {
-                                    return DropdownMenuItem(value: period, child: Text(period));
-                                  }).toList(),
-                                  onChanged: (value) {
-                                    if (value != null) {
-                                      _setAndCalculateDateRange(_selectedPeriodType, value);
-                                    }
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          DropdownButtonFormField<String>(
-                            value: _selectedSaleAgent,
-                            decoration: const InputDecoration(
-                              labelText: 'Người tạo đơn',
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                             ),
-                            items: _availableSaleAgents.map((agent) {
-                              return DropdownMenuItem(value: agent, child: Text(agent));
-                            }).toList(),
-                            onChanged: (value) {
-                              if (value != null) {
-                                setState(() {
-                                  _selectedSaleAgent = value;
-                                });
-                                _calculateStats(); // Recalculate with new agent filter
-                              }
-                            },
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: _selectedPeriodValue,
+                                decoration: const InputDecoration(
+                                  labelText: 'Chọn kỳ',
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                ),
+                                items: _generatePeriods(_selectedPeriodType).map((period) {
+                                  return DropdownMenuItem(value: period, child: Text(period));
+                                }).toList(),
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    _setAndCalculateDateRange(_selectedPeriodType, value);
+                                  }
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<String>(
+                          value: _selectedSaleAgent,
+                          decoration: const InputDecoration(
+                            labelText: 'Người tạo đơn',
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                           ),
-                        ],
-                      ),
+                          items: _availableSaleAgents.map((agent) {
+                            return DropdownMenuItem(value: agent, child: Text(agent));
+                          }).toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() {
+                                _selectedSaleAgent = value;
+                              });
+                              _calculateStats(); // Recalculate with new agent filter
+                            }
+                          },
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                ),
+                const SizedBox(height: 24),
 
-                  _buildSectionTitle('Thống kê tổng quan'),
-                  Card(
-                    elevation: 2,
-                    color: cardBgColor,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        children: [
-                          _buildSummaryItem(
-                            title: 'Tổng số đơn hoàn thành',
-                            value: _totalCompletedOrders.toString(),
-                            icon: Icons.assignment_turned_in,
-                            color: Colors.blue,
-                          ),
-                          const Divider(),
-                          _buildSummaryItem(
-                            title: 'Tổng doanh thu',
-                            value: _formatCurrency(_totalRevenue),
-                            icon: Icons.payments,
-                            color: Colors.green,
-                          ),
-                          const Divider(),
-                          _buildSummaryItem(
-                            title: 'Tổng số mặt hàng đã bán',
-                            value: _uniqueCompletedItems.toString(),
-                            icon: Icons.shopping_basket,
-                            color: Colors.orange,
-                          ),
-                        ],
-                      ),
+                _buildSectionTitle('Thống kê tổng quan'),
+                Card(
+                  elevation: 2,
+                  color: cardBgColor,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      children: [
+                        _buildSummaryItem(
+                          title: 'Tổng số đơn hoàn thành',
+                          value: _totalCompletedOrders.toString(),
+                          icon: Icons.assignment_turned_in,
+                          color: Colors.blue,
+                        ),
+                        const Divider(),
+                        _buildSummaryItem(
+                          title: 'Tổng doanh thu',
+                          value: _formatCurrency(_totalRevenue),
+                          icon: Icons.payments,
+                          color: Colors.green,
+                        ),
+                        const Divider(),
+                        _buildSummaryItem(
+                          title: 'Tổng số mặt hàng đã bán',
+                          value: _uniqueCompletedItems.toString(),
+                          icon: Icons.shopping_basket,
+                          color: Colors.orange,
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                ),
+                const SizedBox(height: 24),
 
-                  _buildSectionTitle('Biểu đồ doanh thu'),
-                  _chartDataRevenue.isEmpty
-                      ? const Center(child: Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: Text('Không có dữ liệu doanh thu để hiển thị biểu đồ.'),
-                        ))
-                      : Card(
-                          elevation: 2,
-                          color: cardBgColor,
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: SizedBox(
-                              height: 200,
-                              child: BarChart(
-                                BarChartData(
-                                  barGroups: _chartDataRevenue.entries.map((entry) {
-                                    final index = _chartDataRevenue.keys.toList().indexOf(entry.key);
-                                    return BarChartGroupData(
-                                      x: index,
-                                      barRods: [
-                                        BarChartRodData(
-                                          toY: entry.value / 1000000, // Display in millions for better scale
-                                          color: Colors.indigoAccent,
-                                          width: _selectedPeriodType == 'Tháng' ? 10 : 20, // Narrower for daily, wider for monthly in quarter
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                      ],
-                                    );
-                                  }).toList(),
-                                  titlesData: FlTitlesData(
-                                    show: true,
-                                    bottomTitles: AxisTitles(
-                                      sideTitles: SideTitles(
-                                        showTitles: true,
-                                        getTitlesWidget: (value, meta) {
-                                          final index = value.toInt();
-                                          if (index >= 0 && index < _chartDataRevenue.keys.length) {
-                                            String labelKey = _chartDataRevenue.keys.toList()[index];
-                                            if (_selectedPeriodType == 'Tháng') {
-                                              // Daily breakdown for the selected month
-                                              return SideTitleWidget(
-                                                axisSide: meta.axisSide,
-                                                child: Text(DateFormat('dd').format(DateTime.parse(labelKey))), // Just the day
-                                              );
-                                            }
-                                            // Monthly breakdown for the selected quarter
+                _buildSectionTitle('Biểu đồ doanh thu theo thời gian'),
+                _chartDataRevenue.isEmpty
+                    ? const Center(child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Text('Không có dữ liệu doanh thu để hiển thị biểu đồ.'),
+                      ))
+                    : Card(
+                        elevation: 2,
+                        color: cardBgColor,
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: SizedBox(
+                            height: 200,
+                            child: BarChart(
+                              BarChartData(
+                                barGroups: _chartDataRevenue.entries.map((entry) {
+                                  final index = _chartDataRevenue.keys.toList().indexOf(entry.key);
+                                  return BarChartGroupData(
+                                    x: index,
+                                    barRods: [
+                                      BarChartRodData(
+                                        toY: entry.value / 1000000, 
+                                        color: Colors.indigoAccent,
+                                        width: _selectedPeriodType == 'Tháng' ? 10 : 20, 
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                    ],
+                                  );
+                                }).toList(),
+                                titlesData: FlTitlesData(
+                                  show: true,
+                                  bottomTitles: AxisTitles(
+                                    sideTitles: SideTitles(
+                                      showTitles: true,
+                                      getTitlesWidget: (value, meta) {
+                                        final index = value.toInt();
+                                        if (index >= 0 && index < _chartDataRevenue.keys.length) {
+                                          String labelKey = _chartDataRevenue.keys.toList()[index];
+                                          if (_selectedPeriodType == 'Tháng') {
+                                            // Daily breakdown for the selected month
                                             return SideTitleWidget(
                                               axisSide: meta.axisSide,
-                                              child: Text(DateFormat('MM/yy').format(DateTime.parse('$labelKey-01'))), // Month/Year
+                                              child: Text(DateFormat('dd').format(DateTime.parse(labelKey))), // Just the day
                                             );
                                           }
-                                          return const Text('');
-                                        },
-                                        reservedSize: 30,
-                                      ),
+                                          // Monthly breakdown for the selected quarter
+                                          return SideTitleWidget(
+                                            axisSide: meta.axisSide,
+                                            child: Text(DateFormat('MM/yy').format(DateTime.parse('$labelKey-01'))), // Month/Year
+                                          );
+                                        }
+                                        return const Text('');
+                                      },
+                                      reservedSize: 30,
                                     ),
-                                    leftTitles: AxisTitles(
-                                      sideTitles: SideTitles(
-                                        showTitles: true,
-                                        getTitlesWidget: (value, meta) => Text('${value.toInt()} tr'), // Show in millions
-                                        reservedSize: 40,
-                                      ),
-                                    ),
-                                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                                   ),
-                                  borderData: FlBorderData(show: false),
-                                  gridData: const FlGridData(show: true, drawVerticalLine: false),
-                                  alignment: BarChartAlignment.spaceAround,
-                                  maxY: (_chartDataRevenue.values.isNotEmpty ? (_chartDataRevenue.values.reduce((a, b) => a > b ? a : b) / 1000000) * 1.2 : 1), // Dynamic max Y, min 1 for empty
-                                  minY: 0,
+                                  leftTitles: AxisTitles(
+                                    sideTitles: SideTitles(
+                                      showTitles: true,
+                                      getTitlesWidget: (value, meta) => Text('${value.toInt()} tr'), 
+                                      reservedSize: 40,
+                                    ),
+                                  ),
+                                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                                 ),
+                                borderData: FlBorderData(show: false),
+                                gridData: const FlGridData(show: true, drawVerticalLine: false),
+                                alignment: BarChartAlignment.spaceAround,
+                                maxY: (_chartDataRevenue.values.isNotEmpty ? (_chartDataRevenue.values.reduce((a, b) => a > b ? a : b) / 1000000) * 1.2 : 1), // Dynamic max Y, min 1 for empty
+                                minY: 0,
                               ),
                             ),
                           ),
                         ),
-                  const SizedBox(height: 24),
+                      ),
+                const SizedBox(height: 24),
 
-                  _buildSectionTitle('Doanh thu theo thương hiệu'),
-                  _revenueByBrand.isEmpty
-                      ? const Center(child: Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: Text('Không có dữ liệu thương hiệu để hiển thị.'),
-                        ))
-                      : Card(
-                          elevation: 2,
-                          color: cardBgColor,
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              children: _revenueByBrand.entries.map((entry) {
+                _buildSectionTitle('Doanh thu theo thương hiệu'),
+                _revenueByBrand.isEmpty
+                    ? const Center(child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Text('Không có dữ liệu thương hiệu để hiển thị.'),
+                      ))
+                    : Card(
+                        elevation: 2,
+                        color: cardBgColor,
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            children: [
+                              // Pie Chart for Revenue by Brand
+                              SizedBox(
+                                height: 200,
+                                child: PieChart(
+                                  PieChartData(
+                                    sections: _getPieChartSections(_revenueByBrand, _totalRevenue, isBrandChart: true),
+                                    sectionsSpace: 2,
+                                    centerSpaceRadius: 40,
+                                    pieTouchData: PieTouchData(touchCallback: (FlTouchEvent event, pieTouchResponse) {
+                                      setState(() {
+                                        if (!event.isInterestedForInteractions || pieTouchResponse == null || pieTouchResponse.touchedSection == null) {
+                                          // _touchedIndex = -1;
+                                          return;
+                                        }
+                                        // Handle touch events if needed, e.g., show tooltip
+                                      });
+                                    }),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              ..._revenueByBrand.entries.map((entry) {
                                 final brand = entry.key;
                                 final revenue = entry.value;
                                 final totalUnits = _totalQuantitySoldByBrand[brand] ?? 0.0;
@@ -663,149 +763,179 @@ class _HSXuHuongKDScreenState extends State<HSXuHuongKDScreen> {
                                   ),
                                 );
                               }).toList(),
-                            ),
+                            ],
                           ),
                         ),
-                  const SizedBox(height: 24),
-
-                  _buildSectionTitle('Doanh thu theo sản phẩm'),
-                  Card(
-                    elevation: 2,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Product Brand Filter Dropdown
-                          DropdownButtonFormField<String>(
-                            value: _selectedProductBrandFilter,
-                            decoration: const InputDecoration(
-                              labelText: 'Lọc theo thương hiệu',
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            ),
-                            items: _availableBrandsForProductFilter.map((brand) {
-                              return DropdownMenuItem(value: brand, child: Text(brand));
-                            }).toList(),
-                            onChanged: (value) {
-                              if (value != null) {
-                                setState(() {
-                                  _selectedProductBrandFilter = value;
-                                });
-                                // No need to recalculate _calculateStats(), just rebuilds with filter
-                              }
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          filteredProducts.isEmpty
-                              ? const Center(child: Padding(
-                                  padding: EdgeInsets.all(16.0),
-                                  child: Text('Không có dữ liệu sản phẩm để hiển thị với bộ lọc này.'),
-                                ))
-                              : Column(
-                                  children: filteredProducts.map((entry) {
-                                    final productName = entry.key;
-                                    final revenue = entry.value;
-                                    final totalUnits = _totalQuantitySoldByProduct[productName] ?? 0.0;
-                                    final avgPrice = _avgPriceByProduct[productName] ?? 0.0;
-                                    return Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 4.0),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  productName,
-                                                  style: const TextStyle(fontWeight: FontWeight.bold),
-                                                ),
-                                              ),
-                                              Column(
-                                                crossAxisAlignment: CrossAxisAlignment.end,
-                                                children: [
-                                                  Text(
-                                                    'Doanh thu: ${_formatCurrency(revenue)}',
-                                                    style: const TextStyle(color: Colors.green),
-                                                  ),
-                                                  Text(
-                                                    'Tổng SP bán: ${totalUnits.toInt()} sp',
-                                                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                                                  ),
-                                                  Text(
-                                                    'Giá TB: ${_formatAveragePrice(avgPrice)}',
-                                                    style: TextStyle(color: Colors.blueGrey, fontSize: 12),
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                          if (filteredProducts.last.key != productName) const Divider(), // Add divider between items
-                                        ],
-                                      ),
-                                    );
-                                  }).toList(),
-                                ),
-                        ],
                       ),
+                const SizedBox(height: 24),
+
+                _buildSectionTitle('Doanh thu theo sản phẩm'),
+                Card(
+                  elevation: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Product Brand Filter Dropdown
+                        DropdownButtonFormField<String>(
+                          value: _selectedProductBrandFilter,
+                          decoration: const InputDecoration(
+                            labelText: 'Lọc theo thương hiệu',
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          ),
+                          items: _availableBrandsForProductFilter.map((brand) {
+                            return DropdownMenuItem(value: brand, child: Text(brand));
+                          }).toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() {
+                                _selectedProductBrandFilter = value;
+                              });
+                              // No need to recalculate _calculateStats(), just rebuilds with filter
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        // Pie Chart for Revenue by Product
+                        totalFilteredProductRevenue == 0
+                            ? const Center(child: Padding(
+                                padding: EdgeInsets.all(16.0),
+                                child: Text('Không có dữ liệu sản phẩm để hiển thị biểu đồ.'),
+                              ))
+                            : SizedBox(
+                                height: 200,
+                                child: PieChart(
+                                  PieChartData(
+                                    sections: _getPieChartSections(
+                                      Map.fromIterable(filteredProducts, key: (e) => e.key, value: (e) => e.value),
+                                      totalFilteredProductRevenue,
+                                      isBrandChart: false,
+                                    ),
+                                    sectionsSpace: 2,
+                                    centerSpaceRadius: 40,
+                                    pieTouchData: PieTouchData(touchCallback: (FlTouchEvent event, pieTouchResponse) {
+                                      setState(() {
+                                        if (!event.isInterestedForInteractions || pieTouchResponse == null || pieTouchResponse.touchedSection == null) {
+                                          // _touchedIndex = -1;
+                                          return;
+                                        }
+                                        // Handle touch events if needed, e.g., show tooltip
+                                      });
+                                    }),
+                                  ),
+                                ),
+                              ),
+                        const SizedBox(height: 16),
+                        filteredProducts.isEmpty
+                            ? const Center(child: Padding(
+                                padding: EdgeInsets.all(16.0),
+                                child: Text('Không có dữ liệu sản phẩm để hiển thị với bộ lọc này.'),
+                              ))
+                            : Column(
+                                children: filteredProducts.map((entry) {
+                                  final productName = entry.key;
+                                  final revenue = entry.value;
+                                  final totalUnits = _totalQuantitySoldByProduct[productName] ?? 0.0;
+                                  final avgPrice = _avgPriceByProduct[productName] ?? 0.0;
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                productName,
+                                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                              ),
+                                            ),
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.end,
+                                              children: [
+                                                Text(
+                                                  'Doanh thu: ${_formatCurrency(revenue)}',
+                                                  style: const TextStyle(color: Colors.green),
+                                                ),
+                                                Text(
+                                                  'Tổng SP bán: ${totalUnits.toInt()} sp',
+                                                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                                                ),
+                                                Text(
+                                                  'Giá TB: ${_formatAveragePrice(avgPrice)}',
+                                                  style: TextStyle(color: Colors.blueGrey, fontSize: 12),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                        if (filteredProducts.last.key != productName) const Divider(), // Add divider between items
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                ), // Closing bracket for Card widget
+                const SizedBox(height: 24),
 
-
-                  _buildSectionTitle('Chi tiết đơn hàng hoàn thành'),
-                  _completedOrders.isEmpty
-                      ? const Center(child: Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: Text('Không có đơn hàng hoàn thành trong kỳ đã chọn.'),
-                        ))
-                      : Card(
-                          elevation: 2,
-                          color: cardBgColor,
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: DataTable(
-                              columnSpacing: 20,
-                              dataRowMinHeight: 40,
-                              dataRowMaxHeight: 60,
-                              headingRowColor: MaterialStateProperty.resolveWith((states) => appBarTop.withOpacity(0.1)),
-                              columns: const [
-                                DataColumn(label: Text('Mã Đơn', style: TextStyle(fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('Khách hàng', style: TextStyle(fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('Người tạo', style: TextStyle(fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('TG hoàn thành', style: TextStyle(fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('Tổng cộng', style: TextStyle(fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('Xem chi tiết', style: TextStyle(fontWeight: FontWeight.bold))),
-                              ],
-                              rows: _completedOrders.map((order) {
-                                return DataRow(
-                                  cells: [
-                                    DataCell(Text(order.soPhieu ?? 'N/A')),
-                                    DataCell(Text(order.tenKhachHang ?? 'N/A')),
-                                    DataCell(Text(order.nguoiTao ?? 'N/A')), // Display as is for now in table
-                                    DataCell(Text(_formatDate(order.thoiGianCapNhatTrangThai))),
-                                    DataCell(Text(_formatCurrency((order.tongCong ?? 0).toDouble()))),
-                                    DataCell(
-                                      IconButton(
-                                        icon: const Icon(Icons.info_outline, color: Colors.blue),
-                                        onPressed: () {
-                                          _showOrderDetailsDialog(context, order);
-                                        },
-                                      ),
+                _buildSectionTitle('Chi tiết đơn hàng hoàn thành'),
+                _completedOrders.isEmpty
+                    ? const Center(child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Text('Không có đơn hàng hoàn thành trong kỳ đã chọn.'),
+                      ))
+                    : Card(
+                        elevation: 2,
+                        color: cardBgColor,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: DataTable(
+                            columnSpacing: 20,
+                            dataRowMinHeight: 40,
+                            dataRowMaxHeight: 60,
+                            headingRowColor: MaterialStateProperty.resolveWith((states) => appBarTop.withOpacity(0.1)),
+                            columns: const [
+                              DataColumn(label: Text('Mã Đơn', style: TextStyle(fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text('Khách hàng', style: TextStyle(fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text('Người tạo', style: TextStyle(fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text('TG hoàn thành', style: TextStyle(fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text('Tổng cộng', style: TextStyle(fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text('Xem chi tiết', style: TextStyle(fontWeight: FontWeight.bold))),
+                            ],
+                            rows: _completedOrders.map((order) {
+                              return DataRow(
+                                cells: [
+                                  DataCell(Text(order.soPhieu ?? 'N/A')),
+                                  DataCell(Text(order.tenKhachHang2 ?? 'N/A')),
+                                  DataCell(Text(order.nguoiTao ?? 'N/A')), 
+                                  DataCell(Text(_formatDate(order.thoiGianCapNhatTrangThai))),
+                                  DataCell(Text(_formatCurrency((order.tongCong ?? 0).toDouble()))),
+                                  DataCell(
+                                    IconButton(
+                                      icon: const Icon(Icons.info_outline, color: Colors.blue),
+                                      onPressed: () {
+                                        _showOrderDetailsDialog(context, order);
+                                      },
                                     ),
-                                  ],
-                                );
-                              }).toList(),
-                            ),
+                                  ),
+                                ],
+                              );
+                            }).toList(),
                           ),
                         ),
-                  const SizedBox(height: 50), // Extra space at bottom
-                ],
-              ),
+                      ),
+                const SizedBox(height: 50), // Extra space at bottom
+              ],
             ),
-    );
-  }
+          ),
+  );
+}
 
   Widget _buildSectionTitle(String title) {
     return Padding(
@@ -880,7 +1010,7 @@ class _HSXuHuongKDScreenState extends State<HSXuHuongKDScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildDetailRow('Khách hàng:', order.tenKhachHang ?? 'N/A'),
+                _buildDetailRow('Khách hàng:', order.tenKhachHang2 ?? 'N/A'),
                 _buildDetailRow('Người tạo:', order.nguoiTao ?? 'N/A'),
                 _buildDetailRow('Thời gian hoàn thành:', _formatDate(order.thoiGianCapNhatTrangThai)),
                 _buildDetailRow('Tổng cộng:', _formatCurrency((order.tongCong ?? 0).toDouble())),

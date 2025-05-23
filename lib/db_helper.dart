@@ -114,11 +114,11 @@ class DBHelper {
         },
         onUpgrade: (Database db, int oldVersion, int newVersion) async {
           if (oldVersion < 28) {
-          await db.execute(DatabaseTables.createGoCleanCongViecTable);
-          await db.execute(DatabaseTables.createGoCleanTaiKhoanTable);
-          await db.execute(DatabaseTables.createGoCleanYeuCauTable);
-          await db.execute(DatabaseTables.createKhachHangTable);
-          await db.execute(DatabaseTables.createKhachHangContactTable);
+          //await db.execute(DatabaseTables.createGoCleanCongViecTable);
+          //await db.execute(DatabaseTables.createGoCleanTaiKhoanTable);
+          //await db.execute(DatabaseTables.createGoCleanYeuCauTable);
+          //await db.execute(DatabaseTables.createKhachHangTable);
+          //await db.execute(DatabaseTables.createKhachHangContactTable);
           }
         },
         onOpen: (db) async {

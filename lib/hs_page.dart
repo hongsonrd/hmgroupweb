@@ -76,6 +76,7 @@ class _HSPageState extends State<HSPage> with SingleTickerProviderStateMixin {
     _currentWidget = _buildBlankWidget();
     _syncDonHangAndChiTietOnEnter();
   }
+  
 Future<void> _syncDonHangAndChiTietOnEnter() async {
   try {
     // Only show loading for user feedback, but don't block UI
@@ -621,22 +622,22 @@ Future<void> _syncDonHangAndChiTietOnEnter() async {
                   // Action buttons
                   Row(
                     children: [
-                      _buildActionButton(Icons.add, () {
+                      _buildActionButton(Icons.add, 'Đơn mới', () {
                         setState(() {
                           _selectedRoute = 'add';
                           _currentWidget = HSDonHangMoiScreen();
                         });
                       }),
                       SizedBox(width: 8),
-                      _buildActionButton(Icons.tips_and_updates, () {
+                      _buildActionButton(Icons.tips_and_updates, ' Sơ đồ kho', () {
                         _syncKhuVucKhoChiTietData();
                       }),
                       SizedBox(width: 8),
-                      _buildActionButton(Icons.storefront, () {
+                      _buildActionButton(Icons.storefront, ' DS Hàng, Tồn kho', () {
                         checkVersionAndSyncKhoData();
                       }),
                       SizedBox(width: 8),
-                      _buildActionButton(Icons.refresh, () {
+                      _buildActionButton(Icons.refresh, ' Đơn, Chi tiết đơn', () {
                         checkVersionAndSyncData();
                       }),
                     ],
@@ -668,21 +669,33 @@ Future<void> _syncDonHangAndChiTietOnEnter() async {
     );
   }
 
-  Widget _buildActionButton(IconData icon, VoidCallback onPressed) {
-    return Container(
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        color: Color(0xFF6e6834),
-        shape: BoxShape.circle,
-      ),
-      child: IconButton(
-        padding: EdgeInsets.zero,
-        icon: Icon(icon, color: Colors.white, size: 18),
-        onPressed: onPressed,
-      ),
-    );
-  }
+Widget _buildActionButton(IconData icon, String text, VoidCallback onPressed) {
+  return GestureDetector(
+    onTap: onPressed,
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: Color(0xFF6e6834),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: Colors.white, size: 18),
+        ),
+        SizedBox(width: 4),
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.yellow,
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   Future<void> checkVersionAndSyncData() async {
   // Show progress dialog
