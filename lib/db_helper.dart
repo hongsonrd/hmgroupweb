@@ -140,6 +140,20 @@ class DBHelper {
     rethrow;
   }
 }
+//ADDONXNK
+Future<List<TonKhoModel>> getTonKhoByMaHangAndKho(String maHangID, List<String> khoHangIDs) async {
+  final db = await database;
+  String placeholders = khoHangIDs.map((_) => '?').join(',');
+  List<String> args = [maHangID] + khoHangIDs;
+  final List<Map<String, dynamic>> maps = await db.query(
+    'TonKho',
+    where: 'maHangID = ? AND khoHangID IN ($placeholders)',
+    whereArgs: args,
+  );
+  return List.generate(maps.length, (i) {
+    return TonKhoModel.fromMap(maps[i]);
+  });
+}
 //ADDON DSHANG
 Future<int> getMaxCounter() async {
   final db = await database;

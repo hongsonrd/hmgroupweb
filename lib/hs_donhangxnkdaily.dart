@@ -33,6 +33,24 @@ class HSDonHangXNKDailyScreen extends StatefulWidget {
 }
 
 class _HSDonHangXNKDailyScreenState extends State<HSDonHangXNKDailyScreen> {
+  Future<double> _getInventoryQuantity(String? idHang) async {
+  if (idHang == null || idHang.isEmpty) return 0;
+  try {
+    // Extract the product code from idHang if it contains " - "
+    String productCode = idHang.contains(" - ") ? idHang.split(" - ")[0] : idHang;
+    // Query TonKho table for HN or HN2 warehouses
+    final inventoryItems = await _dbHelper.getTonKhoByMaHangAndKho(productCode, ['HN', 'HN2']);
+    // Sum up quantities from both warehouses
+    double totalQuantity = 0;
+    for (var item in inventoryItems) {
+      totalQuantity += item.soLuongHienTai ?? 0;
+    }
+    return totalQuantity;
+  } catch (e) {
+    print('Error getting inventory quantity: $e');
+    return 0;
+  }
+}
   final DBHelper _dbHelper = DBHelper();
   late String _username = '';
   List<DonHangModel> _orders = [];
@@ -2313,27 +2331,74 @@ class _HSDonHangXNKDailyScreenState extends State<HSDonHangXNKDailyScreen> {
                                   ),
                                 ),
                                 Row(
-                                  children: [
-                                    Text(
-                                      'NVKD: ',
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                    Text(
-                                      item.baoGia??'?',
-                                      style: TextStyle(fontSize: 14),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    )).toList(),
-
+            children: [
+              Text(
+                'NVKD: ',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 14,
+                ),
+              ),
+              Text(
+                item.baoGia ?? '?',
+                style: TextStyle(fontSize: 14),
+              ),
+            ],
+          ),
+        ],
+      ),
+      SizedBox(height: 4),
+      // Add inventory information here
+      FutureBuilder<double>(
+        future: _getInventoryQuantity(item.idHang),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Row(
+              children: [
+                Text(
+                  'Tồn kho HN: ',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 14,
+                  ),
+                ),
+                SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(strokeWidth: 1),
+                ),
+              ], 
+            );
+          }
+          
+          double inventoryQty = snapshot.data ?? 0;
+          Color inventoryColor = inventoryQty > 0 ? Colors.blue[700]! : Colors.red[700]!;
+          
+          return Row(
+            children: [
+              Text(
+                'Tồn kho HN: ',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 14,
+                ),
+              ),
+              Text(
+                '${inventoryQty.toStringAsFixed(0)} ${item.donViTinh ?? ''}',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: inventoryColor,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    ],
+  ),
+),
+)).toList(),
                     // Footer with totals
                     Container(
                       padding: EdgeInsets.all(16),

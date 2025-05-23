@@ -49,7 +49,8 @@ class _HSDonHangMoiScreenState extends State<HSDonHangMoiScreen> {
   TextEditingController _tenNguoiGiaoDichController = TextEditingController();
   TextEditingController _boPhanGiaoDichController = TextEditingController();
   TextEditingController _sdtNguoiGiaoDichController = TextEditingController();
-  
+  TextEditingController _tenNguoiNhanHangController = TextEditingController();
+TextEditingController _sdtNguoiNhanHangController = TextEditingController();
   // Order form values
   String _tapKH = 'KH Truyền thống';
   String _phuongThucThanhToan = 'Chuyển khoản';
@@ -120,9 +121,69 @@ class _HSDonHangMoiScreenState extends State<HSDonHangMoiScreen> {
     _tienGui10Controller.dispose();
     _thueTNDNController.dispose();
     _vanChuyenController.dispose();
+      _tenNguoiNhanHangController.dispose();
+  _sdtNguoiNhanHangController.dispose();
     super.dispose();
   }
-
+void _selectRecipientContact(KhachHangContactModel contact) {
+  setState(() {
+    _tenNguoiNhanHangController.text = contact.hoTen ?? '';
+    _sdtNguoiNhanHangController.text = contact.soDienThoai ?? '';
+  });
+  Navigator.of(context).pop();
+}
+void _showRecipientContactSelectionDialog() {
+  showDialog(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: Text('Chọn người nhận hàng'),
+        content: Container(
+          width: double.maxFinite,
+          child: _customerContacts.isEmpty
+              ? Center(child: Text('Không có người liên hệ cho khách hàng này'))
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _customerContacts.length,
+                  itemBuilder: (context, index) {
+                    final contact = _customerContacts[index];
+                    return ListTile(
+                      title: Text(contact.hoTen ?? 'Không có tên'),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (contact.chucDanh != null && contact.chucDanh!.isNotEmpty)
+                            Text(contact.chucDanh!),
+                          if (contact.soDienThoai != null && contact.soDienThoai!.isNotEmpty)
+                            Text('ĐT: ${contact.soDienThoai}'),
+                        ],
+                      ),
+                      onTap: () => _selectRecipientContact(contact),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            child: Text('Tự nhập'),
+            onPressed: () {
+              // Clear fields for manual entry
+              _tenNguoiNhanHangController.text = '';
+              _sdtNguoiNhanHangController.text = '';
+              Navigator.of(context).pop();
+            },
+          ),
+          TextButton(
+            child: Text('Đóng'),
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+          ),
+        ],
+      );
+    },
+  );
+}
   // ===== CUSTOMER SELECTION METHODS =====
   
   Future<void> _loadKhachHangData() async {
@@ -444,6 +505,8 @@ class _HSDonHangMoiScreenState extends State<HSDonHangMoiScreen> {
     tenNguoiGiaoDich: _tenNguoiGiaoDichController.text,
     boPhanGiaoDich: _boPhanGiaoDichController.text,
     sdtNguoiGiaoDich: _sdtNguoiGiaoDichController.text,
+      nguoiNhanHang: _tenNguoiNhanHangController.text,
+  sdtNguoiNhanHang: _sdtNguoiNhanHangController.text,
     thoiGianDatHang: thoiGianDatHang,
     ngayYeuCauGiao: DateFormat('yyyy-MM-dd').format(_ngayYeuCauGiao),
     thoiGianCapNhatTrangThai: currentDateTime,
@@ -1311,6 +1374,8 @@ if (_orderType == 'Báo giá') {
       'TenNguoiGiaoDich': _newOrder?.tenNguoiGiaoDich,
       'BoPhanGiaoDich': _newOrder?.boPhanGiaoDich,
       'SDTNguoiGiaoDich': _newOrder?.sdtNguoiGiaoDich,
+        'NguoiNhanHang': _newOrder?.nguoiNhanHang,
+  'SDTNguoiNhanHang': _newOrder?.sdtNguoiNhanHang,
       'ThoiGianDatHang': _newOrder?.thoiGianDatHang,
       'NgayYeuCauGiao': _newOrder?.ngayYeuCauGiao,
       'ThoiGianCapNhatTrangThai': _newOrder?.thoiGianCapNhatTrangThai,
@@ -1340,8 +1405,6 @@ if (_orderType == 'Báo giá') {
       'ThueTNDN': thueTNDN,
       'VanChuyen': vanChuyen,
       'ThucThu': thucThu,
-      'NguoiNhanHang': '', // Empty for now
-      'SDTNguoiNhanHang': '', // Empty for now
       'PhieuXuatKho': '', // Empty for now
       'TrangThai': _newOrder?.trangThai,
       'TenKhachHang2': _newOrder?.tenKhachHang2
@@ -2173,7 +2236,37 @@ void _showBatchOperationsDialog() {
           ),
           
           SizedBox(height: 16),
-          
+          Row(
+  children: [
+    IconButton(
+      icon: Icon(Icons.person_search),
+      onPressed: _showRecipientContactSelectionDialog,
+      tooltip: 'Chọn người nhận hàng từ danh sách',
+    ),
+    Expanded(
+      child: TextField(
+        controller: _tenNguoiNhanHangController,
+        decoration: InputDecoration(
+          labelText: 'Tên người nhận hàng',
+          border: OutlineInputBorder(),
+        ),
+      ),
+    ),
+  ],
+),
+
+SizedBox(height: 16),
+
+TextField(
+  controller: _sdtNguoiNhanHangController,
+  decoration: InputDecoration(
+    labelText: 'SĐT người nhận hàng',
+    border: OutlineInputBorder(),
+  ),
+  keyboardType: TextInputType.phone,
+),
+
+SizedBox(height: 16),
           // Số PO
           TextField(
             controller: _poController,

@@ -42,6 +42,7 @@ class AppVersion {
   @override
   String toString() => '$version+$buildNumber';
 }
+
 class HSPage extends StatefulWidget {
   final Map<String, dynamic>? userData;
   
@@ -59,6 +60,10 @@ class _HSPageState extends State<HSPage> with SingleTickerProviderStateMixin {
   bool _videoInitialized = false;
   late TabController _tabController;
   final DBHelper _dbHelper = DBHelper();
+  
+  // Add variables for sidebar navigation
+  String _selectedRoute = ''; // Start with empty/blank
+  Widget _currentWidget = Container(); // Start with empty container
 
   @override
   void initState() {
@@ -68,38 +73,579 @@ class _HSPageState extends State<HSPage> with SingleTickerProviderStateMixin {
     _playVibrationPattern();
     _tabController = TabController(length: 2, vsync: this);
     _checkAndPerformDailySync();
+    _currentWidget = _buildBlankWidget(); // Initialize with blank widget
   }
+
+  // [Keep all your existing methods unchanged - _checkAndPerformDailySync, _playVibrationPattern, etc.]
   Future<void> _checkAndPerformDailySync() async {
-  final prefs = await SharedPreferences.getInstance();
-  final lastSyncDateStr = prefs.getString('last_sync_date');
-  final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-  
-  // If we haven't synced today yet, perform sync
-  if (lastSyncDateStr != today) {
-    await checkVersionAndSyncData();
-    await checkVersionAndSyncKhoData();
-    await prefs.setString('last_sync_date', today);
+    final prefs = await SharedPreferences.getInstance();
+    final lastSyncDateStr = prefs.getString('last_sync_date');
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    
+    if (lastSyncDateStr != today) {
+      await checkVersionAndSyncData();
+      await checkVersionAndSyncKhoData();
+      await prefs.setString('last_sync_date', today);
+    }
   }
-}
+
   Future<void> _playVibrationPattern() async {
     if (await Vibration.hasVibrator() ?? false) {
       Vibration.vibrate(
-  pattern: [
-    0, 100, 50, 100, // da da
-    50, 100, 50, 150, // da da (slightly longer)
-    50, 100, 50, 200, // da da (emphasize)
-    50, 250,          // final "DAAA!"
-  ],
-  intensities: [
-    0, 200, 0, 200,
-    0, 200, 0, 220,
-    0, 220, 0, 230,
-    0, 255
-  ],
-);
-
+        pattern: [0, 100, 50, 100, 50, 100, 50, 150, 50, 100, 50, 200, 50, 250],
+        intensities: [0, 200, 0, 200, 0, 200, 0, 220, 0, 220, 0, 230, 0, 255],
+      );
     }
   }
+
+  // [Keep all your existing sync methods - I'll skip them for brevity]
+
+  void _initializeVideo() {
+    _videoController = VideoPlayerController.asset('assets/appvideohotel.mp4')
+      ..initialize().then((_) {
+        _videoController.setLooping(true);
+        _videoController.setVolume(0.0);
+        _videoController.play();
+        setState(() {
+          _videoInitialized = true;
+        });
+      });
+  }
+
+  @override
+  void dispose() {
+    _videoController.dispose();
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadUserInfo() async {
+    try {
+      if (widget.userData != null && widget.userData!.containsKey('username')) {
+        setState(() {
+          _username = widget.userData!['username'] ?? '';
+        });
+      } else {
+        final userCredentials = Provider.of<UserCredentials>(context, listen: false);
+        setState(() {
+          _username = userCredentials.username;
+        });
+      }
+      
+      if (_username.isEmpty) {
+        setState(() {
+          _message = 'Lỗi: Không tìm thấy thông tin người dùng';
+        });
+      }
+    } catch (e) {
+      print('Error loading user info: $e');
+      setState(() {
+        _message = 'Lỗi: Không thể tải thông tin người dùng';
+      });
+    }
+  }
+
+  // Modified navigation method to update the right panel
+  void _navigateToScreen(String route) {
+    setState(() {
+      _selectedRoute = route;
+      switch (route) {
+        case 'donhang':
+          _currentWidget = HSDonHangScreen(username: _username);
+          break;
+        case 'tonghop':
+          _currentWidget = HSDonHangDailyScreen(username: _username);
+          break;
+        case 'tonkho':
+          _currentWidget = HSDSHangScreen();
+          break;
+        case 'xuatnhap':
+          _currentWidget = HSKhoScreen(username: _username);
+          break;
+        case 'tracuu':
+          _currentWidget = HSKho2Screen(username: _username);
+          break;
+        case 'xnk':
+          _currentWidget = HSDonHangXNKDailyScreen(username: _username);
+          break;
+        case 'dutru':
+          _currentWidget = _buildComingSoonWidget('Dự trù mặt hàng');
+          break;
+        case 'chiso':
+          _currentWidget = _buildComingSoonWidget('Chỉ số tháng của tôi');
+          break;
+        case 'stat':
+          _currentWidget = HSStatScreen();
+          break;
+        default:
+          _currentWidget = _buildBlankWidget();
+      }
+    });
+  }
+
+  // Build blank widget for default state
+  Widget _buildBlankWidget() {
+    return Container(
+      color: Colors.grey[50],
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.hotel,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Chọn một chức năng từ menu bên trái',
+              style: TextStyle(
+                fontSize: 18,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Vui lòng chọn một mục từ danh sách bên trái để bắt đầu',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[500],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Build coming soon widget
+  Widget _buildComingSoonWidget(String feature) {
+    return Container(
+      color: Colors.grey[50],
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.construction, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text(
+              'Tính năng đang phát triển',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Tính năng "$feature" đang được phát triển và sẽ sớm được ra mắt.',
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Build sidebar with video and welcome content
+  Widget _buildSidebar() {
+    final Color appBarTop = Color(0xFF534b0d);
+    final Color appBarBottom = Color(0xFFb2a41f);
+    final Color videoOverlayTop = Color(0xFF7c7318);
+    final Color videoOverlayMiddle = Color(0xFF554d0e);
+    final Color videoOverlayBottom = Color(0xFF5a530f);
+    final Color buttonColor = Color(0xFF837826);
+    final Color smallTextColor = Color(0xFFcdc473);
+
+    final List<List<Color>> iconGradients = [
+      [appBarTop, appBarBottom],
+      [videoOverlayTop, videoOverlayMiddle],
+      [videoOverlayMiddle, videoOverlayBottom],
+      [appBarBottom, videoOverlayTop],
+      [appBarTop, videoOverlayBottom],
+      [videoOverlayTop, appBarBottom],
+      [appBarBottom, videoOverlayMiddle],
+      [videoOverlayMiddle, appBarTop],
+    ];
+
+    final List<Map<String, dynamic>> operationItems = [
+      {
+        'title': 'Đơn hàng của tôi',
+        'icon': Icons.shopping_bag,
+        'colors': iconGradients[0],
+        'route': 'donhang',
+      },
+      {
+        'title': 'Tổng hợp đơn hàng',
+        'icon': Icons.calendar_today,
+        'colors': iconGradients[1],
+        'route': 'tonghop',
+      },
+      {
+        'title': 'Danh sách hàng',
+        'icon': Icons.inventory,
+        'colors': iconGradients[2],
+        'route': 'tonkho',
+      },
+      {
+        'title': 'Xuất, nhập kho',
+        'icon': Icons.swap_horiz,
+        'colors': iconGradients[3],
+        'route': 'xuatnhap',
+      },
+      {
+        'title': 'Tra cứu kho',
+        'icon': Icons.search,
+        'colors': iconGradients[4],
+        'route': 'tracuu',
+      },
+      {
+        'title': 'XNK đặt hàng',
+        'icon': Icons.price_check,
+        'colors': iconGradients[5],
+        'route': 'xnk',
+      },
+      {
+        'title': 'Chỉ số KD',
+        'icon': Icons.insights,
+        'colors': iconGradients[6],
+        'route': 'stat',
+      },
+    ];
+
+    final double bodyTextSize = 14.0;
+    final double buttonTextSize = bodyTextSize - 1.0;
+    final double smallTextSize = bodyTextSize * 0.7;
+    
+    final now = DateTime.now();
+    final formattedDate = DateFormat('dd/MM/yyyy').format(now);
+    final formattedTime = DateFormat('HH:mm').format(now);
+
+    return Container(
+      width: MediaQuery.of(context).size.width * 0.15,
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        border: Border(right: BorderSide(color: Colors.grey[300]!, width: 1)),
+      ),
+      child: Column(
+        children: [
+          // Video section
+          Container(
+            width: double.infinity,
+            child: _videoInitialized
+                ? AspectRatio(
+                    aspectRatio: _videoController.value.aspectRatio,
+                    child: VideoPlayer(_videoController),
+                  )
+                : Container(
+                    height: 120,
+                    child: Center(
+                      child: CircularProgressIndicator(color: Colors.orange),
+                    ),
+                  ),
+          ),
+          
+          // Welcome section
+          Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [videoOverlayTop, videoOverlayMiddle, videoOverlayBottom],
+                stops: [0.0, 0.5, 1.0],
+              ),
+            ),
+            padding: EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+            child: Column(
+              children: [
+                Text(
+                  'Chào mừng đến với Hotel Supply',
+                  style: TextStyle(fontSize: bodyTextSize, color: Colors.white),
+                  textAlign: TextAlign.center,
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 3.0, bottom: 6.0),
+                  child: Text(
+                    _username,
+                    style: TextStyle(
+                      fontSize: bodyTextSize,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                Text(
+                  'Đồng bộ lúc $formattedTime\n$formattedDate',
+                  style: TextStyle(fontSize: smallTextSize, color: smallTextColor),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 11),
+                
+                // Action buttons in column
+                Column(
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _selectedRoute = 'scan';
+                            _currentWidget = HSScanScreen(username: _username);
+                          });
+                        },
+                        icon: Icon(Icons.qr_code_scanner, color: Colors.white, size: 16),
+                        label: Text(
+                          'Tra cứu đơn',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: buttonTextSize,
+                            fontWeight: FontWeight.normal,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: buttonColor,
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          _navigateToScreen('xuatnhap');
+                        },
+                        icon: Icon(Icons.shopping_cart, color: Colors.white, size: 16),
+                        label: Text(
+                          'Vào kho hàng',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: buttonTextSize,
+                            fontWeight: FontWeight.normal,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: buttonColor,
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                
+                // Instructions text
+                Padding(
+                  padding: EdgeInsets.only(top: 11),
+                  child: Text(
+                    'Bấm nút đồng bộ (góc phải trên) để lấy dữ liệu mới',
+                    style: TextStyle(
+                      fontSize: smallTextSize,
+                      color: smallTextColor,
+                      height: 1.3,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Menu header
+          Container(
+            padding: EdgeInsets.all(12),
+            width: double.infinity,
+            color: appBarTop,
+            child: Text(
+              'Chức năng',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          
+          // Navigation items
+          Expanded(
+            child: ListView.builder(
+              padding: EdgeInsets.zero,
+              itemCount: operationItems.length,
+              itemBuilder: (context, index) {
+                final item = operationItems[index];
+                final isSelected = _selectedRoute == item['route'];
+                
+                return Container(
+                  margin: EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: isSelected ? Colors.blue[100] : Colors.transparent,
+                    borderRadius: BorderRadius.circular(6),
+                    border: isSelected ? Border.all(color: Colors.blue[300]!, width: 2) : null,
+                  ),
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    leading: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(4),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: item['colors'],
+                        ),
+                      ),
+                      child: Icon(
+                        item['icon'],
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                    ),
+                    title: Text(
+                      item['title'],
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        color: isSelected ? Colors.blue[800] : Colors.black87,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () {
+                      _navigateToScreen(item['route']);
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Color appBarTop = Color(0xFF534b0d);
+    final Color appBarBottom = Color(0xFFb2a41f);
+    final Color searchBarColor = Color(0xFF6e6834);
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // App bar section
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [appBarTop, appBarBottom],
+                ),
+              ),
+              padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Back button
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: searchBarColor,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      icon: Icon(Icons.arrow_back, color: Colors.white, size: 18),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ),
+                  
+                  // Title
+                  Text(
+                    'Hotel Supply Dashboard',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  
+                  // Action buttons
+                  Row(
+                    children: [
+                      _buildActionButton(Icons.add, () {
+                        setState(() {
+                          _selectedRoute = 'add';
+                          _currentWidget = HSDonHangMoiScreen();
+                        });
+                      }),
+                      SizedBox(width: 8),
+                      _buildActionButton(Icons.tips_and_updates, () {
+                        _syncKhuVucKhoChiTietData();
+                      }),
+                      SizedBox(width: 8),
+                      _buildActionButton(Icons.storefront, () {
+                        checkVersionAndSyncKhoData();
+                      }),
+                      SizedBox(width: 8),
+                      _buildActionButton(Icons.refresh, () {
+                        checkVersionAndSyncData();
+                      }),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            
+            // Main content area with sidebar
+            Expanded(
+              child: Row(
+                children: [
+                  // Left sidebar (15% width)
+                  _buildSidebar(),
+                  
+                  // Right content area (85% width)
+                  Expanded(
+                    child: Container(
+                      color: Colors.white,
+                      child: _currentWidget,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton(IconData icon, VoidCallback onPressed) {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: Color(0xFF6e6834),
+        shape: BoxShape.circle,
+      ),
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        icon: Icon(icon, color: Colors.white, size: 18),
+        onPressed: onPressed,
+      ),
+    );
+  }
+
   Future<void> checkVersionAndSyncData() async {
   // Show progress dialog
   showDialog(
@@ -726,200 +1272,6 @@ Future<void> _syncChiTietDonData() async {
     throw e;
   }
 }
-  void _initializeVideo() {
-    _videoController = VideoPlayerController.asset('assets/appvideohotel.mp4')
-      ..initialize().then((_) {
-        _videoController.setLooping(true);
-        _videoController.setVolume(0.0);
-        _videoController.play();
-        setState(() {
-          _videoInitialized = true;
-        });
-      });
-  }
-
-  @override
-  void dispose() {
-    _videoController.dispose();
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadUserInfo() async {
-    try {
-      // First check if userData was passed to the widget
-      if (widget.userData != null && widget.userData!.containsKey('username')) {
-        setState(() {
-          _username = widget.userData!['username'] ?? '';
-        });
-      } else {
-        // Fall back to UserCredentials provider if no userData was passed
-        final userCredentials = Provider.of<UserCredentials>(context, listen: false);
-        setState(() {
-          _username = userCredentials.username;
-        });
-      }
-      
-      if (_username.isEmpty) {
-        setState(() {
-          _message = 'Lỗi: Không tìm thấy thông tin người dùng';
-        });
-      }
-    } catch (e) {
-      print('Error loading user info: $e');
-      setState(() {
-        _message = 'Lỗi: Không thể tải thông tin người dùng';
-      });
-    }
-  }
-  @override
-Widget build(BuildContext context) {
-  // Colors with hex values
-  final Color appBarTop = Color(0xFF534b0d);
-  final Color appBarBottom = Color(0xFFb2a41f);
-  final Color videoOverlayTop = Color(0xFF7c7318);
-  final Color videoOverlayMiddle = Color(0xFF554d0e);
-  final Color videoOverlayBottom = Color(0xFF5a530f);
-  final Color searchBarColor = Color(0xFF6e6834);
-  final Color buttonColor = Color(0xFF837826);
-  final Color smallTextColor = Color(0xFFcdc473);
-  final Color tabBarColor = Color(0xFF5a530f);
-  final List<List<Color>> iconGradients = [
-      [appBarTop, appBarBottom],
-      [videoOverlayTop, videoOverlayMiddle],
-      [videoOverlayMiddle, videoOverlayBottom],
-      [appBarBottom, videoOverlayTop],
-      [appBarTop, videoOverlayBottom],
-      [videoOverlayTop, appBarBottom],
-      [appBarBottom, videoOverlayMiddle],
-      [videoOverlayMiddle, appBarTop],
-    ];
-  final List<Map<String, dynamic>> operationItems = [
-  {
-    'title': 'Đơn hàng của tôi / Duyệt đơn',
-    'icon': Icons.shopping_bag,
-    'colors': iconGradients[0],
-    'route': 'donhang', // Route identifier
-  },
-  {
-    'title': 'Tổng hợp đơn hàng theo ngày',
-    'icon': Icons.calendar_today,
-    'colors': iconGradients[1],
-    'route': 'tonghop',
-  },
-  {
-    'title': 'Danh sách hàng & tồn kho',
-    'icon': Icons.inventory,
-    'colors': iconGradients[2],
-    'route': 'tonkho',
-  },
-  {
-    'title': 'Xuất, nhập, thao tác kho',
-    'icon': Icons.swap_horiz,
-    'colors': iconGradients[3],
-    'route': 'xuatnhap',
-  },
-  {
-    'title': 'Tra cứu kho hàng',
-    'icon': Icons.search,
-    'colors': iconGradients[4],
-    'route': 'tracuu',
-  },
-  {
-    'title': 'XNK đặt hàng',
-    'icon': Icons.price_check,
-    'colors': iconGradients[5],
-    'route': 'xnk',
-  },
-  {
-    'title': 'Dự trù mặt hàng',
-    'icon': Icons.store,
-    'colors': iconGradients[6],
-    'route': 'dutru',
-  },
-  {
-    'title': 'Chỉ số tháng của tôi',
-    'icon': Icons.insights,
-    'colors': iconGradients[7],
-    'route': 'chiso',
-  },
-];
-  // Check if we're on a large screen (tablet/desktop)
-  final bool isLargeScreen = MediaQuery.of(context).size.width > 600;
-  
-  final double bodyTextSize = 16.0;  
-  final double searchBarTextSize = 14.0;
-  final double smallTextSize = bodyTextSize * 0.6;  
-  final double buttonTextSize = bodyTextSize - 1.0;  
-  
-  final now = DateTime.now();
-  final formattedDate = DateFormat('dd/MM/yyyy').format(now);
-  final formattedTime = DateFormat('HH:mm').format(now);
-  void _showComingSoonDialog(String feature) {
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text('Tính năng đang phát triển'),
-      content: Text('Tính năng "$feature" đang được phát triển và sẽ sớm được ra mắt.'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text('Đóng'),
-        ),
-      ],
-    ),
-  );
-}
-  void _navigateToScreen(String route) {
-  switch (route) {
-    case 'donhang':
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => HSDonHangScreen(username: _username)),
-      );
-      break;
-    case 'tonghop':
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => HSDonHangDailyScreen(username: _username)),
-      );
-      break;
-    case 'tonkho':
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => HSDSHangScreen()),
-      );
-      break;
-    case 'xuatnhap':
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => HSKhoScreen(username: _username)),
-      );
-      break;
-    case 'tracuu':
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => HSKho2Screen(username: _username)),
-      );
-      break;
-    case 'xnk':
-      Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => HSDonHangXNKDailyScreen(username: _username),
-                ),
-              );
-      break;
-    case 'dutru':
-      _showComingSoonDialog('Dự trù mặt hàng');
-      break;
-    case 'chiso':
-      _showComingSoonDialog('Chỉ số tháng của tôi');
-      break;
-    default:
-      print('Unknown route: $route');
-  }
-}
 Future<void> _syncKhuVucKhoChiTietData() async {
   try {
     // Show progress dialog
@@ -1072,405 +1424,5 @@ Future<void> _syncKhuVucKhoChiTietData() async {
     
     throw e;
   }
-}
-  // Build the operations list widget
-  Widget operationsList = SliverList(
-    delegate: SliverChildBuilderDelegate(
-      (context, index) {
-        final item = operationItems[index];
-        return Container(
-          color: index % 2 == 0 ? Colors.white : Color(0xFFF8F8F8),
-          child: ListTile(
-            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            leading: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: item['colors'],
-                ),
-              ),
-              child: Icon(
-                item['icon'],
-                color: Colors.white,
-                size: 22,
-              ),
-            ),
-            title: Text(
-              item['title'],
-              style: TextStyle(
-                fontSize: bodyTextSize,
-                fontWeight: FontWeight.normal,
-              ),
-            ),
-            trailing: Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[400]),
-            onTap: () {
-              _navigateToScreen(item['route']);
-            },
-          ),
-        );
-      },
-      childCount: operationItems.length,
-    ),
-  );
-  
-  // Build the welcome section widget
-  Widget welcomeSection = Container(
-    width: double.infinity,
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [videoOverlayTop, videoOverlayMiddle, videoOverlayBottom],
-        stops: [0.0, 0.5, 1.0],
-      ),
-    ),
-    padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-    child: Column(
-      children: [
-        // Welcome text
-        Text(
-          'Chào mừng đến với Hotel Supply',
-          style: TextStyle(
-            fontSize: bodyTextSize,
-            color: Colors.white,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        
-        // Username text
-        Padding(
-          padding: const EdgeInsets.only(top: 3.0, bottom: 6.0),
-          child: Text(
-            _username,
-            style: TextStyle(
-              fontSize: bodyTextSize,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ),
-        
-        // Last sync time
-        Text(
-          'Dữ liệu đồng bộ lần cuối lúc $formattedTime - $formattedDate',
-          style: TextStyle(
-            fontSize: smallTextSize,
-            color: smallTextColor,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        
-        SizedBox(height: 11),
-        
-        // Action buttons
-        Row(
-          children: [
-            // Track orders button
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => HSScanScreen(username: _username)),
-      );
-                },
-                icon: Icon(
-                  Icons.qr_code_scanner, 
-                  color: Colors.white,
-                  size: 18,
-                ),
-                label: Text(
-                  'Tra cứu đơn',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: buttonTextSize,
-                    fontWeight: FontWeight.normal,
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: buttonColor,
-                  padding: EdgeInsets.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ),
-            
-            SizedBox(width: 16),
-            
-            // Warehouse button
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.push(
-        context,
-                MaterialPageRoute(builder: (context) => HSKhoScreen(username: _username)),
-      );
-                },
-                icon: Icon(
-                  Icons.shopping_cart,
-                  color: Colors.white,
-                  size: 18,
-                ),
-                label: Text(
-                  'Vào kho hàng',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: buttonTextSize,
-                    fontWeight: FontWeight.normal,
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: buttonColor,
-                  padding: EdgeInsets.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        
-        // Instructions text
-        Padding(
-          padding: EdgeInsets.only(top: 11),
-          child: Text(
-            'Vui lòng bấm nút đồng bộ nhanh (trên cùng bên phải) để lấy dữ liệu mới\nNếu bạn là nhân viên kinh doanh, bấm nút + để tạo đơn hàng mới',
-            style: TextStyle(
-              fontSize: smallTextSize,
-              color: smallTextColor,
-              height: 1.5,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ],
-    ),
-  );
-  
-  // Video section widget
-  Widget videoSection = Container(
-    width: double.infinity,
-    child: _videoInitialized
-      ? AspectRatio(
-          aspectRatio: _videoController.value.aspectRatio,
-          child: VideoPlayer(_videoController),
-        )
-      : Container(
-          height: 300,
-          child: Center(
-            child: CircularProgressIndicator(color: Colors.white),
-          ),
-        ),
-  );
-
-  return Scaffold(
-    backgroundColor: Colors.white,
-    body: SafeArea(
-      child: Column(
-        children: [
-          // App bar section with multi-color gradient
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [appBarTop, appBarBottom],
-                stops: [0.0, 1.0],
-              ),
-            ),
-            padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 0),
-            child: Column(
-              children: [
-                // Top row with navigation buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Back button
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: searchBarColor,
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        padding: EdgeInsets.zero,
-                        icon: Icon(Icons.arrow_back, color: Colors.white, size: 18),
-                        onPressed: () {
-                          Navigator.pop(context);
-                        },
-                      ),
-                    ),
-                    
-                    // Right side buttons
-                    Row(
-                      children: [
-                        // Add button
-                        Container(
-                          width: 32,
-                          height: 32,
-                          margin: EdgeInsets.only(right: 12),
-                          decoration: BoxDecoration(
-                            color: searchBarColor,
-                            shape: BoxShape.circle,
-                          ),
-                          child: IconButton(
-                            padding: EdgeInsets.zero,
-                            icon: Icon(Icons.add, color: Colors.white, size: 18),
-                            onPressed: () {
-                              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => HSDonHangMoiScreen(),
-                ),
-              );
-                            },
-                          ),
-                        ),
-                        Container(
-      width: 32,
-      height: 32,
-      margin: EdgeInsets.only(right: 12),
-      decoration: BoxDecoration(
-        color: searchBarColor,
-        shape: BoxShape.circle,
-      ),
-      child: IconButton(
-        padding: EdgeInsets.zero,
-        icon: Icon(Icons.tips_and_updates, color: Colors.white, size: 18),
-        onPressed: () {
-          _syncKhuVucKhoChiTietData();
-        },
-      ),
-    ),
-                        Container(
-      width: 32,
-      height: 32,
-      margin: EdgeInsets.only(right: 12),
-      decoration: BoxDecoration(
-        color: searchBarColor,
-        shape: BoxShape.circle,
-      ),
-      child: IconButton(
-        padding: EdgeInsets.zero,
-        icon: Icon(Icons.storefront, color: Colors.white, size: 18),
-        onPressed: () {
-          checkVersionAndSyncKhoData();
-        },
-      ),
-    ),
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: searchBarColor,
-                            shape: BoxShape.circle,
-                          ),
-                          child: IconButton(
-                            padding: EdgeInsets.zero,
-                            icon: Icon(Icons.refresh, color: Colors.white, size: 18),
-                            onPressed: () {
-                              checkVersionAndSyncData();
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                SizedBox(height: 12),
-              ],
-            ),
-          ),
-          
-          // Tab Bar
-          Container(
-            color: tabBarColor,
-            child: TabBar(
-              controller: _tabController,
-              indicatorColor: Colors.white,
-              indicatorWeight: 3,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white.withOpacity(0.6),
-              tabs: [
-                Tab(text: 'Công việc'),
-                Tab(text: 'Chỉ số KD'),
-              ],
-            ),
-          ),
-          
-          // Main content - now responsive based on screen size
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                // First tab - Responsive layout
-                isLargeScreen
-                    ? Row(
-                        children: [
-                          // Left side with video and welcome section
-                          Expanded(
-                            flex: 1,
-                            child: CustomScrollView(
-                              slivers: [
-                                SliverToBoxAdapter(child: videoSection),
-                                SliverToBoxAdapter(child: welcomeSection),
-                                SliverToBoxAdapter(child: SizedBox(height: 20)),
-                              ],
-                            ),
-                          ),
-                          // Right side with operations list
-                          Expanded(
-                            flex: 1,
-                            child: CustomScrollView(
-                              slivers: [
-                                SliverToBoxAdapter(
-                                  child: Container(
-                                    padding: EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-                                    color: Colors.grey[100],
-                                    child: Text(
-                                      'Danh sách chức năng',
-                                      style: TextStyle(
-                                        fontSize: bodyTextSize + 2,
-                                        fontWeight: FontWeight.bold,
-                                        color: appBarTop,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                operationsList,
-                                SliverToBoxAdapter(child: SizedBox(height: 20)),
-                              ],
-                            ),
-                          ),
-                        ],
-                      )
-                    : CustomScrollView(
-                        slivers: [
-                          // Mobile layout - stacked vertically
-                          SliverToBoxAdapter(child: videoSection),
-                          SliverToBoxAdapter(child: welcomeSection),
-                          operationsList,
-                          SliverToBoxAdapter(child: SizedBox(height: 20)),
-                        ],
-                      ),
-                
-                // Second tab - Coming soon message
-                HSStatScreen(),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
 }
 }
