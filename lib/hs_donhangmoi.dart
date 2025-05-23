@@ -490,6 +490,9 @@ void _showRecipientContactSelectionDialog() {
     final bool isNoiBo = (_selectedCustomer!.tenDuAn ?? '').toLowerCase().contains('nội bộ');
     trangThai = isNoiBo ? 'Xuất Nội bộ' : 'Chưa xong';
   }
+  print('DEBUG: Before creating order:');
+  print('DEBUG: _tenNguoiNhanHangController.text = "${_tenNguoiNhanHangController.text}"');
+  print('DEBUG: _sdtNguoiNhanHangController.text = "${_sdtNguoiNhanHangController.text}"');
   
   // Create the order
   _newOrder = DonHangModel(
@@ -531,6 +534,9 @@ void _showRecipientContactSelectionDialog() {
     trangThai: trangThai,
     tenKhachHang2: _tenKhachHang2Controller.text,
   );
+  print('DEBUG: After creating order:');
+  print('DEBUG: _newOrder.nguoiNhanHang = "${_newOrder?.nguoiNhanHang}"');
+  print('DEBUG: _newOrder.sdtNguoiNhanHang = "${_newOrder?.sdtNguoiNhanHang}"');
   
   // Load product data
   _loadProductData();
@@ -1704,52 +1710,55 @@ if (_orderType == 'Báo giá') {
     int vanChuyen = int.tryParse(_vanChuyenController.text) ?? 0;
     int thucThu = _tongCong - hoaHong10 - tienGui10 - thueTNDN - vanChuyen;
     
-    // Update the newOrder object with final values
     _newOrder = DonHangModel(
-      soPhieu: _newOrder?.soPhieu,
-      nguoiTao: _newOrder?.nguoiTao,
-      ngay: _newOrder?.ngay,
-      tenKhachHang: _newOrder?.tenKhachHang,
-      sdtKhachHang: _newOrder?.sdtKhachHang,
-      soPO: _newOrder?.soPO,
-      diaChi: _newOrder?.diaChi,
-      mst: _newOrder?.mst,
-      tapKH: _newOrder?.tapKH,
-      tenNguoiGiaoDich: _newOrder?.tenNguoiGiaoDich,
-      boPhanGiaoDich: _newOrder?.boPhanGiaoDich,
-      sdtNguoiGiaoDich: _newOrder?.sdtNguoiGiaoDich,
-      thoiGianDatHang: _newOrder?.thoiGianDatHang,
-      ngayYeuCauGiao: _newOrder?.ngayYeuCauGiao,
-      thoiGianCapNhatTrangThai: _newOrder?.thoiGianCapNhatTrangThai,
-      phuongThucThanhToan: _newOrder?.phuongThucThanhToan,
-      thanhToanSauNhanHangXNgay: _newOrder?.thanhToanSauNhanHangXNgay,
-      datCocSauXNgay: _newOrder?.datCocSauXNgay,
-      giayToCanKhiGiaoHang: _newOrder?.giayToCanKhiGiaoHang,
-      thoiGianVietHoaDon: _newOrder?.thoiGianVietHoaDon,
-      thongTinVietHoaDon: _newOrder?.thongTinVietHoaDon,
-      diaChiGiaoHang: _newOrder?.diaChiGiaoHang,
-      hoTenNguoiNhanHoaHong: _newOrder?.hoTenNguoiNhanHoaHong,
-      sdtNguoiNhanHoaHong: _newOrder?.sdtNguoiNhanHoaHong,
-      hinhThucChuyenHoaHong: _newOrder?.hinhThucChuyenHoaHong,
-      thongTinNhanHoaHong: _newOrder?.thongTinNhanHoaHong,
-      ngaySeGiao: _newOrder?.ngaySeGiao,
-      thoiGianCapNhatMoiNhat: _newOrder?.thoiGianCapNhatMoiNhat,
-      phuongThucGiaoHang: _newOrder?.phuongThucGiaoHang,
-      phuongTienGiaoHang: _newOrder?.phuongTienGiaoHang,
-      hoTenNguoiGiaoHang: _newOrder?.hoTenNguoiGiaoHang,
-      ghiChu: _newOrder?.ghiChu,
-      giaNet: _newOrder?.giaNet,
-      trangThai: _newOrder?.trangThai,
-      tenKhachHang2: _newOrder?.tenKhachHang2,
-      tongTien: _tongTien,
-      vat10: _vat10,
-      tongCong: _tongCong,
-      hoaHong10: hoaHong10,
-      tienGui10: tienGui10,
-      thueTNDN: thueTNDN,
-      vanChuyen: vanChuyen,
-      thucThu: thucThu,
-    );
+  soPhieu: _newOrder?.soPhieu,
+  nguoiTao: _newOrder?.nguoiTao,
+  ngay: _newOrder?.ngay,
+  tenKhachHang: _newOrder?.tenKhachHang,
+  sdtKhachHang: _newOrder?.sdtKhachHang,
+  soPO: _newOrder?.soPO,
+  diaChi: _newOrder?.diaChi,
+  mst: _newOrder?.mst,
+  tapKH: _newOrder?.tapKH,
+  tenNguoiGiaoDich: _newOrder?.tenNguoiGiaoDich,
+  boPhanGiaoDich: _newOrder?.boPhanGiaoDich,
+  sdtNguoiGiaoDich: _newOrder?.sdtNguoiGiaoDich,
+  // ADD THESE MISSING FIELDS:
+  nguoiNhanHang: _newOrder?.nguoiNhanHang,
+  sdtNguoiNhanHang: _newOrder?.sdtNguoiNhanHang,
+  // Continue with rest of fields...
+  thoiGianDatHang: _newOrder?.thoiGianDatHang,
+  ngayYeuCauGiao: _newOrder?.ngayYeuCauGiao,
+  thoiGianCapNhatTrangThai: _newOrder?.thoiGianCapNhatTrangThai,
+  phuongThucThanhToan: _newOrder?.phuongThucThanhToan,
+  thanhToanSauNhanHangXNgay: _newOrder?.thanhToanSauNhanHangXNgay,
+  datCocSauXNgay: _newOrder?.datCocSauXNgay,
+  giayToCanKhiGiaoHang: _newOrder?.giayToCanKhiGiaoHang,
+  thoiGianVietHoaDon: _newOrder?.thoiGianVietHoaDon,
+  thongTinVietHoaDon: _newOrder?.thongTinVietHoaDon,
+  diaChiGiaoHang: _newOrder?.diaChiGiaoHang,
+  hoTenNguoiNhanHoaHong: _newOrder?.hoTenNguoiNhanHoaHong,
+  sdtNguoiNhanHoaHong: _newOrder?.sdtNguoiNhanHoaHong,
+  hinhThucChuyenHoaHong: _newOrder?.hinhThucChuyenHoaHong,
+  thongTinNhanHoaHong: _newOrder?.thongTinNhanHoaHong,
+  ngaySeGiao: _newOrder?.ngaySeGiao,
+  thoiGianCapNhatMoiNhat: _newOrder?.thoiGianCapNhatMoiNhat,
+  phuongThucGiaoHang: _newOrder?.phuongThucGiaoHang,
+  phuongTienGiaoHang: _newOrder?.phuongTienGiaoHang,
+  hoTenNguoiGiaoHang: _newOrder?.hoTenNguoiGiaoHang,
+  ghiChu: _newOrder?.ghiChu,
+  giaNet: _newOrder?.giaNet,
+  trangThai: _newOrder?.trangThai,
+  tenKhachHang2: _newOrder?.tenKhachHang2,
+  tongTien: _tongTien,
+  vat10: _vat10,
+  tongCong: _tongCong,
+  hoaHong10: hoaHong10,
+  tienGui10: tienGui10,
+  thueTNDN: thueTNDN,
+  vanChuyen: vanChuyen,
+  thucThu: thucThu,
+);
     
     // Close dialog
     Navigator.of(context).pop();
