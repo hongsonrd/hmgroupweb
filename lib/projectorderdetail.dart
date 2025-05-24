@@ -594,21 +594,44 @@ Future<void> _addItemsFromPreviousMonth() async {
       return;
     }
     
-    // Calculate previous month date range
-    final previousMonthStart = DateTime(currentDate.year, currentDate.month - 1, 1);
-    final previousMonthEnd = DateTime(currentDate.year, currentDate.month, 0);
+    List<OrderModel> foundOrders = [];
+    OrderModel? bestOrder;
     
-    // Find orders from previous month with same BoPhan and NguoiDung
-    final previousOrders = await dbHelper.getOrdersByDateRangeAndDetails(
-      previousMonthStart,
-      previousMonthEnd,
-      boPhan: currentOrder.boPhan,
-      nguoiDung: currentOrder.nguoiDung
-    );
+    // Search up to 6 months back
+    for (int monthsBack = 1; monthsBack <= 6; monthsBack++) {
+      // Calculate the target month date range
+      final targetDate = DateTime(currentDate.year, currentDate.month - monthsBack, 1);
+      final targetMonthStart = DateTime(targetDate.year, targetDate.month, 1);
+      final targetMonthEnd = DateTime(targetDate.year, targetDate.month + 1, 0);
+      
+      print('Searching month $monthsBack back: ${DateFormat('MM/yyyy').format(targetDate)}');
+      
+      // Find orders from this month with same BoPhan and NguoiDung
+      final monthOrders = await dbHelper.getOrdersByDateRangeAndDetails(
+        targetMonthStart,
+        targetMonthEnd,
+        boPhan: currentOrder.boPhan,
+        nguoiDung: currentOrder.nguoiDung
+      );
+      
+      if (monthOrders.isNotEmpty) {
+        // Sort by date to find the most recent one in this month
+        monthOrders.sort((a, b) => b.ngay!.compareTo(a.ngay!));
+        
+        // Check if this order has items
+        final orderItems = await dbHelper.getOrderChiTietByOrderId(monthOrders.first.orderId!);
+        if (orderItems.isNotEmpty) {
+          bestOrder = monthOrders.first;
+          foundOrders = monthOrders;
+          print('Found suitable order from ${DateFormat('dd/MM/yyyy').format(bestOrder.ngay!)} with ${orderItems.length} items');
+          break; // Stop searching once we find an order with items
+        }
+      }
+    }
     
-    if (previousOrders.isEmpty) {
+    if (bestOrder == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Không tìm thấy đơn hàng tháng trước'))
+        SnackBar(content: Text('Không tìm thấy đơn hàng nào có vật tư trong 6 tháng trước'))
       );
       setState(() {
         _isLoading = false;
@@ -616,16 +639,12 @@ Future<void> _addItemsFromPreviousMonth() async {
       return;
     }
     
-    // Sort by date to find the closest one
-    previousOrders.sort((a, b) => b.ngay!.compareTo(a.ngay!));
-    final closestPreviousOrder = previousOrders.first;
-    
-    // Get items from the previous order
-    final previousItems = await dbHelper.getOrderChiTietByOrderId(closestPreviousOrder.orderId!);
+    // Get items from the found order
+    final previousItems = await dbHelper.getOrderChiTietByOrderId(bestOrder.orderId!);
     
     if (previousItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Đơn hàng tháng trước không có vật tư'))
+        SnackBar(content: Text('Đơn hàng được tìm thấy không có vật tư'))
       );
       setState(() {
         _isLoading = false;
@@ -669,7 +688,7 @@ Future<void> _addItemsFromPreviousMonth() async {
     
     if (itemsToAdd.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Không có vật tư mới để thêm từ đơn hàng tháng trước'))
+        SnackBar(content: Text('Không có vật tư mới để thêm từ đơn hàng trước đó'))
       );
       setState(() {
         _isLoading = false;
@@ -726,20 +745,21 @@ Future<void> _addItemsFromPreviousMonth() async {
         // Reload order details
         await _loadOrderDetails();
         
+        final monthsBack = currentDate.difference(bestOrder.ngay!).inDays ~/ 30;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Đã thêm ${itemsToAdd.length} vật tư từ đơn hàng tháng trước'))
+          SnackBar(content: Text('Đã thêm ${itemsToAdd.length} vật tư từ đơn hàng ${DateFormat('dd/MM/yyyy').format(bestOrder.ngay!)}'))
         );
       }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Lỗi khi thêm vật tư từ đơn hàng tháng trước'),
+          content: Text('Lỗi khi thêm vật tư từ đơn hàng trước đó'),
           backgroundColor: Colors.red,
         ),
       );
     }
   } catch (e) {
-    print('Error adding items from previous month: $e');
+    print('Error adding items from previous months: $e');
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Lỗi: $e'),

@@ -216,6 +216,103 @@ class _HSStatScreenState extends State<HSStatScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Period selector
+                    Card(
+                      elevation: 2,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Chọn kỳ báo cáo',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  isExpanded: true,
+                                  value: _selectedPeriod,
+                                  items: _periods.map((String period) {
+                                    return DropdownMenuItem<String>(
+                                      value: period,
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                        child: Text(period),
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (String? newValue) {
+                                    if (newValue != null) {
+                                      _setAndCalculateDateRange(newValue); // Update and recalculate
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Ngày hiện tại: $formattedDate',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    // Summary card
+                    Card(
+                      elevation: 2,
+                      color: cardBgColor,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Tổng quan nhanh',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            _buildSummaryItem(
+                              title: 'Tổng đơn hàng',
+                              value: _totalCompletedOrders.toString(),
+                              icon: Icons.receipt,
+                              color: Colors.blue,
+                            ),
+                            const Divider(),
+                            _buildSummaryItem(
+                              title: 'Doanh số',
+                              value: _formatCurrency(_totalRevenue),
+                              icon: Icons.monetization_on,
+                              color: Colors.green,
+                            ),
+                            const Divider(),
+                            _buildSummaryItem(
+                              title: 'Số mặt hàng',
+                              value: _uniqueCompletedItems.toString(),
+                              icon: Icons.category,
+                              color: Colors.orange,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                                                            const SizedBox(height: 4),
                     // Main action buttons
                     const Text(
                       'Báo cáo chỉ số',
@@ -279,103 +376,7 @@ class _HSStatScreenState extends State<HSStatScreen> {
                       },
                       textColor: Colors.purple,
                     ),
-                    const SizedBox(height: 24),
-                    // Period selector
-                    Card(
-                      elevation: 2,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Chọn kỳ báo cáo',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.grey.shade300),
-                              ),
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<String>(
-                                  isExpanded: true,
-                                  value: _selectedPeriod,
-                                  items: _periods.map((String period) {
-                                    return DropdownMenuItem<String>(
-                                      value: period,
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                                        child: Text(period),
-                                      ),
-                                    );
-                                  }).toList(),
-                                  onChanged: (String? newValue) {
-                                    if (newValue != null) {
-                                      _setAndCalculateDateRange(newValue); // Update and recalculate
-                                    }
-                                  },
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Ngày hiện tại: $formattedDate',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    // Summary card
-                    Card(
-                      elevation: 2,
-                      color: cardBgColor,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Tổng quan nhanh',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            _buildSummaryItem(
-                              title: 'Tổng đơn hàng',
-                              value: _totalCompletedOrders.toString(),
-                              icon: Icons.receipt,
-                              color: Colors.blue,
-                            ),
-                            const Divider(),
-                            _buildSummaryItem(
-                              title: 'Doanh số',
-                              value: _formatCurrency(_totalRevenue),
-                              icon: Icons.monetization_on,
-                              color: Colors.green,
-                            ),
-                            const Divider(),
-                            _buildSummaryItem(
-                              title: 'Số mặt hàng',
-                              value: _uniqueCompletedItems.toString(),
-                              icon: Icons.category,
-                              color: Colors.orange,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+
                   ],
                 ),
               ),

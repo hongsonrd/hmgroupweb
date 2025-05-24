@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'user_credentials.dart';
 import 'db_helper.dart';
 import 'table_models.dart';
+import 'work_suggestions.dart';
 
 class CreateWorkRequestScreen extends StatefulWidget {
   @override
@@ -14,9 +15,79 @@ class CreateWorkRequestScreen extends StatefulWidget {
 }
 
 class _CreateWorkRequestScreenState extends State<CreateWorkRequestScreen> {
+  String? _selectedWorkDescription;
+String? _selectedWorkArea;
+List<String> _availableAreas = [];
+bool _useCustomDescription = false;
+bool _useCustomArea = false;
   final DBHelper _dbHelper = DBHelper();
   final _formKey = GlobalKey<FormState>();
-  
+  List<String> _selectedLoaiMay = [];
+  List<String> _selectedCongCu = [];
+  List<String> _selectedHoaChat = [];
+  static const List<String> _loaiMayOptions = [
+  'Máy đánh sàn',
+  'Máy đánh sàn chậm',
+  'Máy hút nước',
+  'Máy đánh sàn đẩy tay',
+  'Máy người lái',
+  'Máy chà quét nhỏ trong WC',
+  'Máy hút bụi',
+  'Máy thổi thảm',
+  'Máy chà quét nhỏ',
+  'Máy sàn chậm',
+  'Máy chà quét mini',
+  'Máy chà hút liên hợp',
+  'Máy đẩy tay',
+];
+
+static const List<String> _congCuOptions = [
+  'Biển báo sàn ướt (trơn trượt)',
+  'Bông chà kính - Trắng',
+  'Bộ chà thang máy',
+  'Chổi sơn',
+  'Cây lau 360 độ - GS tự mua',
+  'Cây nối 2.4',
+  'Cây nối 3.6',
+  'Cây nối 6',
+  'Dao nội',
+  'Dũi sàn inox',
+  'Ghế nhựa',
+  'Gáo nhựa - Xanh',
+  'Găng tay cao su liên doanh - Hồng',
+  'Gạt kính UG',
+  'Gạt sàn nhựa 45',
+  'Gậy nhôm ko đv 1.5',
+  'Khăn bạch mai - Hồng',
+  'Khăn to - Vàng',
+  'Khăn đa năng chắp vá',
+  'Phất trần',
+  'Phớt đỏ 16cm',
+  'Thang ghế',
+  'Thang inox 2m',
+  'Thanh chữ T',
+  'Xô nhựa xanh',
+  'Xẻng nhựa có cán - Xanh',
+  'Záp mút',
+  'Záp xanh',
+  'Đầu lau bộ chà thang máy',
+  'Đầu đẩy ẩm metro 60cm - Nâu',
+];
+
+static const List<String> _hoaChatOptions = [
+  'Campain',
+  'Cif tẩy đa năng',
+  'Gift bac',
+  'Gift lau sàn hồng',
+  'Lemon nội',
+  'Mỹ hảo',
+  'Power Spotter',
+  'Power View',
+  'Reflect',
+  'Sun tẩy',
+  'XP OMO 800g',
+];
+
   // Form step tracking
   int _currentStep = 0;
   bool _isLoading = true;
@@ -63,7 +134,51 @@ class _CreateWorkRequestScreenState extends State<CreateWorkRequestScreen> {
     _generateRandomID();
     _loadLocationOptions();
   }
-  
+  void _onWorkDescriptionChanged(String? newValue) {
+  setState(() {
+    _selectedWorkDescription = newValue;
+    _selectedWorkArea = null; // Reset area selection
+    
+    // Update available areas
+    if (newValue != null) {
+      _availableAreas = WorkSuggestionsData.getAreasForWork(newValue);
+      // Auto-fill the description controller
+      _moTaCongViecController.text = newValue;
+      _useCustomDescription = false;
+    } else {
+      _availableAreas = [];
+    }
+  });
+}
+
+void _onWorkAreaChanged(String? newValue) {
+  setState(() {
+    _selectedWorkArea = newValue;
+    if (newValue != null) {
+      // Auto-fill the area controller
+      _khuVucThucHienController.text = newValue;
+      _useCustomArea = false;
+    }
+  });
+}
+
+void _toggleCustomDescription() {
+  setState(() {
+    _useCustomDescription = !_useCustomDescription;
+    if (!_useCustomDescription && _selectedWorkDescription != null) {
+      _moTaCongViecController.text = _selectedWorkDescription!;
+    }
+  });
+}
+
+void _toggleCustomArea() {
+  setState(() {
+    _useCustomArea = !_useCustomArea;
+    if (!_useCustomArea && _selectedWorkArea != null) {
+      _khuVucThucHienController.text = _selectedWorkArea!;
+    }
+  });
+}
   // Load username from provider
   Future<void> _loadUsername() async {
     try {
@@ -128,10 +243,10 @@ class _CreateWorkRequestScreenState extends State<CreateWorkRequestScreen> {
     setState(() {
       _selectedDiaDiem = location;
       
-      // Filter users for this location with PhanLoai = "Thụ hưởng" and Admin = "Active"
+      // Filter users for this location with PhanLoai = "Nghiệm thu" and Admin = "Active"
       _filteredUsers = _allUsers.where((user) {
         return user.diaDiem == location && 
-               (user.phanLoai == 'Thụ hưởng' || user.phanLoai?.contains('hưởng') == true) && 
+               (user.phanLoai == 'Nghiệm thu' || user.phanLoai?.contains('nghiệm') == true) && 
                user.admin == 'Active';
       }).toList();
       
@@ -283,9 +398,9 @@ class _CreateWorkRequestScreenState extends State<CreateWorkRequestScreen> {
         yeuCauCongViec: _yeuCauCongViecController.text,
         thoiGianBatDau: _thoiGianBatDauController.text,
         thoiGianKetThuc: _thoiGianKetThucController.text,
-        loaiMaySuDung: _loaiMaySuDungController.text,
-        congCuSuDung: _congCuSuDungController.text,
-        hoaChatSuDung: _hoaChatSuDungController.text,
+        loaiMaySuDung: _selectedLoaiMay.join(', '),
+congCuSuDung: _selectedCongCu.join(', '),
+hoaChatSuDung: _selectedHoaChat.join(', '),
         ghiChu: _ghiChuController.text,
         xacNhan: 'Chờ xác nhận',
         chiDinh: '',
@@ -358,7 +473,96 @@ class _CreateWorkRequestScreenState extends State<CreateWorkRequestScreen> {
       );
     }
   }
+  void _showMultiSelectDialog(
+  BuildContext context,
+  String title,
+  List<String> options,
+  List<String> selectedItems,
+  Function(List<String>) onSelectionChanged,
+) {
+  List<String> tempSelected = List.from(selectedItems);
   
+  showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: Text(title),
+        content: Container(
+          width: double.maxFinite,
+          height: MediaQuery.of(context).size.height * 0.5,
+          child: Column(
+            children: [
+              // Select All / Clear All buttons
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton(
+                    onPressed: () {
+                      setDialogState(() {
+                        tempSelected = List.from(options);
+                      });
+                    },
+                    child: Text('Chọn tất cả'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      setDialogState(() {
+                        tempSelected.clear();
+                      });
+                    },
+                    child: Text('Bỏ chọn tất cả'),
+                  ),
+                ],
+              ),
+              Divider(),
+              // Options list
+              Expanded(
+                child: ListView.builder(
+                  itemCount: options.length,
+                  itemBuilder: (context, index) {
+                    final option = options[index];
+                    final isSelected = tempSelected.contains(option);
+                    
+                    return CheckboxListTile(
+                      title: Text(
+                        option,
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      value: isSelected,
+                      onChanged: (checked) {
+                        setDialogState(() {
+                          if (checked == true) {
+                            tempSelected.add(option);
+                          } else {
+                            tempSelected.remove(option);
+                          }
+                        });
+                      },
+                      dense: true,
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Hủy'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              onSelectionChanged(tempSelected);
+              Navigator.pop(context);
+            },
+            child: Text('Xác nhận (${tempSelected.length})'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
   // Show confirmation dialog
   void _showConfirmationDialog() {
     showDialog(
@@ -379,7 +583,9 @@ class _CreateWorkRequestScreenState extends State<CreateWorkRequestScreen> {
               _buildConfirmationItem('Loại lặp lại', _lapLai),
               _buildConfirmationItem('Ngày bắt đầu', '${_ngayBatDau.day}/${_ngayBatDau.month}/${_ngayBatDau.year}'),
               _buildConfirmationItem('Ngày kết thúc', '${_ngayKetThuc.day}/${_ngayKetThuc.month}/${_ngayKetThuc.year}'),
-              
+              _buildConfirmationItem('Loại máy sử dụng', _selectedLoaiMay.join(', ')),
+_buildConfirmationItem('Công cụ sử dụng', _selectedCongCu.join(', ')),
+_buildConfirmationItem('Hóa chất sử dụng', _selectedHoaChat.join(', ')),
               if (_lapLai == 'Nhiều lần')
                 _buildConfirmationItem('Số ngày đã chọn', '${_selectedDates.length} ngày'),
                 
@@ -919,58 +1125,216 @@ class _CreateWorkRequestScreenState extends State<CreateWorkRequestScreen> {
         SizedBox(height: 16),
         
         // Task description
-        Text(
-          'Mô tả công việc',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
+        Card(
+        elevation: 2,
+        child: Padding(
+          padding: EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Mô tả công việc *',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.blue[800],
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _toggleCustomDescription,
+                    icon: Icon(
+                      _useCustomDescription ? Icons.list : Icons.edit,
+                      size: 16,
+                    ),
+                    label: Text(
+                      _useCustomDescription ? 'Chọn từ danh sách' : 'Tự nhập',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+              
+              SizedBox(height: 8),
+              
+              if (!_useCustomDescription) ...[
+                // Dropdown for work description suggestions
+                DropdownButtonFormField<String>(
+                  value: _selectedWorkDescription,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: 'Chọn loại công việc',
+                    prefixIcon: Icon(Icons.work_outline),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  items: WorkSuggestionsData.workDescriptions
+                      .map((description) => DropdownMenuItem(
+                            value: description,
+                            child: Text(
+                              description,
+                              style: TextStyle(fontSize: 14),
+                            ),
+                          ))
+                      .toList(),
+                  onChanged: _onWorkDescriptionChanged,
+                  isExpanded: true,
+                  menuMaxHeight: 300,
+                ),
+                SizedBox(height: 8),
+              ],
+              
+              // Text field for description (editable whether from dropdown or custom)
+              TextFormField(
+                controller: _moTaCongViecController,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: _useCustomDescription 
+                      ? 'Nhập mô tả công việc'
+                      : 'Mô tả chi tiết (có thể chỉnh sửa)',
+                  hintText: _useCustomDescription
+                      ? 'Nhập mô tả công việc cần thực hiện'
+                      : 'Có thể chỉnh sửa hoặc bổ sung thông tin',
+                  prefixIcon: Icon(Icons.description),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                maxLines: 2,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Vui lòng nhập mô tả công việc';
+                  }
+                  return null;
+                },
+                onChanged: (value) {
+                  if (_useCustomDescription) {
+                    // If typing custom, check if it matches any suggestion
+                    final matchingSuggestion = WorkSuggestionsData.workDescriptions
+                        .firstWhere(
+                          (desc) => desc.toLowerCase().contains(value.toLowerCase()),
+                          orElse: () => '',
+                        );
+                    
+                    if (matchingSuggestion.isNotEmpty && matchingSuggestion != _selectedWorkDescription) {
+                      setState(() {
+                        _selectedWorkDescription = matchingSuggestion;
+                        _availableAreas = WorkSuggestionsData.getAreasForWork(matchingSuggestion);
+                      });
+                    }
+                  }
+                },
+              ),
+            ],
           ),
         ),
-        SizedBox(height: 8),
-        
-        TextFormField(
-          controller: _moTaCongViecController,
-          decoration: InputDecoration(
-            border: OutlineInputBorder(),
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            hintText: 'Nhập mô tả công việc cần thực hiện',
+      ),
+      
+      SizedBox(height: 16),
+      
+      // ENHANCED Area selection with dependent suggestions
+      Card(
+        elevation: 2,
+        child: Padding(
+          padding: EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Khu vực thực hiện *',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.blue[800],
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _availableAreas.isNotEmpty ? _toggleCustomArea : null,
+                    icon: Icon(
+                      _useCustomArea ? Icons.list : Icons.edit,
+                      size: 16,
+                    ),
+                    label: Text(
+                      _useCustomArea ? 'Chọn từ danh sách' : 'Tự nhập',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+              
+              SizedBox(height: 8),
+              
+              if (!_useCustomArea && _availableAreas.isNotEmpty) ...[
+                // Dropdown for area suggestions (only if work description is selected)
+                DropdownButtonFormField<String>(
+                  value: _selectedWorkArea,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: _selectedWorkDescription == null 
+                        ? 'Chọn mô tả công việc trước'
+                        : 'Chọn khu vực phù hợp',
+                    prefixIcon: Icon(Icons.location_on),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  items: _availableAreas
+                      .map((area) => DropdownMenuItem(
+                            value: area,
+                            child: Text(
+                              area,
+                              style: TextStyle(fontSize: 14),
+                            ),
+                          ))
+                      .toList(),
+                  onChanged: _selectedWorkDescription == null ? null : _onWorkAreaChanged,
+                  isExpanded: true,
+                  menuMaxHeight: 300,
+                ),
+                SizedBox(height: 8),
+              ],
+              
+              // Text field for area (editable whether from dropdown or custom)
+              TextFormField(
+                controller: _khuVucThucHienController,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: (_useCustomArea || _availableAreas.isEmpty)
+                      ? 'Nhập khu vực thực hiện'
+                      : 'Khu vực cụ thể (có thể chỉnh sửa)',
+                  hintText: (_useCustomArea || _availableAreas.isEmpty)
+                      ? 'Nhập khu vực cụ thể thực hiện'
+                      : 'Có thể chỉnh sửa hoặc bổ sung thông tin',
+                  prefixIcon: Icon(Icons.place),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Vui lòng nhập khu vực thực hiện';
+                  }
+                  return null;
+                },
+              ),
+              
+              // Show suggestion info
+              if (_selectedWorkDescription != null && _availableAreas.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: Text(
+                    'Có ${_availableAreas.length} khu vực gợi ý cho "${_selectedWorkDescription}"',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.blue[600],
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+            ],
           ),
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Vui lòng nhập mô tả công việc';
-            }
-            return null;
-          },
         ),
-        
-        SizedBox(height: 16),
-        
-        // Task location
-        Text(
-          'Khu vực thực hiện',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-        SizedBox(height: 8),
-        
-        TextFormField(
-          controller: _khuVucThucHienController,
-          decoration: InputDecoration(
-            border: OutlineInputBorder(),
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            hintText: 'Nhập khu vực cụ thể thực hiện',
-          ),
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Vui lòng nhập khu vực thực hiện';
-            }
-            return null;
-          },
-        ),
-        
-        SizedBox(height: 16),
+      ),
+      
+      SizedBox(height: 16),
         
         // Work volume (sqm)
         Text(
@@ -1121,47 +1485,153 @@ class _CreateWorkRequestScreenState extends State<CreateWorkRequestScreen> {
         
         // Equipment
         Text(
-          'Thiết bị và vật tư',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
+  'Thiết bị và vật tư',
+  style: TextStyle(
+    fontWeight: FontWeight.bold,
+    fontSize: 16,
+  ),
+),
+SizedBox(height: 8),
+
+// Machines - Multi-select dropdown
+Text(
+  'Loại máy sử dụng',
+  style: TextStyle(
+    fontWeight: FontWeight.w500,
+    fontSize: 14,
+  ),
+),
+SizedBox(height: 4),
+Container(
+  decoration: BoxDecoration(
+    border: Border.all(color: Colors.grey),
+    borderRadius: BorderRadius.circular(4),
+  ),
+  child: Column(
+    children: [
+      InkWell(
+        onTap: () => _showMultiSelectDialog(
+          context,
+          'Chọn loại máy sử dụng',
+          _loaiMayOptions,
+          _selectedLoaiMay,
+          (selected) => setState(() => _selectedLoaiMay = selected),
+        ),
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  _selectedLoaiMay.isEmpty 
+                    ? 'Chọn loại máy sử dụng'
+                    : _selectedLoaiMay.join(', '),
+                  style: TextStyle(
+                    color: _selectedLoaiMay.isEmpty ? Colors.grey[600] : Colors.black,
+                  ),
+                ),
+              ),
+              Icon(Icons.arrow_drop_down),
+            ],
           ),
         ),
-        SizedBox(height: 8),
-        
-        // Machines
-        TextFormField(
-          controller: _loaiMaySuDungController,
-          decoration: InputDecoration(
-            border: OutlineInputBorder(),
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            labelText: 'Loại máy sử dụng',
+      ),
+    ],
+  ),
+),
+
+SizedBox(height: 8),
+
+// Tools - Multi-select dropdown
+Text(
+  'Công cụ sử dụng',
+  style: TextStyle(
+    fontWeight: FontWeight.w500,
+    fontSize: 14,
+  ),
+),
+SizedBox(height: 4),
+Container(
+  decoration: BoxDecoration(
+    border: Border.all(color: Colors.grey),
+    borderRadius: BorderRadius.circular(4),
+  ),
+  child: InkWell(
+    onTap: () => _showMultiSelectDialog(
+      context,
+      'Chọn công cụ sử dụng',
+      _congCuOptions,
+      _selectedCongCu,
+      (selected) => setState(() => _selectedCongCu = selected),
+    ),
+    child: Container(
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Text(
+              _selectedCongCu.isEmpty 
+                ? 'Chọn công cụ sử dụng'
+                : _selectedCongCu.join(', '),
+              style: TextStyle(
+                color: _selectedCongCu.isEmpty ? Colors.grey[600] : Colors.black,
+              ),
+            ),
           ),
-        ),
-        
-        SizedBox(height: 8),
-        
-        // Tools
-        TextFormField(
-          controller: _congCuSuDungController,
-          decoration: InputDecoration(
-            border: OutlineInputBorder(),
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            labelText: 'Công cụ sử dụng',
+          Icon(Icons.arrow_drop_down),
+        ],
+      ),
+    ),
+  ),
+),
+
+SizedBox(height: 8),
+
+// Chemicals - Multi-select dropdown
+Text(
+  'Hóa chất sử dụng',
+  style: TextStyle(
+    fontWeight: FontWeight.w500,
+    fontSize: 14,
+  ),
+),
+SizedBox(height: 4),
+Container(
+  decoration: BoxDecoration(
+    border: Border.all(color: Colors.grey),
+    borderRadius: BorderRadius.circular(4),
+  ),
+  child: InkWell(
+    onTap: () => _showMultiSelectDialog(
+      context,
+      'Chọn hóa chất sử dụng',
+      _hoaChatOptions,
+      _selectedHoaChat,
+      (selected) => setState(() => _selectedHoaChat = selected),
+    ),
+    child: Container(
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Text(
+              _selectedHoaChat.isEmpty 
+                ? 'Chọn hóa chất sử dụng'
+                : _selectedHoaChat.join(', '),
+              style: TextStyle(
+                color: _selectedHoaChat.isEmpty ? Colors.grey[600] : Colors.black,
+              ),
+            ),
           ),
-        ),
-        
-        SizedBox(height: 8),
-        
-        // Chemicals
-        TextFormField(
-          controller: _hoaChatSuDungController,
-          decoration: InputDecoration(
-            border: OutlineInputBorder(),
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            labelText: 'Hóa chất sử dụng',
-          ),
-        ),
+          Icon(Icons.arrow_drop_down),
+        ],
+      ),
+    ),
+  ),
+),
         
         SizedBox(height: 16),
         
@@ -1212,9 +1682,9 @@ class _CreateWorkRequestScreenState extends State<CreateWorkRequestScreen> {
     _yeuCauCongViecController.dispose();
     _thoiGianBatDauController.dispose();
     _thoiGianKetThucController.dispose();
-    _loaiMaySuDungController.dispose();
-    _congCuSuDungController.dispose();
-    _hoaChatSuDungController.dispose();
+    //_loaiMaySuDungController.dispose();
+    //_congCuSuDungController.dispose();
+    //_hoaChatSuDungController.dispose();
     _ghiChuController.dispose();
     super.dispose();
   }

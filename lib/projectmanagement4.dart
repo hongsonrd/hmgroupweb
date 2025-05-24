@@ -62,8 +62,8 @@ class _ProjectManagement4State extends State<ProjectManagement4> {
           case 'admin':
             Navigator.pushReplacementNamed(context, '/admin_dashboard');
             break;
-          case 'thụ hưởng':
-          case 'thu huong':
+          case 'nghiệm thu':
+          case 'nghiem thu':
             Navigator.pushReplacementNamed(context, '/customer_dashboard');
             break;
           case 'kỹ thuật':
@@ -189,9 +189,9 @@ class _ProjectManagement4State extends State<ProjectManagement4> {
                 context,
                 MaterialPageRoute(builder: (context) => AdminDashboard()),
               );
-            } else if (normalizedRole.contains('thu huong') ||
-                normalizedRole.contains('thụ hưởng') ||
-                normalizedRole.contains('hưởng')) {
+            } else if (normalizedRole.contains('nghiem thu') ||
+                normalizedRole.contains('nghiệm thu') ||
+                normalizedRole.contains('nghiệm')) {
               print("Navigating to customer dashboard");
               Navigator.pushReplacement(
                 context,
@@ -1093,9 +1093,9 @@ class _ProjectManagement4State extends State<ProjectManagement4> {
                             context,
                             MaterialPageRoute(builder: (context) => AdminDashboard()),
                           );
-                        } else if (normalizedRole.contains('thu huong') ||
-                            normalizedRole.contains('thụ hưởng') ||
-                            normalizedRole.contains('hưởng')) {
+                        } else if (normalizedRole.contains('nghiem thu') ||
+                            normalizedRole.contains('nghiệm thu') ||
+                            normalizedRole.contains('nghiệm')) {
                            Navigator.pushReplacement( // Use pushReplacement
                             context,
                             MaterialPageRoute(builder: (context) => CustomerDashboard()),
