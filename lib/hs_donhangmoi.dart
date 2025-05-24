@@ -803,7 +803,7 @@ void _showRecipientContactSelectionDialog() {
                         labelText: 'Đơn vị tính',
                         border: OutlineInputBorder(),
                       ),
-                      readOnly: !isSpecialProduct,
+                      //readOnly: !isSpecialProduct,
                     ),
                     
                     // Only show XuatXuHangKhac if KHAC
@@ -1082,7 +1082,7 @@ if (_orderType == 'Báo giá') {
                         labelText: 'Đơn vị tính',
                         border: OutlineInputBorder(),
                       ),
-                      readOnly: !isSpecialProduct,
+                      //readOnly: !isSpecialProduct,
                     ),
                     
                     // Only show XuatXuHangKhac if KHAC
