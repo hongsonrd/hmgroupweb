@@ -628,15 +628,53 @@ void _showRecipientContactSelectionDialog() {
   }
   
   // Create the order (rest of the method remains the same)
-  _newOrder = DonHangModel(
+    _newOrder = DonHangModel(
     soPhieu: soPhieu,
     nguoiTao: isEditMode ? _existingOrder!.nguoiTao : userCredentials.username,
     ngay: isEditMode ? _existingOrder!.ngay : formattedDate,
     tenKhachHang: _selectedCustomer!.tenDuAn,
-    // ... rest of the fields remain the same
+    sdtKhachHang: _sdtKhachHangController.text.isNotEmpty ? _sdtKhachHangController.text : null,
+    soPO: _poController.text.isNotEmpty ? _poController.text : null,
+    diaChi: _diaChiController.text.isNotEmpty ? _diaChiController.text : null,
+    mst: _selectedCustomer!.maSoThue,
+    tapKH: _tapKH,
+    tenNguoiGiaoDich: _tenNguoiGiaoDichController.text.isNotEmpty ? _tenNguoiGiaoDichController.text : null,
+    boPhanGiaoDich: _boPhanGiaoDichController.text.isNotEmpty ? _boPhanGiaoDichController.text : null,
+    sdtNguoiGiaoDich: _sdtNguoiGiaoDichController.text.isNotEmpty ? _sdtNguoiGiaoDichController.text : null,
+    nguoiNhanHang: _tenNguoiNhanHangController.text.isNotEmpty ? _tenNguoiNhanHangController.text : null,
+    sdtNguoiNhanHang: _sdtNguoiNhanHangController.text.isNotEmpty ? _sdtNguoiNhanHangController.text : null,
+    thoiGianDatHang: thoiGianDatHang,
+    ngayYeuCauGiao: DateFormat('yyyy-MM-dd').format(_ngayYeuCauGiao),
+    thoiGianCapNhatTrangThai: currentDateTime,
+    phuongThucThanhToan: _phuongThucThanhToan,
+    thanhToanSauNhanHangXNgay: _thanhToanSauNhanHangXNgay,
+    datCocSauXNgay: _datCocSauXNgay,
+    giayToCanKhiGiaoHang: _giayToCanKhiGiaoHangController.text.isNotEmpty ? _giayToCanKhiGiaoHangController.text : null,
+    thoiGianVietHoaDon: _thoiGianVietHoaDonController.text.isNotEmpty ? _thoiGianVietHoaDonController.text : null,
+    thongTinVietHoaDon: _thongTinVietHoaDonController.text.isNotEmpty ? _thongTinVietHoaDonController.text : null,
+    diaChiGiaoHang: _diaChiGiaoHangController.text.isNotEmpty ? _diaChiGiaoHangController.text : null,
+    hoTenNguoiNhanHoaHong: _hoTenNguoiNhanHoaHongController.text.isNotEmpty ? _hoTenNguoiNhanHoaHongController.text : null,
+    sdtNguoiNhanHoaHong: _sdtNguoiNhanHoaHongController.text.isNotEmpty ? _sdtNguoiNhanHoaHongController.text : null,
+    hinhThucChuyenHoaHong: _hinhThucChuyenHoaHongController.text.isNotEmpty ? _hinhThucChuyenHoaHongController.text : null,
+    thongTinNhanHoaHong: _thongTinNhanHoaHongController.text.isNotEmpty ? _thongTinNhanHoaHongController.text : null,
+    ngaySeGiao: null, 
     thoiGianCapNhatMoiNhat: currentDateTime,
+    phuongThucGiaoHang: null, 
+    phuongTienGiaoHang: _phuongTienGiaoHangController.text.isNotEmpty ? _phuongTienGiaoHangController.text : null,
+    hoTenNguoiGiaoHang: _hoTenNguoiGiaoHangController.text.isNotEmpty ? _hoTenNguoiGiaoHangController.text : null,
+    ghiChu: _ghiChuController.text.isNotEmpty ? _ghiChuController.text : null,
+    giaNet: _giaNetController.text.isNotEmpty ? int.tryParse(_giaNetController.text) : null,
     trangThai: trangThai,
-    // ... other fields
+    tenKhachHang2: _tenKhachHang2Controller.text.isNotEmpty ? _tenKhachHang2Controller.text : null,
+    tongTien: null,
+    vat10: null,
+    tongCong: null,
+    hoaHong10: null,
+    tienGui10: null,
+    thueTNDN: null,
+    vanChuyen: null,
+    thucThu: null,
+    phieuXuatKho: null,
   );
   
   // Load product data and move to step 2

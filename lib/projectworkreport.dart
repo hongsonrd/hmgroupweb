@@ -167,16 +167,40 @@ class _ProjectWorkReportState extends State<ProjectWorkReport> with SingleTicker
 'Kế hoạch'
   ],
     'HM-HS': [
-    'Báo cáo',
-'Phát sinh',
+    'Vướng mắc Đề xuất',
 'Kế hoạch',
-'Đề xuất'
+'CV Khác',
+'Gọi điện thoại trao đổi',
+'Báo giá',
+'CSKH sau bán',
+'Gặp trực tiếp KH',
+'Hồ sơ thanh toán',
+'Làm Hợp đồng',
+'Làm việc qua Email',
+'Làm việc qua Zalo',
+'Làm việc qua Viber',
+'Làm việc qua Web TMĐT',
+'Làm việc qua Facebook',
+'Lắp đặt thiết bị',
+'Bảo trì, bảo dưỡng'
   ],
       'HM-KS': [
-    'Báo cáo',
-'Phát sinh',
+'Vướng mắc Đề xuất',
 'Kế hoạch',
-'Đề xuất'
+'CV Khác',
+'Gọi điện thoại trao đổi',
+'Báo giá',
+'CSKH sau bán',
+'Gặp trực tiếp KH',
+'Hồ sơ thanh toán',
+'Làm Hợp đồng',
+'Làm việc qua Email',
+'Làm việc qua Zalo',
+'Làm việc qua Viber',
+'Làm việc qua Web TMĐT',
+'Làm việc qua Facebook',
+'Lắp đặt thiết bị',
+'Bảo trì, bảo dưỡng'
   ],
 };
   Map<String, String> topicIcons = {
