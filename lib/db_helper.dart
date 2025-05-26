@@ -141,7 +141,27 @@ class DBHelper {
   }
 }
 //ADDONXNK
-
+Future<KhuVucKhoChiTietModel?> getKhuVucKhoChiTietByChiTietID(String chiTietID) async {
+  final db = await database;
+  
+  try {
+    final List<Map<String, dynamic>> maps = await db.query(
+      'KhuVucKhoChiTiet',
+      where: 'chiTietID = ?',
+      whereArgs: [chiTietID],
+      limit: 1,
+    );
+    
+    if (maps.isNotEmpty) {
+      return KhuVucKhoChiTietModel.fromMap(maps.first);
+    }
+    
+    return null;
+  } catch (e) {
+    print('Error getting KhuVucKhoChiTiet by chiTietID $chiTietID: $e');
+    return null;
+  }
+}
 Future<List<TonKhoModel>> getTonKhoByMaHangAndKho(String maHangID, List<String> khoHangIDs) async {
   final db = await database;
   String placeholders = khoHangIDs.map((_) => '?').join(',');
