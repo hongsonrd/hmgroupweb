@@ -9,6 +9,10 @@ import 'package:url_launcher/url_launcher.dart' as url_launcher;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:math';
+import 'package:provider/provider.dart';
+import 'user_credentials.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 class HSKhachHangScreen extends StatefulWidget {
   @override
   _HSKhachHangScreenState createState() => _HSKhachHangScreenState();
@@ -23,7 +27,7 @@ class _HSKhachHangScreenState extends State<HSKhachHangScreen> {
   String _filterBy = 'Tất cả';
   String _sortBy = 'tenDuAn';
   bool _sortAscending = true;
-  
+String? username;
   // Color scheme to match main app
   final Color appBarTop = Color(0xFF024965);
   final Color appBarBottom = Color(0xFF03a6cf);
@@ -37,6 +41,15 @@ class _HSKhachHangScreenState extends State<HSKhachHangScreen> {
   void initState() {
     super.initState();
     _loadKhachHangData();
+    _checkAndPerformDailySync();
+  }
+@override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (username == null) {
+      final userCredentials = Provider.of<UserCredentials>(context, listen: false);
+      username = userCredentials.username.toUpperCase();
+    }
   }
 
   @override
@@ -44,7 +57,20 @@ class _HSKhachHangScreenState extends State<HSKhachHangScreen> {
     _searchController.dispose();
     super.dispose();
   }
-
+  Future<void> _checkAndPerformDailySync() async {
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateTime.now().toIso8601String().substring(0, 10); 
+    final lastSyncDate = prefs.getString('last_sync_date');
+    
+    if (lastSyncDate != today) {
+      print('Performing daily auto-sync...');
+      await _refreshData();
+      await prefs.setString('last_sync_date', today);
+      print('Daily sync completed and date saved');
+    } else {
+      print('Daily sync already performed today');
+    }
+  }
   Future<void> _loadKhachHangData() async {
     setState(() {
       _isLoading = true;
@@ -316,7 +342,7 @@ Widget build(BuildContext context) {
   mainAxisAlignment: MainAxisAlignment.end,
   children: [
     FloatingActionButton(
-      backgroundColor: buttonColor,
+      backgroundColor: Colors.blue[200],
       heroTag: "add",
       child: Icon(Icons.add),
       onPressed: () {
@@ -333,7 +359,7 @@ Widget build(BuildContext context) {
     ),
     SizedBox(height: 16),
     FloatingActionButton(
-      backgroundColor: buttonColor,
+      backgroundColor: Colors.blue[200],
       heroTag: "refresh",
       child: Icon(Icons.refresh),
       onPressed: _refreshData,

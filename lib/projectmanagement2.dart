@@ -241,7 +241,12 @@ String _formatKetQua(Object? ketQua) {
     super.initState();
     _loadUserType(); 
     _loadInitialData();
-Future.delayed(Duration(seconds: 3), () {
+    Future.delayed(Duration(milliseconds: 100), () {
+    if (mounted) {
+      _loadProjects();
+    }
+  });
+Future.delayed(Duration(seconds: 2), () {
     _checkAndLoadHistory();
   });
   }

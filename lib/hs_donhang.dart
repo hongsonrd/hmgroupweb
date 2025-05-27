@@ -1749,7 +1749,7 @@ final isHmGroup = (order.phuongThucGiaoHang?.toUpperCase() ?? '') == 'HMGROUP';
             _sendHMGroupOrder(order.soPhieu!);
           },
           icon: Icon(
-            Icons.send, // This is correct for "Send"
+            Icons.send, 
             size: columnCount == 3 ? 12 : (columnCount == 2 ? 14 : 16),
             color: Colors.white,
           ),
@@ -1938,7 +1938,7 @@ Future<void> _sendHMGroupOrder(String soPhieu) async {
 
   try {
     final url = Uri.parse(
-      'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hoteldonhangnhanh/$soPhieu'
+      'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hoteldonhanggui/$soPhieu'
     );
     
     print('Sending request to: ${url.toString()}');
@@ -2087,7 +2087,7 @@ Future<void> _quickApproveHMGroupOrder(String soPhieu) async {
 
   try {
     final url = Uri.parse(
-      'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hoteldonhangnhanh/$soPhieu'
+      'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hoteldonhangduyet/$soPhieu'
     );
     
     print('Sending request to: ${url.toString()}');

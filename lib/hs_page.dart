@@ -23,6 +23,9 @@ import 'hs_kho2.dart';
 import 'hs_stat.dart';
 import 'hs_donhangmoi.dart';
 import 'hs_donhangxnkdaily.dart';
+import 'projectmanagement2.dart';
+import 'hs_khachhang.dart';
+import 'dart:io';
 
 class AppVersion {
   final String version;
@@ -140,23 +143,36 @@ Future<void> _syncDonHangAndChiTietOnEnter() async {
   // [Keep all your existing sync methods - I'll skip them for brevity]
 
   void _initializeVideo() {
-    _videoController = VideoPlayerController.asset('assets/appvideohotel.mp4')
-      ..initialize().then((_) {
-        _videoController.setLooping(true);
-        _videoController.setVolume(0.0);
-        _videoController.play();
-        setState(() {
-          _videoInitialized = true;
-        });
-      });
+  if (Platform.isWindows) {
+    setState(() {
+      _videoInitialized = false; 
+    });
+    return;
   }
+  _videoController = VideoPlayerController.asset('assets/appvideohotel.mp4')
+    ..initialize().then((_) {
+      _videoController.setLooping(true);
+      _videoController.setVolume(0.0);
+      _videoController.play();
+      setState(() {
+        _videoInitialized = true;
+      });
+    }).catchError((error) {
+      print('Video initialization error: $error');
+      setState(() {
+        _videoInitialized = false; // Fallback to image on error
+      });
+    });
+}
 
   @override
-  void dispose() {
+void dispose() {
+  if (!Platform.isWindows && _videoInitialized) {
     _videoController.dispose();
-    _tabController.dispose();
-    super.dispose();
   }
+  _tabController.dispose();
+  super.dispose();
+}
 
   Future<void> _loadUserInfo() async {
     try {
@@ -215,6 +231,12 @@ Future<void> _syncDonHangAndChiTietOnEnter() async {
           break;
         case 'stat':
           _currentWidget = HSStatScreen();
+          break;
+        case 'baocaocongviec':
+          _currentWidget = ProjectManagement2();
+          break;
+        case 'dskhachhang':
+          _currentWidget = HSKhachHangScreen();
           break;
         default:
           _currentWidget = _buildBlankWidget();
@@ -319,7 +341,7 @@ Future<void> _syncDonHangAndChiTietOnEnter() async {
         'route': 'tonghop',
       },
       {
-        'title': 'Danh sách hàng',
+        'title': 'DS hàng & tồn kho',
         'icon': Icons.inventory,
         'colors': iconGradients[2],
         'route': 'tonkho',
@@ -348,6 +370,18 @@ Future<void> _syncDonHangAndChiTietOnEnter() async {
         'colors': iconGradients[6],
         'route': 'stat',
       },
+      {
+        'title': 'Báo cáo công việc',
+        'icon': Icons.feed,
+        'colors': iconGradients[7],
+        'route': 'baocaocongviec',
+      },
+      {
+        'title': 'DS khách hàng',
+        'icon': Icons.local_library,
+        'colors': iconGradients[1],
+        'route': 'dskhachhang',
+      },
     ];
 
     final double bodyTextSize = 14.0;
@@ -368,19 +402,22 @@ Future<void> _syncDonHangAndChiTietOnEnter() async {
         children: [
           // Video section
           Container(
-            width: double.infinity,
-            child: _videoInitialized
-                ? AspectRatio(
-                    aspectRatio: _videoController.value.aspectRatio,
-                    child: VideoPlayer(_videoController),
-                  )
-                : Container(
-                    height: 120,
-                    child: Center(
-                      child: CircularProgressIndicator(color: Colors.orange),
-                    ),
-                  ),
+  width: double.infinity,
+  child: Platform.isWindows || !_videoInitialized
+      ? Container(
+          height: 120,
+          decoration: BoxDecoration(
+            image: DecorationImage(
+              image: AssetImage('assets/vidhcm.png'),
+              fit: BoxFit.cover,
+            ),
           ),
+        )
+      : AspectRatio(
+          aspectRatio: _videoController.value.aspectRatio,
+          child: VideoPlayer(_videoController),
+        ),
+),
           
           // Welcome section
           Container(
@@ -494,23 +531,7 @@ Future<void> _syncDonHangAndChiTietOnEnter() async {
               ],
             ),
           ),
-          
-          // Menu header
-          Container(
-            padding: EdgeInsets.all(12),
-            width: double.infinity,
-            color: appBarTop,
-            child: Text(
-              'Chức năng',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          
+
           // Navigation items
           Expanded(
             child: ListView.builder(

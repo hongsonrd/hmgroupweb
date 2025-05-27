@@ -1263,6 +1263,13 @@ class _HSDSHangScreenState extends State<HSDSHangScreen> with SingleTickerProvid
                   color: Colors.grey[600],
                 ),
               ),
+                            Text(
+                 'ĐVT: ${productInfo?.donVi ?? ''}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
             ],
           ),
         ),

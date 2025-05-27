@@ -2033,7 +2033,7 @@ bool _isDateInGhiChu(String? ghiChu) {
 
     try {
       final url = Uri.parse(
-          'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hoteldonhangnhanh/$soPhieu'
+          'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hoteldonhangduyet/$soPhieu'
       );
 
       final response = await http.get(url);

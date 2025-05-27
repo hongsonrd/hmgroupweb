@@ -103,21 +103,27 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
   }
 
   void _initializeVideo() {
-    _videoController = VideoPlayerController.asset('assets/appvideogroup.mp4')
-      ..initialize().then((_) {
-        _videoController.setLooping(true);
-        _videoController.setVolume(0.0);
-        _videoController.play();
-        setState(() {
-          _videoInitialized = true;
-        });
-      }).catchError((error) {
-         print("Error initializing video: $error");
-         setState(() {
-            _videoInitialized = false; 
-         });
-      });
+  if (Platform.isWindows) {
+    setState(() {
+      _videoInitialized = false;
+    });
+    return;
   }
+  _videoController = VideoPlayerController.asset('assets/appvideogroup.mp4')
+    ..initialize().then((_) {
+      _videoController.setLooping(true);
+      _videoController.setVolume(0.0);
+      _videoController.play();
+      setState(() {
+        _videoInitialized = true;
+      });
+    }).catchError((error) {
+       print("Error initializing video: $error");
+       setState(() {
+          _videoInitialized = false; 
+       });
+    });
+}
 
   Future<void> _loadUserInfo() async {
     try {
@@ -133,7 +139,9 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
 
   @override
   void dispose() {
+    if (!Platform.isWindows) {
     _videoController.dispose();
+  }
     _tabController.dispose();
     super.dispose();
   }
@@ -283,26 +291,37 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
       ),
     );
   }
-  
   Widget _buildVideoSection() {
-    return Container(
-      width: double.infinity,
-      color: Colors.black,
-      child: _videoInitialized && _videoController.value.isInitialized
-        ? AspectRatio(
-            aspectRatio: _videoController.value.aspectRatio,
-            child: VideoPlayer(_videoController),
-          )
-        : Container(
-            height: 200,
-            child: Center(
-              child: _videoInitialized == false 
-                ? Text('⚡', style: TextStyle(color: Colors.white)) 
-                : CircularProgressIndicator(color: Colors.white),
+  return Container(
+    width: double.infinity,
+    color: Colors.black,
+    child: Platform.isWindows
+        ? // Show image on Windows
+          Container(
+            height: 200, 
+            decoration: BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/viddream.png'),
+                fit: BoxFit.cover,
+              ),
             ),
-          ),
-    );
-  }
+          )
+        : // Show video on other platforms
+          _videoInitialized && _videoController.value.isInitialized
+            ? AspectRatio(
+                aspectRatio: _videoController.value.aspectRatio,
+                child: VideoPlayer(_videoController),
+              )
+            : Container(
+                height: 200,
+                child: Center(
+                  child: _videoInitialized == false 
+                    ? Text('⚡', style: TextStyle(color: Colors.white)) 
+                    : CircularProgressIndicator(color: Colors.white),
+                ),
+              ),
+  );
+}
   
   Widget _buildWelcomeSection() {
   return Container(

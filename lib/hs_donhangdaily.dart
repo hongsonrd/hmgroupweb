@@ -1630,7 +1630,7 @@ Future<void> _quickApproveOrder(String soPhieu) async {
 
   try {
     final url = Uri.parse(
-      'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hoteldonhangnhanh/$soPhieu'
+      'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hoteldonhangchuyen/$soPhieu'
     );
 
     final response = await http.get(url);
