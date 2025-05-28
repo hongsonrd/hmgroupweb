@@ -22,7 +22,7 @@ import 'package:flutter/rendering.dart';
 import 'hs_pxkform.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'hs_pycform.dart';
-
+import 'hs_ptform.dart';
 class HSDonHangDailyScreen extends StatefulWidget {
   final String? username;
   
@@ -54,10 +54,10 @@ final List<String> adminUsers = [
   'hm.quocchien', 'hm.damchinh', 'hotel.danang', 'hotel.nhatrang'
 ];
   final Map<String, List<String>> locationAdminMap = {
-  'HN': ['hm.tason', 'hm.manhha','hm.lehoa', 'nvthunghiem'],
-  'SG': ['hm.quocchien', 'hm.damchinh'],
-  'DN': ['hotel.danang'],
-  'NT': ['hotel.nhatrang']
+  'HN': ['hm.tason', 'hm.manhha','hm.lehoa', 'nvthunghiem', 'hm.phiminh'],
+  'SG': ['hm.quocchien', 'hm.damchinh', 'hm.tason', 'hm.manhha'],
+  'DN': ['hotel.danang', 'hm.tason', 'hm.manhha'],
+  'NT': ['hotel.nhatrang', 'hm.tason', 'hm.manhha']
 };
 final List<String> approveableStatuses = ['duyệt', 'cần xuất', 'đang xử lý'];
 
@@ -92,6 +92,41 @@ void dispose() {
   _searchController.dispose();
   _cleanupTimer?.cancel();
   super.dispose();
+}
+void _generatePT() async {
+  setState(() {
+    _isLoading = true;
+  });
+  
+  try {
+    // Get current user name
+    final prefs = await SharedPreferences.getInstance();
+    final username = prefs.getString('username') ?? _username;
+    
+    setState(() {
+      _isLoading = false;
+    });
+    
+    // Generate and show the PT form
+    await PTFormGenerator.generatePTForm(
+      context: context,
+      orders: _filteredOrders, // Pass the current filtered orders
+      createdBy: username,
+    );
+    
+  } catch (e) {
+    setState(() {
+      _isLoading = false;
+    });
+    
+    // Show error message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi khi tạo phiếu tổng: ${e.toString()}'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
 }
 Future<void> _exportToExcel() async {
   try {
@@ -253,7 +288,7 @@ bool _canUserApproveOrderLocation(DonHangModel order) {
     // Filter orders by allowed statuses
     _orders = allOrders.where((order) => 
   allowedStatuses.contains((order.trangThai ?? '').toLowerCase()) &&
-  _canUserApproveOrderLocation(order)
+  _isUserAllowedToApproveOrder(order)
 ).toList();
     
     // Sort by status priority based on user group
@@ -925,30 +960,46 @@ Widget build(BuildContext context) {
         
         // Username and summary row
         Container(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          color: Colors.grey[100],
-          child: Row(
-            children: [
-              Icon(Icons.person, size: 20, color: Colors.grey[700]),
-              SizedBox(width: 8),
-              Text(
-                'Người dùng: $_username',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
-                ),
-              ),
-              Spacer(),
-              Text(
-                'Số đơn hàng: ${_filteredOrders.length}',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green[800],
-                ),
-              ),
-            ],
-          ),
+  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+  color: Colors.grey[100],
+  child: Row(
+    children: [
+      Icon(Icons.person, size: 20, color: Colors.grey[700]),
+      SizedBox(width: 8),
+      Text(
+        'Người dùng: $_username',
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Colors.grey[800],
         ),
+      ),
+      SizedBox(width: 12),
+      // Add the "Tạo phiếu tổng" button
+      OutlinedButton.icon(
+        onPressed: _generatePT,
+        icon: Icon(Icons.description_outlined, size: 16),
+        label: Text(
+          'Tạo phiếu tổng',
+          style: TextStyle(fontSize: 13),
+        ),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Color(0xFF534b0d),
+          side: BorderSide(color: Color(0xFF534b0d)),
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          minimumSize: Size(0, 32),
+        ),
+      ),
+      Spacer(),
+      Text(
+        'Số đơn hàng: ${_filteredOrders.length}',
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Colors.green[800],
+        ),
+      ),
+    ],
+  ),
+),
         
         // Main content
         Expanded(

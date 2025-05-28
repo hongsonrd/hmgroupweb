@@ -1277,6 +1277,8 @@ class _HSDSHangScreenState extends State<HSDSHangScreen> with SingleTickerProvid
       ),
     );
   }
+List<GiaoDichKhoModel> _transactionHistory = [];
+bool _isLoadingTransactions = true;
 
   Future<void> _showTonKhoDetails(TonKhoModel tonKhoItem, DSHangModel? productInfo) async {
   setState(() {
@@ -1290,8 +1292,19 @@ class _HSDSHangScreenState extends State<HSDSHangScreen> with SingleTickerProvid
     // Sort batches by current quantity (lowest first)
     batches.sort((a, b) => (a.soLuongHienTai ?? 0).compareTo(b.soLuongHienTai ?? 0));
     
+    // Get batch IDs for transaction history
+    final batchIds = batches
+        .where((batch) => batch.loHangID != null)
+        .map((batch) => batch.loHangID!)
+        .toList();
+    
+    // Fetch transaction history
+    final transactions = await _dbHelper.getTransactionsByBatchIds(batchIds);
+    
     setState(() {
       _isLoadingTonKho = false;
+      _transactionHistory = transactions;
+      _isLoadingTransactions = false;
     });
     
     _showTonKhoDetailsBottomSheet(tonKhoItem, productInfo, batches);
@@ -1299,6 +1312,7 @@ class _HSDSHangScreenState extends State<HSDSHangScreen> with SingleTickerProvid
     print('Error loading batch data: $e');
     setState(() {
       _isLoadingTonKho = false;
+      _isLoadingTransactions = false;
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1317,222 +1331,541 @@ class _HSDSHangScreenState extends State<HSDSHangScreen> with SingleTickerProvid
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
     builder: (context) {
-      return DraggableScrollableSheet(
-        initialChildSize: 0.8,
-        maxChildSize: 0.95,
-        minChildSize: 0.5,
-        expand: false,
-        builder: (_, scrollController) {
-          return SingleChildScrollView(
-            controller: scrollController,
-            padding: EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      return DefaultTabController(
+        length: 2,
+        child: DraggableScrollableSheet(
+          initialChildSize: 0.8,
+          maxChildSize: 0.95,
+          minChildSize: 0.5,
+          expand: false,
+          builder: (_, scrollController) {
+            return Column(
               children: [
-
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(8),
+                // Handle bar
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    margin: EdgeInsets.only(top: 8, bottom: 16),
+                  ),
+                ),
+                
+                // Product header (static)
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    children: [
+                      if (productInfo != null && productInfo.hinhAnh != null && productInfo.hinhAnh!.isNotEmpty)
+                        Center(
+                          child: Container(
+                            width: 80,
+                            height: 80,
+                            margin: EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey.shade300),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.network(
+                                productInfo.hinhAnh!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Center(
+                                  child: Icon(Icons.image_not_supported, size: 32, color: Colors.grey),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      
+                      Text(
+                        productInfo?.tenSanPham ?? 'Sản phẩm không xác định',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                      margin: EdgeInsets.only(bottom: 16),
+                      
+                      SizedBox(height: 4),
+                      
+                      Text(
+                        'Mã: ${productInfo?.uid ?? 'N/A'}',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                SizedBox(height: 16),
+                
+                // Tab bar
+                Container(
+                  color: Colors.grey[100],
+                  child: TabBar(
+                    labelColor: Colors.blue,
+                    unselectedLabelColor: Colors.grey[600],
+                    indicatorColor: Colors.blue,
+                    tabs: [
+                      Tab(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.inventory_2, size: 16),
+                            SizedBox(width: 4),
+                            Text('Chi tiết lô'),
+                          ],
+                        ),
+                      ),
+                      Tab(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.history, size: 16),
+                            SizedBox(width: 4),
+                            Text('Lịch sử XN'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Tab content
+                Expanded(
+                  child: TabBarView(
+                    children: [
+                      // Tab 1: Batch details
+                      _buildBatchDetailsTab(tonKhoItem, batches, scrollController),
+                      
+                      // Tab 2: Transaction history
+                      _buildTransactionHistoryTab(scrollController),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    },
+  );
+}
+Widget _buildBatchDetailsTab(TonKhoModel tonKhoItem, List<LoHangModel> batches, ScrollController scrollController) {
+  return SingleChildScrollView(
+    controller: scrollController,
+    padding: EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Inventory summary
+        Container(
+          padding: EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Kho hàng:',
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  Text(
+                    tonKhoItem.khoHangID ?? 'Không xác định',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Số lượng hiện tại:',
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  Text(
+                    '${tonKhoItem.soLuongHienTai?.toString() ?? '0'}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                      color: _getStockLevelColor(tonKhoItem),
                     ),
                   ),
-                  
-                  // Product header
-                  if (productInfo != null && productInfo.hinhAnh != null && productInfo.hinhAnh!.isNotEmpty)
-                    Center(
-                      child: Container(
-                        width: 120,
-                        height: 120,
-                        margin: EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade300),
-                          borderRadius: BorderRadius.circular(8),
+                ],
+              ),
+              SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Dự trữ tối thiểu:',
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  Text(
+                    '${tonKhoItem.soLuongDuTru?.toString() ?? 'N/A'}',
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+              if (tonKhoItem.soLuongCanXuat != null) ...[
+                SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Cần xuất:',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    Text(
+                      '${tonKhoItem.soLuongCanXuat}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: Colors.orange,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+        
+        SizedBox(height: 24),
+        
+        // Batches section header
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Chi tiết lô hàng',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(
+              '${batches.length} lô',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        
+        SizedBox(height: 12),
+        
+        // No batches message
+        if (batches.isEmpty)
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Center(
+              child: Text(
+                'Không có lô hàng nào',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+          ),
+        
+        // Batch list
+        ...batches.map((batch) => _buildBatchItem(batch)),
+        
+        SizedBox(height: 32),
+      ],
+    ),
+  );
+}
+
+// Create the transaction history tab content
+Widget _buildTransactionHistoryTab(ScrollController scrollController) {
+  return SingleChildScrollView(
+    controller: scrollController,
+    padding: EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Lịch sử xuất nhập',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(
+              '${_transactionHistory.length} giao dịch',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        
+        SizedBox(height: 16),
+        
+        // Loading indicator
+        if (_isLoadingTransactions)
+          Center(child: CircularProgressIndicator()),
+        
+        // No transactions message
+        if (!_isLoadingTransactions && _transactionHistory.isEmpty)
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Center(
+              child: Text(
+                'Không có giao dịch nào',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+          ),
+        
+        // Transaction list
+        ..._transactionHistory.map((transaction) => _buildTransactionItem(transaction)),
+        
+        SizedBox(height: 32),
+      ],
+    ),
+  );
+}
+
+// Build individual transaction item
+Widget _buildTransactionItem(GiaoDichKhoModel transaction) {
+  // Format date and time
+  String formattedDate = 'N/A';
+  String formattedTime = 'N/A';
+  
+  if (transaction.ngay != null) {
+    try {
+      final date = DateTime.parse(transaction.ngay!);
+      formattedDate = DateFormat('dd/MM/yyyy').format(date);
+    } catch (e) {
+      formattedDate = transaction.ngay!;
+    }
+  }
+  
+  if (transaction.gio != null) {
+    formattedTime = transaction.gio!;
+  }
+  
+  // Determine transaction type color and icon
+  Color transactionColor = Colors.grey;
+  IconData transactionIcon = Icons.swap_horiz;
+  
+  if (transaction.loaiGiaoDich != null) {
+    final type = transaction.loaiGiaoDich!.toLowerCase();
+    if (type.contains('nhập') || type.contains('import')) {
+      transactionColor = Colors.green;
+      transactionIcon = Icons.arrow_downward;
+    } else if (type.contains('xuất') || type.contains('export')) {
+      transactionColor = Colors.red;
+      transactionIcon = Icons.arrow_upward;
+    }
+  }
+  
+  return Card(
+    margin: EdgeInsets.symmetric(vertical: 6),
+    elevation: 1,
+    child: Padding(
+      padding: EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: transactionColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(
+                  transactionIcon,
+                  color: transactionColor,
+                  size: 16,
+                ),
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  transaction.loaiGiaoDich ?? 'Không xác định',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: transactionColor,
+                  ),
+                ),
+              ),
+              Text(
+                '$formattedDate $formattedTime',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+          
+          SizedBox(height: 8),
+          
+          // Transaction details
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (transaction.maGiaoDich != null)
+                      Text(
+                        'Mã GD: ${transaction.maGiaoDich}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            productInfo.hinhAnh!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Center(
-                             child: Icon(Icons.image_not_supported, size: 48, color: Colors.grey),
-                           ),
-                         ),
-                       ),
-                     ),
-                   ),
-                 
-                 // Product name
-                 Text(
-                   productInfo?.tenSanPham ?? 'Sản phẩm không xác định',
-                   style: TextStyle(
-                     fontSize: 22,
-                     fontWeight: FontWeight.bold,
-                   ),
-                 ),
-                 
-                 SizedBox(height: 8),
-                 
-                 // Product code and SKU
-                 Row(
-                   children: [
-                     Expanded(
-                       child: Text(
-                         'Mã: ${productInfo?.uid ?? 'N/A'}',
-                         style: TextStyle(
-                           color: Colors.grey[600],
-                         ),
-                       ),
-                     ),
-                     if (productInfo?.sku != null)
-                       Text(
-                         'SKU: ${productInfo!.sku}',
-                         style: TextStyle(
-                           color: Colors.grey[600],
-                         ),
-                       ),
-                   ],
-                 ),
-                 
-                 SizedBox(height: 16),
-                 
-                 // Inventory summary
-                 Container(
-                   padding: EdgeInsets.all(12),
-                   decoration: BoxDecoration(
-                     color: Colors.grey[100],
-                     borderRadius: BorderRadius.circular(8),
-                   ),
-                   child: Column(
-                     children: [
-                       Row(
-                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                         children: [
-                           Text(
-                             'Kho hàng:',
-                             style: TextStyle(fontWeight: FontWeight.w500),
-                           ),
-                           Text(
-                             tonKhoItem.khoHangID ?? 'Không xác định',
-                             style: TextStyle(fontWeight: FontWeight.bold),
-                           ),
-                         ],
-                       ),
-                       SizedBox(height: 8),
-                       Row(
-                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                         children: [
-                           Text(
-                             'Số lượng hiện tại:',
-                             style: TextStyle(fontWeight: FontWeight.w500),
-                           ),
-                           Text(
-                             '${tonKhoItem.soLuongHienTai?.toString() ?? '0'}',
-                             style: TextStyle(
-                               fontWeight: FontWeight.bold,
-                               fontSize: 18,
-                               color: _getStockLevelColor(tonKhoItem),
-                             ),
-                           ),
-                         ],
-                       ),
-                       SizedBox(height: 8),
-                       Row(
-                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                         children: [
-                           Text(
-                             'Dự trữ tối thiểu:',
-                             style: TextStyle(fontWeight: FontWeight.w500),
-                           ),
-                           Text(
-                             '${tonKhoItem.soLuongDuTru?.toString() ?? 'N/A'}',
-                             style: TextStyle(fontWeight: FontWeight.w500),
-                           ),
-                         ],
-                       ),
-                       if (tonKhoItem.soLuongCanXuat != null) ...[
-                         SizedBox(height: 8),
-                         Row(
-                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                           children: [
-                             Text(
-                               'Cần xuất:',
-                               style: TextStyle(fontWeight: FontWeight.w500),
-                             ),
-                             Text(
-                               '${tonKhoItem.soLuongCanXuat}',
-                               style: TextStyle(
-                                 fontWeight: FontWeight.w500,
-                                 color: Colors.orange,
-                               ),
-                             ),
-                           ],
-                         ),
-                       ],
-                     ],
-                   ),
-                 ),
-                 
-                 SizedBox(height: 24),
-                 
-                 // Batches section header
-                 Row(
-                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                   children: [
-                     Text(
-                       'Chi tiết lô hàng',
-                       style: TextStyle(
-                         fontSize: 18,
-                         fontWeight: FontWeight.bold,
-                       ),
-                     ),
-                     Text(
-                       '${batches.length} lô',
-                       style: TextStyle(
-                         color: Colors.grey[600],
-                         fontWeight: FontWeight.w500,
-                       ),
-                     ),
-                   ],
-                 ),
-                 
-                 SizedBox(height: 12),
-                 
-                 // No batches message
-                 if (batches.isEmpty)
-                   Container(
-                     padding: EdgeInsets.all(16),
-                     decoration: BoxDecoration(
-                       color: Colors.grey[100],
-                       borderRadius: BorderRadius.circular(8),
-                     ),
-                     child: Center(
-                       child: Text(
-                         'Không có lô hàng nào',
-                         style: TextStyle(
-                           color: Colors.grey[600],
-                           fontStyle: FontStyle.italic,
-                         ),
-                       ),
-                     ),
-                   ),
-                 
-                 // Batch list
-                 ...batches.map((batch) => _buildBatchItem(batch)),
-                 
-                 SizedBox(height: 32),
-               ],
-             ),
-           );
-         },
-       );
-     },
-   );
- }
+                      ),
+                    if (transaction.loHangID != null)
+                      Text(
+                        'Lô: ${transaction.loHangID}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'SL: ${transaction.soLuong?.toString() ?? 'N/A'}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: transactionColor,
+                    ),
+                  ),
+                  if (transaction.thucTe != null && transaction.thucTe != transaction.soLuong)
+                    Text(
+                      'Thực tế: ${transaction.thucTe}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.orange,
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+          
+          // User and status
+          if (transaction.nguoiDung != null || transaction.trangThai != null) ...[
+            SizedBox(height: 8),
+            Row(
+              children: [
+                if (transaction.nguoiDung != null)
+                  Expanded(
+                    child: Text(
+                      'Người dùng: ${transaction.nguoiDung}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ),
+                if (transaction.trangThai != null)
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _getTransactionStatusColor(transaction.trangThai),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      transaction.trangThai!,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+          
+          // Notes
+          if (transaction.ghiChu != null && transaction.ghiChu!.isNotEmpty) ...[
+            SizedBox(height: 8),
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: Text(
+                'Ghi chú: ${transaction.ghiChu}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                  color: Colors.grey[700],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
+// Helper method to get transaction status color
+Color _getTransactionStatusColor(String? status) {
+  if (status == null) return Colors.grey;
+  
+  switch (status.toLowerCase()) {
+    case 'hoàn thành':
+    case 'completed':
+    case 'success':
+      return Colors.green;
+    case 'đang xử lý':
+    case 'processing':
+    case 'pending':
+      return Colors.orange;
+    case 'hủy':
+    case 'cancelled':
+    case 'failed':
+      return Colors.red;
+    default:
+      return Colors.grey;
+  }
+}
  
  Color _getStockLevelColor(TonKhoModel tonKhoItem) {
    if (tonKhoItem.soLuongHienTai == null || tonKhoItem.soLuongHienTai == 0) {

@@ -1122,28 +1122,45 @@ Future<void> _syncLoHangData() async {
   try {
     final prefs = await SharedPreferences.getInstance();
     final lastSync = prefs.getString('last_lohang_sync') ?? '2023-01-01 00:00:00';
-    
+
     final response = await AuthenticatedHttpClient.get(
       Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotellohang/?last_sync=$lastSync')
     );
-    
+
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      
-      if (data is List && data.isNotEmpty) {
-        for (var item in data) {
-          final loHang = LoHangModel.fromMap(item);
-          
-          // Check if record exists
-          final existingRecord = await _dbHelper.getLoHangById(loHang.loHangID!);
-          if (existingRecord != null) {
-            // Update existing record
-            await _dbHelper.updateLoHang(loHang);
-          } else {
-            // Insert new record
-            await _dbHelper.insertLoHang(loHang);
+
+      if (data is List) {
+        await _dbHelper.clearLoHangTable();
+        print('Local LoHang table cleared.');
+
+        if (data.isNotEmpty) {
+          final batch = await _dbHelper.startBatch();
+          for (var item in data) {
+            final loHang = LoHangModel.fromMap(item);
+            _dbHelper.addToBatch(batch,
+              'INSERT INTO lohang (loHangID, soLuongBanDau, soLuongHienTai, ngayNhap, ngayCapNhat, hanSuDung, trangThai, maHangID, khoHangID, khuVucKhoID) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              [
+                loHang.loHangID,
+                loHang.soLuongBanDau,
+                loHang.soLuongHienTai,
+                loHang.ngayNhap,
+                loHang.ngayCapNhat,
+                loHang.hanSuDung,
+                loHang.trangThai,
+                loHang.maHangID,
+                loHang.khoHangID,
+                loHang.khuVucKhoID,
+              ]
+            );
           }
+          await _dbHelper.commitBatch(batch);
+          print('Inserted ${data.length} new LoHang records.');
+        } else {
+          print('No LoHang records received from server to insert after clearing.');
         }
+      } else {
+        print('Received non-list data for LoHang, sync aborted for this table.');
       }
     } else {
       throw Exception('Failed to sync LoHang data. Status code: ${response.statusCode}');
@@ -1305,36 +1322,62 @@ Future<void> _syncDonHangData() async {
     throw e;
   }
 }
-
 Future<void> _syncChiTietDonData() async {
   try {
     final prefs = await SharedPreferences.getInstance();
-    final lastSync = prefs.getString('last_chitietdon_sync') ?? '2023-01-01 00:00:00';
-    
-    // Encode the username for safe inclusion in URL
     final encodedUsername = Uri.encodeComponent(_username);
-    
+    final lastSync = prefs.getString('last_chitietdon_sync') ?? '2023-01-01 00:00:00';
+
     final response = await http.get(
       Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelchitietdon/$encodedUsername?last_sync=$lastSync')
     );
-    
+
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      
-      if (data is List && data.isNotEmpty) {
-        for (var item in data) {
-          final chiTietDon = ChiTietDonModel.fromMap(item);
-          
-          // Check if record exists
-          final existingRecord = await _dbHelper.getChiTietDonByUID(chiTietDon.uid!);
-          if (existingRecord != null) {
-            // Update existing record
-            await _dbHelper.updateChiTietDon(chiTietDon);
-          } else {
-            // Insert new record
-            await _dbHelper.insertChiTietDon(chiTietDon);
+
+      if (data is List) {
+        await _dbHelper.clearChiTietDonTable();
+        print('Local ChiTietDon table cleared.');
+
+        if (data.isNotEmpty) {
+          final batch = await _dbHelper.startBatch();
+          for (var item in data) {
+            final chiTietDon = ChiTietDonModel.fromMap(item);
+            _dbHelper.addToBatch(batch,
+              'INSERT INTO chitietdon (uid, soPhieu, trangThai, tenHang, maHang, donViTinh, soLuongYeuCau, donGia, thanhTien, soLuongThucGiao, chiNhanh, idHang, soLuongKhachNhan, duyet, xuatXuHangKhac, baoGia, hinhAnh, ghiChu, phanTramVAT, vat, tenKhachHang, updateTime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              [
+                chiTietDon.uid,
+                chiTietDon.soPhieu,
+                chiTietDon.trangThai,
+                chiTietDon.tenHang,
+                chiTietDon.maHang,
+                chiTietDon.donViTinh,
+                chiTietDon.soLuongYeuCau,
+                chiTietDon.donGia,
+                chiTietDon.thanhTien,
+                chiTietDon.soLuongThucGiao,
+                chiTietDon.chiNhanh,
+                chiTietDon.idHang,
+                chiTietDon.soLuongKhachNhan,
+                chiTietDon.duyet,
+                chiTietDon.xuatXuHangKhac,
+                chiTietDon.baoGia,
+                chiTietDon.hinhAnh,
+                chiTietDon.ghiChu,
+                chiTietDon.phanTramVAT,
+                chiTietDon.vat,
+                chiTietDon.tenKhachHang,
+                chiTietDon.updateTime,
+              ]
+            );
           }
+          await _dbHelper.commitBatch(batch);
+          print('Inserted ${data.length} new ChiTietDon records.');
+        } else {
+          print('No ChiTietDon records received from server to insert after clearing.');
         }
+      } else {
+        print('Received non-list data for ChiTietDon, sync aborted for this table.');
       }
     } else {
       throw Exception('Failed to sync ChiTietDon data. Status code: ${response.statusCode}');

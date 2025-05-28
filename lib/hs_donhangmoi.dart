@@ -1025,7 +1025,7 @@ if (_orderType == 'Báo giá') {
                     
                     // Update totals
                     _updateTotals();
-                    
+                        _productSearchController.clear();
                     Navigator.of(context).pop();
                   },
                 ),
@@ -1452,6 +1452,11 @@ if (_orderType == 'Báo giá') {
                                   onTap: () {
                                     Navigator.of(context).pop();
                                     _showAddProductDialog(product);
+                                    _productSearchController.clear();
+                                this.setState(() {
+                                  _productSearchText = '';
+                                  _filteredDSHangList = List.from(_dshangList);
+                                });
                                   },
                                 );
                               },

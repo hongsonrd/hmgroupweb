@@ -221,47 +221,59 @@ class _HSDonHangScreenState extends State<HSDonHangScreen> {
   }
 
   Future<void> _loadOrders() async {
+  setState(() {
+    _isLoading = true;
+    _errorMessage = '';
+  });
+
+  try {
+    // Get all orders from database
+    final allOrders = await _dbHelper.getAllDonHang();
+
+    // Filter based on username
+    if (adminUsers.contains(_username)) {
+      // Admin users see all orders
+      _orders = allOrders;
+    } else {
+      // Regular users only see their own orders
+      _orders = allOrders
+          .where(
+              (order) => (order.nguoiTao?.toLowerCase() ?? '') == _username)
+          .toList();
+    }
+
+    // Sort by update time first, then by status
+    _sortOrders();
+
+    // **ADD THIS SECTION: Initialize all sections as collapsed**
+    // Get unique statuses from the orders
+    final uniqueStatuses = _orders
+        .map((order) => order.trangThai?.toLowerCase() ?? '')
+        .where((status) => status.isNotEmpty)
+        .toSet();
+    
+    // Initialize all sections as collapsed (true = collapsed)
+    for (String status in uniqueStatuses) {
+      _collapsedSections[status] = true;
+    }
+
+    // First set filtered orders to all orders
     setState(() {
-      _isLoading = true;
-      _errorMessage = '';
+      _filteredOrders = List.from(_orders);
+      _isLoading = false;
+      _processingApprovals.clear(); // Clear processing approvals after reload
     });
 
-    try {
-      // Get all orders from database
-      final allOrders = await _dbHelper.getAllDonHang();
-
-      // Filter based on username
-      if (adminUsers.contains(_username)) {
-        // Admin users see all orders
-        _orders = allOrders;
-      } else {
-        // Regular users only see their own orders
-        _orders = allOrders
-            .where(
-                (order) => (order.nguoiTao?.toLowerCase() ?? '') == _username)
-            .toList();
-      }
-
-      // Sort by update time first, then by status
-      _sortOrders();
-
-      // First set filtered orders to all orders
-      setState(() {
-        _filteredOrders = List.from(_orders);
-        _isLoading = false;
-        _processingApprovals.clear(); // Clear processing approvals after reload
-      });
-
-      // Then apply any filters
-      _applyFilters();
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'Lỗi tải dữ liệu: ${e.toString()}';
-      });
-      print('Error loading orders: $e');
-    }
+    // Then apply any filters
+    _applyFilters();
+  } catch (e) {
+    setState(() {
+      _isLoading = false;
+      _errorMessage = 'Lỗi tải dữ liệu: ${e.toString()}';
+    });
+    print('Error loading orders: $e');
   }
+}
 
   void _sortOrders() {
     // First sort by update time (newest first)
@@ -699,6 +711,65 @@ class _HSDonHangScreenState extends State<HSDonHangScreen> {
       _isTableMode = !_isTableMode;
     });
   }
+  // Check if a button should be disabled due to processing
+bool _isOrderBeingProcessed(String soPhieu) {
+  return _processingApprovals.contains(soPhieu) || 
+         _processingOrders.containsKey(soPhieu);
+}
+
+// Get consistent button text
+String _getApprovalButtonText(String soPhieu, bool isHmGroup) {
+  if (_processingApprovals.contains(soPhieu)) {
+    return 'Đang xử lý...';
+  }
+  return isHmGroup ? 'Duyệt nhanh' : 'Duyệt đơn';
+}
+
+// Unified approval handler
+Future<void> _handleApproval(DonHangModel order, bool isHmGroup) async {
+  if (isHmGroup) {
+    _quickApproveHMGroupOrder(order.soPhieu!);
+  } else {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Xác nhận duyệt đơn'),
+        content: Text('Xác nhận duyệt đơn hàng ${order.soPhieu}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Huỷ'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Duyệt', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+          ),
+        ],
+      ),
+    ) ?? false;
+
+    if (confirm && order.soPhieu != null) {
+      final success = await _approveOrder(order.soPhieu!);
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Đã duyệt đơn hàng ${order.soPhieu}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Future.delayed(Duration(seconds: 3), () => _loadOrders());
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi khi duyệt đơn hàng ${order.soPhieu}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+}
 
   @override
 Widget build(BuildContext context) {
@@ -1210,19 +1281,22 @@ Future<void> _editOrder(String soPhieu) async {
         ],
         
         rows: orders.map((order) {
-          final formattedDate = order.ngay != null
-              ? DateFormat('dd/MM/yyyy').format(DateTime.parse(order.ngay!))
-              : 'N/A';
-          final statusColor = _getStatusColor(order.trangThai);
-          final lowerStatus = (order.trangThai ?? '').toLowerCase();
-          final canApprove = adminUsers.contains(_username) &&
-              pendingStatuses.contains(lowerStatus);
-          final isProcessingApproval = order.soPhieu != null &&
-              _processingApprovals.contains(order.soPhieu!);
-          final isOrderCreator = (order.nguoiTao?.toLowerCase() ?? '') == _username.toLowerCase();
-final isHmGroup = (order.phuongThucGiaoHang?.toUpperCase() ?? '') == 'HMGROUP';
-          return DataRow(
-            cells: [
+    final formattedDate = order.ngay != null
+        ? DateFormat('dd/MM/yyyy').format(DateTime.parse(order.ngay!))
+        : 'N/A';
+    final statusColor = _getStatusColor(order.trangThai);
+    final lowerStatus = (order.trangThai ?? '').toLowerCase();
+    final canApprove = adminUsers.contains(_username) &&
+        pendingStatuses.contains(lowerStatus);
+    final isOrderCreator = (order.nguoiTao?.toLowerCase() ?? '') == _username.toLowerCase();
+    final isHmGroup = (order.phuongThucGiaoHang?.toUpperCase() ?? '') == 'HMGROUP';
+    
+    // Use consistent state checking methods
+    final isBeingProcessed = _isOrderBeingProcessed(order.soPhieu ?? '');
+    final buttonText = _getApprovalButtonText(order.soPhieu ?? '', isHmGroup);
+    
+    return DataRow(
+      cells: [
               DataCell(Text(order.soPhieu ?? 'N/A')),
               DataCell(Text(formattedDate)),
               DataCell(Text(order.tenKhachHang2 ?? 'N/A')),
@@ -1250,45 +1324,51 @@ final isHmGroup = (order.phuongThucGiaoHang?.toUpperCase() ?? '') == 'HMGROUP';
   Row(
     mainAxisSize: MainAxisSize.min,
     children: [
+      // Edit button with consistent state
+      if (isOrderCreator && (lowerStatus == 'chưa xong' || lowerStatus == 'xuất nội bộ' || lowerStatus == 'nháp'))
+        IconButton(
+          icon: Icon(Icons.edit, size: 18, color: Colors.blue),
+          tooltip: 'Sửa đơn',
+          onPressed: _isOrderBeingProcessed(order.soPhieu ?? '') ? null : () => _editOrder(order.soPhieu!),
+        ),
+      
+      // Send button with consistent state
       if (isOrderCreator && isHmGroup && 
-          ((order.trangThai?.toLowerCase() ?? '') == 'chưa xong' || 
-           (order.trangThai?.toLowerCase() ?? '') == 'xuất nội bộ'))
+          (lowerStatus == 'chưa xong' || lowerStatus == 'xuất nội bộ'))
         IconButton(
           icon: Icon(Icons.send, size: 18, color: Colors.blue),
           tooltip: 'Gửi đơn',
-          onPressed: () => _sendHMGroupOrder(order.soPhieu!),
+          onPressed: _isOrderBeingProcessed(order.soPhieu ?? '') ? null : () => _sendHMGroupOrder(order.soPhieu!),
         ),
-          IconButton(
-          icon: Icon(Icons.edit, size: 18, color: Colors.blue),
-          tooltip: 'Sửa đơn',
-          onPressed: () => _editOrder(order.soPhieu!),
-        ),
-      if (order.soPhieu != null && (order.trangThai?.toLowerCase() ?? '') != 'nháp')
+      
+      // PXK button
+      if (order.soPhieu != null && lowerStatus != 'nháp')
         IconButton(
           icon: Icon(Icons.receipt_long, size: 18, color: Color(0xFF534b0d)),
           tooltip: 'Xuất PXK',
           onPressed: () => _generatePXK(order),
         ),
         
-      if (order.soPhieu != null && (order.trangThai?.toLowerCase() ?? '') != 'nháp')
+      // PYC button
+      if (order.soPhieu != null && lowerStatus != 'nháp')
         IconButton(
           icon: Icon(Icons.receipt_long, size: 18, color: Color(0xFF564b0d)),
           tooltip: 'Xuất PYC',
           onPressed: () => _generatePYC(order),
         ),
         
-      if (order.soPhieu != null && (order.trangThai?.toLowerCase() ?? '') != 'nháp')
+      // QR button
+      if (order.soPhieu != null && lowerStatus != 'nháp')
         IconButton(
           icon: Icon(Icons.qr_code, size: 18, color: Color(0xFF534b0d)),
           tooltip: 'Hiện mã QR',
-          onPressed: () {
-            _showQrCode(order.soPhieu!, order.tenKhachHang2 ?? '');
-          },
+          onPressed: () => _showQrCode(order.soPhieu!, order.tenKhachHang2 ?? ''),
         ),
         
+      // Approval button with consistent state
       if (canApprove)
         IconButton(
-          icon: isProcessingApproval
+          icon: _isOrderBeingProcessed(order.soPhieu ?? '')
               ? SizedBox(
                   width: 18,
                   height: 18,
@@ -1302,64 +1382,15 @@ final isHmGroup = (order.phuongThucGiaoHang?.toUpperCase() ?? '') == 'HMGROUP';
                   size: 18, 
                   color: isHmGroup ? Colors.orange : Colors.green
                 ),
-          tooltip: isProcessingApproval 
+          tooltip: _isOrderBeingProcessed(order.soPhieu ?? '') 
               ? 'Đang xử lý...' 
-              : (isHmGroup ? 'Duyệt nhanh' : 'Duyệt đơn'),
-          onPressed: isProcessingApproval
-              ? null
-              : () async {
-                  if (isHmGroup) {
-                    // Quick approve for HMGROUP orders
-                    _quickApproveHMGroupOrder(order.soPhieu!);
-                  } else {
-                    // Regular approval process
-                    final confirm = await showDialog<bool>(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: Text('Xác nhận duyệt đơn'),
-                            content: Text('Xác nhận duyệt đơn hàng ${order.soPhieu}?'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: Text('Huỷ'),
-                              ),
-                              ElevatedButton(
-                                onPressed: () => Navigator.pop(context, true),
-                                child: Text('Duyệt', style: TextStyle(color: Colors.white)),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ) ??
-                        false;
-
-                    if (confirm && order.soPhieu != null) {
-                      final success = await _approveOrder(order.soPhieu!);
-                      if (success) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Đã duyệt đơn hàng ${order.soPhieu}'),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                        Future.delayed(Duration(seconds: 3), () {
-                          _loadOrders();
-                        });
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Lỗi khi duyệt đơn hàng ${order.soPhieu}'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    }
-                  }
-                },
+              : _getApprovalButtonText(order.soPhieu ?? '', isHmGroup),
+          onPressed: _isOrderBeingProcessed(order.soPhieu ?? '') 
+              ? null 
+              : () => _handleApproval(order, isHmGroup),
         ),
         
+      // Detail button
       IconButton(
         icon: Icon(Icons.info_outline, size: 18, color: Colors.blue),
         tooltip: 'Xem chi tiết',
@@ -2677,23 +2708,7 @@ Future<void> _quickApproveHMGroupOrder(String soPhieu) async {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Thông tin khách hàng',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: Colors.grey[800],
-                            ),
-                          ),
-                          SizedBox(height: 10),
-                          _buildDetailItem('Tên khách hàng', order.tenKhachHang2),
-                          _buildDetailItem('Số điện thoại', order.sdtKhachHang),
-                          _buildDetailItem('Địa chỉ', order.diaChi),
-                          _buildDetailItem('Mã số thuế', order.mst),
-                        ],
-                      ),
-                    ),
-
+                          
                     // Order Information
                     Container(
                       padding: EdgeInsets.all(16),
@@ -2833,7 +2848,24 @@ Future<void> _quickApproveHMGroupOrder(String soPhieu) async {
                                           ),
                                           Text(
                                             '${item.soLuongYeuCau ?? 0} ${item.donViTinh ?? ''}',
-                                            style: TextStyle(fontSize: 14),
+                                            style: TextStyle(fontSize: 14, color: Colors.green),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Row(
+                                        children: [
+                                          Text(
+                                            'Thực giao: ',
+                                            style: TextStyle(
+                                              color: Colors.grey[600],
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          Text(
+                                            '${item.soLuongThucGiao ?? 0}',
+                                            style: TextStyle(fontSize: 14, color: Colors.red),
                                           ),
                                         ],
                                       ),
@@ -2920,6 +2952,40 @@ Future<void> _quickApproveHMGroupOrder(String soPhieu) async {
                               ),
                             ],
                           ),
+Text(
+                            '┇ Thông tin khách hàng ┇',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Colors.red,
+                            ),
+                          ),
+                          SizedBox(height: 10),
+                          _buildDetailItem('Tên khách hàng', order.tenKhachHang2),
+                          _buildDetailItem('Số điện thoại', order.sdtKhachHang),
+                          _buildDetailItem('Địa chỉ', order.diaChi),
+                          _buildDetailItem('Mã số thuế', order.mst),
+                              _buildDetailItem('Tên người giao dịch', order.tenNguoiGiaoDich),
+                          _buildDetailItem('SĐT người GD', order.sdtNguoiGiaoDich),
+                          _buildDetailItem('Bộ phận GD', order.boPhanGiaoDich),
+                          _buildDetailItem('Chi nhánh', order.thoiGianDatHang),
+                          _buildDetailItem('Giấy tờ cần khi giao', order.giayToCanKhiGiaoHang),
+                          _buildDetailItem('Thời gian viết hoá đơn', order.thoiGianVietHoaDon),
+                          _buildDetailItem('Thông tin viết hoá đơn', order.thongTinVietHoaDon),
+                          _buildDetailItem('Địa chỉ giao hàng', order.diaChiGiaoHang),
+                          _buildDetailItem('Người nhận hoa hồng', order.hoTenNguoiNhanHoaHong),
+                          _buildDetailItem('SĐT người nhận hoa hồng', order.sdtNguoiNhanHoaHong),
+                          _buildDetailItem('Hình thức chuyển HH', order.hinhThucChuyenHoaHong),
+                          _buildDetailItem('Thông tin nhận HH', order.thongTinNhanHoaHong),
+                          _buildDetailItem('Phương thức giao hàng', order.phuongThucGiaoHang),
+                          _buildDetailItem('Phương tiện giao hàng', order.phuongTienGiaoHang),
+                          _buildDetailItem('Người giao hàng', order.hoTenNguoiGiaoHang),
+                          _buildDetailItem('Người nhận hàng', order.nguoiNhanHang),
+                          _buildDetailItem('SĐT người nhận', order.sdtNguoiNhanHang),
+                          _buildDetailItem('Tên khách hàng gốc', order.tenKhachHang),
+                        ],
+                      ),
+                    ),
 
                           // Only show approval button for admins and pending orders
                           if (adminUsers.contains(_username) &&

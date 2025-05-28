@@ -141,6 +141,112 @@ class DBHelper {
   }
 }
 //ADDONXNK
+Future<void> clearChiTietDonTable() async {
+  final db = await database; 
+  await db.delete('chitietdon');
+  print('DBHelper: Cleared all records from chitietdon table.');
+}
+
+Future<void> clearLoHangTable() async {
+  final db = await database;
+  await db.delete('lohang');
+  print('DBHelper: Cleared all records from lohang table.');
+}
+
+Future<List<LoHangModel>> getAllLoHangByKhoID(String khoID) async {
+  try {
+    print('=== DB QUERY getAllLoHangByKhoID ===');
+    print('Getting all batches for warehouse: $khoID');
+    
+    final db = await database;
+    
+    // First, let's check what columns exist in the LoHang table
+    final tableInfo = await db.rawQuery("PRAGMA table_info(LoHang)");
+    print('LoHang table columns: ${tableInfo.map((col) => col['name']).toList()}');
+    
+    // Try the simple query first with just khoHangID
+    List<Map<String, dynamic>> maps;
+    try {
+      maps = await db.rawQuery('''
+        SELECT * FROM LoHang 
+        WHERE khoHangID = ?
+        ORDER BY ngayNhap DESC
+      ''', [khoID]);
+      print('Query with khoHangID successful: ${maps.length} results');
+    } catch (e) {
+      print('Query with khoHangID failed: $e');
+      
+      // Try with KhoHangID (capital K)
+      try {
+        maps = await db.rawQuery('''
+          SELECT * FROM LoHang 
+          WHERE KhoHangID = ?
+          ORDER BY ngayNhap DESC
+        ''', [khoID]);
+        print('Query with KhoHangID successful: ${maps.length} results');
+      } catch (e2) {
+        print('Query with KhoHangID also failed: $e2');
+        
+        // Let's see what warehouse IDs exist
+        final allWarehouses = await db.rawQuery('SELECT DISTINCT khoHangID FROM LoHang LIMIT 10');
+        print('Available warehouse IDs: ${allWarehouses.map((w) => w['khoHangID']).toList()}');
+        
+        // Try without NULLS LAST which might not be supported
+        maps = await db.rawQuery('''
+          SELECT * FROM LoHang 
+          WHERE khoHangID = ?
+        ''', [khoID]);
+        print('Simple query successful: ${maps.length} results');
+      }
+    }
+    
+    print('Found ${maps.length} batches in database for warehouse $khoID');
+    
+    if (maps.isEmpty) {
+      // Let's see a sample of all records to understand the data structure
+      final sampleData = await db.rawQuery('SELECT * FROM LoHang LIMIT 5');
+      print('Sample LoHang records:');
+      for (var record in sampleData) {
+        print('  Record: ${record}');
+      }
+    }
+    
+    final batches = List.generate(maps.length, (i) {
+      try {
+        return LoHangModel.fromMap(maps[i]);
+      } catch (e) {
+        print('Error creating LoHangModel from record ${i}: $e');
+        print('Record data: ${maps[i]}');
+        rethrow;
+      }
+    });
+    
+    // Log first few batches for debugging
+    for (int i = 0; i < batches.length && i < 3; i++) {
+      final batch = batches[i];
+      print('Batch $i: ${batch.loHangID} - ${batch.maHangID} - Warehouse: ${batch.khoHangID} - Qty: ${batch.soLuongHienTai}');
+    }
+    
+    return batches;
+  } catch (e) {
+    print('Error in getAllLoHangByKhoID: $e');
+    print('Stack trace: ${StackTrace.current}');
+    return [];
+  }
+}
+Future<List<GiaoDichKhoModel>> getTransactionsByBatchIds(List<String> batchIds) async {
+  final db = await database;
+  if (batchIds.isEmpty) return [];
+  
+  final placeholders = batchIds.map((_) => '?').join(',');
+  final result = await db.query(
+    DatabaseTables.giaoDichKhoTable,
+    where: 'loHangID IN ($placeholders)',
+    whereArgs: batchIds,
+    orderBy: 'ngay DESC, gio DESC', 
+  );
+  return result.map((map) => GiaoDichKhoModel.fromMap(map)).toList();
+}
 Future<KhuVucKhoChiTietModel?> getKhuVucKhoChiTietByChiTietID(String chiTietID) async {
   final db = await database;
   

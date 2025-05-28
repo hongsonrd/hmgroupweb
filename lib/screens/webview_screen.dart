@@ -298,7 +298,7 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
     child: Platform.isWindows
         ? // Show image on Windows
           Container(
-            height: 200, 
+            height: 400, 
             decoration: BoxDecoration(
               image: DecorationImage(
                 image: AssetImage('assets/viddream.png'),

@@ -56,6 +56,481 @@ class _HSKho2ScreenState extends State<HSKho2Screen> {
     _loadUsername();
     _loadWarehouses();
   }
+ 
+  Future<List<LoHangModel>> _fetchAvailableBatchesForTransfer(String currentAisleKe) async {
+  try {
+    print('=== FETCHING AVAILABLE BATCHES ===');
+    print('Current Aisle: $currentAisleKe');
+    print('Selected Warehouse: $_selectedKhoHangID');
+    print('==================================');
+    
+    // Get all batches in the current warehouse
+    final allBatches = await _dbHelper.getAllLoHangByKhoID(_selectedKhoHangID!);
+    
+    print('Total batches in warehouse: ${allBatches.length}');
+    
+    // Log first few batches for debugging
+    for (int i = 0; i < allBatches.length && i < 3; i++) {
+      final batch = allBatches[i];
+      print('All Batch $i: ${batch.loHangID} - ${batch.maHangID} - Qty: ${batch.soLuongHienTai} - LocationID: ${batch.khuVucKhoID}');
+    }
+    
+    // Filter batches that:
+    // 1. Have soLuongHienTai > 0
+    // 2. Are not in the current aisle
+    final availableBatches = allBatches.where((batch) {
+      // Check if batch has current quantity > 0
+      if (batch.soLuongHienTai == null || batch.soLuongHienTai! <= 0) {
+        print('Excluding batch ${batch.loHangID} - zero quantity');
+        return false;
+      }
+      
+      // Check if batch is not in the current aisle
+      if (batch.khuVucKhoID != null) {
+        // Find the detail for this batch to get its aisle (ke)
+        final batchDetail = _floorDetails.firstWhere(
+          (detail) => detail.chiTietID == batch.khuVucKhoID,
+          orElse: () => KhuVucKhoChiTietModel(),
+        );
+        
+        // Exclude if it's in the same aisle
+        if (batchDetail.ke == currentAisleKe) {
+          print('Excluding batch ${batch.loHangID} - same aisle: ${batchDetail.ke}');
+          return false;
+        }
+        
+        print('Including batch ${batch.loHangID} - different aisle: ${batchDetail.ke} vs $currentAisleKe');
+      } else {
+        print('Including batch ${batch.loHangID} - no location info');
+      }
+      
+      return true;
+    }).toList();
+    
+    print('Available batches after filtering: ${availableBatches.length}');
+    
+    // Sort by ngayNhap (newest first)
+    availableBatches.sort((a, b) {
+      if (a.ngayNhap == null && b.ngayNhap == null) return 0;
+      if (a.ngayNhap == null) return 1;
+      if (b.ngayNhap == null) return -1;
+      return DateTime.parse(b.ngayNhap!).compareTo(DateTime.parse(a.ngayNhap!));
+    });
+    
+    // Log the first few batches for debugging
+    for (int i = 0; i < availableBatches.length && i < 5; i++) {
+      final batch = availableBatches[i];
+      print('Available Batch $i: ${batch.loHangID} - ${batch.maHangID} - Qty: ${batch.soLuongHienTai}');
+    }
+    
+    return availableBatches;
+  } catch (e) {
+    print('Error fetching available batches: $e');
+    print('Stack trace: ${StackTrace.current}');
+    return [];
+  }
+}
+// Add this method to build the batch transfer list
+Widget _buildBatchTransferList(List<LoHangModel> batches, List<KhuVucKhoChiTietModel> targetAisleItems) {
+  return ListView.builder(
+    padding: EdgeInsets.all(16),
+    itemCount: batches.length,
+    itemBuilder: (context, index) {
+      final batch = batches[index];
+      return _buildTransferBatchCard(batch, targetAisleItems);
+    },
+  );
+}
+
+void _showBatchTransferDialog(String aisleName, List<KhuVucKhoChiTietModel> aisleItems) {
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return Dialog(
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.9,
+          height: MediaQuery.of(context).size.height * 0.8,
+          child: Column(
+            children: [
+              // Header
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Color(0xFFD4AF37),
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(8),
+                    topRight: Radius.circular(8),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Chuyển lô hàng về kệ $aisleName',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Content with search
+              Expanded(
+                child: FutureBuilder<List<LoHangModel>>(
+                  future: _fetchAvailableBatchesForTransfer(aisleName),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return Center(child: CircularProgressIndicator());
+                    }
+                    
+                    if (snapshot.hasError) {
+                      return Center(child: Text('Lỗi: ${snapshot.error}'));
+                    }
+                    
+                    if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.inventory_2, size: 64, color: Colors.grey),
+                            SizedBox(height: 16),
+                            Text(
+                              'Không có lô hàng khả dụng để chuyển',
+                              style: TextStyle(fontSize: 16, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    
+                    // Use the new SearchableBatchList widget
+                    return SearchableBatchList(
+                      batches: snapshot.data!,
+                      targetAisleItems: aisleItems,
+                      onBatchSelected: _showTransferConfirmationDialog,
+                      buildHighlightedText: _buildHighlightedText,
+                      buildInfoRow: _buildInfoRow,
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+Widget _buildTransferBatchCard(LoHangModel batch, List<KhuVucKhoChiTietModel> targetAisleItems, [String searchQuery = '']) {
+  final dateFormat = DateFormat('dd/MM/yyyy');
+  final ngayNhap = batch.ngayNhap != null 
+      ? dateFormat.format(DateTime.parse(batch.ngayNhap!))
+      : 'N/A';
+  
+  // Find current location info
+  String currentLocation = 'N/A';
+  if (batch.khuVucKhoID != null) {
+    final currentDetail = _floorDetails.firstWhere(
+      (detail) => detail.chiTietID == batch.khuVucKhoID,
+      orElse: () => KhuVucKhoChiTietModel(),
+    );
+    if (currentDetail.ke != null) {
+      currentLocation = 'Kệ ${currentDetail.ke}';
+      if (currentDetail.tangKe != null && currentDetail.tangKe != 'Chung') {
+        currentLocation += ' - ${currentDetail.tangKe}';
+      }
+    }
+  }
+  
+  return Card(
+    margin: EdgeInsets.only(bottom: 8),
+    elevation: 2,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(8),
+      side: searchQuery.isNotEmpty && 
+           (batch.maHangID?.toLowerCase().contains(searchQuery.toLowerCase()) == true ||
+            batch.loHangID?.toLowerCase().contains(searchQuery.toLowerCase()) == true)
+          ? BorderSide(color: Color(0xFFD4AF37), width: 2)
+          : BorderSide.none,
+    ),
+    child: InkWell(
+      onTap: () => _showTransferConfirmationDialog(batch, targetAisleItems),
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: _buildHighlightedText(
+                    batch.maHangID ?? 'N/A',
+                    searchQuery,
+                    TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${batch.soLuongHienTai?.toInt()} sản phẩm',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 8),
+            _buildInfoRow('Mã lô hàng', 
+                _buildHighlightedText(
+                  batch.loHangID ?? 'N/A',
+                  searchQuery,
+                  TextStyle(fontWeight: FontWeight.w500),
+                ),
+            ),
+            _buildInfoRow('Vị trí hiện tại', currentLocation),
+            _buildInfoRow('Ngày nhập', ngayNhap),
+            if (batch.hanSuDung != null)
+              _buildInfoRow('Hạn sử dụng', '${batch.hanSuDung} ngày'),
+            SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                ElevatedButton.icon(
+                  icon: Icon(Icons.move_up, size: 16),
+                  label: Text('Chuyển về đây'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFFD4AF37),
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                  onPressed: () => _showTransferConfirmationDialog(batch, targetAisleItems),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+// Add this helper method to create highlighted text
+Widget _buildHighlightedText(String text, String searchQuery, TextStyle style) {
+  if (searchQuery.isEmpty) {
+    return Text(text, style: style);
+  }
+  
+  final query = searchQuery.toLowerCase();
+  final lowerText = text.toLowerCase();
+  
+  if (!lowerText.contains(query)) {
+    return Text(text, style: style);
+  }
+  
+  final List<TextSpan> spans = [];
+  int start = 0;
+  
+  while (true) {
+    final index = lowerText.indexOf(query, start);
+    if (index == -1) {
+      // Add remaining text
+      if (start < text.length) {
+        spans.add(TextSpan(text: text.substring(start)));
+      }
+      break;
+    }
+    
+    // Add text before match
+    if (index > start) {
+      spans.add(TextSpan(text: text.substring(start, index)));
+    }
+    
+    // Add highlighted match
+    spans.add(TextSpan(
+      text: text.substring(index, index + query.length),
+      style: style.copyWith(
+        backgroundColor: Color(0xFFD4AF37).withOpacity(0.3),
+        fontWeight: FontWeight.bold,
+      ),
+    ));
+    
+    start = index + query.length;
+  }
+  
+  return RichText(
+    text: TextSpan(
+      style: style,
+      children: spans,
+    ),
+  );
+}
+
+// Add this method to show transfer confirmation dialog
+void _showTransferConfirmationDialog(LoHangModel batch, List<KhuVucKhoChiTietModel> targetAisleItems) {
+  // Select the first available location in the target aisle
+  final targetLocation = targetAisleItems.isNotEmpty ? targetAisleItems.first : null;
+  
+  if (targetLocation == null) {
+    _showErrorSnackBar('Không tìm thấy vị trí đích hợp lệ');
+    return;
+  }
+  
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Text('Xác nhận chuyển lô hàng'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Bạn có chắc chắn muốn chuyển lô hàng này không?'),
+            SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Thông tin lô hàng:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
+                  _buildInfoRow('Mã hàng', batch.maHangID ?? 'N/A'),
+                  _buildInfoRow('Mã lô hàng', batch.loHangID ?? 'N/A'),
+                  _buildInfoRow('Số lượng', '${batch.soLuongHienTai?.toInt()} sản phẩm'),
+                  _buildInfoRow('Chuyển đến', 'Kệ ${targetLocation.ke} - ${targetLocation.tangKe ?? "Chung"}'),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Hủy'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // Close confirmation dialog
+              Navigator.of(context).pop(); // Close transfer dialog
+              _transferBatch(batch, targetLocation);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFFD4AF37),
+              foregroundColor: Colors.white,
+            ),
+            child: Text('Xác nhận chuyển'),
+          ),
+        ],
+      );
+    },
+  );
+}
+Future<void> _transferBatch(LoHangModel batch, KhuVucKhoChiTietModel targetLocation) async {
+  if (batch.loHangID == null || targetLocation.chiTietID == null) {
+    _showErrorSnackBar('Thông tin không hợp lệ');
+    return;
+  }
+  
+  setState(() {
+    _isLoading = true;
+  });
+  
+  try {
+    final client = http.Client();
+    
+    // Construct the URL
+    final url = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/chuyenlohang/${batch.loHangID}/${targetLocation.chiTietID}';
+    
+    // Log the URL before sending
+    print('=== TRANSFER BATCH REQUEST ===');
+    print('URL: $url');
+    print('Method: POST');
+    print('Batch ID: ${batch.loHangID}');
+    print('Target Location ID: ${targetLocation.chiTietID}');
+    print('Batch MaHangID: ${batch.maHangID}');
+    print('Target Aisle: ${targetLocation.ke}');
+    print('Target Floor: ${targetLocation.tangKe}');
+    print('===============================');
+    
+    // Send transfer request
+    final response = await client.post(
+      Uri.parse(url),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    ).timeout(Duration(seconds: 15)); // Increased timeout
+    
+    // Log the response
+    print('=== TRANSFER BATCH RESPONSE ===');
+    print('Status Code: ${response.statusCode}');
+    print('Response Headers: ${response.headers}');
+    print('Response Body: ${response.body}');
+    print('===============================');
+    
+    client.close();
+    
+    if (response.statusCode == 200) {
+      // Success - refresh the data
+      print('Transfer successful, refreshing data...');
+      await _loadFloorDetails(_selectedKhuVucKhoID!);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đã chuyển lô hàng thành công'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    } else {
+      print('Transfer failed with status: ${response.statusCode}');
+      _showErrorSnackBar('Lỗi chuyển lô hàng: ${response.statusCode}\nPhản hồi: ${response.body}');
+    }
+  } catch (e) {
+    print('=== TRANSFER BATCH ERROR ===');
+    print('Error type: ${e.runtimeType}');
+    print('Error message: $e');
+    print('Stack trace: ${StackTrace.current}');
+    print('============================');
+    
+    String errorMessage = 'Lỗi kết nối';
+    if (e.toString().contains('TimeoutException')) {
+      errorMessage = 'Hết thời gian chờ kết nối';
+    } else if (e.toString().contains('SocketException')) {
+      errorMessage = 'Lỗi kết nối mạng';
+    } else if (e.toString().contains('FormatException')) {
+      errorMessage = 'Lỗi định dạng dữ liệu';
+    }
+    
+    _showErrorSnackBar('$errorMessage: ${e.toString()}');
+  } finally {
+    setState(() {
+      _isLoading = false;
+    });
+  }
+}
  Future<void> _loadUsername() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -1566,163 +2041,224 @@ Widget _buildCompactStat({
   }
   
   Widget _buildAisleTabContent(
-    String aisleName, 
-    List<KhuVucKhoChiTietModel> items,
-    Map<String, int> editedValues,
-    StateSetter setState,
-    bool hasPermission
-  ) {
-    return DefaultTabController(
-      length: 2, // Two tabs: Details and Batches
-      child: Column(
-        children: [
-          TabBar(
-            tabs: [
-              Tab(text: 'Thông tin kệ'),
-              Tab(text: 'Lô hàng'),
-            ],
-            labelColor: Colors.brown,
-            indicatorColor: Color(0xFFD4AF37),
-          ),
-          Expanded(
-            child: TabBarView(
-              children: [
-                // First tab: Aisle details
-                ListView.builder(
-                  itemCount: items.length,
-                  itemBuilder: (context, index) {
-                    final item = items[index];
-                    // Use the edited value if available, otherwise use the original
-                    final currentDungTich = editedValues[item.chiTietID] ?? item.dungTich ?? 0;
-                    
-                    return Card(
-                      margin: EdgeInsets.all(8),
-                      elevation: 3,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  String aisleName, 
+  List<KhuVucKhoChiTietModel> items,
+  Map<String, int> editedValues,
+  StateSetter setState,
+  bool hasPermission
+) {
+  return DefaultTabController(
+    length: 2, // Two tabs: Details and Batches
+    child: Column(
+      children: [
+        TabBar(
+          tabs: [
+            Tab(text: 'Thông tin kệ'),
+            Tab(text: 'Lô hàng'),
+          ],
+          labelColor: Colors.brown,
+          indicatorColor: Color(0xFFD4AF37),
+        ),
+        Expanded(
+          child: TabBarView(
+            children: [
+              // First tab: Aisle details with transfer button
+              Column(
+                children: [
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: items.length,
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        final currentDungTich = editedValues[item.chiTietID] ?? item.dungTich ?? 0;
+                        
+                        return Card(
+                          margin: EdgeInsets.all(8),
+                          elevation: 3,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  'Tầng kệ: ${item.tangKe ?? "Chung"}',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _getCapacityColor(currentDungTich).withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    '$currentDungTich%',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: _getCapacityColor(currentDungTich),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            Divider(),
-                            _buildInfoRow('ID', item.chiTietID ?? 'N/A'),
-                            _buildInfoRow('Tầng', item.tang ?? 'N/A'),
-                            _buildInfoRow('Phòng', item.phong ?? 'N/A'),
-                            _buildInfoRow('Giỏ', item.gio ?? 'N/A'),
-                            
-                            // Add the slider for editing DungTich if user has permission
-                            if (hasPermission) ...[
-                              SizedBox(height: 16),
-                              Text(
-                                'Điều chỉnh dung tích:',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                              SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Slider(
-                                      value: currentDungTich.toDouble(),
-                                      min: 0,
-                                      max: 100,
-                                      divisions: 20,
-                                      label: currentDungTich.toString(),
-                                      activeColor: _getCapacityColor(currentDungTich),
-                                      onChanged: (value) {
-                                        // Update the edited value
-                                        setState(() {
-                                          editedValues[item.chiTietID!] = value.toInt();
-                                        });
-                                      },
-                                    ),
-                                  ),
-                                  Container(
-                                    width: 60,
-                                    child: Text(
-                                      '$currentDungTich%',
+                                // ... existing content remains the same ...
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Tầng kệ: ${item.tangKe ?? "Chung"}',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 16,
                                       ),
-                                      textAlign: TextAlign.center,
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                            
-                            if (item.noiDung != null && item.noiDung!.isNotEmpty)
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
+                                    Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: _getCapacityColor(currentDungTich).withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        '$currentDungTich%',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: _getCapacityColor(currentDungTich),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Divider(),
+                                _buildInfoRow('ID', item.chiTietID ?? 'N/A'),
+                                _buildInfoRow('Tầng', item.tang ?? 'N/A'),
+                                _buildInfoRow('Phòng', item.phong ?? 'N/A'),
+                                _buildInfoRow('Giỏ', item.gio ?? 'N/A'),
+                                
+                                // Add the slider for editing DungTich if user has permission
+                                if (hasPermission) ...[
                                   SizedBox(height: 16),
                                   Text(
-                                    'Nội dung:',
+                                    'Điều chỉnh dung tích:',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 14,
+                                      color: Colors.black87,
                                     ),
                                   ),
-                                  Container(
-                                    width: double.infinity,
-                                    padding: EdgeInsets.all(8),
-                                    margin: EdgeInsets.only(top: 4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(item.noiDung ?? ''),
+                                  SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Slider(
+                                          value: currentDungTich.toDouble(),
+                                          min: 0,
+                                          max: 100,
+                                          divisions: 20,
+                                          label: currentDungTich.toString(),
+                                          activeColor: _getCapacityColor(currentDungTich),
+                                          onChanged: (value) {
+                                            setState(() {
+                                              editedValues[item.chiTietID!] = value.toInt();
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                      Container(
+                                        width: 60,
+                                        child: Text(
+                                          '$currentDungTich%',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
-                              ),
-                          ],
+                                
+                                if (item.noiDung != null && item.noiDung!.isNotEmpty)
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      SizedBox(height: 16),
+                                      Text(
+                                        'Nội dung:',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      Container(
+                                        width: double.infinity,
+                                        padding: EdgeInsets.all(8),
+                                        margin: EdgeInsets.only(top: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(item.noiDung ?? ''),
+                                      ),
+                                    ],
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  
+                  // Add the transfer button at the bottom
+                  if (hasPermission) // Only show if user has permission
+                    Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border(
+                          top: BorderSide(color: Colors.grey.withOpacity(0.2)),
                         ),
                       ),
-                    );
-                  },
-                ),
-                
-                // Second tab: Batches
-                _buildBatchesTab(items),
-              ],
-            ),
+                      child: ElevatedButton.icon(
+                        icon: Icon(Icons.move_up),
+                        label: Text('Chuyển lô hàng về đây'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color(0xFFB8860B),
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onPressed: () => _showBatchTransferDialog(aisleName, items),
+                      ),
+                    ),
+                ],
+              ),
+              
+              // Second tab: Batches (unchanged)
+              _buildBatchesTab(items),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+// Add this method to show when no results are found
+Widget _buildNoResultsWidget(String searchQuery) {
+  return Center(
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.search_off, size: 64, color: Colors.grey),
+        SizedBox(height: 16),
+        Text(
+          searchQuery.isEmpty 
+              ? 'Không có lô hàng nào'
+              : 'Không tìm thấy lô hàng nào',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
+        ),
+        if (searchQuery.isNotEmpty) ...[
+          SizedBox(height: 8),
+          Text(
+            'với từ khóa "$searchQuery"',
+            style: TextStyle(fontSize: 14, color: Colors.grey),
           ),
         ],
-      ),
-    );
-  }
-  
+        SizedBox(height: 16),
+        Text(
+          'Thử tìm kiếm với từ khóa khác',
+          style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+        ),
+      ],
+    ),
+  );
+}
   Widget _buildBatchesTab(List<KhuVucKhoChiTietModel> items) {
     // Combine all chiTietIDs to fetch all batches for this position
     final List<String> chiTietIDs = items
@@ -1957,34 +2493,36 @@ Future<void> _saveEditedValues(Map<String, int> editedValues, List<KhuVucKhoChiT
     _showErrorSnackBar('Lỗi: ${e.toString()}');
   }
 }
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              '$label:',
-              style: TextStyle(
-                color: Colors.black54,
-                fontWeight: FontWeight.w500,
-              ),
+ Widget _buildInfoRow(String label, dynamic value) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 3.0),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 120,
+          child: Text(
+            '$label:',
+            style: TextStyle(
+              color: Colors.black54,
+              fontWeight: FontWeight.w500,
             ),
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+        Expanded(
+          child: value is Widget 
+              ? value 
+              : Text(
+                  value.toString(),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+        ),
+      ],
+    ),
+  );
+}
 
   Color _getCapacityColor(int capacity) {
     if (capacity < 50) {
@@ -2032,4 +2570,271 @@ class RoomWallPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+// Add this new widget class at the end of your file, before the RoomWallPainter class
+class SearchableBatchList extends StatefulWidget {
+  final List<LoHangModel> batches;
+  final List<KhuVucKhoChiTietModel> targetAisleItems;
+  final Function(LoHangModel, List<KhuVucKhoChiTietModel>) onBatchSelected;
+  final Function(String, String, TextStyle) buildHighlightedText;
+  final Function(String, dynamic) buildInfoRow;
+
+  const SearchableBatchList({
+    Key? key,
+    required this.batches,
+    required this.targetAisleItems,
+    required this.onBatchSelected,
+    required this.buildHighlightedText,
+    required this.buildInfoRow,
+  }) : super(key: key);
+
+  @override
+  _SearchableBatchListState createState() => _SearchableBatchListState();
+}
+
+class _SearchableBatchListState extends State<SearchableBatchList> {
+  String searchQuery = '';
+  final TextEditingController searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Filter batches based on search query
+    final filteredBatches = widget.batches.where((batch) {
+      if (searchQuery.isEmpty) return true;
+      
+      final maHangID = batch.maHangID?.toLowerCase() ?? '';
+      final loHangID = batch.loHangID?.toLowerCase() ?? '';
+      final query = searchQuery.toLowerCase();
+      
+      return maHangID.contains(query) || loHangID.contains(query);
+    }).toList();
+    
+    return Column(
+      children: [
+        // Search bar
+        Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey.withOpacity(0.1),
+            border: Border(
+              bottom: BorderSide(color: Colors.grey.withOpacity(0.2)),
+            ),
+          ),
+          child: Column(
+            children: [
+              TextField(
+                controller: searchController,
+                decoration: InputDecoration(
+                  hintText: 'Tìm kiếm theo mã hàng hoặc mã lô hàng...',
+                  prefixIcon: Icon(Icons.search, color: Color(0xFFB8860B)),
+                  suffixIcon: searchQuery.isNotEmpty 
+                      ? IconButton(
+                          icon: Icon(Icons.clear),
+                          onPressed: () {
+                            searchController.clear();
+                            setState(() {
+                              searchQuery = '';
+                            });
+                          },
+                        )
+                      : null,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Color(0xFFD2B48C)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Color(0xFFD4AF37), width: 2),
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    searchQuery = value;
+                  });
+                  print('Search query changed: $value'); // Debug log
+                },
+              ),
+              SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Tìm thấy ${filteredBatches.length} lô hàng',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 14,
+                    ),
+                  ),
+                  if (searchQuery.isNotEmpty)
+                    TextButton.icon(
+                      icon: Icon(Icons.clear, size: 16),
+                      label: Text('Xóa bộ lọc'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Color(0xFFB8860B),
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      onPressed: () {
+                        searchController.clear();
+                        setState(() {
+                          searchQuery = '';
+                        });
+                      },
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        
+        // Results list
+        Expanded(
+          child: filteredBatches.isEmpty
+              ? _buildNoResultsWidget()
+              : ListView.builder(
+                  padding: EdgeInsets.all(16),
+                  itemCount: filteredBatches.length,
+                  itemBuilder: (context, index) {
+                    final batch = filteredBatches[index];
+                    return _buildTransferBatchCard(batch);
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNoResultsWidget() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.search_off, size: 64, color: Colors.grey),
+          SizedBox(height: 16),
+          Text(
+            searchQuery.isEmpty 
+                ? 'Không có lô hàng nào'
+                : 'Không tìm thấy lô hàng nào',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
+          ),
+          if (searchQuery.isNotEmpty) ...[
+            SizedBox(height: 8),
+            Text(
+              'với từ khóa "$searchQuery"',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+          ],
+          SizedBox(height: 16),
+          Text(
+            'Thử tìm kiếm với từ khóa khác',
+            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransferBatchCard(LoHangModel batch) {
+    final dateFormat = DateFormat('dd/MM/yyyy');
+    final ngayNhap = batch.ngayNhap != null 
+        ? dateFormat.format(DateTime.parse(batch.ngayNhap!))
+        : 'N/A';
+    
+    // Find current location info
+    String currentLocation = 'N/A';
+    if (batch.khuVucKhoID != null) {
+      // This is a simplified approach - you might need to pass _floorDetails as a parameter
+      currentLocation = 'Vị trí ${batch.khuVucKhoID}';
+    }
+    
+    return Card(
+      margin: EdgeInsets.only(bottom: 8),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: searchQuery.isNotEmpty && 
+             (batch.maHangID?.toLowerCase().contains(searchQuery.toLowerCase()) == true ||
+              batch.loHangID?.toLowerCase().contains(searchQuery.toLowerCase()) == true)
+            ? BorderSide(color: Color(0xFFD4AF37), width: 2)
+            : BorderSide.none,
+      ),
+      child: InkWell(
+        onTap: () => widget.onBatchSelected(batch, widget.targetAisleItems),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: widget.buildHighlightedText(
+                      batch.maHangID ?? 'N/A',
+                      searchQuery,
+                      TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16, color: Colors.green
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${batch.soLuongHienTai?.toInt()} sản phẩm',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8),
+              widget.buildInfoRow('Mã lô hàng', 
+                  widget.buildHighlightedText(
+                    batch.loHangID ?? 'N/A',
+                    searchQuery,
+                    TextStyle(fontWeight: FontWeight.w500),
+                  ),
+              ),
+              widget.buildInfoRow('Vị trí hiện tại', currentLocation),
+              widget.buildInfoRow('Ngày nhập', ngayNhap),
+              if (batch.hanSuDung != null)
+                widget.buildInfoRow('Hạn sử dụng', '${batch.hanSuDung} ngày'),
+              SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  ElevatedButton.icon(
+                    icon: Icon(Icons.move_up, size: 16),
+                    label: Text('Chuyển về đây'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFFD4AF37),
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    ),
+                    onPressed: () => widget.onBatchSelected(batch, widget.targetAisleItems),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

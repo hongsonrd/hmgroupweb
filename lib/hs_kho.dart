@@ -30,6 +30,7 @@ class HSKhoScreen extends StatefulWidget {
 }
 
 class _HSKhoScreenState extends State<HSKhoScreen> with SingleTickerProviderStateMixin {
+  String _selectedThoiGianFilter = 'HN';
   List<GiaoDichKhoModel> _inputHistory = [];
   List<GiaoDichKhoModel> _outputHistory = [];
   String _historySearchQuery = '';
@@ -234,7 +235,7 @@ List<GiaoDichKhoModel> get _filteredOutputHistory {
       
       // Filter for orders with status "0" (Đang xử lý) or "Cần xuất"
       final pendingOrders = allOrders.where((order) {
-        return order.trangThai == "0" || order.trangThai == "Cần xuất"  || order.trangThai == "Đang xử lý";
+        return order.trangThai == "0" || order.trangThai == "Cần xuất";
       }).toList();
       
       setState(() {
@@ -513,17 +514,27 @@ void _showWarehouseInputDialog() async {
   }
 
   List<DonHangModel> get _filteredOrders {
-    if (_searchQuery.isEmpty) {
-      return _pendingOrders;
-    }
-    
-    return _pendingOrders.where((order) {
-      return (order.soPhieu?.toLowerCase().contains(_searchQuery) ?? false) ||
-             (order.tenKhachHang?.toLowerCase().contains(_searchQuery) ?? false) ||
-             (order.tenKhachHang2?.toLowerCase().contains(_searchQuery) ?? false) ||
-             (order.nguoiTao?.toLowerCase().contains(_searchQuery) ?? false);
+  var orders = _pendingOrders;
+  
+  // Apply ThoiGianDatHang filter first
+  if (_selectedThoiGianFilter != 'ALL') {
+    orders = orders.where((order) {
+      return order.thoiGianDatHang == _selectedThoiGianFilter;
     }).toList();
   }
+  
+  // Then apply search query filter
+  if (_searchQuery.isEmpty) {
+    return orders;
+  }
+  
+  return orders.where((order) {
+    return (order.soPhieu?.toLowerCase().contains(_searchQuery) ?? false) ||
+           (order.tenKhachHang?.toLowerCase().contains(_searchQuery) ?? false) ||
+           (order.tenKhachHang2?.toLowerCase().contains(_searchQuery) ?? false) ||
+           (order.nguoiTao?.toLowerCase().contains(_searchQuery) ?? false);
+  }).toList();
+}
 
  @override
   Widget build(BuildContext context) {
@@ -648,31 +659,78 @@ void _showWarehouseInputDialog() async {
               ),
               
               // Search bar - only show in the first tab (Pending Orders)
-              AnimatedBuilder(
-                animation: _tabController,
-                builder: (context, child) {
-                  return _tabController.index == 0
-                    ? Padding(
-                        padding: EdgeInsets.all(16),
-                        child: TextField(
-                          controller: _searchController,
-                          onChanged: _searchOrders,
-                          decoration: InputDecoration(
-                            hintText: 'Tìm kiếm đơn hàng, khách hàng...',
-                            prefixIcon: Icon(Icons.search),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: Colors.grey[300]!),
-                            ),
-                            filled: true,
-                            fillColor: Colors.white,
-                            contentPadding: EdgeInsets.symmetric(vertical: 0),
-                          ),
-                        ),
-                      )
-                    : SizedBox.shrink();
-                },
+AnimatedBuilder(
+  animation: _tabController,
+  builder: (context, child) {
+    return _tabController.index == 0
+      ? Padding(
+          padding: EdgeInsets.all(16),
+          child: Row(
+            children: [
+              // Search bar - 2/3 width
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: _searchOrders,
+                  decoration: InputDecoration(
+                    hintText: 'Tìm kiếm đơn hàng, khách hàng...',
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: EdgeInsets.symmetric(vertical: 0),
+                  ),
+                ),
               ),
+              
+              SizedBox(width: 12),
+              
+              // Dropdown filter - 1/3 width
+              Expanded(
+                flex: 1,
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Color(0xFF837826), width: 2),
+                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.white,
+                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _selectedThoiGianFilter,
+                      isExpanded: true,
+                      icon: Icon(Icons.arrow_drop_down, color: Color(0xFF837826)),
+                      style: TextStyle(
+                        color: Color(0xFF837826),
+                        fontWeight: FontWeight.bold,
+                      ),
+                      items: [
+                        DropdownMenuItem(value: 'HN', child: Text('HN')),
+                        DropdownMenuItem(value: 'HN2', child: Text('HN2')),
+                        DropdownMenuItem(value: 'ĐN', child: Text('ĐN')),
+                        DropdownMenuItem(value: 'NT', child: Text('NT')),
+                        DropdownMenuItem(value: 'SG', child: Text('SG')),
+                        DropdownMenuItem(value: 'ALL', child: Text('Tất cả')),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedThoiGianFilter = value ?? 'HN';
+                        });
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        )
+      : SizedBox.shrink();
+  },
+),
               
               // Tab content
               Expanded(
@@ -1593,7 +1651,7 @@ void _showWarehouseDetails() async {
                 children: [
                   SizedBox(height: 4),
                   Text('Khách hàng: ${order.tenKhachHang2 ?? order.tenKhachHang ?? "N/A"}'),
-                  Text('Ngày: ${order.ngay ?? "N/A"}'),
+                  Text('Ngày: ${order.ngay ?? "N/A"}, / KD: ${order.nguoiTao}'),
                   Text('Trạng thái: ${_getStatusText(order.trangThai)}'),
                 ],
               ),
@@ -1778,6 +1836,9 @@ Future<void> _printOrderQRCode(DonHangModel order) async {
       }
     }
     
+    // Get NguoiTao in uppercase
+    String nguoiTao = (order.nguoiTao ?? "").toUpperCase();
+    
     pdf.addPage(
       pw.Page(
         pageFormat: pdfx.PdfPageFormat(30 * pdfx.PdfPageFormat.mm, 30 * pdfx.PdfPageFormat.mm, marginAll: 1 * pdfx.PdfPageFormat.mm),
@@ -1786,42 +1847,55 @@ Future<void> _printOrderQRCode(DonHangModel order) async {
             child: pw.Column(
               mainAxisAlignment: pw.MainAxisAlignment.center,
               children: [
-                // QR Code
+                // Smaller QR Code
                 pw.BarcodeWidget(
                   barcode: pw.Barcode.qrCode(),
                   data: order.soPhieu!,
-                  width: 20 * pdfx.PdfPageFormat.mm,
-                  height: 20 * pdfx.PdfPageFormat.mm,
+                  width: 16 * pdfx.PdfPageFormat.mm,  // Reduced from 20mm to 16mm
+                  height: 16 * pdfx.PdfPageFormat.mm, // Reduced from 20mm to 16mm
                 ),
                 
                 pw.SizedBox(height: 1 * pdfx.PdfPageFormat.mm),
                 
+                // NguoiTao in caps
+                if (nguoiTao.isNotEmpty)
+                  pw.Text(
+                    nguoiTao.length > 12 ? '${nguoiTao.substring(0, 12)}...' : nguoiTao,
+                    style: pw.TextStyle(
+                      fontSize: 4,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                
+                pw.SizedBox(height: 0.5 * pdfx.PdfPageFormat.mm),
+                
                 // Black pill with last two digits - smaller size
                 pw.Container(
                   padding: pw.EdgeInsets.symmetric(
-                    horizontal: 3 * pdfx.PdfPageFormat.mm,
-                    vertical: 1 * pdfx.PdfPageFormat.mm,
+                    horizontal: 2.5 * pdfx.PdfPageFormat.mm,
+                    vertical: 0.8 * pdfx.PdfPageFormat.mm,
                   ),
                   decoration: pw.BoxDecoration(
                     color: pdfx.PdfColors.black,
-                    borderRadius: pw.BorderRadius.circular(6),
+                    borderRadius: pw.BorderRadius.circular(5),
                   ),
                   child: pw.Text(
                     lastTwoDigits,
                     style: pw.TextStyle(
                       color: pdfx.PdfColors.white,
-                      fontSize: 8,
+                      fontSize: 6,
                       fontWeight: pw.FontWeight.bold,
                     ),
                   ),
                 ),
                 
-                pw.SizedBox(height: 1 * pdfx.PdfPageFormat.mm),
+                pw.SizedBox(height: 0.5 * pdfx.PdfPageFormat.mm),
                 
                 // Order number - truncated if too long
                 pw.Text(
                   order.soPhieu!.length > 15 ? '${order.soPhieu!.substring(0, 15)}...' : order.soPhieu!,
-                  style: pw.TextStyle(fontSize: 3),
+                  style: pw.TextStyle(fontSize: 2.5),
                   textAlign: pw.TextAlign.center,
                 ),
               ],
@@ -2115,19 +2189,7 @@ class OrderDetailsSheet extends StatelessWidget {
                                 ),
                               ),
                               Divider(thickness: 1),
-                              SizedBox(height: 8),
-                              _buildInfoRow('Số phiếu:', order.soPhieu ?? 'N/A'),
-                              _buildInfoRow('Ngày tạo:', order.ngay ?? 'N/A'),
-                              _buildInfoRow('Khách hàng:', order.tenKhachHang2 ?? order.tenKhachHang ?? 'N/A'),
-                              _buildInfoRow('Người tạo:', order.nguoiTao ?? 'N/A'),
-                              _buildInfoRow('Trạng thái:', _getStatusText(order.trangThai)),
-                              _buildInfoRow('Ghi chú:', order.ghiChu ?? 'N/A'),
-                            ],
-                          ),
-                        ),
-                      ),
-                      
-                      SizedBox(height: 16),
+                              SizedBox(height: 16),
                       
                       // Order items
                       Text(
@@ -2168,7 +2230,7 @@ class OrderDetailsSheet extends StatelessWidget {
                                   return ListTile(
                                     title: Text(
                                       item.tenHang ?? 'Sản phẩm không tên',
-                                      style: TextStyle(fontWeight: FontWeight.bold),
+                                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
                                     ),
                                     subtitle: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2184,7 +2246,27 @@ class OrderDetailsSheet extends StatelessWidget {
                                 },
                               ),
                             ),
-                            
+                              SizedBox(height: 8),
+                              _buildInfoRow('Số phiếu:', order.soPhieu ?? 'N/A'),
+                              _buildInfoRow('Ngày tạo:', order.ngay ?? 'N/A'),
+                              _buildInfoRow('Khách hàng:', order.tenKhachHang2 ?? order.tenKhachHang ?? 'N/A'),
+                              _buildInfoRow('Người tạo:', order.nguoiTao ?? 'N/A'),
+                              _buildInfoRow('Trạng thái:', _getStatusText(order.trangThai)),
+                              _buildInfoRow('Ghi chú:', order.ghiChu ?? 'N/A'),
+                                 _buildInfoRow('Chi nhánh', order.thoiGianDatHang ??''),
+                          _buildInfoRow('Giấy tờ cần khi giao', order.giayToCanKhiGiaoHang ??''),
+                          _buildInfoRow('Địa chỉ giao hàng', order.diaChiGiaoHang ??''),
+                          _buildInfoRow('Phương thức giao hàng', order.phuongThucGiaoHang ??''),
+                          _buildInfoRow('Phương tiện giao hàng', order.phuongTienGiaoHang ??''),
+                          _buildInfoRow('Người giao hàng', order.hoTenNguoiGiaoHang ??''),
+                          _buildInfoRow('Người nhận hàng', order.nguoiNhanHang ??''),
+                          _buildInfoRow('SĐT người nhận', order.sdtNguoiNhanHang ??''),
+                          _buildInfoRow('Tên khách hàng gốc', order.tenKhachHang ??''),
+                            ],
+                          ),
+                        ),
+                      ),
+
                       SizedBox(height: 24),
                             
                       // Actions

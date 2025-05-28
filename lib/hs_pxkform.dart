@@ -241,8 +241,8 @@ class ExportFormGenerator {
                         children: [
                           _buildTableCell('Phương thức thanh toán:', ttf, align: pw.TextAlign.right),
                           _buildTableCell(order.phuongThucThanhToan ?? 'Tiền mặt', ttf),
-                          pw.Container(),
-                          pw.Container(),
+                          _buildTableCell('NVKD:', ttf, align: pw.TextAlign.right),
+                          _buildTableCell(order.nguoiTao ?? 'N/A', ttf),
                         ],
                       ),
                     ],
