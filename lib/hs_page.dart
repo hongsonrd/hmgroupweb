@@ -1292,7 +1292,7 @@ Future<void> _syncDonHangData() async {
     // Encode the username for safe inclusion in URL
     final encodedUsername = Uri.encodeComponent(_username);
     
-    final response = await http.get(
+    final response = await AuthenticatedHttpClient.get(
       Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/hoteldonhang/$encodedUsername?last_sync=$lastSync')
     );
     
@@ -1328,7 +1328,7 @@ Future<void> _syncChiTietDonData() async {
     final encodedUsername = Uri.encodeComponent(_username);
     final lastSync = prefs.getString('last_chitietdon_sync') ?? '2023-01-01 00:00:00';
 
-    final response = await http.get(
+    final response = await AuthenticatedHttpClient.get(
       Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelchitietdon/$encodedUsername?last_sync=$lastSync')
     );
 
@@ -1403,7 +1403,7 @@ Future<void> _syncKhuVucKhoChiTietData() async {
     // Debug log
     print('Syncing KhuVucKhoChiTiet data');
     
-    final response = await http.get(
+    final response = await AuthenticatedHttpClient.get(
       Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelkhuvuckhochitiet')
     );
     
