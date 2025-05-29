@@ -59,7 +59,7 @@ final List<String> adminUsers = [
   'DN': ['hotel.danang', 'hm.tason', 'hm.manhha'],
   'NT': ['hotel.nhatrang', 'hm.tason', 'hm.manhha']
 };
-final List<String> approveableStatuses = ['duyệt', 'cần xuất', 'đang xử lý'];
+final List<String> approveableStatuses = ['duyệt', 'cần xuất', 'đang xử lý', 'hoàn thành', 'xuất nội bộ xong'];
 
   final List<String> specialUsers = [
   'hm.tason', 'hm.luukinh', 'hm.trangiang', 'hm.damlinh', 'nvthunghiem', 'hm.phiminh',

@@ -141,6 +141,19 @@ class DBHelper {
   }
 }
 //ADDONXNK
+Future<void> clearDonHangTable() async {
+  final db = await database;
+  await db.delete('donhang');
+}
+Future<void> updateDonHangStatus(String soPhieu, String newStatus) async {
+  final db = await database;
+  await db.update(
+    DatabaseTables.donHangTable,
+    {'trangThai': newStatus}, // Make sure this matches your actual column name
+    where: 'soPhieu = ?', // Make sure this matches your actual column name
+    whereArgs: [soPhieu],
+  );
+}
 Future<void> clearChiTietDonTable() async {
   final db = await database; 
   await db.delete('chitietdon');

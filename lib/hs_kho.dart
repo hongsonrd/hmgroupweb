@@ -4167,7 +4167,266 @@ class _WarehouseOutputDialogState extends State<WarehouseOutputDialog> {
     _noteController.dispose();
     super.dispose();
   }
+  void _showBulkExportConfirmation() {
+  // Determine warehouses to use
+  List<String> warehouseIds = [];
   
+  if (_selectedWarehouseId == 'HN') {
+    // Special case for Hà Nội - include both HN and HN2
+    warehouseIds = ['HN', 'HN2'];
+  } else {
+    // Use only the selected warehouse
+    warehouseIds = [_selectedWarehouseId!];
+  }
+  
+  final warehouseNames = warehouseIds.map((id) {
+    final warehouse = widget.warehouses.firstWhere(
+      (w) => w.khoHangID == id,
+      orElse: () => KhoModel(khoHangID: id, tenKho: id),
+    );
+    return warehouse.tenKho ?? id;
+  }).join(' và ');
+  
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(
+        'Xác nhận xuất toàn bộ',
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Color(0xFF534b0d),
+        ),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Bạn có chắc chắn muốn xuất toàn bộ hàng hóa trong đơn hàng này?',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          SizedBox(height: 12),
+          Text('Hệ thống sẽ tự động:'),
+          SizedBox(height: 8),
+          Text('• Xuất tất cả mặt hàng theo số lượng yêu cầu'),
+          Text('• Sử dụng lô hàng có sẵn tốt nhất từ kho: $warehouseNames'),
+          Text('• Ưu tiên lô hàng có hạn sử dụng sớm nhất'),
+          Text('• Xuất với số lượng tối đa có thể'),
+          SizedBox(height: 12),
+          Container(
+            padding: EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.warning_amber, color: Colors.orange, size: 20),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Lưu ý: Hệ thống có thể xảy ra sai sót. Vui lòng kiểm tra kỹ trước khi xác nhận.',
+                    style: TextStyle(
+                      color: Colors.orange[800],
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text('Hủy'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.of(context).pop();
+            _performBulkExport(warehouseIds);
+          },
+          child: Text('Xác nhận xuất toàn bộ', style: TextStyle(color: Colors.white)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Color(0xFF837826),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+Future<bool> _performSingleBatchExport(LoHangModel batch, double quantity, String note) async {
+  try {
+    // Generate transaction ID
+    final giaoDichID = _generateGiaoDichID();
+    
+    // Get current date/time
+    final now = DateTime.now();
+    final formattedDate = DateFormat('yyyy-MM-dd').format(now);
+    final formattedDateTime = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
+    final formattedTime = DateFormat('HH:mm:ss').format(now);
+    
+    // Update batch quantity
+    final updatedBatch = LoHangModel(
+      loHangID: batch.loHangID,
+      soLuongBanDau: batch.soLuongBanDau,
+      soLuongHienTai: (batch.soLuongHienTai ?? 0) - quantity,
+      ngayNhap: batch.ngayNhap,
+      ngayCapNhat: formattedDateTime,
+      hanSuDung: batch.hanSuDung,
+      trangThai: (batch.soLuongHienTai ?? 0) - quantity <= 0 ? 'Đã hết' : 'Bình thường',
+      maHangID: batch.maHangID,
+      khoHangID: batch.khoHangID,
+      khuVucKhoID: batch.khuVucKhoID,
+    );
+    
+    // Prepare GiaoDichKho data
+    final giaoDich = GiaoDichKhoModel(
+      giaoDichID: giaoDichID,
+      ngay: formattedDate,
+      gio: formattedTime,
+      nguoiDung: widget.username,
+      trangThai: '-',
+      loaiGiaoDich: 'Xuất kho tự động',
+      maGiaoDich: _selectedOrder!.soPhieu ?? '',
+      loHangID: batch.loHangID ?? '',
+      soLuong: quantity,
+      ghiChu: note,
+      thucTe: null,
+    );
+    
+    // Save to local database
+    await widget.dbHelper.updateLoHang(updatedBatch);
+    await widget.dbHelper.insertGiaoDichKho(giaoDich);
+    
+    // Try to send to server (but don't fail if server is unavailable)
+    try {
+      // Update LoHang on server
+      await http.post(
+        Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelupdatelohang/${updatedBatch.loHangID}'),
+        body: jsonEncode(updatedBatch.toMap()),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(Duration(seconds: 5));
+      
+      // Create GiaoDichKho on server
+      await http.post(
+        Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelnewgiaodich/${giaoDich.giaoDichID}'),
+        body: jsonEncode(giaoDich.toMap()),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(Duration(seconds: 5));
+    } catch (e) {
+      // Server sync failed, but local data is saved
+      print('Server sync failed for batch ${batch.loHangID}: $e');
+    }
+    
+    return true;
+  } catch (e) {
+    print('Error exporting batch ${batch.loHangID}: $e');
+    return false;
+  }
+}
+void _showBulkExportResult(int successCount, int totalItems, List<String> failedItems) {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(
+        'Kết quả xuất toàn bộ',
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Color(0xFF534b0d),
+        ),
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Success summary
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.green, size: 24),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Đã xuất thành công: $successCount/$totalItems mặt hàng',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green[700],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Failed items
+            if (failedItems.isNotEmpty) ...[
+              SizedBox(height: 16),
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.withOpacity(0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.error, color: Colors.red, size: 24),
+                        SizedBox(width: 12),
+                        Text(
+                          'Không thể xuất:',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 8),
+                    ...failedItems.map((item) => Padding(
+                      padding: EdgeInsets.only(left: 36, bottom: 4),
+                      child: Text('• $item', style: TextStyle(color: Colors.red[600])),
+                    )).toList(),
+                  ],
+                ),
+              ),
+            ],
+            
+            SizedBox(height: 16),
+            Text(
+              'Vui lòng kiểm tra lại lịch sử xuất kho để xác nhận các giao dịch.',
+              style: TextStyle(
+                fontStyle: FontStyle.italic,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        ElevatedButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text('Đóng', style: TextStyle(color: Colors.white)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Color(0xFF837826),
+          ),
+        ),
+      ],
+    ),
+  );
+}
   bool _validateInputs() {
     // Basic validations
     if (_selectedWarehouseId == null) {
@@ -4202,7 +4461,121 @@ class _WarehouseOutputDialogState extends State<WarehouseOutputDialog> {
     
     return true;
   }
+  Future<void> _performBulkExport(List<String> warehouseIds) async {
+  if (_selectedOrder == null || _orderItems.isEmpty) {
+    _showError('Không có đơn hàng hoặc mặt hàng nào để xuất');
+    return;
+  }
   
+  setState(() {
+    _isLoading = true;
+  });
+  
+  int successCount = 0;
+  int totalItems = _orderItems.length;
+  List<String> failedItems = [];
+  
+  try {
+    for (final orderItem in _orderItems) {
+      if (orderItem.idHang == null) {
+        failedItems.add(orderItem.tenHang ?? 'Mặt hàng không tên');
+        continue;
+      }
+      
+      // Find best available batches across all specified warehouses
+      List<LoHangModel> allBatches = [];
+      
+      for (String warehouseId in warehouseIds) {
+        try {
+          final batches = await widget.dbHelper.getLoHangByMaHangAndKho(
+            orderItem.idHang!,
+            warehouseId
+          );
+          
+          // Filter for available batches
+          final availableBatches = batches.where((batch) => 
+            (batch.soLuongHienTai ?? 0) > 0
+          ).toList();
+          
+          allBatches.addAll(availableBatches);
+        } catch (e) {
+          print('Error loading batches for warehouse $warehouseId: $e');
+        }
+      }
+      
+      if (allBatches.isEmpty) {
+        failedItems.add('${orderItem.tenHang ?? 'Mặt hàng không tên'} (không có lô hàng)');
+        continue;
+      }
+      
+      // Sort batches by expiry date and then by date
+      allBatches.sort((a, b) {
+        // Prioritize batches with expiry dates
+        if (a.hanSuDung != null && b.hanSuDung != null && a.hanSuDung! > 0 && b.hanSuDung! > 0) {
+          return a.hanSuDung!.compareTo(b.hanSuDung!);
+        }
+        
+        // Then by date received (oldest first)
+        if (a.ngayNhap != null && b.ngayNhap != null) {
+          return a.ngayNhap!.compareTo(b.ngayNhap!);
+        }
+        
+        return 0;
+      });
+      
+      // Calculate how much we need to export
+      double requestedQty = orderItem.soLuongYeuCau ?? 0;
+      double remainingToExport = requestedQty;
+      
+      // Export from batches until we fulfill the order or run out of stock
+      for (final batch in allBatches) {
+        if (remainingToExport <= 0) break;
+        
+        final availableQty = batch.soLuongHienTai ?? 0;
+        if (availableQty <= 0) continue;
+        
+        // Calculate quantity to export from this batch
+        final qtyToExport = availableQty >= remainingToExport ? remainingToExport : availableQty;
+        
+        // Perform the export for this batch
+        bool exportSuccess = await _performSingleBatchExport(
+          batch, 
+          qtyToExport, 
+          'Xuất tự động - ${orderItem.tenHang ?? 'N/A'}'
+        );
+        
+        if (exportSuccess) {
+          remainingToExport -= qtyToExport;
+        } else {
+          print('Failed to export from batch ${batch.loHangID}');
+        }
+      }
+      
+      // Check if we successfully exported the full requested quantity
+      if (remainingToExport <= 0) {
+        successCount++;
+      } else {
+        failedItems.add('${orderItem.tenHang ?? 'Mặt hàng không tên'} (thiếu ${remainingToExport.toStringAsFixed(0)} ${orderItem.donViTinh ?? ''})');
+      }
+    }
+    
+    setState(() {
+      _isLoading = false;
+    });
+    
+    // Show result dialog
+    _showBulkExportResult(successCount, totalItems, failedItems);
+    
+    // Refresh data
+    widget.onSuccess();
+    
+  } catch (e) {
+    setState(() {
+      _isLoading = false;
+    });
+    _showError('Lỗi khi xuất toàn bộ: ${e.toString()}');
+  }
+}
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -4643,15 +5016,36 @@ void _resetFormForNextProduct() {
                       
                       // Order items section - made more prominent
                       if (_orderItems.isNotEmpty) ...[
-                        Text(
-                          'CHỌN MẶT HÀNG',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: Color(0xFF534b0d),
-                          ),
-                        ),
-                        SizedBox(height: 8),
+                        Container(
+    padding: EdgeInsets.symmetric(horizontal: 0),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          'CHỌN MẶT HÀNG',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+            color: Color(0xFF534b0d),
+          ),
+        ),
+        OutlinedButton.icon(
+          onPressed: _showBulkExportConfirmation,
+          icon: Icon(Icons.output, size: 16),
+          label: Text('Xuất toàn bộ'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Color(0xFF534b0d),
+            side: BorderSide(color: Color(0xFF534b0d), width: 1.5),
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+  SizedBox(height: 8),
                         Card(
                           elevation: 2,
                           shape: RoundedRectangleBorder(

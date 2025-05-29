@@ -81,7 +81,160 @@ class _HSDonHangScreenState extends State<HSDonHangScreen> {
     _cleanupTimer?.cancel();
     super.dispose();
   }
+Future<void> _deleteOrder(String soPhieu) async {
+  // Show confirmation dialog
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('Xác nhận xoá đơn'),
+      content: Text('Bạn có chắc chắn muốn xoá đơn hàng $soPhieu?\n\nHành động này không thể hoàn tác.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: Text('Huỷ'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: Text('Xoá', style: TextStyle(color: Colors.white)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+          ),
+        ),
+      ],
+    ),
+  ) ?? false;
 
+  if (!confirm) return;
+
+  setState(() {
+    _processingOrders[soPhieu] = 'processing';
+  });
+
+  try {
+    final url = Uri.parse(
+      'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hoteldonhangxoa/$soPhieu'
+    );
+    
+    print('Sending delete request to: ${url.toString()}');
+
+    final response = await http.get(url);
+    
+    print('Delete response status code: ${response.statusCode}');
+    print('Delete response body: ${response.body}');
+
+    if (response.statusCode == 200) {
+      setState(() {
+        _processingOrders[soPhieu] = 'success';
+      });
+
+      // Show success dialog
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Thành công'),
+          content: Text('Đơn hàng $soPhieu đã được xoá thành công.\n\nVui lòng nhấn đồng bộ ở trên để cập nhật danh sách.'),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _loadOrders(); // Refresh the orders list
+              },
+              child: Text('Đã xong', style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color(0xFF534b0d),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Đóng'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      setState(() {
+        _processingOrders[soPhieu] = 'error';
+      });
+      
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Lỗi'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Không thể xoá đơn hàng. Vui lòng thử lại sau.'),
+                SizedBox(height: 8),
+                Text('URL: ${url.toString()}', style: TextStyle(fontSize: 12)),
+                Text('Mã lỗi: ${response.statusCode}', style: TextStyle(fontSize: 12)),
+                Text('Phản hồi: ${response.body}', style: TextStyle(fontSize: 12)),
+              ],
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Đóng'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+  } catch (e) {
+    print('Exception deleting order: $e');
+    setState(() {
+      _processingOrders[soPhieu] = 'error';
+    });
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Lỗi'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Không thể xoá đơn hàng.'),
+              SizedBox(height: 8),
+              Text('Chi tiết lỗi: $e', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Đóng', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+bool _canDeleteOrder(DonHangModel order) {
+  final isOrderCreator = (order.nguoiTao?.toLowerCase() ?? '') == _username.toLowerCase();
+  final lowerStatus = (order.trangThai ?? '').toLowerCase();
+  
+  final deletableStatuses = [
+    'chưa xong',
+    'gửi', 
+    'duyệt',
+    'xuất nội bộ',
+    'gửi xuất nội bộ',
+    'dự trù'
+  ];
+  
+  return isOrderCreator && deletableStatuses.contains(lowerStatus);
+}
   Future<void> _exportToExcel() async {
     try {
       setState(() {
@@ -546,82 +699,103 @@ class _HSDonHangScreenState extends State<HSDonHangScreen> {
   }
 
   Future<bool> _approveOrder(String soPhieu) async {
-    // Mark this order as being processed
+  // Find the current order to get its current status
+  DonHangModel? currentOrder;
+  for (var order in _orders) {
+    if (order.soPhieu == soPhieu) {
+      currentOrder = order;
+      break;
+    }
+  }
+  
+  if (currentOrder == null) {
+    print('Order not found: $soPhieu');
+    return false;
+  }
+
+  // Mark this order as being processed
+  setState(() {
+    _processingApprovals.add(soPhieu);
+    _processingOrders[soPhieu] = 'processing';
+  });
+
+  // Start cleanup timer if not active
+  _cleanupTimer ??= Timer.periodic(Duration(seconds: 10), (timer) {
+    // Remove successful or error statuses after 10 seconds
     setState(() {
-      _processingApprovals.add(soPhieu);
-      _processingOrders[soPhieu] = 'processing';
-    });
-
-    // Start cleanup timer if not active
-    _cleanupTimer ??= Timer.periodic(Duration(seconds: 10), (timer) {
-      // Remove successful or error statuses after 10 seconds
-      setState(() {
-        _processingOrders.removeWhere((key, value) => value != 'processing');
-        if (_processingOrders.isEmpty) {
-          _cleanupTimer?.cancel();
-          _cleanupTimer = null;
-        }
-      });
-    });
-
-    try {
-      // API call code remains the same
-      final url = Uri.parse(
-          'https://www.appsheet.com/api/v2/apps/HMPro-6083480/tables/DonHang/Action');
-
-      final Map<String, dynamic> requestBody = {
-        "Action": "Edit",
-        "Properties": {
-          "Locale": "en-US",
-          "Location": "47.623098, -122.330184",
-          "Timezone": "SE Asia Standard Time",
-          "UserSettings": {
-            "Người dùng": "hm.trangiang",
-            "Mật khẩu": "100011"
-          }
-        },
-        "Rows": [
-          {
-            "Số phiếu": soPhieu,
-            "Phương thức giao hàng": soPhieu
-          }
-        ]
-      };
-
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'applicationAccessKey': 'V2-HcSe8-jFGNM-Oyw1x-IN5xg-SybvY-i04pC-zcz8P-yzDzd',
-        },
-        body: jsonEncode(requestBody),
-      );
-
-      if (response.statusCode == 200) {
-        // Success
-        setState(() {
-          _processingOrders[soPhieu] = 'success';
-          // Don't remove from _processingApprovals until reload completes
-        });
-        return true;
-      } else {
-        // Error
-        print('Error approving order: ${response.statusCode}, ${response.body}');
-        setState(() {
-          _processingOrders[soPhieu] = 'error';
-          _processingApprovals.remove(soPhieu);
-        });
-        return false;
+      _processingOrders.removeWhere((key, value) => value != 'processing');
+      if (_processingOrders.isEmpty) {
+        _cleanupTimer?.cancel();
+        _cleanupTimer = null;
       }
-    } catch (e) {
-      print('Exception approving order: $e');
+    });
+  });
+
+  try {
+    // API call code remains the same
+    final url = Uri.parse(
+        'https://www.appsheet.com/api/v2/apps/HMPro-6083480/tables/DonHang/Action');
+
+    final Map<String, dynamic> requestBody = {
+      "Action": "Edit",
+      "Properties": {
+        "Locale": "en-US",
+        "Location": "47.623098, -122.330184",
+        "Timezone": "SE Asia Standard Time",
+        "UserSettings": {
+          "Người dùng": "hm.trangiang",
+          "Mật khẩu": "100011"
+        }
+      },
+      "Rows": [
+        {
+          "Số phiếu": soPhieu,
+          "Phương thức giao hàng": soPhieu
+        }
+      ]
+    };
+
+    final response = await http.post(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'applicationAccessKey': 'V2-HcSe8-jFGNM-Oyw1x-IN5xg-SybvY-i04pC-zcz8P-yzDzd',
+      },
+      body: jsonEncode(requestBody),
+    );
+
+    if (response.statusCode == 200) {
+      // Success - update local database
+      final currentStatus = currentOrder.trangThai ?? '';
+      final newStatus = _getNextStatus(currentStatus, 'Duyệt đơn');
+      
+      if (newStatus != currentStatus) {
+        await _updateOrderStatusLocally(soPhieu, newStatus);
+      }
+      
+      setState(() {
+        _processingOrders[soPhieu] = 'success';
+        // Don't remove from _processingApprovals until reload completes
+      });
+      return true;
+    } else {
+      // Error
+      print('Error approving order: ${response.statusCode}, ${response.body}');
       setState(() {
         _processingOrders[soPhieu] = 'error';
         _processingApprovals.remove(soPhieu);
       });
       return false;
     }
+  } catch (e) {
+    print('Exception approving order: $e');
+    setState(() {
+      _processingOrders[soPhieu] = 'error';
+      _processingApprovals.remove(soPhieu);
+    });
+    return false;
   }
+}
 
   Widget _buildProcessingQueue() {
     if (_processingOrders.isEmpty) return SizedBox.shrink();
@@ -793,27 +967,30 @@ Widget build(BuildContext context) {
         ),
       ),
       actions: [
-        IconButton(
-          icon: Icon(Icons.filter_list),
-          onPressed: () {
-            showModalBottomSheet(
-              context: context,
-              builder: (context) => _buildFilterOptions(),
-            );
-          },
-        ),
-       IconButton(
-                            padding: EdgeInsets.zero,
-                            icon: Icon(Icons.add, color: Colors.black, size: 18),
-                            onPressed: () {
-                              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => HSDonHangMoiScreen(),
-                ),
-              );
-                            },
-                          ),
+        TextButton.icon(
+  icon: Icon(Icons.filter_list, color: Colors.black),
+  label: Text("Lọc", style: TextStyle(color: Colors.black)),
+  onPressed: () {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => _buildFilterOptions(),
+    );
+  },
+),
+
+TextButton.icon(
+  icon: Icon(Icons.add, color: Colors.black, size: 18),
+  label: Text("Đơn mới", style: TextStyle(color: Colors.black)),
+  onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => HSDonHangMoiScreen(),
+      ),
+    );
+  },
+),
+
       ],
     ),
     body: Column(
@@ -1331,7 +1508,12 @@ Future<void> _editOrder(String soPhieu) async {
           tooltip: 'Sửa đơn',
           onPressed: _isOrderBeingProcessed(order.soPhieu ?? '') ? null : () => _editOrder(order.soPhieu!),
         ),
-      
+      if (_canDeleteOrder(order))
+        IconButton(
+          icon: Icon(Icons.delete, size: 18, color: Colors.red),
+          tooltip: 'Xoá đơn',
+          onPressed: _isOrderBeingProcessed(order.soPhieu ?? '') ? null : () => _deleteOrder(order.soPhieu!),
+        ),
       // Send button with consistent state
       if (isOrderCreator && isHmGroup && 
           (lowerStatus == 'chưa xong' || lowerStatus == 'xuất nội bộ'))
@@ -1745,6 +1927,31 @@ Future<void> _editOrder(String soPhieu) async {
   child: Row(
     mainAxisAlignment: MainAxisAlignment.end,
     children: [
+      if (!_isTableMode && _canDeleteOrder(order))
+        ElevatedButton.icon(
+          onPressed: _isOrderBeingProcessed(order.soPhieu ?? '') ? null : () {
+            _deleteOrder(order.soPhieu!);
+          },
+          icon: Icon(
+            Icons.delete,
+            size: columnCount == 3 ? 12 : (columnCount == 2 ? 14 : 16),
+            color: Colors.white,
+          ),
+          label: Text(
+            'Xoá',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: microSize,
+            ),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _isOrderBeingProcessed(order.soPhieu ?? '') ? Colors.grey : Colors.red,
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            textStyle: TextStyle(fontSize: microSize),
+            minimumSize: Size(0, 28),
+          ),
+        ),
+      if (!_isTableMode && _canDeleteOrder(order)) SizedBox(width: 8),
       // Add Edit button for order creators
       if (isOrderCreator && (lowerStatus == 'chưa xong' || lowerStatus == 'xuất nội bộ' || lowerStatus == 'nháp'))
         ElevatedButton.icon(
@@ -1960,8 +2167,84 @@ Future<void> _editOrder(String soPhieu) async {
     ),
   );
 }
-// Method to send HMGROUP order
+Future<void> _updateOrderStatusLocally(String soPhieu, String newStatus) async {
+  try {
+    // First update the database
+    await _dbHelper.updateDonHangStatus(soPhieu, newStatus);
+    
+    // Then update the local lists
+    setState(() {
+      // Update the main orders list
+      for (int i = 0; i < _orders.length; i++) {
+        if (_orders[i].soPhieu == soPhieu) {
+          _orders[i] = _orders[i].copyWith(trangThai: newStatus);
+          break;
+        }
+      }
+      
+      // Update filtered orders as well
+      for (int i = 0; i < _filteredOrders.length; i++) {
+        if (_filteredOrders[i].soPhieu == soPhieu) {
+          _filteredOrders[i] = _filteredOrders[i].copyWith(trangThai: newStatus);
+          break;
+        }
+      }
+    });
+    
+    // Re-apply filters and sorting after the update
+    _sortOrders();
+    _applyFilters();
+    
+    print('Successfully updated order $soPhieu status to $newStatus');
+  } catch (e) {
+    print('Error updating order status locally: $e');
+  }
+}
+
+String _getNextStatus(String currentStatus, String action) {
+  currentStatus = currentStatus.trim();
+  
+  if (action == 'Gửi') {
+    switch (currentStatus) {
+      case 'Chưa xong':
+        return 'Gửi';
+      case 'Xuất Nội bộ':
+        return 'Gửi Xuất Nội bộ';
+      default:
+        return currentStatus; 
+    }
+  } else if (action == 'Duyệt đơn' || action == 'Duyệt nhanh') {
+    switch (currentStatus) {
+      case 'Gửi':
+        return 'Duyệt';
+      case 'Gửi Xuất Nội bộ':
+        return 'Xuất Nội bộ xong';
+      case 'Dự trù':
+        return 'Dự trù đã duyệt';
+      case 'XNK Đặt hàng':
+        return 'XNK Đặt hàng đã duyệt';
+      default:
+        return currentStatus; 
+    }
+  }
+  
+  return currentStatus; 
+}
 Future<void> _sendHMGroupOrder(String soPhieu) async {
+  // Find the current order to get its current status
+  DonHangModel? currentOrder;
+  for (var order in _orders) {
+    if (order.soPhieu == soPhieu) {
+      currentOrder = order;
+      break;
+    }
+  }
+  
+  if (currentOrder == null) {
+    print('Order not found: $soPhieu');
+    return;
+  }
+
   setState(() {
     _processingApprovals.add(soPhieu);
     _processingOrders[soPhieu] = 'processing';
@@ -1980,7 +2263,14 @@ Future<void> _sendHMGroupOrder(String soPhieu) async {
     print('Response body: ${response.body}');
 
     if (response.statusCode == 200) {
-      // Success
+      // Success - update local database
+      final currentStatus = currentOrder.trangThai ?? '';
+      final newStatus = _getNextStatus(currentStatus, 'Gửi');
+      
+      if (newStatus != currentStatus) {
+        await _updateOrderStatusLocally(soPhieu, newStatus);
+      }
+      
       setState(() {
         _processingOrders[soPhieu] = 'success';
       });
@@ -1990,20 +2280,19 @@ Future<void> _sendHMGroupOrder(String soPhieu) async {
         context: context,
         builder: (context) => AlertDialog(
           title: Text('Thành công'),
-          content: Text('Đơn hàng đã được gửi thành công. Vui lòng làm mới hoặc đồng bộ lại để xem kết quả.'),
+          content: Text('Đơn hàng đã được gửi thành công và trạng thái đã được cập nhật thành "$newStatus".'),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.pop(context);
-                _loadOrders(); // Refresh orders
+                // Optional: Still refresh from server to ensure consistency
+                _loadOrders();
               },
-              child: Text('Làm mới ngay'),
+              child: Text('Làm mới từ server'),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(context),
-              child: Text('Đóng', style: TextStyle(
-            color: Colors.grey,
-          ),),
+              child: Text('Đóng', style: TextStyle(color: Colors.white)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Color(0xFF534b0d),
               ),
@@ -2012,13 +2301,12 @@ Future<void> _sendHMGroupOrder(String soPhieu) async {
         ),
       );
     } else {
-      // Error
+      // Error handling remains the same
       setState(() {
         _processingOrders[soPhieu] = 'error';
         _processingApprovals.remove(soPhieu);
       });
       
-      // Show error dialog with more details
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -2049,13 +2337,13 @@ Future<void> _sendHMGroupOrder(String soPhieu) async {
       );
     }
   } catch (e) {
+    // Error handling remains the same
     print('Exception sending order: $e');
     setState(() {
       _processingOrders[soPhieu] = 'error';
       _processingApprovals.remove(soPhieu);
     });
     
-    // Show error dialog with more details
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -2084,8 +2372,6 @@ Future<void> _sendHMGroupOrder(String soPhieu) async {
     );
   }
 }
-
-// Method to quick approve HMGROUP order
 Future<void> _quickApproveHMGroupOrder(String soPhieu) async {
   // Show confirmation dialog
   final confirm = await showDialog<bool>(
@@ -2111,6 +2397,20 @@ Future<void> _quickApproveHMGroupOrder(String soPhieu) async {
 
   if (!confirm) return;
 
+  // Find the current order to get its current status
+  DonHangModel? currentOrder;
+  for (var order in _orders) {
+    if (order.soPhieu == soPhieu) {
+      currentOrder = order;
+      break;
+    }
+  }
+  
+  if (currentOrder == null) {
+    print('Order not found: $soPhieu');
+    return;
+  }
+
   setState(() {
     _processingApprovals.add(soPhieu);
     _processingOrders[soPhieu] = 'processing';
@@ -2129,7 +2429,14 @@ Future<void> _quickApproveHMGroupOrder(String soPhieu) async {
     print('Response body: ${response.body}');
 
     if (response.statusCode == 200) {
-      // Success
+      // Success - update local database
+      final currentStatus = currentOrder.trangThai ?? '';
+      final newStatus = _getNextStatus(currentStatus, 'Duyệt nhanh');
+      
+      if (newStatus != currentStatus) {
+        await _updateOrderStatusLocally(soPhieu, newStatus);
+      }
+      
       setState(() {
         _processingOrders[soPhieu] = 'success';
       });
@@ -2139,18 +2446,18 @@ Future<void> _quickApproveHMGroupOrder(String soPhieu) async {
         context: context,
         builder: (context) => AlertDialog(
           title: Text('Thành công'),
-          content: Text('Đơn hàng đã được duyệt nhanh thành công. Vui lòng làm mới hoặc đồng bộ lại để xem kết quả.'),
+          content: Text('Đơn hàng đã được duyệt nhanh thành công và trạng thái đã được cập nhật thành "$newStatus".'),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.pop(context);
-                _loadOrders(); // Refresh orders
+                _loadOrders(); // Refresh from server
               },
-              child: Text('Làm mới ngay'),
+              child: Text('Làm mới từ server'),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(context),
-              child: Text('Đóng'),
+              child: Text('Đóng', style: TextStyle(color: Colors.white)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Color(0xFF534b0d),
               ),
@@ -2159,13 +2466,12 @@ Future<void> _quickApproveHMGroupOrder(String soPhieu) async {
         ),
       );
     } else {
-      // Error
+      // Error handling remains the same...
       setState(() {
         _processingOrders[soPhieu] = 'error';
         _processingApprovals.remove(soPhieu);
       });
       
-      // Show error dialog with more details
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -2196,13 +2502,13 @@ Future<void> _quickApproveHMGroupOrder(String soPhieu) async {
       );
     }
   } catch (e) {
+    // Error handling remains the same...
     print('Exception quick approving order: $e');
     setState(() {
       _processingOrders[soPhieu] = 'error';
       _processingApprovals.remove(soPhieu);
     });
     
-    // Show error dialog with more details
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -2221,9 +2527,7 @@ Future<void> _quickApproveHMGroupOrder(String soPhieu) async {
         actions: [
           ElevatedButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Đóng', style: TextStyle(
-            color: Colors.white,
-          ),),
+            child: Text('Đóng', style: TextStyle(color: Colors.white)),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
             ),

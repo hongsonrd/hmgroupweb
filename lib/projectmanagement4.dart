@@ -1,4 +1,6 @@
 // projectmanagement4.dart
+import 'package:provider/provider.dart';
+import 'user_credentials.dart';
 
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
@@ -13,7 +15,7 @@ import 'projectmanagement4kt.dart';
 import 'projectmanagement4ad.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:flutter/cupertino.dart';
-
+import 'dart:io' show Platform;
 class ProjectManagement4 extends StatefulWidget {
   const ProjectManagement4({Key? key}) : super(key: key);
 
@@ -27,7 +29,6 @@ class _ProjectManagement4State extends State<ProjectManagement4> {
   bool _isSyncing = false;
   int _currentSyncStep = 0;
   List<bool> _syncStepsCompleted = [false, false, false];
-  String _username = '';
   bool _shouldNavigateAway = false;
   final DBHelper _dbHelper = DBHelper();
   String _userRole = '';
@@ -38,17 +39,24 @@ class _ProjectManagement4State extends State<ProjectManagement4> {
   @override
   void initState() {
     super.initState();
+    if (!Platform.isWindows) {
     _initializeVideo();
-    _loadUsername();
-
-    // Add a small delay before triggering sync automatically
+  }
     Future.delayed(Duration(milliseconds: 500), () {
       if (mounted) {
         _startSyncProcess();
       }
     });
   }
-
+String get _username {
+    try {
+      final userCredentials = Provider.of<UserCredentials>(context, listen: false);
+      return userCredentials.username;
+    } catch (e) {
+      print('Error accessing username from Provider: $e');
+      return '';
+    }
+  }
   Future<void> _checkSyncNeeded() async {
     final needToSync = await _needToSync();
     if (!needToSync) {
@@ -95,62 +103,15 @@ class _ProjectManagement4State extends State<ProjectManagement4> {
     });
   }
 
-  Future<void> _loadUsername() async {
-    // Load username from shared preferences
-    final prefs = await SharedPreferences.getInstance();
-    final userObj = prefs.getString('current_user');
-
-    if (userObj != null && userObj.isNotEmpty) {
-      try {
-        // Try to parse it as JSON if it's stored that way
-        final userData = json.decode(userObj);
-        setState(() {
-          // Extract just the username string
-          _username = userData['username'] ?? '';
-          print("Loaded username from prefs: $_username");
-        });
-      } catch (e) {
-        // If it's not JSON, use it directly as username
-        setState(() {
-          _username = userObj;
-          print("Loaded username directly from prefs: $_username");
-        });
-      }
-    } else {
-      // If no username in shared prefs, try to get it from another source
-      try {
-        final response = await http.get(
-          Uri.parse(
-              'https://hmclourdrun1-81200125587.asia-southeast1.run.app/current-user'),
-        );
-
-        if (response.statusCode == 200) {
-          final data = json.decode(response.body);
-          if (data['username'] != null) {
-            setState(() {
-              _username = data['username'];
-              print("Loaded username from API: $_username");
-            });
-            // Save for future use (only the username string)
-            await prefs.setString('current_user', _username);
-          }
-        }
-      } catch (e) {
-        print('Error loading username: $e');
-        // Fall back to a default if needed
-        setState(() {
-          _username = 'default_user';
-          print("Using default username: $_username");
-        });
-      }
-    }
-  }
-
   Future<void> _startSyncProcess() async {
     if (_username.isEmpty) {
-      print("Username empty, attempting to load...");
-      await _loadUsername();
-      print("Username after loading: $_username");
+      print("Username not available from Provider");
+      setState(() {
+        _isSyncing = false;
+        _syncFailed = true;
+        _syncErrorMessage = 'Không thể lấy thông tin người dùng';
+      });
+      return;
     }
 
     setState(() {
@@ -288,18 +249,16 @@ class _ProjectManagement4State extends State<ProjectManagement4> {
       return true;
     }
 
-    // If no last sync time, we need to sync
+    // Rest of the method remains the same...
     if (lastSyncTimeStr == null) {
       return true;
     }
 
-    // Parse last sync time
     final lastSyncTime = DateTime.tryParse(lastSyncTimeStr);
     if (lastSyncTime == null) {
       return true;
     }
 
-    // If last sync was more than 15 minutes ago, we need to sync
     final now = DateTime.now();
     final difference = now.difference(lastSyncTime);
     return difference.inMinutes > 15;
@@ -1060,7 +1019,7 @@ class _ProjectManagement4State extends State<ProjectManagement4> {
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                       child: Text(
-                        'Đăng ký',
+                        'Bấm quay lại rồi vào lại là được',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 12,
@@ -1304,12 +1263,28 @@ class _ProjectManagement4State extends State<ProjectManagement4> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // Video background - always playing
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: Colors.black,
+    body: Stack(
+      children: [
+        // Background - Video on mobile/web, Image on Windows
+        if (Platform.isWindows)
+          // Show image on Windows
+          Center(
+            child: Container(
+              width: double.infinity,
+              height: double.infinity,
+              decoration: BoxDecoration(
+                image: DecorationImage(
+                  image: AssetImage('assets/vidgoclean.png'),
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+          )
+        else
+          // Show video on other platforms
           if (_isVideoInitialized)
             Center(
               child: AspectRatio(
@@ -1318,62 +1293,62 @@ class _ProjectManagement4State extends State<ProjectManagement4> {
               ),
             ),
 
-          // Back button
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Align(
-                alignment: Alignment.topLeft,
-                child: IconButton(
-                  icon: Icon(
-                    Icons.arrow_back,
-                    color: Colors.white,
-                    size: 28,
-                  ),
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
+        // Back button
+        SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: IconButton(
+                icon: Icon(
+                  Icons.arrow_back,
+                  color: Colors.white,
+                  size: 28,
                 ),
+                onPressed: () {
+                  Navigator.pop(context);
+                },
               ),
             ),
           ),
+        ),
 
-          // Start sync button (centered on screen)
-          if (!_isSyncing && !_syncFailed)
-            Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 80.0), // Adjust as needed
-                  child: Center(
-                    child: ElevatedButton(
-                      onPressed: _startSyncProcess,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        padding: EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
+        // Start sync button (centered on screen)
+        if (!_isSyncing && !_syncFailed)
+          Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 80.0),
+                child: Center(
+                  child: ElevatedButton(
+                    onPressed: _startSyncProcess,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      padding: EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
                       ),
-                      child: Text(
-                        'Bắt đầu đồng bộ',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    ),
+                    child: Text(
+                      'Bắt đầu đồng bộ',
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
+          ),
 
-          // Sync overlay (lower third)
-          if (_isSyncing || _syncFailed || _syncStepsCompleted.every((step) => step == true)) // Show overlay if syncing, failed, or completed
-            _buildSyncOverlay(),
-        ],
-      ),
-    );
-  }
+        // Sync overlay
+        if (_isSyncing || _syncFailed || _syncStepsCompleted.every((step) => step == true))
+          _buildSyncOverlay(),
+      ],
+    ),
+  );
+}
 }

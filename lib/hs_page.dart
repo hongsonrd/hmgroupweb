@@ -21,7 +21,7 @@ import 'hs_dshang.dart';
 import 'http_client.dart';
 import 'hs_kho2.dart';
 import 'hs_stat.dart';
-import 'hs_donhangmoi.dart';
+//import 'hs_donhangmoi.dart';
 import 'hs_donhangxnkdaily.dart';
 import 'projectmanagement2.dart';
 import 'hs_khachhang.dart';
@@ -643,13 +643,13 @@ void dispose() {
                   // Action buttons
                   Row(
                     children: [
-                      _buildActionButton(Icons.add, 'Đơn mới', () {
-                        setState(() {
-                          _selectedRoute = 'add';
-                          _currentWidget = HSDonHangMoiScreen();
-                        });
-                      }),
-                      SizedBox(width: 8),
+                      //_buildActionButton(Icons.add, 'Đơn mới', () {
+                      //  setState(() {
+                      //    _selectedRoute = 'add';
+                      //    _currentWidget = HSDonHangMoiScreen();
+                      //  });
+                      //}),
+                      //SizedBox(width: 8),
                       _buildActionButton(Icons.tips_and_updates, ' Sơ đồ kho', () {
                         _syncKhuVucKhoChiTietData();
                       }),
@@ -1283,13 +1283,11 @@ Future<void> _checkForUpdates() async {
     // Continue with sync even if version check fails
   }
 }
-
 Future<void> _syncDonHangData() async {
   try {
     final prefs = await SharedPreferences.getInstance();
     final lastSync = prefs.getString('last_donhang_sync') ?? '2023-01-01 00:00:00';
     
-    // Encode the username for safe inclusion in URL
     final encodedUsername = Uri.encodeComponent(_username);
     
     final response = await AuthenticatedHttpClient.get(
@@ -1299,20 +1297,75 @@ Future<void> _syncDonHangData() async {
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       
-      if (data is List && data.isNotEmpty) {
-        for (var item in data) {
-          final donHang = DonHangModel.fromMap(item);
-          
-          // Check if record exists
-          final existingRecord = await _dbHelper.getDonHangBySoPhieu(donHang.soPhieu!);
-          if (existingRecord != null) {
-            // Update existing record
-            await _dbHelper.updateDonHang(donHang);
-          } else {
-            // Insert new record
-            await _dbHelper.insertDonHang(donHang);
+      if (data is List) {
+        await _dbHelper.clearDonHangTable();  // Clear all existing data
+        print('Local DonHang table cleared.');
+
+        if (data.isNotEmpty) {
+          final batch = await _dbHelper.startBatch();
+          for (var item in data) {
+            final donHang = DonHangModel.fromMap(item);
+            
+            // Add to batch insert with all DonHang fields
+            _dbHelper.addToBatch(batch,
+              'INSERT INTO donhang (soPhieu, nguoiTao, ngay, tenKhachHang, sdtKhachHang, soPO, diaChi, mst, tapKH, tenNguoiGiaoDich, boPhanGiaoDich, sdtNguoiGiaoDich, thoiGianDatHang, ngayYeuCauGiao, thoiGianCapNhatTrangThai, phuongThucThanhToan, thanhToanSauNhanHangXNgay, datCocSauXNgay, giayToCanKhiGiaoHang, thoiGianVietHoaDon, thongTinVietHoaDon, diaChiGiaoHang, hoTenNguoiNhanHoaHong, sdtNguoiNhanHoaHong, hinhThucChuyenHoaHong, thongTinNhanHoaHong, ngaySeGiao, thoiGianCapNhatMoiNhat, phuongThucGiaoHang, phuongTienGiaoHang, hoTenNguoiGiaoHang, ghiChu, giaNet, tongTien, vat10, tongCong, hoaHong10, tienGui10, thueTNDN, vanChuyen, thucThu, nguoiNhanHang, sdtNguoiNhanHang, phieuXuatKho, trangThai, tenKhachHang2) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              [
+                donHang.soPhieu,
+                donHang.nguoiTao,
+                donHang.ngay,
+                donHang.tenKhachHang,
+                donHang.sdtKhachHang,
+                donHang.soPO,
+                donHang.diaChi,
+                donHang.mst,
+                donHang.tapKH,
+                donHang.tenNguoiGiaoDich,
+                donHang.boPhanGiaoDich,
+                donHang.sdtNguoiGiaoDich,
+                donHang.thoiGianDatHang,
+                donHang.ngayYeuCauGiao,
+                donHang.thoiGianCapNhatTrangThai,
+                donHang.phuongThucThanhToan,
+                donHang.thanhToanSauNhanHangXNgay,
+                donHang.datCocSauXNgay,
+                donHang.giayToCanKhiGiaoHang,
+                donHang.thoiGianVietHoaDon,
+                donHang.thongTinVietHoaDon,
+                donHang.diaChiGiaoHang,
+                donHang.hoTenNguoiNhanHoaHong,
+                donHang.sdtNguoiNhanHoaHong,
+                donHang.hinhThucChuyenHoaHong,
+                donHang.thongTinNhanHoaHong,
+                donHang.ngaySeGiao,
+                donHang.thoiGianCapNhatMoiNhat,
+                donHang.phuongThucGiaoHang,
+                donHang.phuongTienGiaoHang,
+                donHang.hoTenNguoiGiaoHang,
+                donHang.ghiChu,
+                donHang.giaNet,
+                donHang.tongTien,
+                donHang.vat10,
+                donHang.tongCong,
+                donHang.hoaHong10,
+                donHang.tienGui10,
+                donHang.thueTNDN,
+                donHang.vanChuyen,
+                donHang.thucThu,
+                donHang.nguoiNhanHang,
+                donHang.sdtNguoiNhanHang,
+                donHang.phieuXuatKho,
+                donHang.trangThai,
+                donHang.tenKhachHang2,
+              ]
+            );
           }
+          await _dbHelper.commitBatch(batch);
+          print('Inserted ${data.length} new DonHang records.');
+        } else {
+          print('No DonHang records received from server to insert after clearing.');
         }
+      } else {
+        print('Received non-list data for DonHang, sync aborted for this table.');
       }
     } else {
       throw Exception('Failed to sync DonHang data. Status code: ${response.statusCode}');

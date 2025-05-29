@@ -390,10 +390,10 @@ class ExportFormGenerator {
                         child: pw.Row(
                           mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
                           children: [
-                            _buildSignatureBox('Người giao hàng', ttf),
-                            _buildSignatureBox('Phòng kế toán', ttf),
-                            _buildSignatureBox('Thủ kho', ttf),
-                            _buildSignatureBox('Người nhận', ttf),
+                                  _buildSignatureBox('Người giao hàng', ttf, nvkd: order.nguoiTao),
+      _buildSignatureBox('Phòng kế toán', ttf, nvkd: order.nguoiTao),
+      _buildSignatureBox('Thủ kho', ttf, nvkd: order.nguoiTao),
+      _buildSignatureBox('Người nhận', ttf, nvkd: order.nguoiTao),
                           ],
                         ),
                       ),
@@ -569,15 +569,39 @@ class ExportFormGenerator {
     );
   }
   
-  static pw.Widget _buildSignatureBox(String title, pw.Font font) {
-  // Define the name based on the title
+  static pw.Widget _buildSignatureBox(String title, pw.Font font, {String? nvkd}) {
+  // List of valid NVKD values that allow signatures to show
+  final List<String> validNVKD = [
+    'hm.trangiang',
+    'hm.tranly',
+    'hm.dinhmai',
+    'hm.hoangthao',
+    'hm.vutoan',
+    'hm.lehoa',
+    'hm.lemanh',
+    'hm.nguyentoan',
+    'hm.nguyennga',
+    'hm.conghai',
+    'hm.thuytrang',
+    'hm.nguyenvy',
+    'hm.phiminh',
+    'hm.doanly'
+  ];
+  
+  // Check if current NVKD is in the valid list
+  bool isValidNVKD = nvkd != null && validNVKD.contains(nvkd.toLowerCase());
+  
+  // Define the name based on the title, but only if NVKD is valid
   String name = '';
-  if (title == 'Người giao hàng') {
-    name = 'Phan Anh Viết';
-  } else if (title == 'Phòng kế toán') {
-    name = 'Lê Thị Thanh Hoa';
-  } else if (title == 'Thủ kho') {
-    name = 'Phí Thị Minh';
+  if (isValidNVKD) {
+    if (title == 'Người giao hàng') {
+      name = 'Phan Anh Viết';
+    } else if (title == 'Phòng kế toán') {
+      name = 'Lê Thị Thanh Hoa';
+    } else if (title == 'Thủ kho') {
+      name = 'Phí Thị Minh';
+    }
+    // 'Người nhận' remains empty as before
   }
   
   return pw.Column(
@@ -601,7 +625,7 @@ class ExportFormGenerator {
         ),
       ),
       pw.SizedBox(height: 55), 
-      // Only add the name if it's not empty (for "Người nhận" which doesn't have a predefined name)
+      // Only add the name if it's not empty (which happens only for valid NVKD)
       if (name.isNotEmpty)
         pw.Text(
           name,
