@@ -55,7 +55,31 @@ class HSDonHangXNKScreen extends StatefulWidget {
 class _HSDonHangXNKScreenState extends State<HSDonHangXNKScreen> {
   final DBHelper _dbHelper = DBHelper();
   final currencyFormat = NumberFormat('#,###', 'vi_VN');
-
+final List<String> _baoGiaOptions = [
+  'hm.tranly',
+  'hm.dinhmai', 
+  'hm.hoangthao',
+  'hm.lehoa',
+  'hm.lemanh',
+  'hm.nguyentoan',
+  'hm.nguyendung',
+  'hm.nguyennga',
+  'hm.baoha',
+  'hm.trantien',
+  'hm.myha',
+  'hm.phiminh',
+  'hm.thanhhao',
+  'hm.luongtrang',
+  'hm.damlinh',
+  'hm.thanhthao',
+  'hm.damchinh',
+  'hm.quocchien',
+  'hm.thuyvan',
+  'hotel.danang',
+  'hotel.nhatrang',
+  'hm.doanly',
+  'hm.trangiang', 
+];
   // Screen state
   int _currentStep = 0; // 0: DonHang selection, 1: Order details, 2: Product selection
 
@@ -501,286 +525,348 @@ class _HSDonHangXNKScreenState extends State<HSDonHangXNKScreen> {
   }
 
   void _showAddProductDialog([DSHangModel? product]) {
-    final bool isSpecialProduct = product == null || product.uid == 'KHAC';
+  final bool isSpecialProduct = product == null || product.uid == 'KHAC';
 
-    TextEditingController tenHangController = TextEditingController(
-        text: isSpecialProduct ? '' : product!.tenSanPham ?? '');
-    TextEditingController maHangController = TextEditingController(
-        text: isSpecialProduct ? '' : product!.maNhapKho ?? '');
-    TextEditingController donViTinhController = TextEditingController(
-        text: isSpecialProduct ? '' : product!.donVi ?? '');
-    TextEditingController xuatXuHangKhacController = TextEditingController();
-    TextEditingController soLuongYeuCauController = TextEditingController(text: '1');
-    TextEditingController donGiaController = TextEditingController(text: '0');
-    TextEditingController ghiChuController = TextEditingController();
+  TextEditingController tenHangController = TextEditingController(
+      text: isSpecialProduct ? '' : product!.tenSanPham ?? '');
+  TextEditingController maHangController = TextEditingController(
+      text: isSpecialProduct ? '' : product!.maNhapKho ?? '');
+  TextEditingController donViTinhController = TextEditingController(
+      text: isSpecialProduct ? '' : product!.donVi ?? '');
+  TextEditingController xuatXuHangKhacController = TextEditingController();
+  TextEditingController soLuongYeuCauController = TextEditingController(text: '1');
+  TextEditingController donGiaController = TextEditingController(text: '0');
+  TextEditingController ghiChuController = TextEditingController();
+  TextEditingController customBaoGiaController = TextEditingController(); // For custom BaoGia input
 
-    int phanTramVAT = 0;
+  int phanTramVAT = 0;
+  String? selectedBaoGia; // Selected BaoGia value
+  bool isCustomBaoGia = false; // Track if "Khác" is selected
 
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            // Calculate thanhTien and VAT
-            double soLuongYeuCau = double.tryParse(soLuongYeuCauController.text) ?? 0;
-            int donGia = int.tryParse(donGiaController.text) ?? 0;
-            int thanhTien = (soLuongYeuCau * donGia).toInt();
-            int vat = (thanhTien * phanTramVAT / 100).toInt();
+  showDialog(
+    context: context,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          // Calculate thanhTien and VAT
+          double soLuongYeuCau = double.tryParse(soLuongYeuCauController.text) ?? 0;
+          int donGia = int.tryParse(donGiaController.text) ?? 0;
+          int thanhTien = (soLuongYeuCau * donGia).toInt();
+          int vat = (thanhTien * phanTramVAT / 100).toInt();
 
-            return AlertDialog(
-              title: Text('Thêm sản phẩm'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Product info section
-                    if (!isSpecialProduct)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Product image
-                          if (product!.hinhAnh != null && product.hinhAnh!.isNotEmpty)
-                            Center(
-                              child: Container(
-                                height: 120,
-                                width: 120,
-                                margin: EdgeInsets.only(bottom: 16),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey[300]!),
-                                ),
-                                child: Image.network(
-                                  product.hinhAnh!,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Center(child: Icon(Icons.image_not_supported));
-                                  },
-                                ),
+          return AlertDialog(
+            title: Text('Thêm sản phẩm'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Product info section
+                  if (!isSpecialProduct)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Product image
+                        if (product!.hinhAnh != null && product.hinhAnh!.isNotEmpty)
+                          Center(
+                            child: Container(
+                              height: 120,
+                              width: 120,
+                              margin: EdgeInsets.only(bottom: 16),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey[300]!),
+                              ),
+                              child: Image.network(
+                                product.hinhAnh!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Center(child: Icon(Icons.image_not_supported));
+                                },
                               ),
                             ),
-                        ],
-                      ),
-
-                    // Fields that are editable if KHAC, otherwise read-only
-                    TextField(
-                      controller: tenHangController,
-                      decoration: InputDecoration(
-                        labelText: 'Tên hàng *',
-                        border: OutlineInputBorder(),
-                      ),
-                      readOnly: !isSpecialProduct,
-                    ),
-
-                    SizedBox(height: 16),
-
-                    TextField(
-                      controller: maHangController,
-                      decoration: InputDecoration(
-                        labelText: 'Mã hàng',
-                        border: OutlineInputBorder(),
-                      ),
-                      readOnly: !isSpecialProduct,
-                    ),
-
-                    SizedBox(height: 16),
-
-                    TextField(
-                      controller: donViTinhController,
-                      decoration: InputDecoration(
-                        labelText: 'Đơn vị tính',
-                        border: OutlineInputBorder(),
-                      ),
-                      readOnly: !isSpecialProduct,
-                    ),
-
-                    // Only show XuatXuHangKhac if KHAC
-                    if (isSpecialProduct)
-                      Column(
-                        children: [
-                          SizedBox(height: 16),
-                          TextField(
-                            controller: xuatXuHangKhacController,
-                            decoration: InputDecoration(
-                              labelText: 'Xuất xứ hàng khác',
-                              border: OutlineInputBorder(),
-                            ),
                           ),
-                        ],
-                      ),
-
-                    SizedBox(height: 16),
-
-                    // Fields that are always editable
-                    TextField(
-                      controller: soLuongYeuCauController,
-                      decoration: InputDecoration(
-                        labelText: 'Số lượng yêu cầu *',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.numberWithOptions(decimal: true),
-                      onChanged: (value) {
-                        setState(() {
-                          // Recalculate will happen on rebuild
-                        });
-                      },
+                      ],
                     ),
 
-                    SizedBox(height: 16),
-
-                    TextField(
-                      controller: donGiaController,
-                      decoration: InputDecoration(
-                        labelText: 'Đơn giá *',
-                        border: OutlineInputBorder(),
-                        suffixText: 'VNĐ',
-                      ),
-                      keyboardType: TextInputType.number,
-                      onChanged: (value) {
-                        setState(() {
-                          // Recalculate will happen on rebuild
-                        });
-                      },
+                  // BaoGia dropdown selection - ADD THIS SECTION
+                  DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Báo giá *',
+                      border: OutlineInputBorder(),
                     ),
-
-                    SizedBox(height: 16),
-
-                    // Calculated fields (non-editable)
-                    InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: 'Thành tiền',
-                        border: OutlineInputBorder(),
-                      ),
-                      child: Text('${currencyFormat.format(thanhTien)} VNĐ'),
-                    ),
-
-                    SizedBox(height: 16),
-
-                    // VAT percentage dropdown
-                    DropdownButtonFormField<int>(
-                      decoration: InputDecoration(
-                        labelText: 'Phần trăm VAT *',
-                        border: OutlineInputBorder(),
-                      ),
-                      value: phanTramVAT,
-                      items: [0, 8, 10]
-                          .map((value) => DropdownMenuItem(
-                                value: value,
-                                child: Text('$value%'),
-                              ))
-                          .toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          phanTramVAT = value!;
-                        });
-                      },
-                    ),
-
-                    SizedBox(height: 16),
-
-                    InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: 'VAT',
-                        border: OutlineInputBorder(),
-                      ),
-                      child: Text('${currencyFormat.format(vat)} VNĐ'),
-                    ),
-
-                    SizedBox(height: 16),
-
-                    TextField(
-                      controller: ghiChuController,
-                      decoration: InputDecoration(
-                        labelText: 'Ghi chú',
-                        border: OutlineInputBorder(),
-                      ),
-                      maxLines: 3,
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  child: Text('Hủy'),
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: buttonColor,
-                    foregroundColor: Colors.white,
+                    value: selectedBaoGia,
+                    items: _baoGiaOptions.map((String value) {
+                      return DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(value),
+                      );
+                    }).toList(),
+                    onChanged: (String? newValue) {
+                      setState(() {
+                        selectedBaoGia = newValue;
+                        isCustomBaoGia = newValue == 'Khác';
+                        if (!isCustomBaoGia) {
+                          customBaoGiaController.clear();
+                        }
+                      });
+                    },
                   ),
-                  child: Text('Xác nhận'),
-                  onPressed: () {
-                    // Validate required fields
-                    if (tenHangController.text.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Tên hàng không được để trống')),
-                      );
-                      return;
-                    }
 
-                    if (soLuongYeuCauController.text.isEmpty ||
-                        double.tryParse(soLuongYeuCauController.text) == 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Số lượng yêu cầu phải lớn hơn 0')),
-                      );
-                      return;
-                    }
+                  SizedBox(height: 16),
 
-                    if (donGiaController.text.isEmpty ||
-                        int.tryParse(donGiaController.text) == 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Đơn giá phải lớn hơn 0')),
-                      );
-                      return;
-                    }
-                    String itemTrangThai = 'Nháp'; // New items start as Nháp
+                  // Custom BaoGia input (only show if "Khác" is selected)
+                  if (isCustomBaoGia)
+                    Column(
+                      children: [
+                        TextField(
+                          controller: customBaoGiaController,
+                          decoration: InputDecoration(
+                            labelText: 'Nhập báo giá tùy chỉnh *',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        SizedBox(height: 16),
+                      ],
+                    ),
 
-                    // Create a new ChiTietDonModel
-                    final newChiTiet = ChiTietDonModel(
-                      uid: 'TEMP-${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(10000)}',
-                      soPhieu: _newOrder?.soPhieu,
-                      trangThai: itemTrangThai,
-                      tenHang: tenHangController.text,
-                      maHang: maHangController.text,
-                      donViTinh: donViTinhController.text,
-                      soLuongYeuCau: double.tryParse(soLuongYeuCauController.text) ?? 0,
-                      donGia: int.tryParse(donGiaController.text) ?? 0,
-                      thanhTien: thanhTien,
-                      soLuongThucGiao: 0,
-                      chiNhanh: _newOrder?.thoiGianDatHang,
-                      idHang: isSpecialProduct ? 'KHAC' : product!.uid,
-                      soLuongKhachNhan: 0,
-                      duyet: 'Chưa xong',
-                      xuatXuHangKhac: isSpecialProduct ? xuatXuHangKhacController.text : '',
-                      baoGia: null, // No original NguoiTao for manually added items
-                      hinhAnh: isSpecialProduct ? '' : product!.hinhAnh,
-                      ghiChu: ghiChuController.text,
-                      phanTramVAT: phanTramVAT,
-                      vat: vat,
-                      tenKhachHang: _newOrder?.tenKhachHang,
-                      updateTime: DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
-                    );
+                  // Fields that are editable if KHAC, otherwise read-only
+                  TextField(
+                    controller: tenHangController,
+                    decoration: InputDecoration(
+                      labelText: 'Tên hàng *',
+                      border: OutlineInputBorder(),
+                    ),
+                    readOnly: !isSpecialProduct,
+                  ),
 
-                    // Add to the list
-                    setState(() {
-                      _chiTietDonList.add(newChiTiet);
-                    });
+                  SizedBox(height: 16),
 
-                    // Update totals
-                    _updateTotals();
+                  TextField(
+                    controller: maHangController,
+                    decoration: InputDecoration(
+                      labelText: 'Mã hàng',
+                      border: OutlineInputBorder(),
+                    ),
+                    readOnly: !isSpecialProduct,
+                  ),
 
-                    Navigator.of(context).pop();
-                  },
+                  SizedBox(height: 16),
+
+                  TextField(
+                    controller: donViTinhController,
+                    decoration: InputDecoration(
+                      labelText: 'Đơn vị tính',
+                      border: OutlineInputBorder(),
+                    ),
+                    readOnly: !isSpecialProduct,
+                  ),
+
+                  // Only show XuatXuHangKhac if KHAC
+                  if (isSpecialProduct)
+                    Column(
+                      children: [
+                        SizedBox(height: 16),
+                        TextField(
+                          controller: xuatXuHangKhacController,
+                          decoration: InputDecoration(
+                            labelText: 'Xuất xứ hàng khác',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                  SizedBox(height: 16),
+
+                  // Fields that are always editable
+                  TextField(
+                    controller: soLuongYeuCauController,
+                    decoration: InputDecoration(
+                      labelText: 'Số lượng yêu cầu *',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.numberWithOptions(decimal: true),
+                    onChanged: (value) {
+                      setState(() {
+                        // Recalculate will happen on rebuild
+                      });
+                    },
+                  ),
+
+                  SizedBox(height: 16),
+
+                  TextField(
+                    controller: donGiaController,
+                    decoration: InputDecoration(
+                      labelText: 'Đơn giá *',
+                      border: OutlineInputBorder(),
+                      suffixText: 'VNĐ',
+                    ),
+                    keyboardType: TextInputType.number,
+                    onChanged: (value) {
+                      setState(() {
+                        // Recalculate will happen on rebuild
+                      });
+                    },
+                  ),
+
+                  SizedBox(height: 16),
+
+                  // Calculated fields (non-editable)
+                  InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: 'Thành tiền',
+                      border: OutlineInputBorder(),
+                    ),
+                    child: Text('${currencyFormat.format(thanhTien)} VNĐ'),
+                  ),
+
+                  SizedBox(height: 16),
+
+                  // VAT percentage dropdown
+                  DropdownButtonFormField<int>(
+                    decoration: InputDecoration(
+                      labelText: 'Phần trăm VAT *',
+                      border: OutlineInputBorder(),
+                    ),
+                    value: phanTramVAT,
+                    items: [0, 8, 10]
+                        .map((value) => DropdownMenuItem(
+                              value: value,
+                              child: Text('$value%'),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        phanTramVAT = value!;
+                      });
+                    },
+                  ),
+
+                  SizedBox(height: 16),
+
+                  InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: 'VAT',
+                      border: OutlineInputBorder(),
+                    ),
+                    child: Text('${currencyFormat.format(vat)} VNĐ'),
+                  ),
+
+                  SizedBox(height: 16),
+
+                  TextField(
+                    controller: ghiChuController,
+                    decoration: InputDecoration(
+                      labelText: 'Ghi chú',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 3,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                child: Text('Hủy'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: buttonColor,
+                  foregroundColor: Colors.white,
                 ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
+                child: Text('Xác nhận'),
+                onPressed: () {
+                  // Validate required fields
+                  if (tenHangController.text.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Tên hàng không được để trống')),
+                    );
+                    return;
+                  }
+
+                  if (selectedBaoGia == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Vui lòng chọn báo giá')),
+                    );
+                    return;
+                  }
+
+                  if (isCustomBaoGia && customBaoGiaController.text.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Vui lòng nhập báo giá tùy chỉnh')),
+                    );
+                    return;
+                  }
+
+                  if (soLuongYeuCauController.text.isEmpty ||
+                      double.tryParse(soLuongYeuCauController.text) == 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Số lượng yêu cầu phải lớn hơn 0')),
+                    );
+                    return;
+                  }
+
+                  if (donGiaController.text.isEmpty ||
+                      int.tryParse(donGiaController.text) == 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Đơn giá phải lớn hơn 0')),
+                    );
+                    return;
+                  }
+
+                  String itemTrangThai = 'Nháp'; // New items start as Nháp
+                  
+                  // Get the final BaoGia value
+                  String finalBaoGia = isCustomBaoGia ? customBaoGiaController.text : selectedBaoGia!;
+
+                  // Create a new ChiTietDonModel
+                  final newChiTiet = ChiTietDonModel(
+                    uid: 'TEMP-${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(10000)}',
+                    soPhieu: _newOrder?.soPhieu,
+                    trangThai: itemTrangThai,
+                    tenHang: tenHangController.text,
+                    maHang: maHangController.text,
+                    donViTinh: donViTinhController.text,
+                    soLuongYeuCau: double.tryParse(soLuongYeuCauController.text) ?? 0,
+                    donGia: int.tryParse(donGiaController.text) ?? 0,
+                    thanhTien: thanhTien,
+                    soLuongThucGiao: 0,
+                    chiNhanh: _newOrder?.thoiGianDatHang,
+                    idHang: isSpecialProduct ? 'KHAC' : product!.uid,
+                    soLuongKhachNhan: 0,
+                    duyet: 'Chưa xong',
+                    xuatXuHangKhac: isSpecialProduct ? xuatXuHangKhacController.text : '',
+                    baoGia: finalBaoGia, // Use the selected/custom BaoGia value
+                    hinhAnh: isSpecialProduct ? '' : product!.hinhAnh,
+                    ghiChu: ghiChuController.text,
+                    phanTramVAT: phanTramVAT,
+                    vat: vat,
+                    tenKhachHang: _newOrder?.tenKhachHang,
+                    updateTime: DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
+                  );
+
+                  // Add to the list
+                  setState(() {
+                    _chiTietDonList.add(newChiTiet);
+                  });
+
+                  // Update totals
+                  _updateTotals();
+
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
 
   void _showEditProductDialog(ChiTietDonModel chiTietDon, int index) {
     final bool isSpecialProduct = chiTietDon.idHang == 'KHAC';

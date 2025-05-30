@@ -39,13 +39,13 @@ class DBHelper {
     }
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool hasReset = prefs.getBool('db_reset_v28') ?? false;
+    bool hasReset = prefs.getBool('db_reset_v29') ?? false;
     
     if (!hasReset) {
-      print('Forcing database reset for version 28...');
+      print('Forcing database reset for version 29...');
       try {
         await deleteDatabase(path);
-        await prefs.setBool('db_reset_v28', true);
+        await prefs.setBool('db_reset_v29', true);
         print('Database reset successful');
       } catch (e) {
         print('Error during database reset: $e');
@@ -57,7 +57,7 @@ class DBHelper {
     final db = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 28,
+        version: 29,
         onCreate: (Database db, int version) async {
           print('Creating database tables...');
           await db.execute(DatabaseTables.createInteractionTable);
@@ -110,15 +110,26 @@ class DBHelper {
           await db.execute(DatabaseTables.createGoCleanYeuCauTable);
           await db.execute(DatabaseTables.createKhachHangTable);
           await db.execute(DatabaseTables.createKhachHangContactTable);
+                      await db.execute(DatabaseTables.createLinkHopDongTable);
+            await db.execute(DatabaseTables.createLinkVatTuTable);
+            await db.execute(DatabaseTables.createLinkDinhKyTable);
+            await db.execute(DatabaseTables.createLinkLeTetTCTable);
+            await db.execute(DatabaseTables.createLinkPhuCapTable);
+            await db.execute(DatabaseTables.createLinkNgoaiGiaoTable);
+            await db.execute(DatabaseTables.createLinkMayMocTable);
+            await db.execute(DatabaseTables.createLinkLuongTable);
           print('Database tables created successfully');
         },
         onUpgrade: (Database db, int oldVersion, int newVersion) async {
-          if (oldVersion < 28) {
-          //await db.execute(DatabaseTables.createGoCleanCongViecTable);
-          //await db.execute(DatabaseTables.createGoCleanTaiKhoanTable);
-          //await db.execute(DatabaseTables.createGoCleanYeuCauTable);
-          //await db.execute(DatabaseTables.createKhachHangTable);
-          //await db.execute(DatabaseTables.createKhachHangContactTable);
+          if (oldVersion < 29) {
+            await db.execute(DatabaseTables.createLinkHopDongTable);
+            await db.execute(DatabaseTables.createLinkVatTuTable);
+            await db.execute(DatabaseTables.createLinkDinhKyTable);
+            await db.execute(DatabaseTables.createLinkLeTetTCTable);
+            await db.execute(DatabaseTables.createLinkPhuCapTable);
+            await db.execute(DatabaseTables.createLinkNgoaiGiaoTable);
+            await db.execute(DatabaseTables.createLinkMayMocTable);
+            await db.execute(DatabaseTables.createLinkLuongTable);
           }
         },
         onOpen: (db) async {
@@ -139,6 +150,994 @@ class DBHelper {
     print('Stack trace: $stackTrace');
     rethrow;
   }
+}
+// ==================== LinkHopDong CRUD Operations ====================
+
+/// Inserts a LinkHopDong record into the database.
+Future<int> insertLinkHopDong(LinkHopDongModel hopDong) async {
+  final db = await database;
+  return await db.insert(
+    DatabaseTables.linkHopDongTable,
+    hopDong.toMap(),
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
+}
+
+/// Retrieves a LinkHopDong record by its uid.
+Future<LinkHopDongModel?> getLinkHopDongById(String uid) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkHopDongTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+    limit: 1,
+  );
+  if (maps.isNotEmpty) {
+    return LinkHopDongModel.fromMap(maps.first);
+  }
+  return null;
+}
+
+/// Retrieves all LinkHopDong records from the database.
+Future<List<LinkHopDongModel>> getAllLinkHopDongs() async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(DatabaseTables.linkHopDongTable);
+  return maps.map((map) => LinkHopDongModel.fromMap(map)).toList();
+}
+
+/// Updates a LinkHopDong record in the database.
+Future<int> updateLinkHopDong(LinkHopDongModel hopDong) async {
+  final db = await database;
+  return await db.update(
+    DatabaseTables.linkHopDongTable,
+    hopDong.toMap(),
+    where: 'uid = ?',
+    whereArgs: [hopDong.uid],
+  );
+}
+
+/// Deletes a LinkHopDong record from the database by its uid.
+Future<int> deleteLinkHopDong(String uid) async {
+  final db = await database;
+  return await db.delete(
+    DatabaseTables.linkHopDongTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
+}
+
+/// Clears all records from the LinkHopDong table.
+Future<void> clearLinkHopDongTable() async {
+  final db = await database;
+  await db.delete(DatabaseTables.linkHopDongTable);
+  print('Cleared LinkHopDong table');
+}
+
+/// Gets the total count of records in the LinkHopDong table.
+Future<int> getLinkHopDongCount() async {
+  final db = await database;
+  final result = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.linkHopDongTable}');
+  return Sqflite.firstIntValue(result) ?? 0;
+}
+
+/// Search LinkHopDong by contract name or customer name
+Future<List<LinkHopDongModel>> searchLinkHopDongs(String searchTerm) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkHopDongTable,
+    where: 'tenHopDong LIKE ? OR comTenKhachHang LIKE ? OR soHopDong LIKE ?',
+    whereArgs: ['%$searchTerm%', '%$searchTerm%', '%$searchTerm%'],
+  );
+  return maps.map((map) => LinkHopDongModel.fromMap(map)).toList();
+}
+
+/// Get LinkHopDong records by month and business code
+Future<List<LinkHopDongModel>> getLinkHopDongsByMonthAndBusiness(DateTime month, String maKinhDoanh) async {
+  final db = await database;
+  final monthStr = month.toIso8601String().split('T').first;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkHopDongTable,
+    where: 'thang = ? AND maKinhDoanh = ?',
+    whereArgs: [monthStr, maKinhDoanh],
+  );
+  return maps.map((map) => LinkHopDongModel.fromMap(map)).toList();
+}
+
+/// Get LinkHopDong records by status
+Future<List<LinkHopDongModel>> getLinkHopDongsByStatus(String trangThai) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkHopDongTable,
+    where: 'trangThai = ?',
+    whereArgs: [trangThai],
+  );
+  return maps.map((map) => LinkHopDongModel.fromMap(map)).toList();
+}
+
+/// Get contracts expiring soon (within next 30 days)
+Future<List<LinkHopDongModel>> getExpiringContracts() async {
+  final db = await database;
+  final now = DateTime.now();
+  final futureDate = now.add(Duration(days: 30));
+  final nowStr = now.toIso8601String().split('T').first;
+  final futureStr = futureDate.toIso8601String().split('T').first;
+  
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkHopDongTable,
+    where: 'thoiHanKetthuc BETWEEN ? AND ?',
+    whereArgs: [nowStr, futureStr],
+  );
+  return maps.map((map) => LinkHopDongModel.fromMap(map)).toList();
+}
+
+// ==================== LinkVatTu CRUD Operations ====================
+
+/// Inserts a LinkVatTu record into the database.
+Future<int> insertLinkVatTu(LinkVatTuModel vatTu) async {
+  final db = await database;
+  return await db.insert(
+    DatabaseTables.linkVatTuTable,
+    vatTu.toMap(),
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
+}
+
+/// Retrieves a LinkVatTu record by its uid.
+Future<LinkVatTuModel?> getLinkVatTuById(String uid) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkVatTuTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+    limit: 1,
+  );
+  if (maps.isNotEmpty) {
+    return LinkVatTuModel.fromMap(maps.first);
+  }
+  return null;
+}
+
+/// Retrieves all LinkVatTu records from the database.
+Future<List<LinkVatTuModel>> getAllLinkVatTus() async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(DatabaseTables.linkVatTuTable);
+  return maps.map((map) => LinkVatTuModel.fromMap(map)).toList();
+}
+
+/// Updates a LinkVatTu record in the database.
+Future<int> updateLinkVatTu(LinkVatTuModel vatTu) async {
+  final db = await database;
+  return await db.update(
+    DatabaseTables.linkVatTuTable,
+    vatTu.toMap(),
+    where: 'uid = ?',
+    whereArgs: [vatTu.uid],
+  );
+}
+
+/// Deletes a LinkVatTu record from the database by its uid.
+Future<int> deleteLinkVatTu(String uid) async {
+  final db = await database;
+  return await db.delete(
+    DatabaseTables.linkVatTuTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
+}
+
+/// Get LinkVatTu records by contract ID
+Future<List<LinkVatTuModel>> getLinkVatTusByContract(String hopDongID) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkVatTuTable,
+    where: 'hopDongID = ?',
+    whereArgs: [hopDongID],
+  );
+  return maps.map((map) => LinkVatTuModel.fromMap(map)).toList();
+}
+
+/// Get LinkVatTu records by month and contract
+Future<List<LinkVatTuModel>> getLinkVatTusByMonthAndContract(DateTime month, String hopDongID) async {
+  final db = await database;
+  final monthStr = month.toIso8601String().split('T').first;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkVatTuTable,
+    where: 'thang = ? AND hopDongID = ?',
+    whereArgs: [monthStr, hopDongID],
+  );
+  return maps.map((map) => LinkVatTuModel.fromMap(map)).toList();
+}
+
+/// Search LinkVatTu by material name or brand
+Future<List<LinkVatTuModel>> searchLinkVatTus(String searchTerm) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkVatTuTable,
+    where: 'danhMucVatTuTieuHao LIKE ? OR nhanHieu LIKE ?',
+    whereArgs: ['%$searchTerm%', '%$searchTerm%'],
+  );
+  return maps.map((map) => LinkVatTuModel.fromMap(map)).toList();
+}
+
+// ==================== LinkDinhKy CRUD Operations ====================
+
+/// Inserts a LinkDinhKy record into the database.
+Future<int> insertLinkDinhKy(LinkDinhKyModel dinhKy) async {
+  final db = await database;
+  return await db.insert(
+    DatabaseTables.linkDinhKyTable,
+    dinhKy.toMap(),
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
+}
+
+/// Retrieves a LinkDinhKy record by its uid.
+Future<LinkDinhKyModel?> getLinkDinhKyById(String uid) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkDinhKyTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+    limit: 1,
+  );
+  if (maps.isNotEmpty) {
+    return LinkDinhKyModel.fromMap(maps.first);
+  }
+  return null;
+}
+
+/// Retrieves all LinkDinhKy records from the database.
+Future<List<LinkDinhKyModel>> getAllLinkDinhKys() async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(DatabaseTables.linkDinhKyTable);
+  return maps.map((map) => LinkDinhKyModel.fromMap(map)).toList();
+}
+
+/// Updates a LinkDinhKy record in the database.
+Future<int> updateLinkDinhKy(LinkDinhKyModel dinhKy) async {
+  final db = await database;
+  return await db.update(
+    DatabaseTables.linkDinhKyTable,
+    dinhKy.toMap(),
+    where: 'uid = ?',
+    whereArgs: [dinhKy.uid],
+  );
+}
+
+/// Deletes a LinkDinhKy record from the database by its uid.
+Future<int> deleteLinkDinhKy(String uid) async {
+  final db = await database;
+  return await db.delete(
+    DatabaseTables.linkDinhKyTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
+}
+
+/// Get LinkDinhKy records by contract ID
+Future<List<LinkDinhKyModel>> getLinkDinhKysByContract(String hopDongID) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkDinhKyTable,
+    where: 'hopDongID = ?',
+    whereArgs: [hopDongID],
+  );
+  return maps.map((map) => LinkDinhKyModel.fromMap(map)).toList();
+}
+
+/// Get LinkDinhKy records by work category
+Future<List<LinkDinhKyModel>> getLinkDinhKysByCategory(String danhMucCongViec) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkDinhKyTable,
+    where: 'danhMucCongViec = ?',
+    whereArgs: [danhMucCongViec],
+  );
+  return maps.map((map) => LinkDinhKyModel.fromMap(map)).toList();
+}
+
+// ==================== LinkLeTetTC CRUD Operations ====================
+
+/// Inserts a LinkLeTetTC record into the database.
+Future<int> insertLinkLeTetTC(LinkLeTetTCModel leTetTC) async {
+  final db = await database;
+  return await db.insert(
+    DatabaseTables.linkLeTetTCTable,
+    leTetTC.toMap(),
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
+}
+
+/// Retrieves a LinkLeTetTC record by its uid.
+Future<LinkLeTetTCModel?> getLinkLeTetTCById(String uid) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkLeTetTCTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+    limit: 1,
+  );
+  if (maps.isNotEmpty) {
+    return LinkLeTetTCModel.fromMap(maps.first);
+  }
+  return null;
+}
+
+/// Retrieves all LinkLeTetTC records from the database.
+Future<List<LinkLeTetTCModel>> getAllLinkLeTetTCs() async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(DatabaseTables.linkLeTetTCTable);
+  return maps.map((map) => LinkLeTetTCModel.fromMap(map)).toList();
+}
+
+/// Updates a LinkLeTetTC record in the database.
+Future<int> updateLinkLeTetTC(LinkLeTetTCModel leTetTC) async {
+  final db = await database;
+  return await db.update(
+    DatabaseTables.linkLeTetTCTable,
+    leTetTC.toMap(),
+    where: 'uid = ?',
+    whereArgs: [leTetTC.uid],
+  );
+}
+
+/// Deletes a LinkLeTetTC record from the database by its uid.
+Future<int> deleteLinkLeTetTC(String uid) async {
+  final db = await database;
+  return await db.delete(
+    DatabaseTables.linkLeTetTCTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
+}
+
+/// Get LinkLeTetTC records by contract ID
+Future<List<LinkLeTetTCModel>> getLinkLeTetTCsByContract(String hopDongID) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkLeTetTCTable,
+    where: 'hopDongID = ?',
+    whereArgs: [hopDongID],
+  );
+  return maps.map((map) => LinkLeTetTCModel.fromMap(map)).toList();
+}
+
+// ==================== LinkPhuCap CRUD Operations ====================
+
+/// Inserts a LinkPhuCap record into the database.
+Future<int> insertLinkPhuCap(LinkPhuCapModel phuCap) async {
+  final db = await database;
+  return await db.insert(
+    DatabaseTables.linkPhuCapTable,
+    phuCap.toMap(),
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
+}
+
+/// Retrieves a LinkPhuCap record by its uid.
+Future<LinkPhuCapModel?> getLinkPhuCapById(String uid) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkPhuCapTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+    limit: 1,
+  );
+  if (maps.isNotEmpty) {
+    return LinkPhuCapModel.fromMap(maps.first);
+  }
+  return null;
+}
+
+/// Retrieves all LinkPhuCap records from the database.
+Future<List<LinkPhuCapModel>> getAllLinkPhuCaps() async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(DatabaseTables.linkPhuCapTable);
+  return maps.map((map) => LinkPhuCapModel.fromMap(map)).toList();
+}
+
+/// Updates a LinkPhuCap record in the database.
+Future<int> updateLinkPhuCap(LinkPhuCapModel phuCap) async {
+  final db = await database;
+  return await db.update(
+    DatabaseTables.linkPhuCapTable,
+    phuCap.toMap(),
+    where: 'uid = ?',
+    whereArgs: [phuCap.uid],
+  );
+}
+
+/// Deletes a LinkPhuCap record from the database by its uid.
+Future<int> deleteLinkPhuCap(String uid) async {
+  final db = await database;
+  return await db.delete(
+    DatabaseTables.linkPhuCapTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
+}
+
+/// Get LinkPhuCap records by contract ID
+Future<List<LinkPhuCapModel>> getLinkPhuCapsByContract(String hopDongID) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkPhuCapTable,
+    where: 'hopDongID = ?',
+    whereArgs: [hopDongID],
+  );
+  return maps.map((map) => LinkPhuCapModel.fromMap(map)).toList();
+}
+
+// ==================== LinkNgoaiGiao CRUD Operations ====================
+
+/// Inserts a LinkNgoaiGiao record into the database.
+Future<int> insertLinkNgoaiGiao(LinkNgoaiGiaoModel ngoaiGiao) async {
+  final db = await database;
+  return await db.insert(
+    DatabaseTables.linkNgoaiGiaoTable,
+    ngoaiGiao.toMap(),
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
+}
+
+/// Retrieves a LinkNgoaiGiao record by its uid.
+Future<LinkNgoaiGiaoModel?> getLinkNgoaiGiaoById(String uid) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkNgoaiGiaoTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+    limit: 1,
+  );
+  if (maps.isNotEmpty) {
+    return LinkNgoaiGiaoModel.fromMap(maps.first);
+  }
+  return null;
+}
+
+/// Retrieves all LinkNgoaiGiao records from the database.
+Future<List<LinkNgoaiGiaoModel>> getAllLinkNgoaiGiaos() async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(DatabaseTables.linkNgoaiGiaoTable);
+  return maps.map((map) => LinkNgoaiGiaoModel.fromMap(map)).toList();
+}
+
+/// Updates a LinkNgoaiGiao record in the database.
+Future<int> updateLinkNgoaiGiao(LinkNgoaiGiaoModel ngoaiGiao) async {
+  final db = await database;
+  return await db.update(
+    DatabaseTables.linkNgoaiGiaoTable,
+    ngoaiGiao.toMap(),
+    where: 'uid = ?',
+    whereArgs: [ngoaiGiao.uid],
+  );
+}
+
+/// Deletes a LinkNgoaiGiao record from the database by its uid.
+Future<int> deleteLinkNgoaiGiao(String uid) async {
+  final db = await database;
+  return await db.delete(
+    DatabaseTables.linkNgoaiGiaoTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
+}
+
+/// Get LinkNgoaiGiao records by contract ID
+Future<List<LinkNgoaiGiaoModel>> getLinkNgoaiGiaosByContract(String hopDongID) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkNgoaiGiaoTable,
+    where: 'hopDongID = ?',
+    whereArgs: [hopDongID],
+  );
+  return maps.map((map) => LinkNgoaiGiaoModel.fromMap(map)).toList();
+}
+
+// ==================== LinkMayMoc CRUD Operations ====================
+
+/// Inserts a LinkMayMoc record into the database.
+Future<int> insertLinkMayMoc(LinkMayMocModel mayMoc) async {
+  final db = await database;
+  return await db.insert(
+    DatabaseTables.linkMayMocTable,
+    mayMoc.toMap(),
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
+}
+
+/// Retrieves a LinkMayMoc record by its uid.
+Future<LinkMayMocModel?> getLinkMayMocById(String uid) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkMayMocTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+    limit: 1,
+  );
+  if (maps.isNotEmpty) {
+    return LinkMayMocModel.fromMap(maps.first);
+  }
+  return null;
+}
+
+/// Retrieves all LinkMayMoc records from the database.
+Future<List<LinkMayMocModel>> getAllLinkMayMocs() async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(DatabaseTables.linkMayMocTable);
+  return maps.map((map) => LinkMayMocModel.fromMap(map)).toList();
+}
+
+/// Updates a LinkMayMoc record in the database.
+Future<int> updateLinkMayMoc(LinkMayMocModel mayMoc) async {
+  final db = await database;
+  return await db.update(
+    DatabaseTables.linkMayMocTable,
+    mayMoc.toMap(),
+    where: 'uid = ?',
+    whereArgs: [mayMoc.uid],
+  );
+}
+
+/// Deletes a LinkMayMoc record from the database by its uid.
+Future<int> deleteLinkMayMoc(String uid) async {
+  final db = await database;
+  return await db.delete(
+    DatabaseTables.linkMayMocTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
+}
+
+/// Get LinkMayMoc records by contract ID
+Future<List<LinkMayMocModel>> getLinkMayMocsByContract(String hopDongID) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkMayMocTable,
+    where: 'hopDongID = ?',
+    whereArgs: [hopDongID],
+  );
+  return maps.map((map) => LinkMayMocModel.fromMap(map)).toList();
+}
+
+/// Search LinkMayMoc by machine type or name
+Future<List<LinkMayMocModel>> searchLinkMayMocs(String searchTerm) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkMayMocTable,
+    where: 'loaiMay LIKE ? OR tenMay LIKE ? OR hangSanXuat LIKE ?',
+    whereArgs: ['%$searchTerm%', '%$searchTerm%', '%$searchTerm%'],
+  );
+  return maps.map((map) => LinkMayMocModel.fromMap(map)).toList();
+}
+
+// ==================== LinkLuong CRUD Operations ====================
+
+/// Inserts a LinkLuong record into the database.
+Future<int> insertLinkLuong(LinkLuongModel luong) async {
+  final db = await database;
+  return await db.insert(
+    DatabaseTables.linkLuongTable,
+    luong.toMap(),
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
+}
+
+/// Retrieves a LinkLuong record by its uid.
+Future<LinkLuongModel?> getLinkLuongById(String uid) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkLuongTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+    limit: 1,
+  );
+  if (maps.isNotEmpty) {
+    return LinkLuongModel.fromMap(maps.first);
+  }
+  return null;
+}
+
+/// Retrieves all LinkLuong records from the database.
+Future<List<LinkLuongModel>> getAllLinkLuongs() async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(DatabaseTables.linkLuongTable);
+  return maps.map((map) => LinkLuongModel.fromMap(map)).toList();
+}
+
+/// Updates a LinkLuong record in the database.
+Future<int> updateLinkLuong(LinkLuongModel luong) async {
+  final db = await database;
+  return await db.update(
+    DatabaseTables.linkLuongTable,
+    luong.toMap(),
+    where: 'uid = ?',
+    whereArgs: [luong.uid],
+  );
+}
+
+/// Deletes a LinkLuong record from the database by its uid.
+Future<int> deleteLinkLuong(String uid) async {
+  final db = await database;
+  return await db.delete(
+    DatabaseTables.linkLuongTable,
+    where: 'uid = ?',
+    whereArgs: [uid],
+  );
+}
+
+/// Get LinkLuong records by contract ID
+Future<List<LinkLuongModel>> getLinkLuongsByContract(String hopDongID) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkLuongTable,
+    where: 'hopDongID = ?',
+    whereArgs: [hopDongID],
+  );
+  return maps.map((map) => LinkLuongModel.fromMap(map)).toList();
+}
+
+/// Get LinkLuong records by category
+Future<List<LinkLuongModel>> getLinkLuongsByCategory(String hangMuc) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkLuongTable,
+    where: 'hangMuc = ?',
+    whereArgs: [hangMuc],
+  );
+  return maps.map((map) => LinkLuongModel.fromMap(map)).toList();
+}
+
+/// Search LinkLuong by category or description
+Future<List<LinkLuongModel>> searchLinkLuongs(String searchTerm) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkLuongTable,
+    where: 'hangMuc LIKE ? OR moTa LIKE ?',
+    whereArgs: ['%$searchTerm%', '%$searchTerm%'],
+  );
+  return maps.map((map) => LinkLuongModel.fromMap(map)).toList();
+}
+/// Clear all Link tables
+Future<void> clearAllLinkTables() async {
+  final db = await database;
+  await db.delete(DatabaseTables.linkHopDongTable);
+  await db.delete(DatabaseTables.linkVatTuTable);
+  await db.delete(DatabaseTables.linkDinhKyTable);
+  await db.delete(DatabaseTables.linkLeTetTCTable);
+  await db.delete(DatabaseTables.linkPhuCapTable);
+  await db.delete(DatabaseTables.linkNgoaiGiaoTable);
+  await db.delete(DatabaseTables.linkMayMocTable);
+  await db.delete(DatabaseTables.linkLuongTable);
+   print('Cleared all Link tables');
+}
+Future<Map<String, int>> getAllLinkTableCounts() async {
+ final db = await database;
+ 
+ final hopDongCount = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.linkHopDongTable}');
+ final vatTuCount = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.linkVatTuTable}');
+ final dinhKyCount = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.linkDinhKyTable}');
+ final leTetTCCount = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.linkLeTetTCTable}');
+ final phuCapCount = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.linkPhuCapTable}');
+ final ngoaiGiaoCount = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.linkNgoaiGiaoTable}');
+ final mayMocCount = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.linkMayMocTable}');
+ final luongCount = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.linkLuongTable}');
+ 
+ return {
+   'LinkHopDong': Sqflite.firstIntValue(hopDongCount) ?? 0,
+   'LinkVatTu': Sqflite.firstIntValue(vatTuCount) ?? 0,
+   'LinkDinhKy': Sqflite.firstIntValue(dinhKyCount) ?? 0,
+   'LinkLeTetTC': Sqflite.firstIntValue(leTetTCCount) ?? 0,
+   'LinkPhuCap': Sqflite.firstIntValue(phuCapCount) ?? 0,
+   'LinkNgoaiGiao': Sqflite.firstIntValue(ngoaiGiaoCount) ?? 0,
+   'LinkMayMoc': Sqflite.firstIntValue(mayMocCount) ?? 0,
+   'LinkLuong': Sqflite.firstIntValue(luongCount) ?? 0,
+ };
+}
+
+/// Batch insert multiple records for better performance
+Future<void> batchInsertLinkHopDongs(List<LinkHopDongModel> hopDongs) async {
+ final db = await database;
+ final batch = db.batch();
+ 
+ for (final hopDong in hopDongs) {
+   batch.insert(
+     DatabaseTables.linkHopDongTable,
+     hopDong.toMap(),
+     conflictAlgorithm: ConflictAlgorithm.replace,
+   );
+ }
+ 
+ await batch.commit(noResult: true);
+ print('Batch inserted ${hopDongs.length} LinkHopDong records');
+}
+
+/// Batch insert multiple LinkVatTu records
+Future<void> batchInsertLinkVatTus(List<LinkVatTuModel> vatTus) async {
+ final db = await database;
+ final batch = db.batch();
+ 
+ for (final vatTu in vatTus) {
+   batch.insert(
+     DatabaseTables.linkVatTuTable,
+     vatTu.toMap(),
+     conflictAlgorithm: ConflictAlgorithm.replace,
+   );
+ }
+ 
+ await batch.commit(noResult: true);
+ print('Batch inserted ${vatTus.length} LinkVatTu records');
+}
+
+/// Batch insert multiple LinkDinhKy records
+Future<void> batchInsertLinkDinhKys(List<LinkDinhKyModel> dinhKys) async {
+ final db = await database;
+ final batch = db.batch();
+ 
+ for (final dinhKy in dinhKys) {
+   batch.insert(
+     DatabaseTables.linkDinhKyTable,
+     dinhKy.toMap(),
+     conflictAlgorithm: ConflictAlgorithm.replace,
+   );
+ }
+ 
+ await batch.commit(noResult: true);
+ print('Batch inserted ${dinhKys.length} LinkDinhKy records');
+}
+
+/// Batch insert multiple LinkLeTetTC records
+Future<void> batchInsertLinkLeTetTCs(List<LinkLeTetTCModel> leTetTCs) async {
+ final db = await database;
+ final batch = db.batch();
+ 
+ for (final leTetTC in leTetTCs) {
+   batch.insert(
+     DatabaseTables.linkLeTetTCTable,
+     leTetTC.toMap(),
+     conflictAlgorithm: ConflictAlgorithm.replace,
+   );
+ }
+ 
+ await batch.commit(noResult: true);
+ print('Batch inserted ${leTetTCs.length} LinkLeTetTC records');
+}
+
+/// Batch insert multiple LinkPhuCap records
+Future<void> batchInsertLinkPhuCaps(List<LinkPhuCapModel> phuCaps) async {
+ final db = await database;
+ final batch = db.batch();
+ 
+ for (final phuCap in phuCaps) {
+   batch.insert(
+     DatabaseTables.linkPhuCapTable,
+     phuCap.toMap(),
+     conflictAlgorithm: ConflictAlgorithm.replace,
+   );
+ }
+ 
+ await batch.commit(noResult: true);
+ print('Batch inserted ${phuCaps.length} LinkPhuCap records');
+}
+
+/// Batch insert multiple LinkNgoaiGiao records
+Future<void> batchInsertLinkNgoaiGiaos(List<LinkNgoaiGiaoModel> ngoaiGiaos) async {
+ final db = await database;
+ final batch = db.batch();
+ 
+ for (final ngoaiGiao in ngoaiGiaos) {
+   batch.insert(
+     DatabaseTables.linkNgoaiGiaoTable,
+     ngoaiGiao.toMap(),
+     conflictAlgorithm: ConflictAlgorithm.replace,
+   );
+ }
+ 
+ await batch.commit(noResult: true);
+ print('Batch inserted ${ngoaiGiaos.length} LinkNgoaiGiao records');
+}
+
+/// Batch insert multiple LinkMayMoc records
+Future<void> batchInsertLinkMayMocs(List<LinkMayMocModel> mayMocs) async {
+ final db = await database;
+ final batch = db.batch();
+ 
+ for (final mayMoc in mayMocs) {
+   batch.insert(
+     DatabaseTables.linkMayMocTable,
+     mayMoc.toMap(),
+     conflictAlgorithm: ConflictAlgorithm.replace,
+   );
+ }
+ 
+ await batch.commit(noResult: true);
+ print('Batch inserted ${mayMocs.length} LinkMayMoc records');
+}
+
+/// Batch insert multiple LinkLuong records
+Future<void> batchInsertLinkLuongs(List<LinkLuongModel> luongs) async {
+ final db = await database;
+ final batch = db.batch();
+ 
+ for (final luong in luongs) {
+   batch.insert(
+     DatabaseTables.linkLuongTable,
+     luong.toMap(),
+     conflictAlgorithm: ConflictAlgorithm.replace,
+   );
+ }
+ 
+ await batch.commit(noResult: true);
+ print('Batch inserted ${luongs.length} LinkLuong records');
+}
+
+/// Get all records related to a specific contract
+Future<Map<String, dynamic>> getAllContractRelatedData(String hopDongID) async {
+ final hopDong = await getLinkHopDongById(hopDongID);
+ final vatTus = await getLinkVatTusByContract(hopDongID);
+ final dinhKys = await getLinkDinhKysByContract(hopDongID);
+ final leTetTCs = await getLinkLeTetTCsByContract(hopDongID);
+ final phuCaps = await getLinkPhuCapsByContract(hopDongID);
+ final ngoaiGiaos = await getLinkNgoaiGiaosByContract(hopDongID);
+ final mayMocs = await getLinkMayMocsByContract(hopDongID);
+ final luongs = await getLinkLuongsByContract(hopDongID);
+ 
+ return {
+   'hopDong': hopDong,
+   'vatTus': vatTus,
+   'dinhKys': dinhKys,
+   'leTetTCs': leTetTCs,
+   'phuCaps': phuCaps,
+   'ngoaiGiaos': ngoaiGiaos,
+   'mayMocs': mayMocs,
+   'luongs': luongs,
+ };
+}
+
+/// Delete all records related to a specific contract
+Future<void> deleteAllContractRelatedData(String hopDongID) async {
+ final db = await database;
+ final batch = db.batch();
+ 
+ // Delete all related records
+ batch.delete(DatabaseTables.linkVatTuTable, where: 'hopDongID = ?', whereArgs: [hopDongID]);
+ batch.delete(DatabaseTables.linkDinhKyTable, where: 'hopDongID = ?', whereArgs: [hopDongID]);
+ batch.delete(DatabaseTables.linkLeTetTCTable, where: 'hopDongID = ?', whereArgs: [hopDongID]);
+ batch.delete(DatabaseTables.linkPhuCapTable, where: 'hopDongID = ?', whereArgs: [hopDongID]);
+ batch.delete(DatabaseTables.linkNgoaiGiaoTable, where: 'hopDongID = ?', whereArgs: [hopDongID]);
+ batch.delete(DatabaseTables.linkMayMocTable, where: 'hopDongID = ?', whereArgs: [hopDongID]);
+ batch.delete(DatabaseTables.linkLuongTable, where: 'hopDongID = ?', whereArgs: [hopDongID]);
+ 
+ // Delete the main contract record
+ batch.delete(DatabaseTables.linkHopDongTable, where: 'uid = ?', whereArgs: [hopDongID]);
+ 
+ await batch.commit(noResult: true);
+ print('Deleted all data related to contract: $hopDongID');
+}
+
+/// Get summary statistics for a contract
+Future<Map<String, dynamic>> getContractSummary(String hopDongID) async {
+ final db = await database;
+ 
+ // Get total amounts from each table
+ final vatTuTotal = await db.rawQuery('''
+   SELECT COALESCE(SUM(thanhTien), 0) as total FROM ${DatabaseTables.linkVatTuTable} 
+   WHERE hopDongID = ?
+ ''', [hopDongID]);
+ 
+ final dinhKyTotal = await db.rawQuery('''
+   SELECT COALESCE(SUM(thanhTien), 0) as total FROM ${DatabaseTables.linkDinhKyTable} 
+   WHERE hopDongID = ?
+ ''', [hopDongID]);
+ 
+ final leTetTCTotal = await db.rawQuery('''
+   SELECT COALESCE(SUM(thanhTienTrenThang), 0) as total FROM ${DatabaseTables.linkLeTetTCTable} 
+   WHERE hopDongID = ?
+ ''', [hopDongID]);
+ 
+ final phuCapTotal = await db.rawQuery('''
+   SELECT COALESCE(SUM(thanhTienTrenThang), 0) as total FROM ${DatabaseTables.linkPhuCapTable} 
+   WHERE hopDongID = ?
+ ''', [hopDongID]);
+ 
+ final ngoaiGiaoTotal = await db.rawQuery('''
+   SELECT COALESCE(SUM(thanhTienTrenThang), 0) as total FROM ${DatabaseTables.linkNgoaiGiaoTable} 
+   WHERE hopDongID = ?
+ ''', [hopDongID]);
+ 
+ final mayMocTotal = await db.rawQuery('''
+   SELECT COALESCE(SUM(thanhTienThang), 0) as total FROM ${DatabaseTables.linkMayMocTable} 
+   WHERE hopDongID = ?
+ ''', [hopDongID]);
+ 
+ final luongTotal = await db.rawQuery('''
+   SELECT COALESCE(SUM(thanhTien), 0) as total FROM ${DatabaseTables.linkLuongTable} 
+   WHERE hopDongID = ?
+ ''', [hopDongID]);
+ 
+ // Get record counts
+ final vatTuCount = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.linkVatTuTable} WHERE hopDongID = ?', [hopDongID]);
+ final dinhKyCount = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.linkDinhKyTable} WHERE hopDongID = ?', [hopDongID]);
+ final leTetTCCount = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.linkLeTetTCTable} WHERE hopDongID = ?', [hopDongID]);
+ final phuCapCount = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.linkPhuCapTable} WHERE hopDongID = ?', [hopDongID]);
+ final ngoaiGiaoCount = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.linkNgoaiGiaoTable} WHERE hopDongID = ?', [hopDongID]);
+ final mayMocCount = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.linkMayMocTable} WHERE hopDongID = ?', [hopDongID]);
+ final luongCount = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.linkLuongTable} WHERE hopDongID = ?', [hopDongID]);
+ 
+ return {
+   'totals': {
+     'vatTu': vatTuTotal.first['total'],
+     'dinhKy': dinhKyTotal.first['total'],
+     'leTetTC': leTetTCTotal.first['total'],
+     'phuCap': phuCapTotal.first['total'],
+     'ngoaiGiao': ngoaiGiaoTotal.first['total'],
+     'mayMoc': mayMocTotal.first['total'],
+     'luong': luongTotal.first['total'],
+   },
+   'counts': {
+     'vatTu': Sqflite.firstIntValue(vatTuCount) ?? 0,
+     'dinhKy': Sqflite.firstIntValue(dinhKyCount) ?? 0,
+     'leTetTC': Sqflite.firstIntValue(leTetTCCount) ?? 0,
+     'phuCap': Sqflite.firstIntValue(phuCapCount) ?? 0,
+     'ngoaiGiao': Sqflite.firstIntValue(ngoaiGiaoCount) ?? 0,
+     'mayMoc': Sqflite.firstIntValue(mayMocCount) ?? 0,
+     'luong': Sqflite.firstIntValue(luongCount) ?? 0,
+   }
+ };
+}
+
+/// Get monthly summary across all contracts
+Future<Map<String, dynamic>> getMonthlySummary(DateTime month) async {
+ final db = await database;
+ final monthStr = month.toIso8601String().split('T').first;
+ 
+ // Get contracts for the month
+ final contracts = await db.query(
+   DatabaseTables.linkHopDongTable,
+   where: 'thang = ?',
+   whereArgs: [monthStr],
+ );
+ 
+ // Get total revenue and costs for the month
+ final revenueQuery = await db.rawQuery('''
+   SELECT 
+     COALESCE(SUM(doanhThuDangThucHien), 0) as totalRevenue,
+     COALESCE(SUM(chiPhiGiamSat + chiPhiVatLieu + chiPhiCVDinhKy + chiPhiLeTetTCa + chiPhiPhuCap + chiPhiNgoaiGiao + chiPhiMayMoc + chiPhiLuong), 0) as totalCosts,
+     COUNT(*) as contractCount
+   FROM ${DatabaseTables.linkHopDongTable} 
+   WHERE thang = ?
+ ''', [monthStr]);
+ 
+ final result = revenueQuery.first;
+ 
+ return {
+   'month': monthStr,
+   'contractCount': result['contractCount'],
+   'totalRevenue': result['totalRevenue'],
+   'totalCosts': result['totalCosts'],
+   'netProfit': (result['totalRevenue'] as num) - (result['totalCosts'] as num),
+   'contracts': contracts.map((c) => LinkHopDongModel.fromMap(c)).toList(),
+ };
+}
+
+/// Get records by business code and date range
+Future<List<LinkHopDongModel>> getLinkHopDongsByBusinessAndDateRange(
+ String maKinhDoanh, 
+ DateTime startDate, 
+ DateTime endDate
+) async {
+ final db = await database;
+ final startStr = startDate.toIso8601String().split('T').first;
+ final endStr = endDate.toIso8601String().split('T').first;
+ 
+ final List<Map<String, dynamic>> maps = await db.query(
+   DatabaseTables.linkHopDongTable,
+   where: 'maKinhDoanh = ? AND thang BETWEEN ? AND ?',
+   whereArgs: [maKinhDoanh, startStr, endStr],
+   orderBy: 'thang DESC',
+ );
+ 
+ return maps.map((map) => LinkHopDongModel.fromMap(map)).toList();
 }
 //ADDONXNK
 Future<void> clearDonHangTable() async {

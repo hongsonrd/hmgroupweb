@@ -184,7 +184,7 @@ class _PTFormDialogState extends State<PTFormDialog> {
                      ),
                      DataColumn(
                        label: Text(
-                         'Tên sản phẩm',
+                         'Mã hàng - Tên hàng',
                          style: TextStyle(fontWeight: FontWeight.bold),
                        ),
                      ),
@@ -225,7 +225,8 @@ class _PTFormDialogState extends State<PTFormDialog> {
                      
                      String productName = item.idHang;
                      if (item.idHang.contains(" - ")) {
-                       productName = item.idHang.split(" - ")[1];
+                       //productName = item.idHang.split(" - ")[1];
+                       productName = item.idHang;
                      }
                      
                      return DataRow(
@@ -427,7 +428,7 @@ class _PTFormDialogState extends State<PTFormDialog> {
                  ),
                  children: [
                    _buildTableCell('STT', ttf, isBold: true, align: pw.TextAlign.center),
-                   _buildTableCell('Tên sản phẩm', ttf, isBold: true),
+                   _buildTableCell('Mã hàng - Tên hàng', ttf, isBold: true),
                    _buildTableCell('SL yêu cầu', ttf, isBold: true, align: pw.TextAlign.center),
                    _buildTableCell('SL xuất', ttf, isBold: true, align: pw.TextAlign.center),
                    _buildTableCell('Số phiếu', ttf, isBold: true),

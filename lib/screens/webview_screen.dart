@@ -17,6 +17,7 @@ import '../hs_page.dart';
 import '../news_section.dart'; 
 import '../projectmanagement4.dart';
 import '../hs_khachhang.dart';
+import '../hd_page.dart';
 
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
@@ -64,6 +65,11 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
       'isDirectNavigation': true,
       'tab': 0, 
     },
+      {'icon': 'assets/hopdonglogo.png', 'important': 'true', 'name': 'Hợp đồng của tôi',
+    'link': 'hopdong_link',
+    'isDirectNavigation': true,
+    'tab': 0, 
+  },
     {'icon': 'assets/zaloviplogo.png','important': 'true', 'name': 'OA Kinh Doanh', 'link': 'https://zalo.me/g/rzccet697', 'tab': 0},
     {'icon': 'assets/zaloviplogo.png','important': 'true', 'name': 'OA QLDV', 'link': 'https://zalo.me/g/xbcalx122', 'tab': 0},
     {'icon': 'assets/linklogo.png', 'name': 'HM Link', 'link': 'https://www.appsheet.com/start/28785d83-62f3-4ec6-8ddd-2780d413dfa7', 'tab': 0},
@@ -189,7 +195,17 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
       );
       return;
     }
-
+if (title == 'Hợp đồng của tôi') {
+    final userState = Provider.of<UserState>(context, listen: false);
+    final userData = userState.currentUser;
+    
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => HDPage(),
+      ),
+    );
+    return;
+  }
     // External URL handling with desktop_webview_window
     final Uri uri = Uri.parse(url);
     
