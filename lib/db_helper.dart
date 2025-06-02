@@ -39,13 +39,13 @@ class DBHelper {
     }
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool hasReset = prefs.getBool('db_reset_v29') ?? false;
+    bool hasReset = prefs.getBool('db_reset_v30') ?? false;
     
     if (!hasReset) {
-      print('Forcing database reset for version 29...');
+      print('Forcing database reset for version 30...');
       try {
         await deleteDatabase(path);
-        await prefs.setBool('db_reset_v29', true);
+        await prefs.setBool('db_reset_v30', true);
         print('Database reset successful');
       } catch (e) {
         print('Error during database reset: $e');
@@ -57,7 +57,7 @@ class DBHelper {
     final db = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 29,
+        version: 30,
         onCreate: (Database db, int version) async {
           print('Creating database tables...');
           await db.execute(DatabaseTables.createInteractionTable);
@@ -121,15 +121,8 @@ class DBHelper {
           print('Database tables created successfully');
         },
         onUpgrade: (Database db, int oldVersion, int newVersion) async {
-          if (oldVersion < 29) {
-            await db.execute(DatabaseTables.createLinkHopDongTable);
-            await db.execute(DatabaseTables.createLinkVatTuTable);
-            await db.execute(DatabaseTables.createLinkDinhKyTable);
-            await db.execute(DatabaseTables.createLinkLeTetTCTable);
-            await db.execute(DatabaseTables.createLinkPhuCapTable);
-            await db.execute(DatabaseTables.createLinkNgoaiGiaoTable);
-            await db.execute(DatabaseTables.createLinkMayMocTable);
-            await db.execute(DatabaseTables.createLinkLuongTable);
+          if (oldVersion < 30) {
+
           }
         },
         onOpen: (db) async {
@@ -181,8 +174,29 @@ Future<LinkHopDongModel?> getLinkHopDongById(String uid) async {
 /// Retrieves all LinkHopDong records from the database.
 Future<List<LinkHopDongModel>> getAllLinkHopDongs() async {
   final db = await database;
-  final List<Map<String, dynamic>> maps = await db.query(DatabaseTables.linkHopDongTable);
-  return maps.map((map) => LinkHopDongModel.fromMap(map)).toList();
+  final List<Map<String, dynamic>> maps = await db.query('LinkHopDong');
+  
+  // Add this debug section
+  print("=== DATABASE RAW DATA ===");
+  for (int i = 0; i < (maps.length > 3 ? 3 : maps.length); i++) {
+    print("Raw map $i: ${maps[i]}");
+  }
+  print("========================");
+  
+  return List.generate(maps.length, (i) {
+    final model = LinkHopDongModel.fromMap(maps[i]);
+    
+    // Debug the model creation
+    if (i < 3) {
+      print("=== MODEL $i ===");
+      print("Map: ${maps[i]}");
+      print("Model TenHopDong: ${model.tenHopDong}");
+      print("Model Thang: ${model.thang}");
+      print("===============");
+    }
+    
+    return model;
+  });
 }
 
 /// Updates a LinkHopDong record in the database.
@@ -206,11 +220,59 @@ Future<int> deleteLinkHopDong(String uid) async {
   );
 }
 
-/// Clears all records from the LinkHopDong table.
 Future<void> clearLinkHopDongTable() async {
   final db = await database;
   await db.delete(DatabaseTables.linkHopDongTable);
   print('Cleared LinkHopDong table');
+}
+
+/// Clear only LinkVatTu table
+Future<void> clearLinkVatTuTable() async {
+  final db = await database;
+  await db.delete(DatabaseTables.linkVatTuTable);
+  print('Cleared LinkVatTu table');
+}
+
+/// Clear only LinkDinhKy table  
+Future<void> clearLinkDinhKyTable() async {
+  final db = await database;
+  await db.delete(DatabaseTables.linkDinhKyTable);
+  print('Cleared LinkDinhKy table');
+}
+
+/// Clear only LinkLeTetTC table
+Future<void> clearLinkLeTetTCTable() async {
+  final db = await database;
+  await db.delete(DatabaseTables.linkLeTetTCTable);
+  print('Cleared LinkLeTetTC table');
+}
+
+/// Clear only LinkPhuCap table
+Future<void> clearLinkPhuCapTable() async {
+  final db = await database;
+  await db.delete(DatabaseTables.linkPhuCapTable);
+  print('Cleared LinkPhuCap table');
+}
+
+/// Clear only LinkNgoaiGiao table
+Future<void> clearLinkNgoaiGiaoTable() async {
+  final db = await database;
+  await db.delete(DatabaseTables.linkNgoaiGiaoTable);
+  print('Cleared LinkNgoaiGiao table');
+}
+
+/// Clear only LinkMayMoc table
+Future<void> clearLinkMayMocTable() async {
+  final db = await database;
+  await db.delete(DatabaseTables.linkMayMocTable);
+  print('Cleared LinkMayMoc table');
+}
+
+/// Clear only LinkLuong table
+Future<void> clearLinkLuongTable() async {
+  final db = await database;
+  await db.delete(DatabaseTables.linkLuongTable);
+  print('Cleared LinkLuong table');
 }
 
 /// Gets the total count of records in the LinkHopDong table.
@@ -232,13 +294,12 @@ Future<List<LinkHopDongModel>> searchLinkHopDongs(String searchTerm) async {
 }
 
 /// Get LinkHopDong records by month and business code
-Future<List<LinkHopDongModel>> getLinkHopDongsByMonthAndBusiness(DateTime month, String maKinhDoanh) async {
+Future<List<LinkHopDongModel>> getLinkHopDongsByMonthAndBusiness(String month, String maKinhDoanh) async {
   final db = await database;
-  final monthStr = month.toIso8601String().split('T').first;
   final List<Map<String, dynamic>> maps = await db.query(
     DatabaseTables.linkHopDongTable,
     where: 'thang = ? AND maKinhDoanh = ?',
-    whereArgs: [monthStr, maKinhDoanh],
+    whereArgs: [month, maKinhDoanh],
   );
   return maps.map((map) => LinkHopDongModel.fromMap(map)).toList();
 }
@@ -337,13 +398,12 @@ Future<List<LinkVatTuModel>> getLinkVatTusByContract(String hopDongID) async {
 }
 
 /// Get LinkVatTu records by month and contract
-Future<List<LinkVatTuModel>> getLinkVatTusByMonthAndContract(DateTime month, String hopDongID) async {
+Future<List<LinkVatTuModel>> getLinkVatTusByMonthAndContract(String month, String hopDongID) async {
   final db = await database;
-  final monthStr = month.toIso8601String().split('T').first;
   final List<Map<String, dynamic>> maps = await db.query(
     DatabaseTables.linkVatTuTable,
     where: 'thang = ? AND hopDongID = ?',
-    whereArgs: [monthStr, hopDongID],
+    whereArgs: [month, hopDongID],
   );
   return maps.map((map) => LinkVatTuModel.fromMap(map)).toList();
 }
@@ -1087,57 +1147,145 @@ Future<Map<String, dynamic>> getContractSummary(String hopDongID) async {
 }
 
 /// Get monthly summary across all contracts
-Future<Map<String, dynamic>> getMonthlySummary(DateTime month) async {
- final db = await database;
- final monthStr = month.toIso8601String().split('T').first;
- 
- // Get contracts for the month
- final contracts = await db.query(
-   DatabaseTables.linkHopDongTable,
-   where: 'thang = ?',
-   whereArgs: [monthStr],
- );
- 
- // Get total revenue and costs for the month
- final revenueQuery = await db.rawQuery('''
-   SELECT 
-     COALESCE(SUM(doanhThuDangThucHien), 0) as totalRevenue,
-     COALESCE(SUM(chiPhiGiamSat + chiPhiVatLieu + chiPhiCVDinhKy + chiPhiLeTetTCa + chiPhiPhuCap + chiPhiNgoaiGiao + chiPhiMayMoc + chiPhiLuong), 0) as totalCosts,
-     COUNT(*) as contractCount
-   FROM ${DatabaseTables.linkHopDongTable} 
-   WHERE thang = ?
- ''', [monthStr]);
- 
- final result = revenueQuery.first;
- 
- return {
-   'month': monthStr,
-   'contractCount': result['contractCount'],
-   'totalRevenue': result['totalRevenue'],
-   'totalCosts': result['totalCosts'],
-   'netProfit': (result['totalRevenue'] as num) - (result['totalCosts'] as num),
-   'contracts': contracts.map((c) => LinkHopDongModel.fromMap(c)).toList(),
- };
+Future<Map<String, dynamic>> getMonthlySummary(String month) async {
+  final db = await database;
+  
+  // Get contracts for the month
+  final contracts = await db.query(
+    DatabaseTables.linkHopDongTable,
+    where: 'thang = ?',
+    whereArgs: [month],
+  );
+  
+  // Get total revenue and costs for the month
+  final revenueQuery = await db.rawQuery('''
+    SELECT 
+      COALESCE(SUM(doanhThuDangThucHien), 0) as totalRevenue,
+      COALESCE(SUM(chiPhiGiamSat + chiPhiVatLieu + chiPhiCVDinhKy + chiPhiLeTetTCa + chiPhiPhuCap + chiPhiNgoaiGiao + chiPhiMayMoc + chiPhiLuong), 0) as totalCosts,
+      COUNT(*) as contractCount
+    FROM ${DatabaseTables.linkHopDongTable} 
+    WHERE thang = ?
+  ''', [month]);
+  
+  final result = revenueQuery.first;
+  
+  return {
+    'month': month,
+    'contractCount': result['contractCount'],
+    'totalRevenue': result['totalRevenue'],
+    'totalCosts': result['totalCosts'],
+    'netProfit': (result['totalRevenue'] as num) - (result['totalCosts'] as num),
+    'contracts': contracts.map((c) => LinkHopDongModel.fromMap(c)).toList(),
+  };
 }
 
 /// Get records by business code and date range
 Future<List<LinkHopDongModel>> getLinkHopDongsByBusinessAndDateRange(
- String maKinhDoanh, 
- DateTime startDate, 
- DateTime endDate
+  String maKinhDoanh, 
+  String startDate, 
+  String endDate
 ) async {
- final db = await database;
- final startStr = startDate.toIso8601String().split('T').first;
- final endStr = endDate.toIso8601String().split('T').first;
- 
- final List<Map<String, dynamic>> maps = await db.query(
-   DatabaseTables.linkHopDongTable,
-   where: 'maKinhDoanh = ? AND thang BETWEEN ? AND ?',
-   whereArgs: [maKinhDoanh, startStr, endStr],
-   orderBy: 'thang DESC',
- );
- 
- return maps.map((map) => LinkHopDongModel.fromMap(map)).toList();
+  final db = await database;
+  
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkHopDongTable,
+    where: 'maKinhDoanh = ? AND thang BETWEEN ? AND ?',
+    whereArgs: [maKinhDoanh, startDate, endDate],
+    orderBy: 'thang DESC',
+  );
+  
+  return maps.map((map) => LinkHopDongModel.fromMap(map)).toList();
+}
+Future<List<LinkHopDongModel>> getLinkHopDongsByDateRange(String startDate, String endDate) async {
+  final db = await database;
+  
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkHopDongTable,
+    where: 'thang BETWEEN ? AND ?',
+    whereArgs: [startDate, endDate],
+    orderBy: 'thang DESC',
+  );
+  
+  return maps.map((map) => LinkHopDongModel.fromMap(map)).toList();
+}
+Future<List<LinkHopDongModel>> getContractsEndingBetween(String startDate, String endDate) async {
+  final db = await database;
+  
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkHopDongTable,
+    where: 'thoiHanKetthuc BETWEEN ? AND ?',
+    whereArgs: [startDate, endDate],
+    orderBy: 'thoiHanKetthuc ASC',
+  );
+  
+  return maps.map((map) => LinkHopDongModel.fromMap(map)).toList();
+}
+
+/// Get contracts starting between specific dates
+Future<List<LinkHopDongModel>> getContractsStartingBetween(String startDate, String endDate) async {
+  final db = await database;
+  
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkHopDongTable,
+    where: 'thoiHanBatDau BETWEEN ? AND ?',
+    whereArgs: [startDate, endDate],
+    orderBy: 'thoiHanBatDau ASC',
+  );
+  
+  return maps.map((map) => LinkHopDongModel.fromMap(map)).toList();
+}
+
+/// Get summary by date range
+Future<Map<String, dynamic>> getSummaryByDateRange(String startDate, String endDate) async {
+  final db = await database;
+  
+  final revenueQuery = await db.rawQuery('''
+    SELECT 
+      COALESCE(SUM(doanhThuDangThucHien), 0) as totalRevenue,
+      COALESCE(SUM(chiPhiGiamSat + chiPhiVatLieu + chiPhiCVDinhKy + chiPhiLeTetTCa + chiPhiPhuCap + chiPhiNgoaiGiao + chiPhiMayMoc + chiPhiLuong), 0) as totalCosts,
+      COUNT(*) as contractCount,
+      AVG(doanhThuDangThucHien) as avgRevenue
+    FROM ${DatabaseTables.linkHopDongTable} 
+    WHERE thang BETWEEN ? AND ?
+  ''', [startDate, endDate]);
+  
+  final result = revenueQuery.first;
+  
+  return {
+    'startDate': startDate,
+    'endDate': endDate,
+    'contractCount': result['contractCount'],
+    'totalRevenue': result['totalRevenue'],
+    'totalCosts': result['totalCosts'],
+    'netProfit': (result['totalRevenue'] as num) - (result['totalCosts'] as num),
+    'avgRevenue': result['avgRevenue'],
+  };
+}
+Future<List<LinkHopDongModel>> getLinkHopDongsByMonth(String yearMonth) async {
+  final db = await database;
+  
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkHopDongTable,
+    where: 'thang LIKE ?',
+    whereArgs: ['$yearMonth%'],
+    orderBy: 'thang DESC',
+  );
+  
+  return maps.map((map) => LinkHopDongModel.fromMap(map)).toList();
+}
+
+/// Get contracts by year (YYYY format)
+Future<List<LinkHopDongModel>> getLinkHopDongsByYear(String year) async {
+  final db = await database;
+  
+  final List<Map<String, dynamic>> maps = await db.query(
+    DatabaseTables.linkHopDongTable,
+    where: 'thang LIKE ?',
+    whereArgs: ['$year%'],
+    orderBy: 'thang DESC',
+  );
+  
+  return maps.map((map) => LinkHopDongModel.fromMap(map)).toList();
 }
 //ADDONXNK
 Future<void> clearDonHangTable() async {

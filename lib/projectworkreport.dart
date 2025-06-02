@@ -131,7 +131,7 @@ class _ProjectWorkReportState extends State<ProjectWorkReport> with SingleTicker
     'Bảo hiểm',
     'Đánh giá nhân sự',
     'Chế độ chính sách',
-    'Đề xuất cải tiến'
+    'Đề xuất cải tiến', 'Khác'
   ],
   'HM-RD': [
     'Họp',
@@ -182,7 +182,7 @@ class _ProjectWorkReportState extends State<ProjectWorkReport> with SingleTicker
 'Làm việc qua Web TMĐT',
 'Làm việc qua Facebook',
 'Lắp đặt thiết bị',
-'Bảo trì, bảo dưỡng'
+'Bảo trì, bảo dưỡng', 'Khác'
   ],
       'HM-KS': [
 'Vướng mắc Đề xuất',
@@ -200,7 +200,7 @@ class _ProjectWorkReportState extends State<ProjectWorkReport> with SingleTicker
 'Làm việc qua Web TMĐT',
 'Làm việc qua Facebook',
 'Lắp đặt thiết bị',
-'Bảo trì, bảo dưỡng'
+'Bảo trì, bảo dưỡng', 'Khác'
   ],
 };
   Map<String, String> topicIcons = {
@@ -294,12 +294,12 @@ late List<String> topicList;
         break;
       case 'HM-KS':
         _selectedShare = ['hm.trangiang'];
-        break;
+        break;  
       case 'HM-TD':
-        _selectedShare = ['hm.nguyenhanh'];
+        _selectedShare = ['hm.tranhanh'];
         break;
       default:
-        _selectedShare = []; // No default value
+        _selectedShare = []; 
     }
   }
 
