@@ -65,9 +65,8 @@ class _HSPageState extends State<HSPage> with SingleTickerProviderStateMixin {
   final DBHelper _dbHelper = DBHelper();
   
   // Add variables for sidebar navigation
-  String _selectedRoute = ''; // Start with empty/blank
-  Widget _currentWidget = Container(); // Start with empty container
-
+  String _selectedRoute = '';
+  Widget _currentWidget = Container(); 
   @override
   void initState() {
     super.initState();
@@ -365,7 +364,7 @@ void dispose() {
         'route': 'xnk',
       },
       {
-        'title': 'Chỉ số KD',
+        'title': '★ Chỉ số KD ★',
         'icon': Icons.insights,
         'colors': iconGradients[6],
         'route': 'stat',

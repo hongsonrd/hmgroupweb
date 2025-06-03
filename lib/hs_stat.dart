@@ -7,7 +7,9 @@ import 'hs_xuhuong.dart';
 import 'hs_xuhuongxnk.dart';
 import 'hs_xuhuongkd.dart';
 import 'hs_xuhuongkho.dart';
-
+import 'hs_xuhuongkpi.dart';
+import 'http_client.dart';
+import 'dart:convert';
 class HSStatScreen extends StatefulWidget {
   const HSStatScreen({Key? key}) : super(key: key);
 
@@ -21,7 +23,7 @@ class _HSStatScreenState extends State<HSStatScreen> {
   bool _isLoading = false;
   String _selectedPeriod = 'Tuần này';
   final List<String> _periods = ['Hôm nay', 'Tuần này', 'Tháng này', 'Quý này'];
-
+bool _isSyncing = false; 
   // Variables to hold calculated statistics
   int _totalCompletedOrders = 0;
   double _totalRevenue = 0.0;
@@ -54,7 +56,238 @@ class _HSStatScreenState extends State<HSStatScreen> {
       });
     }
   }
+Future<void> _syncAllHistoryData() async {
+    if (_isSyncing) return; // Prevent multiple simultaneous syncs
 
+    setState(() {
+      _isSyncing = true;
+    });
+
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => _buildSyncProgressDialog(),
+      );
+
+      // Sync DonHang data (all history)
+      await _syncDonHangData();
+      
+      // Sync ChiTietDon data (all history)
+      await _syncChiTietDonData();
+      
+      // Update last sync time
+      final prefs = await SharedPreferences.getInstance();
+      final now = DateTime.now();
+      final formattedNow = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
+      await prefs.setString('last_donhang_sync', formattedNow);
+      await prefs.setString('last_chitietdon_sync', formattedNow);
+      
+      // Close dialog
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.of(context).pop();
+      }
+      
+      // Recalculate stats with new data
+      await _setAndCalculateDateRange(_selectedPeriod);
+      
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đồng bộ lịch sử thành công lúc ${DateFormat('HH:mm').format(now)}'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      // Close dialog on error
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.of(context).pop();
+      }
+      
+      print('Error syncing history data: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi đồng bộ: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    } finally {
+      setState(() {
+        _isSyncing = false;
+      });
+    }
+  }
+  Widget _buildSyncProgressDialog() {
+    return AlertDialog(
+      title: Text(
+        '📊 Đang đồng bộ lịch sử',
+        style: TextStyle(fontSize: 16),
+        textAlign: TextAlign.center,
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          LinearProgressIndicator(
+            backgroundColor: Colors.grey[200],
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+          ),
+          SizedBox(height: 32),
+          Text(
+            'Đang tải toàn bộ lịch sử đơn hàng và chi tiết...',
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+  Future<void> _syncDonHangData() async {
+    try {
+      final encodedUsername = Uri.encodeComponent(_username);
+      
+      // Get all history by using a very old date
+      final response = await AuthenticatedHttpClient.get(
+        Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/hoteldonhangall/$encodedUsername?last_sync=2020-01-01%2000:00:00')
+      );
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        
+        if (data is List) {
+          await _dbHelper.clearDonHangTable();
+          print('Local DonHang table cleared for full history sync.');
+
+          if (data.isNotEmpty) {
+            final batch = await _dbHelper.startBatch();
+            for (var item in data) {
+              final donHang = DonHangModel.fromMap(item);
+              
+              _dbHelper.addToBatch(batch,
+                'INSERT INTO donhang (soPhieu, nguoiTao, ngay, tenKhachHang, sdtKhachHang, soPO, diaChi, mst, tapKH, tenNguoiGiaoDich, boPhanGiaoDich, sdtNguoiGiaoDich, thoiGianDatHang, ngayYeuCauGiao, thoiGianCapNhatTrangThai, phuongThucThanhToan, thanhToanSauNhanHangXNgay, datCocSauXNgay, giayToCanKhiGiaoHang, thoiGianVietHoaDon, thongTinVietHoaDon, diaChiGiaoHang, hoTenNguoiNhanHoaHong, sdtNguoiNhanHoaHong, hinhThucChuyenHoaHong, thongTinNhanHoaHong, ngaySeGiao, thoiGianCapNhatMoiNhat, phuongThucGiaoHang, phuongTienGiaoHang, hoTenNguoiGiaoHang, ghiChu, giaNet, tongTien, vat10, tongCong, hoaHong10, tienGui10, thueTNDN, vanChuyen, thucThu, nguoiNhanHang, sdtNguoiNhanHang, phieuXuatKho, trangThai, tenKhachHang2) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [
+                  donHang.soPhieu,
+                  donHang.nguoiTao,
+                  donHang.ngay,
+                  donHang.tenKhachHang,
+                  donHang.sdtKhachHang,
+                  donHang.soPO,
+                  donHang.diaChi,
+                  donHang.mst,
+                  donHang.tapKH,
+                  donHang.tenNguoiGiaoDich,
+                  donHang.boPhanGiaoDich,
+                  donHang.sdtNguoiGiaoDich,
+                  donHang.thoiGianDatHang,
+                  donHang.ngayYeuCauGiao,
+                  donHang.thoiGianCapNhatTrangThai,
+                  donHang.phuongThucThanhToan,
+                  donHang.thanhToanSauNhanHangXNgay,
+                  donHang.datCocSauXNgay,
+                  donHang.giayToCanKhiGiaoHang,
+                  donHang.thoiGianVietHoaDon,
+                  donHang.thongTinVietHoaDon,
+                  donHang.diaChiGiaoHang,
+                  donHang.hoTenNguoiNhanHoaHong,
+                  donHang.sdtNguoiNhanHoaHong,
+                  donHang.hinhThucChuyenHoaHong,
+                  donHang.thongTinNhanHoaHong,
+                  donHang.ngaySeGiao,
+                  donHang.thoiGianCapNhatMoiNhat,
+                  donHang.phuongThucGiaoHang,
+                  donHang.phuongTienGiaoHang,
+                  donHang.hoTenNguoiGiaoHang,
+                  donHang.ghiChu,
+                  donHang.giaNet,
+                  donHang.tongTien,
+                  donHang.vat10,
+                  donHang.tongCong,
+                  donHang.hoaHong10,
+                  donHang.tienGui10,
+                  donHang.thueTNDN,
+                  donHang.vanChuyen,
+                  donHang.thucThu,
+                  donHang.nguoiNhanHang,
+                  donHang.sdtNguoiNhanHang,
+                  donHang.phieuXuatKho,
+                  donHang.trangThai,
+                  donHang.tenKhachHang2,
+                ]
+              );
+            }
+            await _dbHelper.commitBatch(batch);
+            print('Synced ${data.length} DonHang records (full history).');
+          }
+        }
+      } else {
+        throw Exception('Failed to sync DonHang history. Status code: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error syncing DonHang history: $e');
+      throw e;
+    }
+  }
+  Future<void> _syncChiTietDonData() async {
+    try {
+      final encodedUsername = Uri.encodeComponent(_username);
+      
+      // Get all history by using a very old date
+      final response = await AuthenticatedHttpClient.get(
+        Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelchitietdonall/$encodedUsername?last_sync=2020-01-01%2000:00:00')
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        if (data is List) {
+          await _dbHelper.clearChiTietDonTable();
+          print('Local ChiTietDon table cleared for full history sync.');
+
+          if (data.isNotEmpty) {
+            final batch = await _dbHelper.startBatch();
+            for (var item in data) {
+              final chiTietDon = ChiTietDonModel.fromMap(item);
+              _dbHelper.addToBatch(batch,
+                'INSERT INTO chitietdon (uid, soPhieu, trangThai, tenHang, maHang, donViTinh, soLuongYeuCau, donGia, thanhTien, soLuongThucGiao, chiNhanh, idHang, soLuongKhachNhan, duyet, xuatXuHangKhac, baoGia, hinhAnh, ghiChu, phanTramVAT, vat, tenKhachHang, updateTime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [
+                  chiTietDon.uid,
+                  chiTietDon.soPhieu,
+                  chiTietDon.trangThai,
+                  chiTietDon.tenHang,
+                  chiTietDon.maHang,
+                  chiTietDon.donViTinh,
+                  chiTietDon.soLuongYeuCau,
+                  chiTietDon.donGia,
+                  chiTietDon.thanhTien,
+                  chiTietDon.soLuongThucGiao,
+                  chiTietDon.chiNhanh,
+                  chiTietDon.idHang,
+                  chiTietDon.soLuongKhachNhan,
+                  chiTietDon.duyet,
+                  chiTietDon.xuatXuHangKhac,
+                  chiTietDon.baoGia,
+                  chiTietDon.hinhAnh,
+                  chiTietDon.ghiChu,
+                  chiTietDon.phanTramVAT,
+                  chiTietDon.vat,
+                  chiTietDon.tenKhachHang,
+                  chiTietDon.updateTime,
+                ]
+              );
+            }
+            await _dbHelper.commitBatch(batch);
+            print('Synced ${data.length} ChiTietDon records (full history).');
+          }
+        }
+      } else {
+        throw Exception('Failed to sync ChiTietDon history. Status code: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error syncing ChiTietDon history: $e');
+      throw e;
+    }
+  }
   Future<void> _setAndCalculateDateRange(String period) async { // Added 'async'
   DateTime now = DateTime.now();
   setState(() {
@@ -202,9 +435,27 @@ class _HSStatScreenState extends State<HSStatScreen> {
           ),
         ),
         actions: [
+          TextButton.icon(
+  icon: _isSyncing
+      ? SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.yellow),
+          ),
+        )
+      : const Icon(Icons.cloud_download, color: Colors.yellow),
+  label: const Text(
+    'Đồng bộ toàn bộ lịch sử',
+    style: TextStyle(color: Colors.yellow),
+  ),
+  onPressed: _isSyncing ? null : _syncAllHistoryData,
+),
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _isLoading ? null : _refreshData, // Disable refresh when loading
+            icon: const Icon(Icons.refresh, color: Colors.yellow),
+            onPressed: (_isLoading || _isSyncing) ? null : _refreshData,
+            tooltip: 'Làm mới dữ liệu',
           ),
         ],
       ),
@@ -376,7 +627,19 @@ class _HSStatScreenState extends State<HSStatScreen> {
                       },
                       textColor: Colors.purple,
                     ),
-
+const SizedBox(height: 16),
+_buildActionButton(
+  icon: Icons.trending_up,
+  title: 'Theo dõi chỉ số KPI',
+  subtitle: 'Theo dõi và phân tích các chỉ số hiệu suất hoạt động',
+  onTap: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => HSXuHuongKPIScreen()),
+    );
+  },
+  textColor: Colors.red,
+),
                   ],
                 ),
               ),

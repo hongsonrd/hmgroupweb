@@ -144,6 +144,51 @@ class DBHelper {
     rethrow;
   }
 }
+// ==================== Count Methods ====================
+
+/// Gets the total count of records in the DonHang table.
+Future<int> getDonHangCount() async {
+  final db = await database;
+  final result = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.donHangTable}');
+  return Sqflite.firstIntValue(result) ?? 0;
+}
+
+/// Gets the total count of records in the ChiTietDon table.
+Future<int> getChiTietDonCount() async {
+  final db = await database;
+  final result = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.chiTietDonTable}');
+  return Sqflite.firstIntValue(result) ?? 0;
+}
+
+// ==================== Additional Missing Methods ====================
+Future<List<KhachHangContactModel>> getAllKhachHangContact() async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(DatabaseTables.khachHangContactTable);
+  return maps.map((map) => KhachHangContactModel.fromMap(map)).toList();
+}
+/// Get all DonHang as raw maps (for KPI calculations)
+Future<List<Map<String, dynamic>>> getAllDonHangMaps() async {
+  final db = await database;
+  return await db.query(DatabaseTables.donHangTable);
+}
+
+/// Get all ChiTietDon as raw maps (for KPI calculations)
+Future<List<Map<String, dynamic>>> getAllChiTietDonMaps() async {
+  final db = await database;
+  return await db.query(DatabaseTables.chiTietDonTable);
+}
+
+/// Get all DSHang as raw maps (for KPI calculations)
+Future<List<Map<String, dynamic>>> getAllDSHangMaps() async {
+  final db = await database;
+  return await db.query(DatabaseTables.dsHangTable);
+}
+
+/// Get all TonKho as raw maps (for KPI calculations)
+Future<List<Map<String, dynamic>>> getAllTonKhoMaps() async {
+  final db = await database;
+  return await db.query(DatabaseTables.tonKhoTable);
+}
 // ==================== LinkHopDong CRUD Operations ====================
 
 /// Inserts a LinkHopDong record into the database.

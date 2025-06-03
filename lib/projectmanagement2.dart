@@ -26,6 +26,7 @@ import 'dart:typed_data' show Uint8List;
 import 'package:sqflite/sqflite.dart';
 import 'http_client.dart';
 import 'package:file_picker/file_picker.dart';
+import 'projecttimeline.dart';
 
 class ProjectManagement2 extends StatefulWidget {
     ProjectManagement2({Key? key}) : super(key: key);
@@ -1721,6 +1722,21 @@ Widget build(BuildContext context) {
               ),
             ),
           ),
+          Expanded(
+            child:
+          _buildCompactButton(
+            'Timeline',
+            Icons.timeline,
+            Color(0xFF3F51B5),
+            () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ProjectTimeline(
+                  username: userCredentials.username.toLowerCase(),
+                ),
+              ),
+            ),
+          ),),
         ],
       ),
       SizedBox(height: 4),
