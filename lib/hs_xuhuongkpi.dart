@@ -129,214 +129,257 @@ class _HSXuHuongKPIScreenState extends State<HSXuHuongKPIScreen>
   }
 
   Future<void> _loadCustomerKPI() async {
-    try {
-      // Get all customers created up to end date
-      final allCustomers = await _dbHelper.getAllKhachHang();
-      final eligibleCustomers = allCustomers.where((customer) {
-        if (customer.ngayKhoiTao == null) return false;
-        return customer.ngayKhoiTao!.isBefore(_endDate.add(Duration(days: 1)));
-      }).toList();
+  try {
+    // Get all customers created up to end date
+    final allCustomers = await _dbHelper.getAllKhachHang();
+    final eligibleCustomers = allCustomers.where((customer) {
+      if (customer.ngayKhoiTao == null) return false;
+      return customer.ngayKhoiTao!.isBefore(_endDate.add(Duration(days: 1)));
+    }).toList();
 
-      // Get all COMPLETED orders up to end date
-      final allOrders = await _dbHelper.getAllDonHang();
-      final eligibleOrders = allOrders.where((order) {
-        if (order.ngay == null || order.ngay!.isEmpty) return false;
-        if (order.trangThai != 'Hoàn thành') return false; // Only completed orders for C1/C2
-        try {
-          DateTime orderDate = DateTime.parse(order.ngay!);
-          return orderDate.isBefore(_endDate.add(Duration(days: 1)));
-        } catch (e) {
-          print('Error parsing date: ${order.ngay}');
-          return false;
-        }
-      }).toList();
-
-      // Get all customer contacts for D2 calculation
-      final allCustomerContacts = await _dbHelper.getAllKhachHangContact();
-
-      // Calculate KPI for each staff
-      final staffKPIMap = <String, StaffCustomerKPI>{};
-      final customerDetailsMap = <String, CustomerDetail>{};
-
-      // Initialize staff KPI from both orders and customers
-      final allStaff = <String>{};
-      for (var order in eligibleOrders) {
-        if (order.nguoiTao != null && order.nguoiTao!.isNotEmpty) {
-          allStaff.add(order.nguoiTao!);
-        }
+    // Get all COMPLETED orders up to end date
+    final allOrders = await _dbHelper.getAllDonHang();
+    final eligibleOrders = allOrders.where((order) {
+      if (order.ngay == null || order.ngay!.isEmpty) return false;
+      if (order.trangThai != 'Hoàn thành') return false; // Only completed orders for C1/C2
+      try {
+        DateTime orderDate = DateTime.parse(order.ngay!);
+        return orderDate.isBefore(_endDate.add(Duration(days: 1)));
+      } catch (e) {
+        print('Error parsing date: ${order.ngay}');
+        return false;
       }
-      for (var customer in eligibleCustomers) {
-        if (customer.nguoiDung != null && customer.nguoiDung!.isNotEmpty) {
-          allStaff.add(customer.nguoiDung!);
-        }
+    }).toList();
+
+    // Get all customer contacts for D2 calculation
+    final allCustomerContacts = await _dbHelper.getAllKhachHangContact();
+
+    // Calculate KPI for each staff
+    final staffKPIMap = <String, StaffCustomerKPI>{};
+    final customerDetailsMap = <String, CustomerDetail>{};
+
+    // Initialize staff KPI from both orders and customers
+    final allStaff = <String>{};
+    for (var order in eligibleOrders) {
+      if (order.nguoiTao != null && order.nguoiTao!.isNotEmpty) {
+        allStaff.add(order.nguoiTao!);
       }
-
-      for (var staff in allStaff) {
-        staffKPIMap[staff] = StaffCustomerKPI(
-          staffName: staff,
-          c1Count: 0,
-          c2Count: 0,
-          d1Count: 0,
-          d2Count: 0,
-        );
+    }
+    for (var customer in eligibleCustomers) {
+      if (customer.nguoiDung != null && customer.nguoiDung!.isNotEmpty) {
+        allStaff.add(customer.nguoiDung!);
       }
+    }
 
-      // Process customers for C1, C2, D1, D2
-      for (var customer in eligibleCustomers) {
-        final customerName = customer.tenDuAn ?? '';
-        final staff = customer.nguoiDung ?? 'Unknown';
+    for (var staff in allStaff) {
+      staffKPIMap[staff] = StaffCustomerKPI(
+        staffName: staff,
+        c1Count: 0,
+        c2Count: 0,
+        d1Count: 0,
+        d2Count: 0,
+        doanhThuTruocThue: 0.0,
+        doanhThuHoaDon: 0.0,
+      );
+    }
 
-        // Calculate C1 and C2 (based on COMPLETED orders only)
-        if (customerName.isNotEmpty) {
-          final matchingOrders = eligibleOrders.where((order) {
-            return (order.tenKhachHang != null && order.tenKhachHang!.contains(customerName)) ||
-                   (order.tenKhachHang2 != null && order.tenKhachHang2!.contains(customerName));
-          }).toList();
+    // Calculate revenue for each staff from completed orders within selected period
+    final completedOrdersInPeriod = allOrders.where((order) {
+      if (order.ngay == null || order.ngay!.isEmpty) return false;
+      if (order.trangThai != 'Hoàn thành') return false;
+      if (order.nguoiTao == null || order.nguoiTao!.isEmpty) return false;
+      try {
+        DateTime orderDate = DateTime.parse(order.ngay!);
+        return orderDate.isAfter(_startDate.subtract(Duration(days: 1))) &&
+               orderDate.isBefore(_endDate.add(Duration(days: 1)));
+      } catch (e) {
+        print('Error parsing date: ${order.ngay}');
+        return false;
+      }
+    }).toList();
 
-          if (matchingOrders.isNotEmpty) {
-            matchingOrders.sort((a, b) {
-              try {
-                DateTime dateA = a.ngay != null && a.ngay!.isNotEmpty 
-                    ? DateTime.parse(a.ngay!) 
-                    : DateTime(1900);
-                DateTime dateB = b.ngay != null && b.ngay!.isNotEmpty 
-                    ? DateTime.parse(b.ngay!) 
-                    : DateTime(1900);
-                return dateB.compareTo(dateA);
-              } catch (e) {
-                return 0;
-              }
-            });
-            
-            final orderCount = matchingOrders.length;
-            final latestOrder = matchingOrders.first;
-            final orderStaff = latestOrder.nguoiTao ?? staff;
-
-            DateTime? latestOrderDate;
-            try {
-              if (latestOrder.ngay != null && latestOrder.ngay!.isNotEmpty) {
-                latestOrderDate = DateTime.parse(latestOrder.ngay!);
-              }
-            } catch (e) {
-              print('Error parsing latest order date: ${latestOrder.ngay}');
-            }
-
-            // Update C1 and C2 for order staff
-            if (staffKPIMap.containsKey(orderStaff)) {
-              if (orderCount >= 1) {
-                staffKPIMap[orderStaff]!.c1Count++;
-              }
-              if (orderCount >= 3) {
-                staffKPIMap[orderStaff]!.c2Count++;
-              }
-            }
+    // Calculate revenue by staff
+    for (var order in completedOrdersInPeriod) {
+      final staff = order.nguoiTao!;
+      if (staffKPIMap.containsKey(staff)) {
+        // Add tongTien to doanhThuTruocThue
+        if (order.tongTien != null) {
+          try {
+            double tongTien = double.parse(order.tongTien.toString());
+            staffKPIMap[staff]!.doanhThuTruocThue += tongTien;
+          } catch (e) {
+            print('Error parsing tongTien: ${order.tongTien}');
           }
         }
-
-        // Calculate D1: customer with non-blank kenhTiepCan
-        bool isD1 = customer.kenhTiepCan != null && customer.kenhTiepCan!.trim().isNotEmpty;
         
-        // Calculate D2: D1 + filled out info + contact record
-        bool isD2 = false;
-        if (isD1) {
-          // Check if basic info is filled
-          bool hasBasicInfo = (customer.tenDuAn != null && customer.tenDuAn!.trim().isNotEmpty) &&
-                             (customer.soDienThoai != null && customer.soDienThoai!.trim().isNotEmpty) &&
-                             (customer.phanLoai != null && customer.phanLoai!.trim().isNotEmpty);
+        // Add tongCong to doanhThuHoaDon
+        if (order.tongCong != null) {
+          try {
+            double tongCong = double.parse(order.tongCong.toString());
+            staffKPIMap[staff]!.doanhThuHoaDon += tongCong;
+          } catch (e) {
+            print('Error parsing tongCong: ${order.tongCong}');
+          }
+        }
+      }
+    }
+
+    // Process customers for C1, C2, D1, D2
+    for (var customer in eligibleCustomers) {
+      final customerName = customer.tenDuAn ?? '';
+      final staff = customer.nguoiDung ?? 'Unknown';
+
+      // Calculate C1 and C2 (based on COMPLETED orders only)
+      if (customerName.isNotEmpty) {
+        final matchingOrders = eligibleOrders.where((order) {
+          return (order.tenKhachHang != null && order.tenKhachHang!.contains(customerName)) ||
+                 (order.tenKhachHang2 != null && order.tenKhachHang2!.contains(customerName));
+        }).toList();
+
+        if (matchingOrders.isNotEmpty) {
+          matchingOrders.sort((a, b) {
+            try {
+              DateTime dateA = a.ngay != null && a.ngay!.isNotEmpty 
+                  ? DateTime.parse(a.ngay!) 
+                  : DateTime(1900);
+              DateTime dateB = b.ngay != null && b.ngay!.isNotEmpty 
+                  ? DateTime.parse(b.ngay!) 
+                  : DateTime(1900);
+              return dateB.compareTo(dateA);
+            } catch (e) {
+              return 0;
+            }
+          });
           
-          if (hasBasicInfo) {
-            // Check if there's at least one contact record with matching boPhan
-            bool hasContactRecord = allCustomerContacts.any((contact) => 
-              contact.boPhan != null && 
-              customer.uid != null && 
-              contact.boPhan == customer.uid
-            );
-            
-            isD2 = hasContactRecord;
-          }
-        }
-
-        // Update D1 and D2 counts for customer's staff
-        if (staffKPIMap.containsKey(staff)) {
-          if (isD1) {
-            staffKPIMap[staff]!.d1Count++;
-          }
-          if (isD2) {
-            staffKPIMap[staff]!.d2Count++;
-          }
-        }
-
-        // Create customer detail if it has any qualifying metrics
-        if (customerName.isNotEmpty) {
-          // Get order count for this customer
-          final matchingOrders = eligibleOrders.where((order) {
-            return (order.tenKhachHang != null && order.tenKhachHang!.contains(customerName)) ||
-                   (order.tenKhachHang2 != null && order.tenKhachHang2!.contains(customerName));
-          }).toList();
+          final orderCount = matchingOrders.length;
+          final latestOrder = matchingOrders.first;
+          final orderStaff = latestOrder.nguoiTao ?? staff;
 
           DateTime? latestOrderDate;
-          if (matchingOrders.isNotEmpty) {
-            matchingOrders.sort((a, b) {
-              try {
-                DateTime dateA = a.ngay != null && a.ngay!.isNotEmpty 
-                    ? DateTime.parse(a.ngay!) 
-                    : DateTime(1900);
-                DateTime dateB = b.ngay != null && b.ngay!.isNotEmpty 
-                    ? DateTime.parse(b.ngay!) 
-                    : DateTime(1900);
-                return dateB.compareTo(dateA);
-              } catch (e) {
-                return 0;
-              }
-            });
-            
-            try {
-              if (matchingOrders.first.ngay != null && matchingOrders.first.ngay!.isNotEmpty) {
-                latestOrderDate = DateTime.parse(matchingOrders.first.ngay!);
-              }
-            } catch (e) {
-              print('Error parsing latest order date: ${matchingOrders.first.ngay}');
+          try {
+            if (latestOrder.ngay != null && latestOrder.ngay!.isNotEmpty) {
+              latestOrderDate = DateTime.parse(latestOrder.ngay!);
             }
+          } catch (e) {
+            print('Error parsing latest order date: ${latestOrder.ngay}');
           }
 
-          customerDetailsMap[customerName] = CustomerDetail(
-            customerName: customerName,
-            customerType: customer.phanLoai ?? '',
-            orderCount: matchingOrders.length,
-            lastOrderDate: latestOrderDate,
-            assignedStaff: staff,
-            isC1: matchingOrders.length >= 1,
-            isC2: matchingOrders.length >= 3,
-            isD1: isD1,
-            isD2: isD2,
-            phone: customer.soDienThoai ?? '',
-            contactChannel: customer.kenhTiepCan ?? '',
-          );
+          // Update C1 and C2 for order staff
+          if (staffKPIMap.containsKey(orderStaff)) {
+            if (orderCount >= 1) {
+              staffKPIMap[orderStaff]!.c1Count++;
+            }
+            if (orderCount >= 3) {
+              staffKPIMap[orderStaff]!.c2Count++;
+            }
+          }
         }
       }
 
-      // Apply staff filter
-      List<StaffCustomerKPI> filteredStaffKPI = staffKPIMap.values.toList();
-      List<CustomerDetail> filteredCustomerDetails = customerDetailsMap.values.toList();
-
-      if (_selectedStaff != null && _selectedStaff != 'Tất cả') {
-        filteredStaffKPI = filteredStaffKPI.where((kpi) => kpi.staffName == _selectedStaff).toList();
-        filteredCustomerDetails = filteredCustomerDetails.where((detail) => detail.assignedStaff == _selectedStaff).toList();
+      // Calculate D1: customer with non-blank kenhTiepCan
+      bool isD1 = customer.kenhTiepCan != null && customer.kenhTiepCan!.trim().isNotEmpty;
+      
+      // Calculate D2: D1 + filled out info + contact record
+      bool isD2 = false;
+      if (isD1) {
+        // Check if basic info is filled
+        bool hasBasicInfo = (customer.tenDuAn != null && customer.tenDuAn!.trim().isNotEmpty) &&
+                           (customer.soDienThoai != null && customer.soDienThoai!.trim().isNotEmpty) &&
+                           (customer.phanLoai != null && customer.phanLoai!.trim().isNotEmpty);
+        
+        if (hasBasicInfo) {
+          // Check if there's at least one contact record with matching boPhan
+          bool hasContactRecord = allCustomerContacts.any((contact) => 
+            contact.boPhan != null && 
+            customer.uid != null && 
+            contact.boPhan == customer.uid
+          );
+          
+          isD2 = hasContactRecord;
+        }
       }
 
-      // Sort by total KPI descending
-      filteredStaffKPI.sort((a, b) => (b.getTotalKPI()).compareTo(a.getTotalKPI()));
-      
-      // Sort customer details by order count descending
-      filteredCustomerDetails.sort((a, b) => b.orderCount.compareTo(a.orderCount));
+      // Update D1 and D2 counts for customer's staff
+      if (staffKPIMap.containsKey(staff)) {
+        if (isD1) {
+          staffKPIMap[staff]!.d1Count++;
+        }
+        if (isD2) {
+          staffKPIMap[staff]!.d2Count++;
+        }
+      }
 
-      _staffKPIList = filteredStaffKPI;
-      _customerDetails = filteredCustomerDetails;
+      // Create customer detail if it has any qualifying metrics
+      if (customerName.isNotEmpty) {
+        // Get order count for this customer
+        final matchingOrders = eligibleOrders.where((order) {
+          return (order.tenKhachHang != null && order.tenKhachHang!.contains(customerName)) ||
+                 (order.tenKhachHang2 != null && order.tenKhachHang2!.contains(customerName));
+        }).toList();
 
-    } catch (e) {
-      print('Error loading customer KPI: $e');
+        DateTime? latestOrderDate;
+        if (matchingOrders.isNotEmpty) {
+          matchingOrders.sort((a, b) {
+            try {
+              DateTime dateA = a.ngay != null && a.ngay!.isNotEmpty 
+                  ? DateTime.parse(a.ngay!) 
+                  : DateTime(1900);
+              DateTime dateB = b.ngay != null && b.ngay!.isNotEmpty 
+                  ? DateTime.parse(b.ngay!) 
+                  : DateTime(1900);
+              return dateB.compareTo(dateA);
+            } catch (e) {
+              return 0;
+            }
+          });
+          
+          try {
+            if (matchingOrders.first.ngay != null && matchingOrders.first.ngay!.isNotEmpty) {
+              latestOrderDate = DateTime.parse(matchingOrders.first.ngay!);
+            }
+          } catch (e) {
+            print('Error parsing latest order date: ${matchingOrders.first.ngay}');
+          }
+        }
+
+        customerDetailsMap[customerName] = CustomerDetail(
+          customerName: customerName,
+          customerType: customer.phanLoai ?? '',
+          orderCount: matchingOrders.length,
+          lastOrderDate: latestOrderDate,
+          assignedStaff: staff,
+          isC1: matchingOrders.length >= 1,
+          isC2: matchingOrders.length >= 3,
+          isD1: isD1,
+          isD2: isD2,
+          phone: customer.soDienThoai ?? '',
+          contactChannel: customer.kenhTiepCan ?? '',
+        );
+      }
     }
+
+    // Apply staff filter
+    List<StaffCustomerKPI> filteredStaffKPI = staffKPIMap.values.toList();
+    List<CustomerDetail> filteredCustomerDetails = customerDetailsMap.values.toList();
+
+    if (_selectedStaff != null && _selectedStaff != 'Tất cả') {
+      filteredStaffKPI = filteredStaffKPI.where((kpi) => kpi.staffName == _selectedStaff).toList();
+      filteredCustomerDetails = filteredCustomerDetails.where((detail) => detail.assignedStaff == _selectedStaff).toList();
+    }
+
+    // Sort by total KPI descending
+    filteredStaffKPI.sort((a, b) => (b.getTotalKPI()).compareTo(a.getTotalKPI()));
+    
+    // Sort customer details by order count descending
+    filteredCustomerDetails.sort((a, b) => b.orderCount.compareTo(a.orderCount));
+
+    _staffKPIList = filteredStaffKPI;
+    _customerDetails = filteredCustomerDetails;
+
+  } catch (e) {
+    print('Error loading customer KPI: $e');
   }
+}
 
   Future<void> _loadTransactionKPI() async {
     try {
@@ -503,7 +546,7 @@ class _HSXuHuongKPIScreenState extends State<HSXuHuongKPIScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Xu hướng KPI'),
+        title: Text('Theo dõi KPI'),
         backgroundColor: Colors.blue[800],
         foregroundColor: Colors.white,
         bottom: TabBar(
@@ -512,8 +555,8 @@ class _HSXuHuongKPIScreenState extends State<HSXuHuongKPIScreen>
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           tabs: [
-            Tab(text: 'Khách hàng'),
-            Tab(text: 'Giao dịch khách hàng'),
+            Tab(text: '1️⃣ Khách hàng'),
+            Tab(text: '2️⃣ Giao dịch'),
           ],
         ),
       ),
@@ -745,59 +788,69 @@ class _HSXuHuongKPIScreenState extends State<HSXuHuongKPIScreen>
   }
 
   Widget _buildStaffKPITable() {
-    return Card(
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Bảng điểm KPI Khách hàng theo Nhân viên',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+  return Card(
+    child: Padding(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Bảng điểm KPI Khách hàng theo Nhân viên',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          SizedBox(height: 16),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Table(
+              border: TableBorder.all(color: Colors.grey[300]!),
+              columnWidths: {
+                0: FixedColumnWidth(150),
+                1: FixedColumnWidth(80),
+                2: FixedColumnWidth(80),
+                3: FixedColumnWidth(80),
+                4: FixedColumnWidth(80),
+                5: FixedColumnWidth(80),
+                6: FixedColumnWidth(120), // Revenue column
+                7: FixedColumnWidth(120), // Revenue column
+              },
+              children: [
+                TableRow(
+                  decoration: BoxDecoration(color: Colors.blue[50]),
+                  children: [
+                    _buildTableHeader('Nhân viên'),
+                    _buildTableHeader('C1\n(≥1 đơn hoàn thành)'),
+                    _buildTableHeader('C2\n(≥3 đơn hoàn thành)'),
+                    _buildTableHeader('D1\n(Kênh tiếp cận)'),
+                    _buildTableHeader('D2\n(Thông tin đầy đủ)'),
+                    _buildTableHeader('Tổng'),
+                    _buildTableHeader('Doanh thu\ntrước thuế'),
+                    _buildTableHeader('Doanh thu\nhóa đơn'),
+                  ],
+                ),
+                ..._staffKPIList.map((kpi) => TableRow(
+                  children: [
+                    _buildTableCell(kpi.staffName),
+                    _buildTableCell(kpi.c1Count.toString()),
+                    _buildTableCell(kpi.c2Count.toString()),
+                    _buildTableCell(kpi.d1Count.toString()),
+                    _buildTableCell(kpi.d2Count.toString()),
+                    _buildTableCell(kpi.getTotalKPI().toString()),
+                    _buildTableCell(_formatCurrency(kpi.doanhThuTruocThue)),
+                    _buildTableCell(_formatCurrency(kpi.doanhThuHoaDon)),
+                  ],
+                )),
+              ],
             ),
-            SizedBox(height: 16),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Table(
-                border: TableBorder.all(color: Colors.grey[300]!),
-                columnWidths: {
-                  0: FixedColumnWidth(150),
-                  1: FixedColumnWidth(80),
-                  2: FixedColumnWidth(80),
-                  3: FixedColumnWidth(80),
-                  4: FixedColumnWidth(80),
-                  5: FixedColumnWidth(80),
-                },
-                children: [
-                  TableRow(
-                    decoration: BoxDecoration(color: Colors.blue[50]),
-                    children: [
-                      _buildTableHeader('Nhân viên'),
-                      _buildTableHeader('C1\n(≥1 đơn hoàn thành)'),
-                      _buildTableHeader('C2\n(≥3 đơn hoàn thành)'),
-                      _buildTableHeader('D1\n(Kênh tiếp cận)'),
-                      _buildTableHeader('D2\n(Thông tin đầy đủ)'),
-                      _buildTableHeader('Tổng'),
-                    ],),
-                 ..._staffKPIList.map((kpi) => TableRow(
-                   children: [
-                     _buildTableCell(kpi.staffName),
-                     _buildTableCell(kpi.c1Count.toString()),
-                     _buildTableCell(kpi.c2Count.toString()),
-                     _buildTableCell(kpi.d1Count.toString()),
-                     _buildTableCell(kpi.d2Count.toString()),
-                     _buildTableCell(kpi.getTotalKPI().toString()),
-                   ],
-                 )),
-               ],
-             ),
-           ),
-         ],
-       ),
-     ),
-   );
- }
-
+          ),
+        ],
+      ),
+    ),
+  );
+}
+String _formatCurrency(double amount) {
+  final formatter = NumberFormat('#,###', 'vi_VN');
+  return formatter.format(amount);
+}
  Widget _buildStaffTransactionKPITable() {
    return Card(
      child: Padding(
@@ -857,76 +910,110 @@ class _HSXuHuongKPIScreenState extends State<HSXuHuongKPIScreen>
  }
 
  Widget _buildCustomerDetailsTable() {
-   return Card(
-     child: Padding(
-       padding: EdgeInsets.all(16),
-       child: Column(
-         crossAxisAlignment: CrossAxisAlignment.start,
-         children: [
-           Text(
-             'Chi tiết Khách hàng',
-             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-           ),
-           SizedBox(height: 16),
-           SingleChildScrollView(
-             scrollDirection: Axis.horizontal,
-             child: DataTable(
-               border: TableBorder.all(color: Colors.grey[300]!),
-               headingRowColor: MaterialStateProperty.all(Colors.blue[50]),
-               columnSpacing: 12,
-               columns: [
-                 DataColumn(label: Text('Tên khách hàng', style: TextStyle(fontWeight: FontWeight.bold))),
-                 DataColumn(label: Text('Loại KH', style: TextStyle(fontWeight: FontWeight.bold))),
-                 DataColumn(label: Text('SĐT', style: TextStyle(fontWeight: FontWeight.bold))),
-                 DataColumn(label: Text('Kênh tiếp cận', style: TextStyle(fontWeight: FontWeight.bold))),
-                 DataColumn(label: Text('Số đơn hoàn thành', style: TextStyle(fontWeight: FontWeight.bold))),
-                 DataColumn(label: Text('Đơn hàng cuối', style: TextStyle(fontWeight: FontWeight.bold))),
-                 DataColumn(label: Text('Nhân viên', style: TextStyle(fontWeight: FontWeight.bold))),
-                 DataColumn(label: Text('C1', style: TextStyle(fontWeight: FontWeight.bold))),
-                 DataColumn(label: Text('C2', style: TextStyle(fontWeight: FontWeight.bold))),
-                 DataColumn(label: Text('D1', style: TextStyle(fontWeight: FontWeight.bold))),
-                 DataColumn(label: Text('D2', style: TextStyle(fontWeight: FontWeight.bold))),
-               ],
-               rows: _customerDetails.map((customer) => DataRow(
-                 cells: [
-                   DataCell(Text(customer.customerName)),
-                   DataCell(Text(customer.customerType)),
-                   DataCell(Text(customer.phone)),
-                   DataCell(Text(customer.contactChannel)),
-                   DataCell(Text(customer.orderCount.toString())),
-                   DataCell(Text(customer.lastOrderDate != null 
-                       ? DateFormat('dd/MM/yyyy').format(customer.lastOrderDate!) 
-                       : '')),
-                   DataCell(Text(customer.assignedStaff)),
-                   DataCell(Icon(
-                     customer.isC1 ? Icons.check_circle : Icons.cancel,
-                     color: customer.isC1 ? Colors.green : Colors.red,
-                     size: 20,
-                   )),
-                   DataCell(Icon(
-                     customer.isC2 ? Icons.check_circle : Icons.cancel,
-                     color: customer.isC2 ? Colors.green : Colors.red,
-                     size: 20,
-                   )),
-                   DataCell(Icon(
-                     customer.isD1 ? Icons.check_circle : Icons.cancel,
-                     color: customer.isD1 ? Colors.green : Colors.red,
-                     size: 20,
-                   )),
-                   DataCell(Icon(
-                     customer.isD2 ? Icons.check_circle : Icons.cancel,
-                     color: customer.isD2 ? Colors.green : Colors.red,
-                     size: 20,
-                   )),
-                 ],
-               )).toList(),
-             ),
-           ),
-         ],
-       ),
-     ),
-   );
- }
+  return Card(
+    child: Padding(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Chi tiết Khách hàng',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          SizedBox(height: 16),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              border: TableBorder.all(color: Colors.grey[300]!),
+              headingRowColor: MaterialStateProperty.all(Colors.blue[50]),
+              columnSpacing: 8, 
+              dataRowHeight: 56, 
+              columns: [
+                DataColumn(
+                  label: Container(
+                    width: 220, 
+                    child: Text('Tên khách hàng', 
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+                DataColumn(label: Text('Loại KH', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(
+                  label: Container(
+                    width: 100, // Fixed width for phone
+                    child: Text('SĐT', 
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+                DataColumn(label: Text('Kênh tiếp cận', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Số đơn hoàn thành', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Đơn hàng cuối', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Nhân viên', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('C1', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('C2', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('D1', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('D2', style: TextStyle(fontWeight: FontWeight.bold))),
+              ],
+              rows: _customerDetails.map((customer) => DataRow(
+                cells: [
+                  DataCell(
+                    Container(
+                      width: 120,
+                      child: Text(
+                        customer.customerName,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
+                      ),
+                    ),
+                  ),
+                  DataCell(Text(customer.customerType)),
+                  DataCell(
+                    Container(
+                      width: 100,
+                      child: Text(
+                        customer.phone,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  DataCell(Text(customer.contactChannel)),
+                  DataCell(Text(customer.orderCount.toString())),
+                  DataCell(Text(customer.lastOrderDate != null 
+                      ? DateFormat('dd/MM/yyyy').format(customer.lastOrderDate!) 
+                      : '')),
+                  DataCell(Text(customer.assignedStaff)),
+                  DataCell(Icon(
+                    customer.isC1 ? Icons.check_circle : Icons.cancel,
+                    color: customer.isC1 ? Colors.green : Colors.red,
+                    size: 20,
+                  )),
+                  DataCell(Icon(
+                    customer.isC2 ? Icons.check_circle : Icons.cancel,
+                    color: customer.isC2 ? Colors.green : Colors.red,
+                    size: 20,
+                  )),
+                  DataCell(Icon(
+                    customer.isD1 ? Icons.check_circle : Icons.cancel,
+                    color: customer.isD1 ? Colors.green : Colors.red,
+                    size: 20,
+                  )),
+                  DataCell(Icon(
+                    customer.isD2 ? Icons.check_circle : Icons.cancel,
+                    color: customer.isD2 ? Colors.green : Colors.red,
+                    size: 20,
+                  )),
+                ],
+              )).toList(),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
 
  Widget _buildTransactionDetailsTable() {
    return Card(
@@ -1022,18 +1109,21 @@ class StaffCustomerKPI {
  int c2Count;
  int d1Count;
  int d2Count;
-
+double doanhThuTruocThue; 
+  double doanhThuHoaDon;
  StaffCustomerKPI({
    required this.staffName,
    required this.c1Count,
    required this.c2Count,
    required this.d1Count,
    required this.d2Count,
- });
+ this.doanhThuTruocThue = 0.0,
+    this.doanhThuHoaDon = 0.0,
+  });
 
- int getTotalKPI() {
-   return c1Count + c2Count + d1Count + d2Count;
- }
+  int getTotalKPI() {
+    return c1Count + c2Count + d1Count + d2Count;
+  }
 }
 
 class StaffTransactionKPI {

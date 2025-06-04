@@ -420,7 +420,7 @@ class DeliveryRequestFormGenerator {
                         signatureName: _getSignatureByLocation(order.thoiGianDatHang, "SG", "Đàm Phương Linh", "Trần Xuân Giang"),
                         smallerSize: true),
                       _buildSignatureBox('NV Tổng hợp', ttf, smallerSize: true),
-                      _buildSignatureBox('NVKD Yêu cầu', ttf, signatureName: createdBy, smallerSize: true),
+                      _buildSignatureBox('NVKD Yêu cầu', ttf, signatureName: order.nguoiTao, smallerSize: true),
                     ],
                   ),
                 ),

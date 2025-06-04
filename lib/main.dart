@@ -29,8 +29,6 @@ import 'floating_draggable_icon.dart';
 import 'projectdirector.dart';
 import 'projectdirector2.dart';
 import 'map_project.dart';
-import 'package:dio/dio.dart';
-
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<bool> checkWebView2Installation() async {
@@ -333,57 +331,53 @@ Future<void> checkAppVersion() async {
                 ],
               ),
               actions: <Widget>[
-                if (fetchSuccess && currentVersion != latestVersion && !isCurrentVersionNewer) Column(
+                if (fetchSuccess && currentVersion != latestVersion) Column(
                   children: [
-                    // Instruction text
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.blue[50],
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.blue[200]!),
-                      ),
-                      child: Text(
-                        Platform.isWindows 
-                          ? 'Tải về và cài đặt tự động:\n• Tải về có thể hủy trong 3 giây đầu\n• Ứng dụng sẽ đóng để chạy trình cài đặt'
-                          : Platform.isMacOS
-                            ? 'Tải về thư mục Downloads:\n• Tải về có thể hủy trong 3 giây đầu\n• Sau đó chạy phiên bản mới từ Downloads'
-                            : 'Tải về phiên bản mới',
-                        style: const TextStyle(fontSize: 13),
-                        textAlign: TextAlign.left,
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.laptop_mac),
+                        label: const Text('Tải bản macOS'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          backgroundColor: const Color.fromARGB(255, 227, 255, 255),
+                        ),
+                        onPressed: () async {
+                          final url = Uri.parse('https://storage.googleapis.com/times1/DocumentApp/HMGROUPmac.zip');
+                          try {
+                            await launchUrl(url, mode: LaunchMode.externalApplication);
+                          } catch (e) {
+                            print('Error launching URL: $e');
+                          }
+                          if (!isSignificantlyOutdated) {
+                            Navigator.of(context).pop();
+                          }
+                        },
                       ),
                     ),
-                    
-                    if (Platform.isMacOS) SizedBox(
-  width: double.infinity,
-  child: ElevatedButton.icon(
-    icon: const Icon(Icons.laptop_mac),
-    label: const Text('Tải về Downloads'),
-    style: ElevatedButton.styleFrom(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      backgroundColor: const Color.fromARGB(255, 227, 255, 255),
-    ),
-    onPressed: () {
-      _showMacOSDownloadDialog(context, isSignificantlyOutdated, latestVersion);
-    },
-  ),
-),
-
-if (Platform.isWindows) SizedBox(
-  width: double.infinity,
-  child: ElevatedButton.icon(
-    icon: const Icon(Icons.laptop),
-    label: const Text('Tải và cài đặt'),
-    style: ElevatedButton.styleFrom(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      backgroundColor: const Color.fromARGB(255, 250, 234, 255),
-    ),
-    onPressed: () {
-      _showWindowsDownloadDialog(context, isSignificantlyOutdated, latestVersion);
-    },
-  ),
-),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.laptop),
+                        label: const Text('Tải bản Windows'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          backgroundColor: const Color.fromARGB(255, 250, 234, 255),
+                        ),
+                        onPressed: () async {
+                          final url = Uri.parse('https://storage.googleapis.com/times1/DocumentApp/HMGROUPwin.zip');
+                          try {
+                            await launchUrl(url, mode: LaunchMode.externalApplication);
+                          } catch (e) {
+                            print('Error launching URL: $e');
+                          }
+                          if (!isSignificantlyOutdated) {
+                            Navigator.of(context).pop();
+                          }
+                        },
+                      ),
+                    ),
                   ],
                 ),
                 if (!isSignificantlyOutdated) TextButton(
@@ -402,548 +396,6 @@ if (Platform.isWindows) SizedBox(
   } catch (e) {
     print('Error checking version: $e');
   }
-}
-void _showMacOSDownloadDialog(BuildContext context, bool isSignificantlyOutdated, String latestVersion) async {
-  // Get current version first
-  PackageInfo packageInfo = await PackageInfo.fromPlatform();
-  String currentVersion = packageInfo.version;
-  
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (BuildContext dialogContext) {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          double downloadProgress = 0.0;
-          String downloadStatus = 'Tải về sẽ bắt đầu sau 3 giây...';
-          bool isCountingDown = true;
-          bool isDownloading = false;
-          bool downloadCompleted = false;
-          bool downloadFailed = false;
-          bool downloadCancelled = false;
-          int countdown = 3;
-          Timer? countdownTimer;
-          StreamSubscription? downloadSubscription;
-          bool cancelRequested = false;
-
-          Future<void> startDownload() async {
-            if (downloadCancelled || cancelRequested) return;
-            
-            setState(() {
-              isDownloading = true;
-              downloadFailed = false;
-              downloadStatus = 'Đang tải về...';
-              downloadProgress = 0.0;
-            });
-
-            try {
-              final directory = await getApplicationDocumentsDirectory();
-              final fileName = 'HMGroup_v${latestVersion}_macOS.zip';
-              final filePath = '${directory.path}/$fileName';
-
-              // Simple HTTP request without any headers
-              final request = http.Request('GET', Uri.parse('https://storage.googleapis.com/times1/DocumentApp/HMGROUPmac.zip'));
-              final response = await http.Client().send(request);
-              
-              if (response.statusCode != 200) {
-                throw Exception('HTTP ${response.statusCode}');
-              }
-
-              final contentLength = response.contentLength ?? 0;
-              final file = File(filePath);
-              final sink = file.openWrite();
-              
-              int downloadedBytes = 0;
-              
-              downloadSubscription = response.stream.listen(
-                (List<int> chunk) {
-                  if (cancelRequested || downloadCancelled) {
-                    sink.close();
-                    file.deleteSync();
-                    return;
-                  }
-                  
-                  sink.add(chunk);
-                  downloadedBytes += chunk.length;
-                  
-                  if (contentLength > 0) {
-                    setState(() {
-                      downloadProgress = downloadedBytes / contentLength;
-                      downloadStatus = 'Đang tải về... ${(downloadProgress * 100).toStringAsFixed(1)}%';
-                    });
-                  }
-                },
-                onDone: () async {
-                  await sink.close();
-                  
-                  if (!cancelRequested && !downloadCancelled) {
-                    setState(() {
-                      downloadCompleted = true;
-                      downloadStatus = 'Tải về hoàn tất! File đã lưu trong Documents';
-                    });
-
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Đã tải về: $fileName\nVào Documents và chạy phiên bản mới'),
-                          duration: const Duration(seconds: 8),
-                          backgroundColor: Colors.green,
-                          action: SnackBarAction(
-                            label: 'Mở Documents',
-                            textColor: Colors.white,
-                            onPressed: () async {
-                              if (Platform.isMacOS) {
-                                await Process.run('open', [directory.path]);
-                              }
-                            },
-                          ),
-                        ),
-                      );
-                    }
-                  }
-                },
-                onError: (error) async {
-                  await sink.close();
-                  if (file.existsSync()) {
-                    file.deleteSync();
-                  }
-                  
-                  if (!cancelRequested && !downloadCancelled) {
-                    setState(() {
-                      downloadFailed = true;
-                      isDownloading = false;
-                      downloadStatus = 'Lỗi tải về: $error';
-                    });
-                  }
-                },
-                cancelOnError: true,
-              );
-
-            } catch (e) {
-              print('Download error: $e');
-              if (!cancelRequested && !downloadCancelled) {
-                setState(() {
-                  downloadFailed = true;
-                  isDownloading = false;
-                  downloadStatus = 'Lỗi kết nối: $e';
-                });
-              }
-            }
-          }
-
-          void cancelCountdown() {
-            countdownTimer?.cancel();
-            setState(() {
-              isCountingDown = false;
-              downloadCancelled = true;
-              downloadStatus = 'Đã hủy tải về';
-            });
-          }
-
-          void cancelDownload() {
-            print('Cancelling download...');
-            cancelRequested = true;
-            downloadSubscription?.cancel();
-            
-            setState(() {
-              downloadCancelled = true;
-              isDownloading = false;
-              downloadStatus = 'Đã hủy tải về';
-            });
-          }
-
-          // Start countdown automatically when dialog opens
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (isCountingDown && countdownTimer == null) {
-              countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-                if (!isCountingDown || downloadCancelled || cancelRequested) {
-                  timer.cancel();
-                  return;
-                }
-                
-                setState(() {
-                  countdown--;
-                  if (countdown > 0) {
-                    downloadStatus = 'Tải về sẽ bắt đầu sau $countdown giây...';
-                  } else {
-                    downloadStatus = 'Đang bắt đầu tải về...';
-                    timer.cancel();
-                    isCountingDown = false;
-                    startDownload();
-                  }
-                });
-              });
-            }
-          });
-
-          return WillPopScope(
-            onWillPop: () async => !isDownloading && !isCountingDown && !isSignificantlyOutdated,
-            child: AlertDialog(
-              title: const Text('Cập nhật macOS'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Phiên bản hiện tại: $currentVersion\nPhiên bản mới nhất: $latestVersion',
-                    style: const TextStyle(fontSize: 14),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  Text(downloadStatus, 
-                    style: TextStyle(
-                      fontSize: 16, 
-                      fontWeight: FontWeight.bold,
-                      color: downloadFailed ? Colors.red : 
-                             downloadCompleted ? Colors.green :
-                             downloadCancelled ? Colors.orange : Colors.blue,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  if (isCountingDown) ...[
-                    CircularProgressIndicator(value: (3 - countdown) / 3),
-                    const SizedBox(height: 12),
-                    const Text('Tải về thư mục Documents', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  ] else ...[
-                    LinearProgressIndicator(
-                      value: downloadProgress,
-                      backgroundColor: Colors.grey[300],
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        downloadCompleted ? Colors.green : 
-                        downloadFailed ? Colors.red : 
-                        downloadCancelled ? Colors.orange : Colors.blue,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text('${(downloadProgress * 100).toStringAsFixed(1)}%'),
-                  ],
-                  
-                  if (downloadFailed) ...[
-                    const SizedBox(height: 16),
-                    const Text('Vui lòng thử lại hoặc tải về thủ công.', style: TextStyle(fontSize: 12)),
-                  ],
-
-                  if (downloadCancelled && !downloadFailed) ...[
-                    const SizedBox(height: 16),
-                    const Text('Tải về đã bị hủy.', style: TextStyle(fontSize: 12)),
-                  ],
-                ],
-              ),
-              actions: [
-                if (isCountingDown) 
-                  TextButton(
-                    onPressed: cancelCountdown,
-                    child: const Text('Hủy', style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
-                
-                if (isDownloading && !downloadCompleted && !downloadCancelled) 
-                  TextButton(
-                    onPressed: cancelDownload,
-                    child: const Text('Hủy tải về', style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
-                
-                if (downloadFailed || downloadCancelled) ...[
-                  TextButton(
-                    onPressed: () async {
-                      final url = Uri.parse('https://storage.googleapis.com/times1/DocumentApp/HMGROUPmac.zip');
-                      await launchUrl(url, mode: LaunchMode.externalApplication);
-                    },
-                    child: const Text('Tải thủ công'),
-                  ),
-                  if (!isSignificantlyOutdated) 
-                    TextButton(
-                      onPressed: () => Navigator.of(dialogContext).pop(),
-                      child: const Text('Đóng'),
-                    ),
-                ],
-
-                if (downloadCompleted) ...[
-                  ElevatedButton(
-                    onPressed: () async {
-                      final directory = await getApplicationDocumentsDirectory();
-                      if (Platform.isMacOS) {
-                        await Process.run('open', [directory.path]);
-                      }
-                      Navigator.of(dialogContext).pop();
-                    },
-                    child: const Text('Mở Documents'),
-                  ),
-                  if (!isSignificantlyOutdated) 
-                    TextButton(
-                      onPressed: () => Navigator.of(dialogContext).pop(),
-                      child: const Text('Đóng'),
-                    ),
-                ],
-              ],
-            ),
-          );
-        },
-      );
-    },
-  );
-}
-void _showWindowsDownloadDialog(BuildContext context, bool isSignificantlyOutdated, String latestVersion) async {
-  // Get current version first
-  PackageInfo packageInfo = await PackageInfo.fromPlatform();
-  String currentVersion = packageInfo.version;
-  
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (BuildContext dialogContext) {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          double downloadProgress = 0.0;
-          String downloadStatus = 'Tải về sẽ bắt đầu sau 3 giây...';
-          bool isCountingDown = true;
-          bool isDownloading = false;
-          bool downloadCompleted = false;
-          bool downloadFailed = false;
-          bool downloadCancelled = false;
-          int countdown = 3;
-          Timer? countdownTimer;
-          StreamSubscription? downloadSubscription;
-          bool cancelRequested = false;
-
-          Future<void> downloadAndInstall() async {
-            if (downloadCancelled || cancelRequested) return;
-            
-            setState(() {
-              isDownloading = true;
-              downloadFailed = false;
-              downloadStatus = 'Đang tải về...';
-              downloadProgress = 0.0;
-            });
-
-            try {
-              final directory = await getDownloadsDirectory() ?? 
-                               await getApplicationDocumentsDirectory();
-              final filePath = '${directory.path}/CaiDatHMGroup.exe';
-
-              // Simple HTTP request without any headers
-              final request = http.Request('GET', Uri.parse('https://storage.googleapis.com/times1/DocumentApp/CaiDatHMGroup.exe'));
-              final response = await http.Client().send(request);
-              
-              if (response.statusCode != 200) {
-                throw Exception('HTTP ${response.statusCode}');
-              }
-
-              final contentLength = response.contentLength ?? 0;
-              final file = File(filePath);
-              final sink = file.openWrite();
-              
-              int downloadedBytes = 0;
-              
-              downloadSubscription = response.stream.listen(
-                (List<int> chunk) {
-                  if (cancelRequested || downloadCancelled) {
-                    sink.close();
-                    file.deleteSync();
-                    return;
-                  }
-                  
-                  sink.add(chunk);
-                  downloadedBytes += chunk.length;
-                  
-                  if (contentLength > 0) {
-                    setState(() {
-                      downloadProgress = downloadedBytes / contentLength;
-                      downloadStatus = 'Đang tải về... ${(downloadProgress * 100).toStringAsFixed(1)}%';
-                    });
-                  }
-                },
-                onDone: () async {
-                  await sink.close();
-                  
-                  if (!cancelRequested && !downloadCancelled) {
-                    setState(() {
-                      downloadCompleted = true;
-                      downloadStatus = 'Tải về hoàn tất! Đang khởi động cài đặt...';
-                    });
-
-                    // Wait a moment for user to see completion
-                    await Future.delayed(const Duration(seconds: 2));
-
-                    // Launch the installer
-                    await Process.start(filePath, []);
-                    
-                    // Close the current app to allow installation
-                    await Future.delayed(const Duration(seconds: 1));
-                    exit(0);
-                  }
-                },
-                onError: (error) async {
-                  await sink.close();
-                  if (file.existsSync()) {
-                    file.deleteSync();
-                  }
-                  
-                  if (!cancelRequested && !downloadCancelled) {
-                    setState(() {
-                      downloadFailed = true;
-                      isDownloading = false;
-                      downloadStatus = 'Lỗi tải về: $error';
-                    });
-                  }
-                },
-                cancelOnError: true,
-              );
-
-            } catch (e) {
-              print('Download error: $e');
-              if (!cancelRequested && !downloadCancelled) {
-                setState(() {
-                  downloadFailed = true;
-                  isDownloading = false;
-                  downloadStatus = 'Lỗi kết nối: $e';
-                });
-              }
-            }
-          }
-
-          void cancelCountdown() {
-            countdownTimer?.cancel();
-            setState(() {
-              isCountingDown = false;
-              downloadCancelled = true;
-              downloadStatus = 'Đã hủy tải về';
-            });
-          }
-
-          void cancelDownload() {
-            print('Cancelling download...');
-            cancelRequested = true;
-            downloadSubscription?.cancel();
-            
-            setState(() {
-              downloadCancelled = true;
-              isDownloading = false;
-              downloadStatus = 'Đã hủy tải về';
-            });
-          }
-
-          // Start countdown automatically when dialog opens
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (isCountingDown && countdownTimer == null) {
-              countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-                if (!isCountingDown || downloadCancelled || cancelRequested) {
-                  timer.cancel();
-                  return;
-                }
-                
-                setState(() {
-                  countdown--;
-                  if (countdown > 0) {
-                    downloadStatus = 'Tải về sẽ bắt đầu sau $countdown giây...';
-                  } else {
-                    downloadStatus = 'Đang bắt đầu tải về...';
-                    timer.cancel();
-                    isCountingDown = false;
-                    downloadAndInstall();
-                  }
-                });
-              });
-            }
-          });
-
-          return WillPopScope(
-            onWillPop: () async => !isDownloading && !isCountingDown && !isSignificantlyOutdated,
-            child: AlertDialog(
-              title: const Text('Cập nhật Windows'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Phiên bản hiện tại: $currentVersion\nPhiên bản mới nhất: $latestVersion',
-                    style: const TextStyle(fontSize: 14),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  Text(downloadStatus, 
-                    style: TextStyle(
-                      fontSize: 16, 
-                      fontWeight: FontWeight.bold,
-                      color: downloadFailed ? Colors.red : 
-                             downloadCompleted ? Colors.green :
-                             downloadCancelled ? Colors.orange : Colors.blue,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  if (isCountingDown) ...[
-                    CircularProgressIndicator(value: (3 - countdown) / 3),
-                    const SizedBox(height: 12),
-                    const Text('Cài đặt tự động sau khi tải xong', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  ] else ...[
-                    LinearProgressIndicator(
-                      value: downloadProgress,
-                      backgroundColor: Colors.grey[300],
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        downloadCompleted ? Colors.green : 
-                        downloadFailed ? Colors.red : 
-                        downloadCancelled ? Colors.orange : Colors.blue,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text('${(downloadProgress * 100).toStringAsFixed(1)}%'),
-                  ],
-                  
-                  if (downloadCompleted) ...[
-                    const SizedBox(height: 12),
-                    const Text('Ứng dụng sẽ đóng để chạy trình cài đặt...', 
-                      style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  ],
-                  
-                  if (downloadFailed) ...[
-                    const SizedBox(height: 16),
-                    const Text('Vui lòng thử lại hoặc tải về thủ công.', style: TextStyle(fontSize: 12)),
-                  ],
-
-                  if (downloadCancelled && !downloadFailed) ...[
-                    const SizedBox(height: 16),
-                    const Text('Tải về đã bị hủy.', style: TextStyle(fontSize: 12)),
-                  ],
-                ],
-              ),
-              actions: [
-                if (isCountingDown) 
-                  TextButton(
-                    onPressed: cancelCountdown,
-                    child: const Text('Hủy', style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
-                
-                if (isDownloading && !downloadCompleted && !downloadCancelled) 
-                  TextButton(
-                    onPressed: cancelDownload,
-                    child: const Text('Hủy tải về', style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
-                
-                if (downloadFailed || downloadCancelled) ...[
-                  TextButton(
-                    onPressed: () async {
-                      final url = Uri.parse('https://storage.googleapis.com/times1/DocumentApp/CaiDatHMGroup.exe');
-                      await launchUrl(url, mode: LaunchMode.externalApplication);
-                      Navigator.of(dialogContext).pop();
-                    },
-                    child: const Text('Tải thủ công'),
-                  ),
-                  if (!isSignificantlyOutdated) 
-                    TextButton(
-                      onPressed: () => Navigator.of(dialogContext).pop(),
-                      child: const Text('Đóng'),
-                    ),
-                ],
-              ],
-            ),
-          );
-        },
-      );
-    },
-  );
 }
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});

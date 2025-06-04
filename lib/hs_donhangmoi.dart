@@ -434,24 +434,43 @@ void _showRecipientContactSelectionDialog() {
   setState(() {
     _isLoading = true;
     _selectedCustomer = customer;
-    _orderType = orderType; // Change _isBaoGia to _orderType
+    _orderType = orderType;
   });
   
   // Load customer contacts
   await _loadCustomerContacts(customer.uid ?? '');
   
-  // Set default values
+  // Get the username from UserCredentials
+  final userCredentials = Provider.of<UserCredentials>(context, listen: false);
+  final username = userCredentials.username;
+  
+  // Set default values based on order type
+  if (orderType == 'Dự trù') {
+    // For "Dự trù" orders, set both tenKhachHang and tenKhachHang2 to the special format
+    final duTruCustomerName = 'Đơn đặt hàng dự trù của $username';
+    _selectedCustomer = KhachHangModel(
+      uid: customer.uid,
+      tenDuAn: duTruCustomerName, // This will be used for tenKhachHang
+      diaChi: customer.diaChi,
+      sdtDuAn: customer.sdtDuAn,
+      maSoThue: customer.maSoThue,
+      // Copy other fields as needed
+    );
+    _tenKhachHang2Controller.text = duTruCustomerName;
+  } else {
+    // For regular orders, use the original customer name
+    _tenKhachHang2Controller.text = customer.tenDuAn ?? '';
+  }
+  
   _diaChiController.text = customer.diaChi ?? '';
   _sdtKhachHangController.text = customer.sdtDuAn ?? '';
   _diaChiGiaoHangController.text = customer.diaChi ?? '';
-  _tenKhachHang2Controller.text = customer.tenDuAn ?? '';
   
   setState(() {
     _isLoading = false;
     _currentStep = 1; // Move to order details step
   });
 }
-  
   Future<void> _loadCustomerContacts(String customerUid) async {
     try {
       final db = await _dbHelper.database;
@@ -616,7 +635,7 @@ void _showRecipientContactSelectionDialog() {
     soPhieu = _generateSoPhieu();
     thoiGianDatHang = _getThoiGianDatHang();
     
-    // Determine trangThai based on _orderType and customer name
+    // Determine trangThai based on _orderType
     if (_orderType == 'Báo giá') {
       trangThai = 'Báo giá';
     } else if (_orderType == 'Dự trù') {
@@ -627,8 +646,8 @@ void _showRecipientContactSelectionDialog() {
     }
   }
   
-  // Create the order (rest of the method remains the same)
-    _newOrder = DonHangModel(
+  // Create the order - tenKhachHang will now use the modified customer name for Dự trù orders
+  _newOrder = DonHangModel(
     soPhieu: soPhieu,
     nguoiTao: isEditMode ? _existingOrder!.nguoiTao : userCredentials.username,
     ngay: isEditMode ? _existingOrder!.ngay : formattedDate,
@@ -665,7 +684,7 @@ void _showRecipientContactSelectionDialog() {
     ghiChu: _ghiChuController.text.isNotEmpty ? _ghiChuController.text : null,
     giaNet: _giaNetController.text.isNotEmpty ? int.tryParse(_giaNetController.text) : null,
     trangThai: trangThai,
-    tenKhachHang2: _tenKhachHang2Controller.text.isNotEmpty ? _tenKhachHang2Controller.text : null,
+        tenKhachHang2: _tenKhachHang2Controller.text.isNotEmpty ? _tenKhachHang2Controller.text : null,
     tongTien: null,
     vat10: null,
     tongCong: null,
@@ -2258,7 +2277,7 @@ Widget build(BuildContext context) {
                 foregroundColor: Colors.white,
                 padding: EdgeInsets.symmetric(horizontal: 8), // Smaller padding
               ),
-              child: Text('Dự trù', style: TextStyle(fontSize: 13)), // Smaller text
+              child: Text('Đặt hàng', style: TextStyle(fontSize: 13)), // Smaller text
               onPressed: () => _selectCustomer(customer, orderType: 'Dự trù'),
             ),
             SizedBox(width: 4),

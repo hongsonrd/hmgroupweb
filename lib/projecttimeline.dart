@@ -257,14 +257,19 @@ class _ProjectTimelineState extends State<ProjectTimeline> {
   }
 
   bool _isValidProject(String? boPhan) {
-    if (boPhan == null || boPhan.trim().isEmpty) return false;
-    if (boPhan.length <= 6) return false;
-    
-    final lowerBoPhan = boPhan.toLowerCase();
-    if (lowerBoPhan.startsWith('hm') || lowerBoPhan.startsWith('http')) return false;
-    
-    return true;
+  if (boPhan == null || boPhan.trim().isEmpty) return false;
+  if (boPhan.length <= 6) return false;
+  
+  final lowerBoPhan = boPhan.toLowerCase();
+  if (lowerBoPhan.startsWith('hm') || lowerBoPhan.startsWith('http')) return false;
+  
+  // Check if project name is all caps without any spaces
+  if (boPhan == boPhan.toUpperCase() && !boPhan.contains(' ')) {
+    return false;
   }
+  
+  return true;
+}
 
   List<String> _getProjectsForDisplay() {
     if (_selectedProject == null || _selectedProject == 'Tất cả') {

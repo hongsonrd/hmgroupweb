@@ -286,19 +286,48 @@ class ExportFormGenerator {
                         return pw.TableRow( // Added return statement
                           children: [
                             _buildTableCell(
-  (item.idHang == "KHAC") 
-      ? (item.tenHang ?? 'N/A') 
-      : ((item.idHang != null && item.idHang!.contains(' - ')) 
-          ? item.idHang!.split(' - ')[1].trim() 
-          : (item.idHang ?? 'N/A')), 
+  (item.tenHang != null && item.tenHang!.trim().isNotEmpty)
+      ? item.tenHang!
+      : ((item.idHang == "KHAC") 
+          ? 'N/A'
+          : ((item.idHang != null && item.idHang!.contains(' - ')) 
+              ? (() {
+                  String str = item.idHang!;
+                  int firstDash = str.indexOf(' - ');
+                  int secondDash = str.indexOf(' - ', firstDash + 1);
+                  
+                  if (secondDash != -1) {
+                    // Has 2nd dash: split from 2nd dash
+                    return str.substring(secondDash + 3).trim();
+                  } else {
+                    // Only 1 dash: take everything after first dash
+                    return str.substring(firstDash + 3).trim();
+                  }
+                }())
+              : 'N/A')), 
   ttf
 ),
-                           _buildTableCell(
-  (item.idHang == "KHAC") 
-      ? (item.tenHang ?? 'N/A') 
-      : ((item.idHang != null && item.idHang!.contains(' - ')) 
-          ? item.idHang!.split(' - ')[0].trim() 
-          : (item.idHang ?? 'N/A')), 
+
+_buildTableCell(
+  (item.maHang != null && item.maHang!.trim().isNotEmpty)
+      ? item.maHang!
+      : ((item.idHang == "KHAC") 
+          ? 'N/A'
+          : ((item.idHang != null && item.idHang!.contains(' - ')) 
+              ? (() {
+                  String str = item.idHang!;
+                  int firstDash = str.indexOf(' - ');
+                  int secondDash = str.indexOf(' - ', firstDash + 1);
+                  
+                  if (secondDash != -1) {
+                    // Has 2nd dash: take everything up to 2nd dash
+                    return str.substring(0, secondDash).trim();
+                  } else {
+                    // Only 1 dash: take everything before first dash
+                    return str.substring(0, firstDash).trim();
+                  }
+                }())
+              : 'N/A')), 
   ttf
 ),
                             _buildTableCell(item.donViTinh ?? 'N/A', ttf),

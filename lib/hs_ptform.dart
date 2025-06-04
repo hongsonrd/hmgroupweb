@@ -30,6 +30,8 @@ class PTFormGenerator {
          for (var item in items) {
            formItems.add(PTFormItem(
              idHang: item.idHang ?? '',
+             maHang: item.maHang ?? '',
+             tenHang: item.tenHang ?? '',
              soLuongYeuCau: item.soLuongYeuCau ?? 0.0,
              soLuongThucGiao: item.soLuongThucGiao,
              soPhieu: order.soPhieu ?? '',
@@ -76,21 +78,25 @@ class PTFormGenerator {
 }
 
 class PTFormItem {
- final String idHang;
- final double soLuongYeuCau;
- final double? soLuongThucGiao;
- final String soPhieu;
- final String tenKhachHang;
- final String nguoiTao;
- 
- PTFormItem({
-   required this.idHang,
-   required this.soLuongYeuCau,
-   this.soLuongThucGiao,
-   required this.soPhieu,
-   required this.tenKhachHang,
-   required this.nguoiTao,
- });
+  final String idHang;
+  final String maHang;
+  final String tenHang;
+  final double soLuongYeuCau;
+  final double? soLuongThucGiao;
+  final String soPhieu;
+  final String tenKhachHang;
+  final String nguoiTao;
+  
+  PTFormItem({
+    required this.idHang,
+    required this.maHang,
+    required this.tenHang,
+    required this.soLuongYeuCau,
+    this.soLuongThucGiao,
+    required this.soPhieu,
+    required this.tenKhachHang,
+    required this.nguoiTao,
+  });
 }
 
 class PTFormDialog extends StatefulWidget {
@@ -183,11 +189,17 @@ class _PTFormDialogState extends State<PTFormDialog> {
                        ),
                      ),
                      DataColumn(
-                       label: Text(
-                         'Mã hàng - Tên hàng',
-                         style: TextStyle(fontWeight: FontWeight.bold),
-                       ),
-                     ),
+    label: Text(
+      'Mã hàng',
+      style: TextStyle(fontWeight: FontWeight.bold),
+    ),
+  ),
+  DataColumn(
+    label: Text(
+      'Tên hàng',
+      style: TextStyle(fontWeight: FontWeight.bold),
+    ),
+  ),
                      DataColumn(
                        label: Text(
                          'SL yêu cầu',
@@ -230,18 +242,28 @@ class _PTFormDialogState extends State<PTFormDialog> {
                      }
                      
                      return DataRow(
-                       cells: [
-                         DataCell(Text('${index + 1}')),
-                         DataCell(
-                           Container(
-                             constraints: BoxConstraints(maxWidth: 200),
-                             child: Text(
-                               productName,
-                               overflow: TextOverflow.ellipsis,
-                               maxLines: 2,
-                             ),
-                           ),
-                         ),
+  cells: [
+    DataCell(Text('${index + 1}')),
+    DataCell(
+      Container(
+        constraints: BoxConstraints(maxWidth: 120),
+        child: Text(
+          item.maHang,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    ),
+    DataCell(
+      Container(
+        constraints: BoxConstraints(maxWidth: 200),
+        child: Text(
+          item.tenHang,
+          overflow: TextOverflow.ellipsis,
+          maxLines: 2,
+        ),
+      ),
+    ),
+
                          DataCell(Text('${item.soLuongYeuCau.toStringAsFixed(item.soLuongYeuCau == item.soLuongYeuCau.toInt() ? 0 : 1)}')),
                          DataCell(
                            Text(
@@ -413,13 +435,14 @@ class _PTFormDialogState extends State<PTFormDialog> {
            pw.Table(
              border: pw.TableBorder.all(),
              columnWidths: {
-               0: pw.FixedColumnWidth(25),
-               1: pw.FlexColumnWidth(3),
-               2: pw.FixedColumnWidth(45),
-               3: pw.FixedColumnWidth(45),
-               4: pw.FlexColumnWidth(1.5),
-               5: pw.FlexColumnWidth(2),
-               6: pw.FlexColumnWidth(1.2),
+                   0: pw.FixedColumnWidth(25),
+    1: pw.FlexColumnWidth(1.5), 
+    2: pw.FlexColumnWidth(3),   
+    3: pw.FixedColumnWidth(45),
+    4: pw.FixedColumnWidth(45),
+    5: pw.FlexColumnWidth(1.5),
+    6: pw.FlexColumnWidth(2),
+    7: pw.FlexColumnWidth(1.2),
              },
              children: [
                pw.TableRow(
@@ -428,7 +451,8 @@ class _PTFormDialogState extends State<PTFormDialog> {
                  ),
                  children: [
                    _buildTableCell('STT', ttf, isBold: true, align: pw.TextAlign.center),
-                   _buildTableCell('Mã hàng - Tên hàng', ttf, isBold: true),
+                   _buildTableCell('Mã hàng', ttf, isBold: true),
+        _buildTableCell('Tên hàng', ttf, isBold: true),
                    _buildTableCell('SL yêu cầu', ttf, isBold: true, align: pw.TextAlign.center),
                    _buildTableCell('SL xuất', ttf, isBold: true, align: pw.TextAlign.center),
                    _buildTableCell('Số phiếu', ttf, isBold: true),
@@ -447,29 +471,30 @@ class _PTFormDialogState extends State<PTFormDialog> {
                  }
                  
                  return pw.TableRow(
-                   children: [
-                     _buildTableCell('${index + 1}', ttf, align: pw.TextAlign.center),
-                     _buildTableCell(productName, ttf),
-                     _buildTableCell(
-                       '${item.soLuongYeuCau.toStringAsFixed(item.soLuongYeuCau == item.soLuongYeuCau.toInt() ? 0 : 1)}',
-                       ttf,
-                       align: pw.TextAlign.center,
-                     ),
-                     _buildTableCell(
-                       (item.soLuongThucGiao == null || item.soLuongThucGiao == 0) 
-                         ? '' 
-                         : '${item.soLuongThucGiao!.toStringAsFixed(item.soLuongThucGiao! == item.soLuongThucGiao!.toInt() ? 0 : 1)}',
-                       ttf,
-                       align: pw.TextAlign.center,
-                     ),
-                     _buildTableCell(item.soPhieu, ttf),
-                     _buildTableCell(item.tenKhachHang, ttf),
-                     _buildTableCell(item.nguoiTao, ttf),
-                   ],
-                 );
-               }).toList(),
-             ],
-           ),
+        children: [
+          _buildTableCell('${index + 1}', ttf, align: pw.TextAlign.center),
+          _buildTableCell(item.maHang, ttf),
+          _buildTableCell(item.tenHang, ttf),
+          _buildTableCell(
+            '${item.soLuongYeuCau.toStringAsFixed(item.soLuongYeuCau == item.soLuongYeuCau.toInt() ? 0 : 1)}',
+            ttf,
+            align: pw.TextAlign.center,
+          ),
+          _buildTableCell(
+            (item.soLuongThucGiao == null || item.soLuongThucGiao == 0) 
+              ? '' 
+              : '${item.soLuongThucGiao!.toStringAsFixed(item.soLuongThucGiao! == item.soLuongThucGiao!.toInt() ? 0 : 1)}',
+            ttf,
+            align: pw.TextAlign.center,
+          ),
+          _buildTableCell(item.soPhieu, ttf),
+          _buildTableCell(item.tenKhachHang, ttf),
+          _buildTableCell(item.nguoiTao, ttf),
+        ],
+      );
+    }).toList(),
+  ],
+),
          ];
        },
      ),

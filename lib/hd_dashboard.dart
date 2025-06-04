@@ -515,11 +515,11 @@ Widget _buildCurrentPeriodCard() {
               child: DataTable(
                 columns: [
                   DataColumn(label: Text('Kỳ', style: TextStyle(fontWeight: FontWeight.bold))),
+                                    DataColumn(label: Text('Thao tác', style: TextStyle(fontWeight: FontWeight.bold))),
                   DataColumn(label: Text('Số HĐ', style: TextStyle(fontWeight: FontWeight.bold))),
                   DataColumn(label: Text('Doanh thu', style: TextStyle(fontWeight: FontWeight.bold))),
                   DataColumn(label: Text('Chi phí', style: TextStyle(fontWeight: FontWeight.bold))),
                   DataColumn(label: Text('Lợi nhuận', style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text('Thao tác', style: TextStyle(fontWeight: FontWeight.bold))),
                 ],
                 rows: _periodStats.map((stat) {
                   double netProfit = _safeToDouble(stat['netProfit']);
@@ -528,19 +528,7 @@ Widget _buildCurrentPeriodCard() {
                   return DataRow(
                     cells: [
                       DataCell(Text(_formatPeriod(stat['period']))),
-                      DataCell(Text('${stat['contractCount']}')),
-                      DataCell(Text(_formatCurrency(_safeToDouble(stat['totalRevenue'])))),
-                      DataCell(Text(_formatCurrency(_safeToDouble(stat['totalCosts'])))),
-                      DataCell(
-                        Text(
-                          _formatCurrency(netProfit),
-                          style: TextStyle(
-                            color: isProfit ? Colors.green : Colors.red,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      DataCell(
+                                            DataCell(
                         ElevatedButton(
                           onPressed: () {
                             Navigator.push(
@@ -565,6 +553,18 @@ Widget _buildCurrentPeriodCard() {
                           child: Text(
                             'Xem',
                             style: TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ),
+                      DataCell(Text('${stat['contractCount']}')),
+                      DataCell(Text(_formatCurrency(_safeToDouble(stat['totalRevenue'])))),
+                      DataCell(Text(_formatCurrency(_safeToDouble(stat['totalCosts'])))),
+                      DataCell(
+                        Text(
+                          _formatCurrency(netProfit),
+                          style: TextStyle(
+                            color: isProfit ? Colors.green : Colors.red,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),

@@ -46,6 +46,7 @@ class _HDThangScreenState extends State<HDThangScreen> {
   String _selectedNguoiTao = 'Tất cả';
   String _sortBy = 'Tên hợp đồng';
   bool _sortAscending = true;
+  bool _isTableView = false;
 
   // Lists for filter options
   List<String> _loaiHinhOptions = ['Tất cả'];
@@ -874,7 +875,7 @@ Widget _buildDetailRow(String label, String? value) {
     );
   }
 
-  Widget _buildContractsCard() {
+ Widget _buildContractsCard() {
     return Card(
       elevation: 4,
       child: Padding(
@@ -882,13 +883,48 @@ Widget _buildDetailRow(String label, String? value) {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Danh sách hợp đồng (${_filteredContracts.length} hợp đồng)',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF024965),
-              ),
+                            // View mode toggle
+                Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        Icons.view_list,
+                        color: !_isTableView ? Color(0xFF024965) : Colors.grey,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _isTableView = false;
+                        });
+                      },
+                      tooltip: 'Chế độ danh sách',
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.table_chart,
+                        color: _isTableView ? Color(0xFF024965) : Colors.grey,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _isTableView = true;
+                        });
+                      },
+                      tooltip: 'Chế độ bảng',
+                    ),
+                  ],
+                ),
+            // Header with view mode toggle
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Danh sách hợp đồng (${_filteredContracts.length} hợp đồng)',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF024965),
+                  ),
+                ),
+              ],
             ),
             SizedBox(height: 16),
             
@@ -908,92 +944,331 @@ Widget _buildDetailRow(String label, String? value) {
                 ),
               )
             else
-              ListView.separated(
-                shrinkWrap: true,
-                physics: NeverScrollableScrollPhysics(),
-                itemCount: _filteredContracts.length,
-                separatorBuilder: (context, index) => Divider(),
-                itemBuilder: (context, index) {
-                  final contract = _filteredContracts[index];
-                  final revenue = _safeToDouble(contract.doanhThuDangThucHien);
-                  final costs = _calculateTotalCosts(contract);
-                  final profit = revenue - costs;
-                  final canEdit = _canEditContract(contract);
-                  
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: Color(0xFF024965),
-                      child: Text(
-                        contract.maKinhDoanh ?? '${index + 1}',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    title: Text(
-                      contract.tenHopDong ?? 'Không có tên',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Địa chỉ: ${contract.diaChi ?? 'N/A'}'),
-                        Text('Doanh thu: ${_formatCurrency(revenue)}'),
-                        Text(
-                          'Lợi nhuận: ${_formatCurrency(profit)}',
-                          style: TextStyle(
-                            color: profit >= 0 ? Colors.green : Colors.red,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        if (contract.loaiHinh != null)
-                          Text('Loại: ${contract.loaiHinh}'),
-                        if (contract.nguoiTao != null)
-                          Text('Người tạo: ${contract.nguoiTao}'),
-                      ],
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Chip(
-                              label: Text(
-                                contract.trangThai ?? 'N/A',
-                                style: TextStyle(fontSize: 10),
-                              ),
-                              backgroundColor: _getStatusColor(contract.trangThai),
-                            ),
-                            if (contract.thoiHanKetthuc != null) // Fixed spelling
-                              Text(
-                                _formatDate(contract.thoiHanKetthuc), // Fixed spelling
-                                style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-                              ),
-                          ],
-                        ),
-                        if (canEdit) ...[
-                          SizedBox(width: 8),
-                          IconButton(
-                            icon: Icon(Icons.edit, color: Color(0xFF024965)),
-                            onPressed: () => _navigateToEditContract(contract),
-                            tooltip: 'Chỉnh sửa',
-                          ),
-                        ],
-                      ],
-                    ),
-                    onTap: () => _showContractDetails(contract),
-                  );
-                },
-              ),
+              _isTableView ? _buildTableView() : _buildListView(),
           ],
         ),
       ),
     );
   }
 
+  Widget _buildListView() {
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: NeverScrollableScrollPhysics(),
+      itemCount: _filteredContracts.length,
+      separatorBuilder: (context, index) => Divider(),
+      itemBuilder: (context, index) {
+        final contract = _filteredContracts[index];
+        final revenue = _safeToDouble(contract.doanhThuDangThucHien);
+        final costs = _calculateTotalCosts(contract);
+        final profit = revenue - costs;
+        final canEdit = _canEditContract(contract);
+        
+        return ListTile(
+          leading: CircleAvatar(
+            backgroundColor: Color(0xFF024965),
+            child: Text(
+              contract.maKinhDoanh ?? '${index + 1}',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          title: Text(
+            contract.tenHopDong ?? 'Không có tên',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Địa chỉ: ${contract.diaChi ?? 'N/A'}'),
+              Text('Doanh thu: ${_formatCurrency(revenue)}'),
+              Text(
+                'Lợi nhuận: ${_formatCurrency(profit)}',
+                style: TextStyle(
+                  color: profit >= 0 ? Colors.green : Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              if (contract.loaiHinh != null)
+                Text('Loại: ${contract.loaiHinh}'),
+              if (contract.nguoiTao != null)
+                Text('Người tạo: ${contract.nguoiTao}'),
+            ],
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Chip(
+                    label: Text(
+                      contract.trangThai ?? 'N/A',
+                      style: TextStyle(fontSize: 10),
+                    ),
+                    backgroundColor: _getStatusColor(contract.trangThai),
+                  ),
+                  if (contract.thoiHanKetthuc != null)
+                    Text(
+                      _formatDate(contract.thoiHanKetthuc),
+                      style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                    ),
+                ],
+              ),
+              if (canEdit) ...[
+                SizedBox(width: 8),
+                IconButton(
+                  icon: Icon(Icons.edit, color: Color(0xFF024965)),
+                  onPressed: () => _navigateToEditContract(contract),
+                  tooltip: 'Chỉnh sửa',
+                ),
+              ],
+            ],
+          ),
+          onTap: () => _showContractDetails(contract),
+        );
+      },
+    );
+  }
+
+  Widget _buildTableView() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Container(
+        constraints: BoxConstraints(
+          minWidth: MediaQuery.of(context).size.width - 64,
+        ),
+        child: DataTable(
+          columnSpacing: 16,
+          horizontalMargin: 8,
+          headingRowHeight: 60,
+          dataRowHeight: 80,
+          border: TableBorder.all(
+            color: Colors.grey[300]!,
+            width: 1,
+          ),
+          columns: [
+            DataColumn(
+              label: Container(
+                width: 150,
+                child: Text(
+                  'Tên hợp đồng',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF024965),
+                  ),
+                ),
+              ),
+            ),
+            DataColumn(
+              label: Text(
+                'Mã KD',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF024965),
+                ),
+              ),
+            ),
+            DataColumn(
+              label: Text(
+                'Địa chỉ',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF024965),
+                ),
+              ),
+            ),
+            DataColumn(
+              label: Text(
+                'Loại hình',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF024965),
+                ),
+              ),
+            ),
+            DataColumn(
+              label: Text(
+                'Trạng thái',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF024965),
+                ),
+              ),
+            ),
+            DataColumn(
+              label: Text(
+                'Doanh thu',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF024965),
+                ),
+              ),
+              numeric: true,
+            ),
+            DataColumn(
+              label: Text(
+                'Chi phí',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF024965),
+                ),
+              ),
+              numeric: true,
+            ),
+            DataColumn(
+              label: Text(
+                'Lợi nhuận',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF024965),
+                ),
+              ),
+              numeric: true,
+            ),
+            DataColumn(
+              label: Text(
+                'Người tạo',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF024965),
+                ),
+              ),
+            ),
+            DataColumn(
+              label: Text(
+                'Ngày KT',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF024965),
+                ),
+              ),
+            ),
+            DataColumn(
+              label: Text(
+                'Thao tác',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF024965),
+                ),
+              ),
+            ),
+          ],
+          rows: _filteredContracts.map((contract) {
+            final revenue = _safeToDouble(contract.doanhThuDangThucHien);
+            final costs = _calculateTotalCosts(contract);
+            final profit = revenue - costs;
+            final canEdit = _canEditContract(contract);
+            
+            return DataRow(
+              cells: [
+                DataCell(
+                  Container(
+                    width: 150,
+                    child: Text(
+                      contract.tenHopDong ?? 'N/A',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 2,
+                    ),
+                  ),
+                  onTap: () => _showContractDetails(contract),
+                ),
+                DataCell(
+                  Text(contract.maKinhDoanh ?? 'N/A'),
+                  onTap: () => _showContractDetails(contract),
+                ),
+                DataCell(
+                  Container(
+                    width: 120,
+                    child: Text(
+                      contract.diaChi ?? 'N/A',
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 2,
+                    ),
+                  ),
+                  onTap: () => _showContractDetails(contract),
+                ),
+                DataCell(
+                  Text(contract.loaiHinh ?? 'N/A'),
+                  onTap: () => _showContractDetails(contract),
+                ),
+                DataCell(
+                  Chip(
+                    label: Text(
+                      contract.trangThai ?? 'N/A',
+                      style: TextStyle(fontSize: 10),
+                    ),
+                    backgroundColor: _getStatusColor(contract.trangThai),
+                  ),
+                  onTap: () => _showContractDetails(contract),
+                ),
+                DataCell(
+                  Text(
+                    _formatCurrency(revenue),
+                    style: TextStyle(
+                      color: Colors.green,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  onTap: () => _showContractDetails(contract),
+                ),
+                DataCell(
+                  Text(
+                    _formatCurrency(costs),
+                    style: TextStyle(
+                      color: Colors.orange,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  onTap: () => _showContractDetails(contract),
+                ),
+                DataCell(
+                  Text(
+                    _formatCurrency(profit),
+                    style: TextStyle(
+                      color: profit >= 0 ? Colors.green : Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  onTap: () => _showContractDetails(contract),
+                ),
+                DataCell(
+                  Text(contract.nguoiTao ?? 'N/A'),
+                  onTap: () => _showContractDetails(contract),
+                ),
+                DataCell(
+                  Text(_formatDate(contract.thoiHanKetthuc)),
+                  onTap: () => _showContractDetails(contract),
+                ),
+                DataCell(
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.visibility, size: 16),
+                        onPressed: () => _showContractDetails(contract),
+                        tooltip: 'Xem chi tiết',
+                      ),
+                      if (canEdit)
+                        IconButton(
+                          icon: Icon(Icons.edit, size: 16, color: Color(0xFF024965)),
+                          onPressed: () => _navigateToEditContract(contract),
+                          tooltip: 'Chỉnh sửa',
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
   Widget _buildStatCard(String title, String value, IconData icon, Color color) {
    return Container(
      padding: EdgeInsets.all(16),
@@ -1051,4 +1326,4 @@ Widget _buildDetailRow(String label, String? value) {
      ),
    );
  }
-}
+ }

@@ -890,6 +890,9 @@ Widget _buildRegularSection(String columnType, String sectionTitle) {
       totalKey = 'cong';
   }
   
+  // Create a scroll controller
+  final ScrollController horizontalController = ScrollController();
+  
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
@@ -904,7 +907,93 @@ Widget _buildRegularSection(String columnType, String sectionTitle) {
           ),
         ),
       ),
+      
+      // Add scroll controls
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            ElevatedButton.icon(
+              onPressed: () {
+                horizontalController.animateTo(
+                  0,
+                  duration: Duration(milliseconds: 300),
+                  curve: Curves.easeOut,
+                );
+              },
+              icon: Icon(Icons.first_page),
+              label: Text('Đầu bảng'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+            ),
+            Row(
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () {
+                    double newOffset = (horizontalController.offset - 300);
+                    if (newOffset < 0) newOffset = 0;
+                    horizontalController.animateTo(
+                      newOffset,
+                      duration: Duration(milliseconds: 300),
+                      curve: Curves.easeOut,
+                    );
+                  },
+                  icon: Icon(Icons.arrow_back),
+                  label: Text('Trái'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey.shade700,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+                SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    double newOffset = (horizontalController.offset + 300);
+                    if (horizontalController.hasClients) {
+                      double maxScroll = horizontalController.position.maxScrollExtent;
+                      if (newOffset > maxScroll) newOffset = maxScroll;
+                      horizontalController.animateTo(
+                        newOffset,
+                        duration: Duration(milliseconds: 300),
+                        curve: Curves.easeOut,
+                      );
+                    }
+                  },
+                  icon: Icon(Icons.arrow_forward),
+                  label: Text('Phải'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey.shade700,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                if (horizontalController.hasClients) {
+                  horizontalController.animateTo(
+                    horizontalController.position.maxScrollExtent,
+                    duration: Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                  );
+                }
+              },
+              icon: Icon(Icons.last_page),
+              label: Text('Cuối bảng'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+      
       SingleChildScrollView(
+        controller: horizontalController, // Add this line
         scrollDirection: Axis.horizontal,
         child: Table(
           border: TableBorder(
@@ -1343,6 +1432,9 @@ String _extractCongThuongChuBase(String? value) {
    return SizedBox.shrink();
  }
  
+ // Add scroll controller
+ final ScrollController horizontalController = ScrollController();
+ 
  return Column(
    crossAxisAlignment: CrossAxisAlignment.start,
    children: [
@@ -1357,7 +1449,93 @@ String _extractCongThuongChuBase(String? value) {
          ),
        ),
      ),
+     
+     // Add scroll controls
+     Padding(
+       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+       child: Row(
+         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+         children: [
+           ElevatedButton.icon(
+             onPressed: () {
+               horizontalController.animateTo(
+                 0,
+                 duration: Duration(milliseconds: 300),
+                 curve: Curves.easeOut,
+               );
+             },
+             icon: Icon(Icons.first_page),
+             label: Text('Đầu bảng'),
+             style: ElevatedButton.styleFrom(
+               backgroundColor: Colors.blue,
+               foregroundColor: Colors.white,
+             ),
+           ),
+           Row(
+             children: [
+               ElevatedButton.icon(
+                 onPressed: () {
+                   double newOffset = (horizontalController.offset - 300);
+                   if (newOffset < 0) newOffset = 0;
+                   horizontalController.animateTo(
+                     newOffset,
+                     duration: Duration(milliseconds: 300),
+                     curve: Curves.easeOut,
+                   );
+                 },
+                 icon: Icon(Icons.arrow_back),
+                 label: Text('Trái'),
+                 style: ElevatedButton.styleFrom(
+                   backgroundColor: Colors.grey.shade700,
+                   foregroundColor: Colors.white,
+                 ),
+               ),
+               SizedBox(width: 8),
+               ElevatedButton.icon(
+                 onPressed: () {
+                   double newOffset = (horizontalController.offset + 300);
+                   if (horizontalController.hasClients) {
+                     double maxScroll = horizontalController.position.maxScrollExtent;
+                     if (newOffset > maxScroll) newOffset = maxScroll;
+                     horizontalController.animateTo(
+                       newOffset,
+                       duration: Duration(milliseconds: 300),
+                       curve: Curves.easeOut,
+                     );
+                   }
+                 },
+                 icon: Icon(Icons.arrow_forward),
+                 label: Text('Phải'),
+                 style: ElevatedButton.styleFrom(
+                   backgroundColor: Colors.grey.shade700,
+                   foregroundColor: Colors.white,
+                 ),
+               ),
+             ],
+           ),
+           ElevatedButton.icon(
+             onPressed: () {
+               if (horizontalController.hasClients) {
+                 horizontalController.animateTo(
+                   horizontalController.position.maxScrollExtent,
+                   duration: Duration(milliseconds: 300),
+                   curve: Curves.easeOut,
+                 );
+               }
+             },
+             icon: Icon(Icons.last_page),
+             label: Text('Cuối bảng'),
+             style: ElevatedButton.styleFrom(
+               backgroundColor: Colors.blue,
+               foregroundColor: Colors.white,
+             ),
+           ),
+         ],
+       ),
+     ),
+     
      SingleChildScrollView(
+       controller: horizontalController, 
        scrollDirection: Axis.horizontal,
        child: Table(
          border: TableBorder(
