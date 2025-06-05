@@ -4032,6 +4032,35 @@ class LinkVatTuModel {
      thanhTien: map['thanhTien']?.toInt(),
    );
  }
+ LinkVatTuModel copyWith({
+  String? uid,
+  String? hopDongID,
+  String? thang,
+  String? nguoiTao,
+  String? maKinhDoanh,
+  String? danhMucVatTuTieuHao,
+  String? nhanHieu,
+  String? quyCach,
+  String? donViTinh,
+  int? donGiaCapKhachHang,
+  double? soLuong,
+  int? thanhTien,
+}) {
+  return LinkVatTuModel(
+    uid: uid ?? this.uid,
+    hopDongID: hopDongID ?? this.hopDongID,
+    thang: thang ?? this.thang,
+    nguoiTao: nguoiTao ?? this.nguoiTao,
+    maKinhDoanh: maKinhDoanh ?? this.maKinhDoanh,
+    danhMucVatTuTieuHao: danhMucVatTuTieuHao ?? this.danhMucVatTuTieuHao,
+    nhanHieu: nhanHieu ?? this.nhanHieu,
+    quyCach: quyCach ?? this.quyCach,
+    donViTinh: donViTinh ?? this.donViTinh,
+    donGiaCapKhachHang: donGiaCapKhachHang ?? this.donGiaCapKhachHang,
+    soLuong: soLuong ?? this.soLuong,
+    thanhTien: thanhTien ?? this.thanhTien,
+  );
+}
 }
 
 class LinkDinhKyModel {
@@ -4098,6 +4127,37 @@ class LinkDinhKyModel {
      ghiChu: map['ghiChu']?.toString(),
    );
  }
+ LinkDinhKyModel copyWith({
+  String? uid,
+  String? hopDongID,
+  String? thang,
+  String? nguoiTao,
+  String? maKinhDoanh,
+  String? danhMucCongViec,
+  String? chiTietCongViec,
+  int? tongTienTrenLanThucHien,
+  double? tanSuatThucHienTrenThang,
+  int? donGiaTrenThang,
+  double? soLuong,
+  int? thanhTien,
+  String? ghiChu,
+}) {
+  return LinkDinhKyModel(
+    uid: uid ?? this.uid,
+    hopDongID: hopDongID ?? this.hopDongID,
+    thang: thang ?? this.thang,
+    nguoiTao: nguoiTao ?? this.nguoiTao,
+    maKinhDoanh: maKinhDoanh ?? this.maKinhDoanh,
+    danhMucCongViec: danhMucCongViec ?? this.danhMucCongViec,
+    chiTietCongViec: chiTietCongViec ?? this.chiTietCongViec,
+    tongTienTrenLanThucHien: tongTienTrenLanThucHien ?? this.tongTienTrenLanThucHien,
+    tanSuatThucHienTrenThang: tanSuatThucHienTrenThang ?? this.tanSuatThucHienTrenThang,
+    donGiaTrenThang: donGiaTrenThang ?? this.donGiaTrenThang,
+    soLuong: soLuong ?? this.soLuong,
+    thanhTien: thanhTien ?? this.thanhTien,
+    ghiChu: ghiChu ?? this.ghiChu,
+  );
+}
 }
 
 class LinkLeTetTCModel {
@@ -4172,6 +4232,41 @@ class LinkLeTetTCModel {
      ghiChu: map['ghiChu']?.toString(),
    );
  }
+ LinkLeTetTCModel copyWith({
+  String? uid,
+  String? hopDongID,
+  String? thang,
+  String? nguoiTao,
+  String? maKinhDoanh,
+  String? danhMucCongViec,
+  String? chiTietCongViec,
+  String? tanSuatTrenLan,
+  String? donViTinh,
+  int? donGia,
+  double? soLuongNhanVien,
+  double? thoiGianCungCapDVT,
+  double? phanBoTrenThang,
+  int? thanhTienTrenThang,
+  String? ghiChu,
+}) {
+  return LinkLeTetTCModel(
+    uid: uid ?? this.uid,
+    hopDongID: hopDongID ?? this.hopDongID,
+    thang: thang ?? this.thang,
+    nguoiTao: nguoiTao ?? this.nguoiTao,
+    maKinhDoanh: maKinhDoanh ?? this.maKinhDoanh,
+    danhMucCongViec: danhMucCongViec ?? this.danhMucCongViec,
+    chiTietCongViec: chiTietCongViec ?? this.chiTietCongViec,
+    tanSuatTrenLan: tanSuatTrenLan ?? this.tanSuatTrenLan,
+    donViTinh: donViTinh ?? this.donViTinh,
+    donGia: donGia ?? this.donGia,
+    soLuongNhanVien: soLuongNhanVien ?? this.soLuongNhanVien,
+    thoiGianCungCapDVT: thoiGianCungCapDVT ?? this.thoiGianCungCapDVT,
+    phanBoTrenThang: phanBoTrenThang ?? this.phanBoTrenThang,
+    thanhTienTrenThang: thanhTienTrenThang ?? this.thanhTienTrenThang,
+    ghiChu: ghiChu ?? this.ghiChu,
+  );
+}
 }
 
 class LinkPhuCapModel {
@@ -4246,6 +4341,41 @@ class LinkPhuCapModel {
      ghiChu: map['ghiChu']?.toString(),
    );
  }
+ LinkPhuCapModel copyWith({
+  String? uid,
+  String? hopDongID,
+  String? thang,
+  String? nguoiTao,
+  String? maKinhDoanh,
+  String? danhMucCongViec,
+  String? chiTietCongViec,
+  String? tanSuatTrenLan,
+  String? donViTinh,
+  int? donGia,
+  double? soLuongNhanVien,
+  double? thoiGianCungCapDVT,
+  double? phanBoTrenThang,
+  int? thanhTienTrenThang,
+  String? ghiChu,
+}) {
+  return LinkPhuCapModel(
+    uid: uid ?? this.uid,
+    hopDongID: hopDongID ?? this.hopDongID,
+    thang: thang ?? this.thang,
+    nguoiTao: nguoiTao ?? this.nguoiTao,
+    maKinhDoanh: maKinhDoanh ?? this.maKinhDoanh,
+    danhMucCongViec: danhMucCongViec ?? this.danhMucCongViec,
+    chiTietCongViec: chiTietCongViec ?? this.chiTietCongViec,
+    tanSuatTrenLan: tanSuatTrenLan ?? this.tanSuatTrenLan,
+    donViTinh: donViTinh ?? this.donViTinh,
+    donGia: donGia ?? this.donGia,
+    soLuongNhanVien: soLuongNhanVien ?? this.soLuongNhanVien,
+    thoiGianCungCapDVT: thoiGianCungCapDVT ?? this.thoiGianCungCapDVT,
+    phanBoTrenThang: phanBoTrenThang ?? this.phanBoTrenThang,
+    thanhTienTrenThang: thanhTienTrenThang ?? this.thanhTienTrenThang,
+    ghiChu: ghiChu ?? this.ghiChu,
+  );
+}
 }
 
 class LinkNgoaiGiaoModel {
@@ -4320,6 +4450,41 @@ class LinkNgoaiGiaoModel {
       ghiChu: map['ghiChu']?.toString(),
     );
   }
+  LinkNgoaiGiaoModel copyWith({
+  String? uid,
+  String? hopDongID,
+  String? thang,
+  String? nguoiTao,
+  String? maKinhDoanh,
+  String? danhMuc,
+  String? noiDungChiTiet,
+  String? tanSuat,
+  String? donViTinh,
+  int? donGia,
+  double? soLuong,
+  double? thoiGianCungCapDVT,
+  double? phanBoTrenThang,
+  int? thanhTienTrenThang,
+  String? ghiChu,
+}) {
+  return LinkNgoaiGiaoModel(
+    uid: uid ?? this.uid,
+    hopDongID: hopDongID ?? this.hopDongID,
+    thang: thang ?? this.thang,
+    nguoiTao: nguoiTao ?? this.nguoiTao,
+    maKinhDoanh: maKinhDoanh ?? this.maKinhDoanh,
+    danhMuc: danhMuc ?? this.danhMuc,
+    noiDungChiTiet: noiDungChiTiet ?? this.noiDungChiTiet,
+    tanSuat: tanSuat ?? this.tanSuat,
+    donViTinh: donViTinh ?? this.donViTinh,
+    donGia: donGia ?? this.donGia,
+    soLuong: soLuong ?? this.soLuong,
+    thoiGianCungCapDVT: thoiGianCungCapDVT ?? this.thoiGianCungCapDVT,
+    phanBoTrenThang: phanBoTrenThang ?? this.phanBoTrenThang,
+    thanhTienTrenThang: thanhTienTrenThang ?? this.thanhTienTrenThang,
+    ghiChu: ghiChu ?? this.ghiChu,
+  );
+}
 }
 
 class LinkMayMocModel {
@@ -4398,6 +4563,43 @@ class LinkMayMocModel {
       ghiChu: map['ghiChu']?.toString(),
     );
   }
+  LinkMayMocModel copyWith({
+  String? uid,
+  String? hopDongID,
+  String? thang,
+  String? nguoiTao,
+  String? maKinhDoanh,
+  String? loaiMay,
+  String? tenMay,
+  String? hangSanXuat,
+  String? tanSuat,
+  int? donGiaMay,
+  double? tinhTrangThietBi,
+  int? khauHao,
+  int? thanhTienMay,
+  int? soLuongCap,
+  int? thanhTienThang,
+  String? ghiChu,
+}) {
+  return LinkMayMocModel(
+    uid: uid ?? this.uid,
+    hopDongID: hopDongID ?? this.hopDongID,
+    thang: thang ?? this.thang,
+    nguoiTao: nguoiTao ?? this.nguoiTao,
+    maKinhDoanh: maKinhDoanh ?? this.maKinhDoanh,
+    loaiMay: loaiMay ?? this.loaiMay,
+    tenMay: tenMay ?? this.tenMay,
+    hangSanXuat: hangSanXuat ?? this.hangSanXuat,
+    tanSuat: tanSuat ?? this.tanSuat,
+    donGiaMay: donGiaMay ?? this.donGiaMay,
+    tinhTrangThietBi: tinhTrangThietBi ?? this.tinhTrangThietBi,
+    khauHao: khauHao ?? this.khauHao,
+    thanhTienMay: thanhTienMay ?? this.thanhTienMay,
+    soLuongCap: soLuongCap ?? this.soLuongCap,
+    thanhTienThang: thanhTienThang ?? this.thanhTienThang,
+    ghiChu: ghiChu ?? this.ghiChu,
+  );
+}
 }
 
 class LinkLuongModel {
@@ -4452,6 +4654,31 @@ class LinkLuongModel {
       thanhTien: map['thanhTien']?.toInt(),
     );
   }
+  LinkLuongModel copyWith({
+  String? uid,
+  String? hopDongID,
+  String? thang,
+  String? nguoiTao,
+  String? maKinhDoanh,
+  String? hangMuc,
+  String? moTa,
+  int? donGia,
+  double? soLuong,
+  int? thanhTien,
+}) {
+  return LinkLuongModel(
+    uid: uid ?? this.uid,
+    hopDongID: hopDongID ?? this.hopDongID,
+    thang: thang ?? this.thang,
+    nguoiTao: nguoiTao ?? this.nguoiTao,
+    maKinhDoanh: maKinhDoanh ?? this.maKinhDoanh,
+    hangMuc: hangMuc ?? this.hangMuc,
+    moTa: moTa ?? this.moTa,
+    donGia: donGia ?? this.donGia,
+    soLuong: soLuong ?? this.soLuong,
+    thanhTien: thanhTien ?? this.thanhTien,
+  );
+}
 }
 // Database Tables
 class DatabaseTables {

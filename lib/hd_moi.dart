@@ -6,6 +6,8 @@ import 'db_helper.dart';
 import 'table_models.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'hd_chiphi.dart';
+
 class HDMoiScreen extends StatefulWidget {
   @override
   _HDMoiScreenState createState() => _HDMoiScreenState();
@@ -95,11 +97,29 @@ bool _isDataLoaded = false;
   bool _isLoading = false;
   bool _isSaving = false;
   bool _isLoadingMaKinhDoanh = false;
-
+  int _updatedChiPhiVatLieu = 0;
+  int _updatedChiPhiCVDinhKy = 0;
+  int _updatedChiPhiLeTetTCa = 0;
+  int _updatedChiPhiPhuCap = 0;
+  int _updatedChiPhiNgoaiGiao = 0;
+  int _updatedChiPhiMayMoc = 0;
+  int _updatedChiPhiLuong = 0;
 @override
 void initState() {
   super.initState();
+  _initializeUpdatedCosts();
 }
+void _initializeUpdatedCosts() {
+    if (_editingContract != null) {
+      _updatedChiPhiVatLieu = _editingContract!.chiPhiVatLieu ?? 0;
+      _updatedChiPhiCVDinhKy = _editingContract!.chiPhiCVDinhKy ?? 0;
+      _updatedChiPhiLeTetTCa = _editingContract!.chiPhiLeTetTCa ?? 0;
+      _updatedChiPhiPhuCap = _editingContract!.chiPhiPhuCap ?? 0;
+      _updatedChiPhiNgoaiGiao = _editingContract!.chiPhiNgoaiGiao ?? 0;
+      _updatedChiPhiMayMoc = _editingContract!.chiPhiMayMoc ?? 0;
+      _updatedChiPhiLuong = _editingContract!.chiPhiLuong ?? 0;
+    }
+  }
 bool get _canEditThang {
   if (_isEdit && _editingContract != null) {
     final contractThang = _editingContract!.thang;
@@ -337,7 +357,7 @@ Future<void> _fetchMaKinhDoanh() async {
       
       print('Contract data loaded successfully');
       print('tenHopDong loaded: ${_tenHopDongController.text}');
-      
+      _initializeUpdatedCosts();
       // Trigger calculations after loading data
       _calculateDerivedValues();
     }
@@ -452,15 +472,15 @@ Future<void> _selectEndDate() async {
     int doanhThuXuatHoaDon = int.tryParse(_doanhThuXuatHoaDonController.text) ?? 0;
     int giaNetCN = int.tryParse(_giaNetCNController.text) ?? 0;
     
-    // Get chi phi values from existing contract or default to 0
+    // Use updated cost values instead of original contract values
     int chiPhiGiamSat = int.tryParse(_chiPhiGiamSatController.text) ?? 0;
-    int chiPhiVatLieu = _editingContract?.chiPhiVatLieu ?? 0;
-    int chiPhiCVDinhKy = _editingContract?.chiPhiCVDinhKy ?? 0;
-    int chiPhiLeTetTCa = _editingContract?.chiPhiLeTetTCa ?? 0;
-    int chiPhiPhuCap = _editingContract?.chiPhiPhuCap ?? 0;
-    int chiPhiNgoaiGiao = _editingContract?.chiPhiNgoaiGiao ?? 0;
-    int chiPhiMayMoc = _editingContract?.chiPhiMayMoc ?? 0;
-    int chiPhiLuong = _editingContract?.chiPhiLuong ?? 0;
+    int chiPhiVatLieu = _updatedChiPhiVatLieu;
+    int chiPhiCVDinhKy = _updatedChiPhiCVDinhKy;
+    int chiPhiLeTetTCa = _updatedChiPhiLeTetTCa;
+    int chiPhiPhuCap = _updatedChiPhiPhuCap;
+    int chiPhiNgoaiGiao = _updatedChiPhiNgoaiGiao;
+    int chiPhiMayMoc = _updatedChiPhiMayMoc;
+    int chiPhiLuong = _updatedChiPhiLuong;
     
     // Calculate derived values
     _congNhanDuocCo = congNhanHopDong + congNhanHDTang - congNhanHDGiam;
@@ -599,7 +619,13 @@ Map<String, dynamic> _prepareContractData() {
       'chiPhiGiamSat': _parseInt(_chiPhiGiamSatController.text),
       'giaNetCN': _parseInt(_giaNetCNController.text),
       'netVung': _selectedNetVung,
-      
+            'chiPhiVatLieu': _updatedChiPhiVatLieu,
+      'chiPhiCVDinhKy': _updatedChiPhiCVDinhKy,
+      'chiPhiLeTetTCa': _updatedChiPhiLeTetTCa,
+      'chiPhiPhuCap': _updatedChiPhiPhuCap,
+      'chiPhiNgoaiGiao': _updatedChiPhiNgoaiGiao,
+      'chiPhiMayMoc': _updatedChiPhiMayMoc,
+      'chiPhiLuong': _updatedChiPhiLuong,
       // Calculated costs
       'giaTriConLai': _giaTriConLai,
       'netCN': _netCN,
@@ -1379,128 +1405,269 @@ Widget _buildContractPeriodCard() {
   );
 }
 
- Widget _buildCostsCalculationsCard() {
-   return Card(
-     elevation: 4,
-     child: Padding(
-       padding: EdgeInsets.all(16.0),
-       child: Column(
-         crossAxisAlignment: CrossAxisAlignment.start,
-         children: [
-           Text(
-             'Chi phí & Tính toán',
-             style: TextStyle(
-               fontSize: 18,
-               fontWeight: FontWeight.bold,
-               color: Color(0xFF024965),
-             ),
-           ),
-           SizedBox(height: 16),
-           
-           Row(
-             children: [
-               Expanded(
-                 child: TextFormField(
-                   controller: _chiPhiGiamSatController,
-                   decoration: InputDecoration(
-                     labelText: 'Chi phí giám sát',
-                     border: OutlineInputBorder(),
-                     prefixIcon: Icon(Icons.money_off),
-                     suffixText: 'VND',
-                   ),
-                   enabled: _canEditThang,
-                   keyboardType: TextInputType.number,
-                   onChanged: (value) => _calculateDerivedValues(),
-                 ),
-               ),
-               SizedBox(width: 16),
-               Expanded(
-                 child: TextFormField(
-                   controller: _giaNetCNController,
-                   decoration: InputDecoration(
-                     labelText: 'Giá Net CN',
-                     border: OutlineInputBorder(),
-                     prefixIcon: Icon(Icons.price_check),
-                     suffixText: 'VND',
-                   ),
-                   enabled: _canEditThang,
-                   keyboardType: TextInputType.number,
-                   onChanged: (value) => _calculateDerivedValues(),
-                 ),
-               ),
-             ],
-           ),
-           SizedBox(height: 16),
-           
-           DropdownButtonFormField<String>(
-  value: _selectedNetVung.isNotEmpty ? _selectedNetVung : null,
-  decoration: InputDecoration(
-    labelText: 'Net Vùng',
-    border: OutlineInputBorder(),
-    prefixIcon: Icon(Icons.location_city),
+Widget _buildCostsCalculationsCard() {
+  return Card(
+    elevation: 4,
+    child: Padding(
+      padding: EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Chi phí & Tính toán',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF024965),
+            ),
+          ),
+          SizedBox(height: 16),
+          
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _chiPhiGiamSatController,
+                  decoration: InputDecoration(
+                    labelText: 'Chi phí giám sát',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.money_off),
+                    suffixText: 'VND',
+                  ),
+                  enabled: _canEditThang,
+                  keyboardType: TextInputType.number,
+                  onChanged: (value) => _calculateDerivedValues(),
+                ),
+              ),
+              SizedBox(width: 16),
+              Expanded(
+                child: TextFormField(
+                  controller: _giaNetCNController,
+                  decoration: InputDecoration(
+                    labelText: 'Giá Net CN',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.price_check),
+                    suffixText: 'VND',
+                  ),
+                  enabled: _canEditThang,
+                  keyboardType: TextInputType.number,
+                  onChanged: (value) => _calculateDerivedValues(),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 16),
+          
+          DropdownButtonFormField<String>(
+            value: _selectedNetVung.isNotEmpty ? _selectedNetVung : null,
+            decoration: InputDecoration(
+              labelText: 'Net Vùng',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.location_city),
+            ),
+            items: _buildSafeDropdownItems(['Vùng I', 'Vùng II', 'Vùng III'], _selectedNetVung),
+            onChanged: _canEditThang ? (value) {
+              setState(() {
+                _selectedNetVung = value ?? '';
+              });
+            } : null,
+          ),
+          SizedBox(height: 16),
+          
+          // Cost fields with edit buttons
+          Text(
+            'Chi phí tự động (từ bảng tham chiếu):',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[700],
+            ),
+          ),
+          SizedBox(height: 8),
+          
+            Container(
+    padding: EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.grey[50],
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: Colors.grey[300]!),
+    ),
+    child: Column(
+      children: [
+        _buildCostRowWithButton('Chi phí Vật tư', 'VatLieu'),
+        _buildCostRowWithButton('Chi phí CV Định kỳ', 'CVDinhKy'),
+        _buildCostRowWithButton('Chi phí Lễ tết Tăng ca', 'LeTetTCa'),
+        _buildCostRowWithButton('Chi phí Phụ cấp', 'PhuCap'),
+        _buildCostRowWithButton('Chi phí Ngoại giao', 'NgoaiGiao'),
+        _buildCostRowWithButton('Chi phí Máy móc', 'MayMoc'),
+        _buildCostRowWithButton('Chi phí Lương', 'Luong'),
+      ],
+    ),
   ),
-  items: _buildSafeDropdownItems(['Vùng I', 'Vùng II', 'Vùng III'], _selectedNetVung),
-  onChanged: _canEditThang ? (value) {
+          SizedBox(height: 16),
+          
+          // Final calculations
+          Container(
+            padding: EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue[200]!),
+            ),
+            child: Column(
+              children: [
+                _buildCalculatedRow('Giá trị còn lại', _giaTriConLai, 'VND'),
+                _buildCalculatedRow('Net CN', _netCN, 'VND'),
+                _buildCalculatedRow('Chênh lệch giá', _chenhLechGia, 'VND'),
+                _buildCalculatedRow('Chênh lệch tổng', _chenhLechTong, 'VND'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+int _getUpdatedCostValue(String costType) {
+    switch (costType) {
+      case 'VatLieu':
+        return _updatedChiPhiVatLieu;
+      case 'CVDinhKy':
+        return _updatedChiPhiCVDinhKy;
+      case 'LeTetTCa':
+        return _updatedChiPhiLeTetTCa;
+      case 'PhuCap':
+        return _updatedChiPhiPhuCap;
+      case 'NgoaiGiao':
+        return _updatedChiPhiNgoaiGiao;
+      case 'MayMoc':
+        return _updatedChiPhiMayMoc;
+      case 'Luong':
+        return _updatedChiPhiLuong;
+      default:
+        return 0;
+    }
+  }
+ Widget _buildCostRowWithButton(String label, String costType) {
+    int value = _getUpdatedCostValue(costType);
+    String displayValue = NumberFormat('#,##0', 'vi_VN').format(value);
+    
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              '$displayValue VND',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[800],
+              ),
+              textAlign: TextAlign.right,
+            ),
+          ),
+          SizedBox(width: 8),
+          if (_canEditThang)
+            SizedBox(
+              width: 60,
+              height: 28,
+              child: ElevatedButton(
+                onPressed: () => _editCostType(costType),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFF024965),
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  textStyle: TextStyle(fontSize: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                child: Text('Sửa'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+// Method to handle cost editing - will call methods from hd_chiphi.dart
+void _editCostType(String costType) {
+  // Prepare context data for the cost editing
+  final costEditContext = HDChiPhiContext(
+    costType: costType,
+    username: _username,
+    userRole: _userRole,
+    hopDongUid: _editingContract?.uid,
+    hopDongThang: _selectedThang,
+    hopDongTen: _tenHopDongController.text.trim(),
+    hopDongMaKinhDoanh: _maKinhDoanhController.text.trim(),
+    currentPeriod: _currentPeriod,
+    nextPeriod: _nextPeriod,
+    currentCostValue: _getCurrentCostValue(costType),
+    onCostUpdated: _onCostUpdated, // Callback when cost is updated
+  );
+
+  // Call the cost editing method from hd_chiphi.dart
+  HDChiPhi.editCost(
+    context: context,
+    costContext: costEditContext,
+  );
+}
+
+int _getCurrentCostValue(String costType) {
+    return _getUpdatedCostValue(costType); 
+  }
+
+// Callback method when cost is updated from hd_chiphi.dart
+void _onCostUpdated(String costType, int newValue) {
     setState(() {
-      _selectedNetVung = value ?? '';
+      // Update the local cost variables
+      switch (costType) {
+        case 'VatLieu':
+          _updatedChiPhiVatLieu = newValue;
+          break;
+        case 'CVDinhKy':
+          _updatedChiPhiCVDinhKy = newValue;
+          break;
+        case 'LeTetTCa':
+          _updatedChiPhiLeTetTCa = newValue;
+          break;
+        case 'PhuCap':
+          _updatedChiPhiPhuCap = newValue;
+          break;
+        case 'NgoaiGiao':
+          _updatedChiPhiNgoaiGiao = newValue;
+          break;
+        case 'MayMoc':
+          _updatedChiPhiMayMoc = newValue;
+          break;
+        case 'Luong':
+          _updatedChiPhiLuong = newValue;
+          break;
+      }
+      
+      // Recalculate derived values with new cost
+      _calculateDerivedValues();
     });
-  } : null,
-),
-           SizedBox(height: 16),
-           
-           // Read-only cost fields (calculated from references)
-           Text(
-             'Chi phí tự động (từ bảng tham chiếu):',
-             style: TextStyle(
-               fontWeight: FontWeight.bold,
-               color: Colors.grey[700],
-             ),
-           ),
-           SizedBox(height: 8),
-           
-           Container(
-             padding: EdgeInsets.all(12),
-             decoration: BoxDecoration(
-               color: Colors.grey[50],
-               borderRadius: BorderRadius.circular(8),
-               border: Border.all(color: Colors.grey[300]!),
-             ),
-             child: Column(
-               children: [
-                 _buildReadOnlyCostRow('Chi phí Vật tư', _editingContract?.chiPhiVatLieu ?? 0),
-                 _buildReadOnlyCostRow('Chi phí CV Định kỳ', _editingContract?.chiPhiCVDinhKy ?? 0),
-                 _buildReadOnlyCostRow('Chi phí Lễ tết Tăng ca', _editingContract?.chiPhiLeTetTCa ?? 0),
-                 _buildReadOnlyCostRow('Chi phí Phụ cấp', _editingContract?.chiPhiPhuCap ?? 0),
-                 _buildReadOnlyCostRow('Chi phí Ngoại giao', _editingContract?.chiPhiNgoaiGiao ?? 0),
-                 _buildReadOnlyCostRow('Chi phí Máy móc', _editingContract?.chiPhiMayMoc ?? 0),
-                 _buildReadOnlyCostRow('Chi phí Lương', _editingContract?.chiPhiLuong ?? 0),
-               ],
-             ),
-           ),
-           SizedBox(height: 16),
-           
-           // Final calculations
-           Container(
-             padding: EdgeInsets.all(12),
-             decoration: BoxDecoration(
-               color: Colors.blue[50],
-               borderRadius: BorderRadius.circular(8),
-               border: Border.all(color: Colors.blue[200]!),
-             ),
-             child: Column(
-               children: [
-                 _buildCalculatedRow('Giá trị còn lại', _giaTriConLai, 'VND'),
-                 _buildCalculatedRow('Net CN', _netCN, 'VND'),
-                 _buildCalculatedRow('Chênh lệch giá', _chenhLechGia, 'VND'),
-                 _buildCalculatedRow('Chênh lệch tổng', _chenhLechTong, 'VND'),
-               ],
-             ),
-           ),
-         ],
-       ),
-     ),
-   );
- }
+
+    // Show success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Chi phí $costType đã được cập nhật: ${NumberFormat('#,##0', 'vi_VN').format(newValue)} VND'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
 
  Widget _buildAdditionalInfoCard() {
    return Card(

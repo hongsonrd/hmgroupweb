@@ -135,14 +135,17 @@ class DBHelper {
         }
       ),
     );
-
     return db;
-
   } catch (e, stackTrace) {
     print('Error initializing database: $e');
     print('Stack trace: $stackTrace');
     rethrow;
   }
+}
+//ADDON 3:
+Future<void> clearDSHangTable() async {
+  final db = await database;
+  await db.delete('dshang');
 }
 // ==================== Count Methods ====================
 

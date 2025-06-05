@@ -909,33 +909,60 @@ Future<void> _syncDSHangData() async {
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       
-      if (data is List && data.isNotEmpty) {
-        print("Retrieved ${data.length} DSHang items from server");
+      if (data is List) {
+        await _dbHelper.clearDSHangTable();  // Clear all existing data
+        print('Local DSHang table cleared.');
         
-        for (var item in data) {
-          // Debug logging
-          print("Processing DSHang item - UID: ${item['uid']}, tenSanPham: ${item['tenSanPham']}");
+        if (data.isNotEmpty) {
+          print("Retrieved ${data.length} DSHang items from server");
           
-          final dsHang = DSHangModel.fromMap(item);
-          
-          // Check if record exists by UID
-          if (dsHang.uid != null && dsHang.uid!.isNotEmpty) {
-            final existingRecord = await _dbHelper.getDSHangByUID(dsHang.uid!);
-            if (existingRecord != null) {
-              // Update existing record
-              await _dbHelper.updateDSHang(dsHang);
-              print("Updated DSHang record with UID: ${dsHang.uid}");
-            } else {
-              // Insert new record
-              await _dbHelper.insertDSHang(dsHang);
-              print("Inserted new DSHang record with UID: ${dsHang.uid}");
-            }
-          } else {
-            print("Skipping DSHang item with empty UID");
+          final batch = await _dbHelper.startBatch();
+          for (var item in data) {
+            // Debug logging
+            print("Processing DSHang item - UID: ${item['uid']}, tenSanPham: ${item['tenSanPham']}");
+            
+            final dsHang = DSHangModel.fromMap(item);
+            
+            // Add to batch insert with all DSHang fields
+            _dbHelper.addToBatch(batch,
+              'INSERT INTO dshang (uid, sku, counter, maNhapKho, tenModel, tenSanPham, sanPhamGoc, phanLoai1, congDung, chatLieu, mauSac, kichThuoc, dungTich, khoiLuong, quyCachDongGoi, soLuongDongGoi, donVi, kichThuocDongGoi, thuongHieu, nhaCungCap, xuatXu, moTa, hinhAnh, hangTieuHao, coThoiHan, thoiHanSuDung) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              [
+                dsHang.uid,
+                dsHang.sku,
+                dsHang.counter,
+                dsHang.maNhapKho,
+                dsHang.tenModel,
+                dsHang.tenSanPham,
+                dsHang.sanPhamGoc,
+                dsHang.phanLoai1,
+                dsHang.congDung,
+                dsHang.chatLieu,
+                dsHang.mauSac,
+                dsHang.kichThuoc,
+                dsHang.dungTich,
+                dsHang.khoiLuong,
+                dsHang.quyCachDongGoi,
+                dsHang.soLuongDongGoi,
+                dsHang.donVi,
+                dsHang.kichThuocDongGoi,
+                dsHang.thuongHieu,
+                dsHang.nhaCungCap,
+                dsHang.xuatXu,
+                dsHang.moTa,
+                dsHang.hinhAnh,
+                dsHang.hangTieuHao == true ? 1 : 0,  // Convert boolean to int
+                dsHang.coThoiHan == true ? 1 : 0,    // Convert boolean to int
+                dsHang.thoiHanSuDung,
+              ]
+            );
           }
+          await _dbHelper.commitBatch(batch);
+          print('Inserted ${data.length} new DSHang records.');
+        } else {
+          print("No DSHang records received from server to insert after clearing.");
         }
       } else {
-        print("No DSHang data received from server or empty list");
+        print("Received non-list data for DSHang, sync aborted for this table.");
       }
     } else {
       throw Exception('Failed to sync DSHang data. Status code: ${response.statusCode}');

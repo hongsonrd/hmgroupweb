@@ -1074,7 +1074,7 @@ Widget _buildDetailRow(String label, String? value) {
             ),
             DataColumn(
               label: Text(
-                'Địa chỉ',
+                'CN Được có',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF024965),
@@ -1182,12 +1182,11 @@ Widget _buildDetailRow(String label, String? value) {
                   onTap: () => _showContractDetails(contract),
                 ),
                 DataCell(
-                  Container(
-                    width: 120,
-                    child: Text(
-                      contract.diaChi ?? 'N/A',
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 2,
+                  Text(
+                    contract.congNhanDuocCo?.toString()?? '',
+                    style: TextStyle(
+                      color: Colors.green,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                   onTap: () => _showContractDetails(contract),
