@@ -16,7 +16,7 @@ class HDPage extends StatefulWidget {
 }
 
 class _HDPageState extends State<HDPage> {
- late VideoPlayerController _videoController;
+ VideoPlayerController? _videoController;
  bool _isVideoInitialized = false;
  bool _isSyncing = false;
  int _currentSyncStep = 0;
@@ -58,39 +58,36 @@ class _HDPageState extends State<HDPage> {
  }
 
  Future<void> _initializeVideo() async {
-   // Check if running on Windows
-   if (Platform.isWindows) {
-     // For Windows, just set initialized to true (we'll show image instead)
-     setState(() {
-       _isVideoInitialized = true;
-     });
-     return;
-   }
-   // For other platforms, initialize video as before
-   try {
-     _videoController = VideoPlayerController.asset('assets/appvideohopdong.mp4');
-     await _videoController.initialize();
-     _videoController.setLooping(true);
-     _videoController.setVolume(1.0);
-     _videoController.play();
+  if (Platform.isWindows) {
+    setState(() {
+      _isVideoInitialized = true;
+    });
+    return;
+  }
+  
+  try {
+    _videoController = VideoPlayerController.asset('assets/appvideohopdong.mp4');
+    await _videoController!.initialize();
+    _videoController!.setLooping(true);
+    _videoController!.setVolume(1.0);
+    _videoController!.play();
 
-     setState(() {
-       _isVideoInitialized = true;
-     });
-     
-     _videoController.addListener(() {
-       if (!_videoController.value.isPlaying && mounted) {
-         _videoController.play();
-       }
-     });
-   } catch (e) {
-     print("Error initializing video: $e");
-     // Fallback to showing image if video fails
-     setState(() {
-       _isVideoInitialized = true;
-     });
-   }
- }
+    setState(() {
+      _isVideoInitialized = true;
+    });
+    
+    _videoController!.addListener(() {
+      if (!_videoController!.value.isPlaying && mounted) {
+        _videoController!.play();
+      }
+    });
+  } catch (e) {
+    print("Error initializing video: $e");
+    setState(() {
+      _isVideoInitialized = true;
+    });
+  }
+}
 
  Future<void> _loadUsername() async {
    final prefs = await SharedPreferences.getInstance();
@@ -236,68 +233,101 @@ class _HDPageState extends State<HDPage> {
    }
  }
 
- Future<void> _performSync() async {
-   final prefs = await SharedPreferences.getInstance();
-   final originalUserState = prefs.getString('current_user');
-   print("ORIGINAL USER STATE in _performSync: $originalUserState");
+Future<void> _performSync() async {
+    final prefs = await SharedPreferences.getInstance();
+    final originalUserState = prefs.getString('current_user');
+    print("ORIGINAL USER STATE in _performSync: $originalUserState");
 
-   for (int step = 0; step < 9; step++) {
-     if (_isVideoInitialized && !_videoController.value.isPlaying && mounted) {
-       _videoController.play();
-     }
+    for (int step = 0; step < 9; step++) {
+      // Add null check before accessing video controller
+      if (!Platform.isWindows && _isVideoInitialized && _videoController != null && !_videoController!.value.isPlaying && mounted) {
+        _videoController!.play();
+      }
 
-     setState(() {
-       _currentSyncStep = step;
-       _syncStepsCompleted[step] = false;
-       _syncFailed = false;
-     });
+      setState(() {
+        _currentSyncStep = step;
+        _syncStepsCompleted[step] = false;
+        _syncFailed = false;
+      });
 
-     try {
-       await Future.microtask(() => _executeSyncStep(step, _username));
+      try {
+        await Future.microtask(() => _executeSyncStep(step, _username));
 
-       setState(() {
-         _syncStepsCompleted[step] = true;
-       });
+        setState(() {
+          _syncStepsCompleted[step] = true;
+          // Enable skip after HopDong sync (step 1) is completed
+          if (step == 1) {
+            _allowSkipSync = true;
+          }
+        });
 
-       await Future.delayed(Duration(milliseconds: 800));
+        await Future.delayed(Duration(milliseconds: 800));
 
-       if (_isVideoInitialized && !_videoController.value.isPlaying && mounted) {
-         _videoController.play();
-       }
-     } catch (e) {
-       print("Error in sync step ${step + 1}: $e");
-       if (mounted) {
-         setState(() {
-           _syncFailed = true;
-           _syncErrorMessage =
-               "Lỗi đồng bộ bước ${step + 1}: ${e.toString()}";
-         });
-         ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(
-             content: Text("Lỗi trong quá trình đồng bộ bước ${step + 1}"),
-             backgroundColor: Colors.red,
-             duration: Duration(seconds: 5),
-           ),
-         );
-       }
-       break;
-     }
-   }
+        // Add null check here too
+        if (!Platform.isWindows && _isVideoInitialized && _videoController != null && !_videoController!.value.isPlaying && mounted) {
+          _videoController!.play();
+        }
+      } catch (e) {
+        print("Error in sync step ${step + 1}: $e");
+        if (mounted) {
+          setState(() {
+            _syncFailed = true;
+            _syncErrorMessage = "Lỗi đồng bộ bước ${step + 1}: ${e.toString()}";
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Lỗi trong quá trình đồng bộ bước ${step + 1}"),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
+        break;
+      }
+    }
 
-   await Future.delayed(Duration(seconds: 1));
+    await Future.delayed(Duration(seconds: 1));
 
-   if (_syncStepsCompleted.every((step) => step == true)) {
-     await prefs.setString('last_sync_time', DateTime.now().toIso8601String());
-   }
+    if (_syncStepsCompleted.every((step) => step == true)) {
+      await prefs.setString('last_sync_time', DateTime.now().toIso8601String());
+    }
 
-   final finalUserState = prefs.getString('current_user');
-   if (originalUserState != finalUserState) {
-     print(
-         "WARNING: User state changed during _performSync! Original: $originalUserState, Final: $finalUserState");
-     await prefs.setString('current_user', originalUserState ?? '');
-     print("RESTORED original user state in _performSync");
-   }
- }
+    final finalUserState = prefs.getString('current_user');
+    if (originalUserState != finalUserState) {
+      print("WARNING: User state changed during _performSync! Original: $originalUserState, Final: $finalUserState");
+      await prefs.setString('current_user', originalUserState ?? '');
+      print("RESTORED original user state in _performSync");
+    }
+  }
+
+  bool _allowSkipSync = false;
+  Future<void> _skipRemainingSync() async {
+    setState(() {
+      _isSyncing = false;
+      // Mark all remaining steps as completed
+      for (int i = 0; i < _syncStepsCompleted.length; i++) {
+        _syncStepsCompleted[i] = true;
+      }
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('last_sync_time', DateTime.now().toIso8601String());
+
+    // Navigate to dashboard
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HDDashboard(
+            currentPeriod: _currentPeriod,
+            nextPeriod: _nextPeriod,
+            username: _username,
+            userRole: _userHdRole,
+          ),
+        ),
+      );
+    }
+  }
 
  Future<void> _executeSyncStep(int step, String usernameForSync) async {
    if (usernameForSync.isEmpty) {
@@ -547,106 +577,128 @@ class _HDPageState extends State<HDPage> {
  }
 
  Widget _buildSyncOverlay() {
-   return Positioned(
-     left: 0,
-     right: 0,
-     top: 0,
-     child: SafeArea(
-       child: Container(
-         margin: EdgeInsets.all(16),
-         padding: EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-         decoration: BoxDecoration(
-           color: Colors.black.withOpacity(0.85),
-           borderRadius: BorderRadius.circular(20),
-           border: Border.all(
-             color: Colors.grey.withOpacity(0.2),
-             width: 0.5,
-           ),
-         ),
-         child: Column(
-           mainAxisSize: MainAxisSize.min,
-           children: [
-             Padding(
-               padding: const EdgeInsets.only(bottom: 12.0),
-               child: Text(
-                 'Đồng bộ hợp đồng',
-                 style: TextStyle(
-                   color: Colors.white,
-                   fontSize: 16,
-                   fontWeight: FontWeight.w600,
-                   letterSpacing: 0.3,
-                 ),
-               ),
-             ),
+    return Positioned(
+      left: 0,
+      right: 0,
+      top: 0,
+      child: SafeArea(
+        child: Container(
+          margin: EdgeInsets.all(16),
+          padding: EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.85),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.grey.withOpacity(0.2),
+              width: 0.5,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: Text(
+                  'Đồng bộ hợp đồng',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
 
-             if (_isSyncing && _currentSyncStep < _stepLabels.length)
-               Padding(
-                 padding: const EdgeInsets.only(bottom: 8.0),
-                 child: Text(
-                   'Đang đồng bộ: ${_stepLabels[_currentSyncStep]}',
-                   style: TextStyle(
-                     color: Colors.blue,
-                     fontSize: 14,
-                     fontWeight: FontWeight.w500,
-                   ),
-                 ),
-               ),
+              if (_isSyncing && _currentSyncStep < _stepLabels.length)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Text(
+                    'Đang đồng bộ: ${_stepLabels[_currentSyncStep]}',
+                    style: TextStyle(
+                      color: Colors.blue,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
 
-             Container(
-               height: 6,
-               margin: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-               child: ClipRRect(
-                 borderRadius: BorderRadius.circular(3),
-                 child: LinearProgressIndicator(
-                   value: _syncStepsCompleted.where((completed) => completed).length / 9.0,
-                   backgroundColor: Colors.grey.withOpacity(0.3),
-                   valueColor: AlwaysStoppedAnimation<Color>(
-                     _syncFailed ? Colors.red : Colors.blue,
-                   ),
-                 ),
-               ),
-             ),
+              Container(
+                height: 6,
+                margin: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: LinearProgressIndicator(
+                    value: _syncStepsCompleted.where((completed) => completed).length / 9.0,
+                    backgroundColor: Colors.grey.withOpacity(0.3),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      _syncFailed ? Colors.red : Colors.blue,
+                    ),
+                  ),
+                ),
+              ),
 
-             Padding(
-               padding: const EdgeInsets.only(bottom: 16.0),
-               child: Text(
-                 '${_syncStepsCompleted.where((completed) => completed).length}/9 bước hoàn thành',
-                 style: TextStyle(
-                   color: Colors.white70,
-                   fontSize: 12,
-                 ),
-               ),
-             ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16.0),
+                child: Text(
+                  '${_syncStepsCompleted.where((completed) => completed).length}/9 bước hoàn thành',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
 
-             if (_syncedCounts.isNotEmpty)
-               Container(
-                 margin: EdgeInsets.only(bottom: 16),
-                 padding: EdgeInsets.all(12),
-                 decoration: BoxDecoration(
-                   color: Colors.grey.withOpacity(0.1),
-                   borderRadius: BorderRadius.circular(8),
-                 ),
-                 child: Column(
-                   children: _syncedCounts.entries.map((entry) {
-                     return Padding(
-                       padding: const EdgeInsets.symmetric(vertical: 2.0),
-                       child: Row(
-                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                         children: [
-                           Text(
-                             entry.key.replaceAll('Link', ''),
-                             style: TextStyle(color: Colors.white70, fontSize: 12),
-                           ),
-                           Text(
-                             '${entry.value} bản ghi',
-                             style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
-                           ),
-                         ],
-                       ),
-                     );
-                   }).toList(),
-                 ),
-               ),
+              // Add skip button after HopDong sync is completed
+              if (_allowSkipSync && _isSyncing && _syncStepsCompleted[1] == true)
+                Container(
+                  margin: EdgeInsets.only(bottom: 16),
+                  width: double.infinity,
+                  height: 36,
+                  child: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    color: Color(0xFFFF9500), // Orange color for skip button
+                    borderRadius: BorderRadius.circular(18),
+                    onPressed: _skipRemainingSync,
+                    child: Text(
+                      'Bỏ qua đồng bộ',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+
+              if (_syncedCounts.isNotEmpty)
+                Container(
+                  margin: EdgeInsets.only(bottom: 16),
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    children: _syncedCounts.entries.map((entry) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              entry.key.replaceAll('Link', ''),
+                              style: TextStyle(color: Colors.white70, fontSize: 12),
+                            ),
+                            Text(
+                              '${entry.value} bản ghi',
+                              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
 
              if (_currentSyncStep == 0 && _syncFailed)
                Container(
@@ -784,51 +836,48 @@ class _HDPageState extends State<HDPage> {
  }
 
   @override
- void dispose() {
-   try {
-     if (!Platform.isWindows && _videoController != null) {
-       _videoController.removeListener(() {});
-       _videoController.pause();
-       _videoController.dispose();
-     }
-   } catch (e) {
-     print("Error disposing video controller: $e");
-   }
-   super.dispose();
- }
+void dispose() {
+  try {
+    if (!Platform.isWindows && _isVideoInitialized && _videoController != null) {
+      _videoController!.removeListener(() {});
+      _videoController!.pause();
+      _videoController!.dispose();
+    }
+  } catch (e) {
+    print("Error disposing video controller: $e");
+  }
+  super.dispose();
+}
 Widget _buildBackgroundMedia() {
-   if (Platform.isWindows) {
-     // Show image on Windows
-     return Container(
-       width: double.infinity,
-       height: double.infinity,
-       child: Image.asset(
-         'assets/vidhopdong.png',
-         fit: BoxFit.cover,
-       ),
-     );
-   } else {
-     // Show video on other platforms
-     if (_isVideoInitialized && _videoController.value.isInitialized) {
-       return Center(
-         child: AspectRatio(
-           aspectRatio: _videoController.value.aspectRatio,
-           child: VideoPlayer(_videoController),
-         ),
-       );
-     } else {
-       // Fallback image if video fails to load
-       return Container(
-         width: double.infinity,
-         height: double.infinity,
-         child: Image.asset(
-           'assets/vidhopdong.png',
-           fit: BoxFit.cover,
-         ),
-       );
-     }
-   }
- }
+  if (Platform.isWindows) {
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      child: Image.asset(
+        'assets/vidhopdong.png',
+        fit: BoxFit.cover,
+      ),
+    );
+  } else {
+    if (_isVideoInitialized && _videoController != null && _videoController!.value.isInitialized) {
+      return Center(
+        child: AspectRatio(
+          aspectRatio: _videoController!.value.aspectRatio,
+          child: VideoPlayer(_videoController!),
+        ),
+      );
+    } else {
+      return Container(
+        width: double.infinity,
+        height: double.infinity,
+        child: Image.asset(
+          'assets/vidhopdong.png',
+          fit: BoxFit.cover,
+        ),
+      );
+    }
+  }
+}
  @override
  Widget build(BuildContext context) {
    return Scaffold(

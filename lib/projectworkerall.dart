@@ -490,7 +490,7 @@ Future<void> _copyFromYesterday() async {
       }),
     ).timeout(const Duration(seconds: 300));
     
-    if (response.statusCode == 200 || response.statusCode == 400) {
+    if (response.statusCode == 200) {
       final result = json.decode(response.body);
       final resultString = result.toString();
       debugLog('Batch response: ${resultString.substring(0, resultString.length > 100 ? 100 : resultString.length)}...');

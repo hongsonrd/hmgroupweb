@@ -304,31 +304,34 @@ Future<void> _syncKhachHangContact(String username) async {
 Widget build(BuildContext context) {
   return Scaffold(
     appBar: AppBar(
-      flexibleSpace: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [appBarTop, appBarBottom],
-          ),
-        ),
+  flexibleSpace: Container(
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [appBarTop, appBarBottom],
       ),
-      title: Text('DS khách hàng', style: TextStyle(color: Colors.white),),
-      actions: [
-        IconButton(
-          icon: Icon(Icons.filter_list),
-          onPressed: () {
-            _showFilterDialog();
-          },
-        ),
-        IconButton(
-          icon: Icon(Icons.sort),
-          onPressed: () {
-            _showSortDialog();
-          },
-        ),
-      ],
     ),
+  ),
+  title: Text('DS khách hàng', style: TextStyle(color: Colors.white)),
+  iconTheme: IconThemeData(color: Colors.white), 
+  actions: [
+    TextButton.icon(
+      icon: Icon(Icons.filter_list, color: Colors.white),
+      label: Text('Lọc', style: TextStyle(color: Colors.white)),
+      onPressed: () {
+        _showFilterDialog();
+      },
+    ),
+    TextButton.icon(
+      icon: Icon(Icons.sort, color: Colors.white),
+      label: Text('Sắp xếp', style: TextStyle(color: Colors.white)),
+      onPressed: () {
+        _showSortDialog();
+      },
+    ),
+  ],
+),
     body: Column(
       children: [
         _buildSearchBar(),
@@ -489,79 +492,147 @@ Widget build(BuildContext context) {
       ),
     );
   }
-
-  Widget _buildCustomerCard(KhachHangModel customer) {
-    return Card(
-      margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: ExpansionTile(
-        title: Text(
-          customer.tenDuAn ?? 'Không có tên',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Text(
-          '${customer.phanLoai ?? ''} ${customer.vungMien != null ? '• ${customer.vungMien}' : ''}',
-          style: TextStyle(fontSize: 12),
-        ),
-        expandedCrossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (customer.tenKyThuat != null && customer.tenKyThuat!.isNotEmpty)
-                  _buildInfoRow('Tên kỹ thuật:', customer.tenKyThuat!),
-                if (customer.diaChi != null && customer.diaChi!.isNotEmpty)
-                  _buildInfoRow('Địa chỉ:', customer.diaChi!),
-                if (customer.diaChiVanPhong != null && customer.diaChiVanPhong!.isNotEmpty)
-                  _buildInfoRow('Địa chỉ VP:', customer.diaChiVanPhong!),
-                if (customer.soDienThoai != null && customer.soDienThoai!.isNotEmpty)
-                  _buildInfoRow('Điện thoại:', customer.soDienThoai!, isPhone: true),
-                if (customer.website != null && customer.website!.isNotEmpty)
-                  _buildInfoRow('Website:', customer.website!),
-                if (customer.email != null && customer.email!.isNotEmpty)
-                  _buildInfoRow('Email:', customer.email!),
-                if (customer.maSoThue != null && customer.maSoThue!.isNotEmpty)
-                  _buildInfoRow('Mã số thuế:', customer.maSoThue!),
-                if (customer.giamSat != null && customer.giamSat!.isNotEmpty)
-                  _buildInfoRow('Giám sát:', customer.giamSat!),
-                if (customer.qldv != null && customer.qldv!.isNotEmpty)
-                  _buildInfoRow('QLDV:', customer.qldv!),
-                if (customer.ghiChu != null && customer.ghiChu!.isNotEmpty)
-                  _buildInfoRow('Ghi chú:', customer.ghiChu!),
-                if (customer.ngayCapNhatCuoi != null)
-                  _buildInfoRow('Cập nhật:', DateFormat('dd/MM/yyyy').format(customer.ngayCapNhatCuoi!)),
-                
-                SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    if (customer.soDienThoai != null && customer.soDienThoai!.isNotEmpty)
-                      ElevatedButton.icon(
-                        icon: Icon(Icons.call),
-                        label: Text('Gọi'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: buttonColor,
-                        ),
-                        onPressed: () => _callCustomer(customer.soDienThoai!),
-                      ),
-                    ElevatedButton.icon(
-                      icon: Icon(Icons.directions),
-                      label: Text('Chỉ đường'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: buttonColor,
-                      ),
-                      onPressed: () => _openMaps(customer.diaChi ?? ''),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
+void _editCustomer(KhachHangModel customer) {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => AddKhachHangScreen(
+        editingCustomer: customer, 
       ),
-    );
+    ),
+  ).then((value) {
+    if (value == true) {
+      _refreshData();
+    }
+  });
+}
+  Widget _buildCustomerCard(KhachHangModel customer) {
+  // Determine VungMien color and text
+  Color vungMienColor;
+  String vungMienText = '?';
+  
+  if (customer.vungMien != null && customer.vungMien!.isNotEmpty) {
+    vungMienText = customer.vungMien!.substring(0, 1).toUpperCase();
+    switch (customer.vungMien!.toLowerCase()) {
+      case 'bắc':
+        vungMienColor = Colors.blue;
+        break;
+      case 'trung':
+        vungMienColor = Colors.red;
+        break;
+      default:
+        vungMienColor = Colors.green;
+    }
+  } else {
+    vungMienColor = Colors.grey;
   }
+
+  return Card(
+    margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    child: ExpansionTile(
+      leading: CircleAvatar(
+        backgroundColor: vungMienColor,
+        radius: 20,
+        child: Text(
+          vungMienText,
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+      ),
+      title: Text(
+        customer.tenDuAn ?? 'Không có tên',
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Colors.black87, // Explicitly set black color
+        ),
+      ),
+      subtitle: Text(
+        [
+          customer.nguoiDung ?? '',
+          customer.phanLoai ?? '',
+          customer.loaiCongTrinh ?? '',
+        ].where((text) => text.isNotEmpty).join(' • '),
+        style: TextStyle(
+          fontSize: 12,
+          color: Colors.grey[600], // Explicitly set grey color
+        ),
+      ),
+      // Remove iconColor and collapsedIconColor to use default colors
+      expandedCrossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (customer.tenKyThuat != null && customer.tenKyThuat!.isNotEmpty)
+                _buildInfoRow('Tên kỹ thuật:', customer.tenKyThuat!),
+              if (customer.diaChi != null && customer.diaChi!.isNotEmpty)
+                _buildInfoRow('Địa chỉ:', customer.diaChi!),
+              if (customer.diaChiVanPhong != null && customer.diaChiVanPhong!.isNotEmpty)
+                _buildInfoRow('Địa chỉ VP:', customer.diaChiVanPhong!),
+              if (customer.soDienThoai != null && customer.soDienThoai!.isNotEmpty)
+                _buildInfoRow('Điện thoại:', customer.soDienThoai!, isPhone: true),
+              if (customer.website != null && customer.website!.isNotEmpty)
+                _buildInfoRow('Website:', customer.website!),
+              if (customer.email != null && customer.email!.isNotEmpty)
+                _buildInfoRow('Email:', customer.email!),
+              if (customer.maSoThue != null && customer.maSoThue!.isNotEmpty)
+                _buildInfoRow('Mã số thuế:', customer.maSoThue!),
+              if (customer.giamSat != null && customer.giamSat!.isNotEmpty)
+                _buildInfoRow('Giám sát:', customer.giamSat!),
+              if (customer.qldv != null && customer.qldv!.isNotEmpty)
+                _buildInfoRow('QLDV:', customer.qldv!),
+              if (customer.ghiChu != null && customer.ghiChu!.isNotEmpty)
+                _buildInfoRow('Ghi chú:', customer.ghiChu!),
+              if (customer.ngayCapNhatCuoi != null)
+                _buildInfoRow('Cập nhật:', DateFormat('dd/MM/yyyy').format(customer.ngayCapNhatCuoi!)),
+              
+              SizedBox(height: 16),
+              Row(
+  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+  children: [
+    // Edit button (NEW)
+    ElevatedButton.icon(
+      icon: Icon(Icons.edit, color: Colors.white),
+      label: Text('Sửa', style: TextStyle(color: Colors.white)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.orange,
+        foregroundColor: Colors.white,
+      ),
+      onPressed: () => _editCustomer(customer),
+    ),
+    if (customer.soDienThoai != null && customer.soDienThoai!.isNotEmpty)
+      ElevatedButton.icon(
+        icon: Icon(Icons.call, color: Colors.white),
+        label: Text('Gọi', style: TextStyle(color: Colors.white)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: buttonColor,
+          foregroundColor: Colors.white,
+        ),
+        onPressed: () => _callCustomer(customer.soDienThoai!),
+      ),
+    ElevatedButton.icon(
+      icon: Icon(Icons.directions, color: Colors.white),
+      label: Text('Chỉ đường', style: TextStyle(color: Colors.white)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: buttonColor,
+        foregroundColor: Colors.white,
+      ),
+      onPressed: () => _openMaps(customer.diaChi ?? ''),
+    ),
+  ],
+),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildInfoRow(String label, String value, {bool isPhone = false}) {
     return Padding(
@@ -753,6 +824,8 @@ Widget build(BuildContext context) {
   }
 }
 class AddKhachHangScreen extends StatefulWidget {
+  final KhachHangModel? editingCustomer; 
+  const AddKhachHangScreen({Key? key, this.editingCustomer}) : super(key: key);
   @override
   _AddKhachHangScreenState createState() => _AddKhachHangScreenState();
 }
@@ -761,10 +834,11 @@ class _AddKhachHangScreenState extends State<AddKhachHangScreen>
     with SingleTickerProviderStateMixin { 
   final _formKey = GlobalKey<FormState>();
   final _contactFormKey = GlobalKey<FormState>();
-  
+    bool get isEditMode => widget.editingCustomer != null;
   // Customer data
   Map<String, dynamic> newCustomer = {};
-  
+    final DBHelper _dbHelper = DBHelper();
+
   // Contact list
   List<KhachHangContactDraft> contacts = [];
   
@@ -855,7 +929,17 @@ class _AddKhachHangScreenState extends State<AddKhachHangScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     
-    // Set initial values
+    if (isEditMode) {
+      // Load existing customer data for editing
+      _loadExistingCustomerData();
+    } else {
+      // Create new customer (existing logic)
+      _initializeNewCustomer();
+    }
+  }
+  
+  // Extract the new customer initialization logic into a separate method
+  void _initializeNewCustomer() {
     final userCredentials = Provider.of<UserCredentials>(context, listen: false);
     final username = userCredentials.username;
     
@@ -878,6 +962,86 @@ class _AddKhachHangScreenState extends State<AddKhachHangScreen>
     String formattedDateTime = _formatDateTimeForDb(now);
     newCustomer['ngayCapNhatCuoi'] = formattedDateTime;
     newCustomer['ngayKhoiTao'] = formattedDateTime;
+  }
+  
+  // Add this method to load existing customer data
+  void _loadExistingCustomerData() async {
+    if (widget.editingCustomer == null) return;
+    
+    final customer = widget.editingCustomer!;
+    
+    // Populate customer data
+    newCustomer['uid'] = customer.uid;
+    newCustomer['nguoiDung'] = customer.nguoiDung;
+    newCustomer['phanLoai'] = customer.phanLoai;
+    newCustomer['loaiHinh'] = customer.loaiHinh;
+    newCustomer['ngayKhoiTao'] = customer.ngayKhoiTao != null 
+        ? _formatDateTimeForDb(customer.ngayKhoiTao!) 
+        : _formatDateTimeForDb(DateTime.now());
+    
+    // Update ngayCapNhatCuoi to current time for edits
+    final now = DateTime.now();
+    newCustomer['ngayCapNhatCuoi'] = _formatDateTimeForDb(now);
+    
+    // Populate form controllers
+    tenDuAnController.text = customer.tenDuAn ?? '';
+    ghiChuController.text = customer.ghiChu ?? '';
+    diaChiController.text = customer.diaChi ?? '';
+    maSoThueController.text = customer.maSoThue ?? '';
+    soDienThoaiController.text = customer.soDienThoai ?? '';
+    faxController.text = customer.fax ?? '';
+    websiteController.text = customer.website ?? '';
+    emailController.text = customer.email ?? '';
+    soTaiKhoanController.text = customer.soTaiKhoan ?? '';
+    nganHangController.text = customer.nganHang ?? '';
+    tinhThanhController.text = customer.tinhThanh ?? '';
+    quanHuyenController.text = customer.quanHuyen ?? '';
+    phuongXaController.text = customer.phuongXa ?? '';
+    duKienTrienKhaiController.text = customer.duKienTrienKhai ?? '';
+    tiemNangDVTMController.text = customer.tiemNangDVTM ?? '';
+    yeuCauNhanSuController.text = customer.yeuCauNhanSu ?? '';
+    cachThucTuyenController.text = customer.cachThucTuyen ?? '';
+    mucLuongTuyenController.text = customer.mucLuongTuyen ?? '';
+    luongBPController.text = customer.luongBP ?? '';
+    
+    // Set dropdown values
+    setState(() {
+      selectedDanhDau = customer.danhDau;
+      selectedVungMien = customer.vungMien;
+      selectedLoaiHinh = customer.loaiHinh ?? 'Dự án';
+      selectedLoaiCongTrinh = customer.loaiCongTrinh;
+      selectedTrangThaiHopDong = customer.trangThaiHopDong;
+      selectedLoaiMuaHang = customer.loaiMuaHang;
+      selectedKenhTiepCan = customer.kenhTiepCan;
+    });
+    
+    // Load existing contacts
+    await _loadExistingContacts(customer.uid!);
+  }
+  
+  // Add this method to load existing contacts
+  Future<void> _loadExistingContacts(String customerUid) async {
+    try {
+      final contactList = await _dbHelper.getContactsByCustomerUid(customerUid);
+      
+      setState(() {
+        contacts = contactList.map((contact) => KhachHangContactDraft(
+          uid: contact.uid ?? _generateContactUuid(),
+          boPhan: contact.boPhan ?? customerUid,
+          nguoiDung: contact.nguoiDung ?? '',
+          ngayTao: contact.ngayTao?.toString() ?? _formatDateTimeForDb(DateTime.now()),
+          ngayCapNhat: _formatDateTimeForDb(DateTime.now()),
+          hoTen: contact.hoTen ?? '',
+          gioiTinh: contact.gioiTinh ?? '',
+          chucDanh: contact.chucDanh ?? '',
+          soDienThoai: contact.soDienThoai ?? '',
+          email: contact.email ?? '',
+          nguonGoc: contact.nguonGoc ?? '',
+        )).toList();
+      });
+    } catch (e) {
+      print('Error loading existing contacts: $e');
+    }
   }
   
   @override
@@ -1319,58 +1483,65 @@ class _AddKhachHangScreenState extends State<AddKhachHangScreen>
   }
   
   Future<Map<String, dynamic>> _submitCustomer() async {
-    final String endpoint = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelkhachhangmoi';
+  final String endpoint = isEditMode 
+    ? 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelkhachhangupdate'
+    : 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelkhachhangmoi';
+  
+  final response = await http.post(
+    Uri.parse(endpoint),
+    headers: {'Content-Type': 'application/json'},
+    body: json.encode(newCustomer),
+  );
+  
+  print('Customer request body: ${json.encode(newCustomer)}');
+  print('Customer response code: ${response.statusCode}');
+  print('Customer response body: ${response.body}');
+  
+  if (response.statusCode == 200) {
+    return {
+      'success': true,
+      'message': isEditMode 
+        ? 'Dữ liệu khách hàng đã được cập nhật thành công'
+        : 'Dữ liệu khách hàng đã được gửi thành công',
+      'response': response.body,
+    };
+  } else {
+    throw Exception('Failed to ${isEditMode ? "update" : "submit"} customer data: ${response.statusCode}, ${response.body}');
+  }
+}
+
+Future<List<Map<String, dynamic>>> _submitContacts() async {
+  final String endpoint = isEditMode
+    ? 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelcontactupdate'
+    : 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelcontactmoi';
+    
+  List<Map<String, dynamic>> results = [];
+  
+  for (var contact in contacts) {
+    final requestBody = contact.toMap();
     
     final response = await http.post(
       Uri.parse(endpoint),
       headers: {'Content-Type': 'application/json'},
-      body: json.encode(newCustomer),
+      body: json.encode(requestBody),
     );
     
-    print('Customer request body: ${json.encode(newCustomer)}');
-    print('Customer response code: ${response.statusCode}');
-    print('Customer response body: ${response.body}');
+    print('Contact request body: ${json.encode(requestBody)}');
+    print('Contact response code: ${response.statusCode}');
+    print('Contact response body: ${response.body}');
     
-    if (response.statusCode == 200) {
-      return {
-        'success': true,
-        'message': 'Dữ liệu khách hàng đã được gửi thành công',
-        'response': response.body,
-      };
-    } else {
-      throw Exception('Failed to submit customer data: ${response.statusCode}, ${response.body}');
-    }
+    results.add({
+      'contact': contact.hoTen,
+      'success': response.statusCode == 200,
+      'message': response.statusCode == 200 
+        ? 'Thành công' 
+        : 'Lỗi: ${response.statusCode}',
+      'response': response.body,
+    });
   }
   
-  Future<List<Map<String, dynamic>>> _submitContacts() async {
-    final String endpoint = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelcontactmoi';
-    List<Map<String, dynamic>> results = [];
-    
-    for (var contact in contacts) {
-      final requestBody = contact.toMap();
-      
-      final response = await http.post(
-        Uri.parse(endpoint),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(requestBody),
-      );
-      
-      print('Contact request body: ${json.encode(requestBody)}');
-      print('Contact response code: ${response.statusCode}');
-      print('Contact response body: ${response.body}');
-      
-      results.add({
-        'contact': contact.hoTen,
-        'success': response.statusCode == 200,
-        'message': response.statusCode == 200 
-          ? 'Thành công' 
-          : 'Lỗi: ${response.statusCode}',
-        'response': response.body,
-      });
-    }
-    
-    return results;
-  }
+  return results;
+}
   
   void _showSubmitRecapDialog(
     Map<String, dynamic> customerResult,
@@ -1455,25 +1626,25 @@ class _AddKhachHangScreenState extends State<AddKhachHangScreen>
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          flexibleSpace: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [appBarTop, appBarBottom],
-              ),
-            ),
-          ),
-          title: Text('Thêm khách hàng mới'),
-          bottom: TabBar(
-            controller: _tabController,
-            indicatorColor: Colors.white,
-            tabs: [
-              Tab(text: 'Thông tin khách hàng'),
-              Tab(text: 'Người liên hệ'),
-            ],
-          ),
-        ),
+  flexibleSpace: Container(
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [appBarTop, appBarBottom],
+      ),
+    ),
+  ),
+  title: Text(isEditMode ? 'Chỉnh sửa khách hàng' : 'Thêm khách hàng mới'),
+  bottom: TabBar(
+    controller: _tabController,
+    indicatorColor: Colors.white,
+    tabs: [
+      Tab(text: 'Thông tin khách hàng'),
+      Tab(text: 'Người liên hệ'),
+    ],
+  ),
+),
         body: TabBarView(
           controller: _tabController,
           children: [
@@ -1528,7 +1699,7 @@ class _AddKhachHangScreenState extends State<AddKhachHangScreen>
                         'Khách thương mại', 'Du thuyền', 'Cty Dịch vụ', 'Căn hộ dịch vụ',
                         'Khu đô thị', 'Chung cư', 'Tòa nhà cao cấp', 'VP lẻ',
                         'Trung tâm thương mại', 'Homestay', 'Khách sạn'
-                      ],
+                      ].toSet().toList(),
                       selectedLoaiCongTrinh,
                       (value) => setState(() => selectedLoaiCongTrinh = value),
                       validator: (value) => value == null ? 'Vui lòng chọn loại công trình' : null,
@@ -1717,28 +1888,28 @@ class _AddKhachHangScreenState extends State<AddKhachHangScreen>
                         ),
                         onPressed: _isSubmitting ? null : _submitData,
                         child: _isSubmitting 
-                          ? Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                                SizedBox(width: 10),
-                                Text(
-                                  'Đang gửi dữ liệu...',
-                                  style: TextStyle(fontSize: 16),
-                                ),
-                              ],
-                            )
-                          : Text(
-                              'Gửi dữ liệu lên server',
-                              style: TextStyle(fontSize: 16),
-                            ),
+  ? Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            color: Colors.white,
+            strokeWidth: 2,
+          ),
+        ),
+        SizedBox(width: 10),
+        Text(
+          isEditMode ? 'Đang cập nhật dữ liệu...' : 'Đang gửi dữ liệu...',
+          style: TextStyle(fontSize: 16),
+        ),
+      ],
+    )
+  : Text(
+      isEditMode ? 'Cập nhật dữ liệu' : 'Gửi dữ liệu lên server',
+      style: TextStyle(fontSize: 16),
+    ),
                       ),
                     ),
                   ],

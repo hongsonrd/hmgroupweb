@@ -147,6 +147,18 @@ Future<void> clearDSHangTable() async {
   final db = await database;
   await db.delete('dshang');
 }
+Future<List<KhachHangContactModel>> getContactsByCustomerUid(String customerUid) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    'khachhangcontact',
+    where: 'boPhan = ?',
+    whereArgs: [customerUid],
+  );
+
+  return List.generate(maps.length, (i) {
+    return KhachHangContactModel.fromMap(maps[i]);
+  });
+}
 // ==================== Count Methods ====================
 
 /// Gets the total count of records in the DonHang table.

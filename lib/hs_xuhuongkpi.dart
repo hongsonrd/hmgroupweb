@@ -382,165 +382,237 @@ class _HSXuHuongKPIScreenState extends State<HSXuHuongKPIScreen>
 }
 
   Future<void> _loadTransactionKPI() async {
-    try {
-      // Get all customers created up to end date for L1/L2 (D1/D2)
-      final allCustomers = await _dbHelper.getAllKhachHang();
-      final eligibleCustomers = allCustomers.where((customer) {
-        if (customer.ngayKhoiTao == null) return false;
-        return customer.ngayKhoiTao!.isBefore(_endDate.add(Duration(days: 1)));
-      }).toList();
+  try {
+    // Get all customers created up to end date for L1/L2 (D1/D2)
+    final allCustomers = await _dbHelper.getAllKhachHang();
+    final eligibleCustomers = allCustomers.where((customer) {
+      if (customer.ngayKhoiTao == null) return false;
+      return customer.ngayKhoiTao!.isBefore(_endDate.add(Duration(days: 1)));
+    }).toList();
 
-      // Get all customer contacts for D2/L2 calculation
-      final allCustomerContacts = await _dbHelper.getAllKhachHangContact();
+    // Get all customer contacts for D2/L2 calculation
+    final allCustomerContacts = await _dbHelper.getAllKhachHangContact();
 
-      // Get all orders for L3, L4, L5 calculation (within selected period)
-      final allOrders = await _dbHelper.getAllDonHang();
-      final periodOrders = allOrders.where((order) {
-        if (order.ngay == null || order.ngay!.isEmpty) return false;
-        try {
-          DateTime orderDate = DateTime.parse(order.ngay!);
-          return orderDate.isAfter(_startDate.subtract(Duration(days: 1))) &&
-                 orderDate.isBefore(_endDate.add(Duration(days: 1)));
-        } catch (e) {
-          print('Error parsing date: ${order.ngay}');
-          return false;
-        }
-      }).toList();
-
-      // Calculate transaction KPI for each staff
-      final staffTransactionKPIMap = <String, StaffTransactionKPI>{};
-      final transactionDetailsMap = <String, TransactionDetail>{};
-
-      // Initialize staff KPI from both customers and orders
-      final allStaff = <String>{};
-      for (var customer in eligibleCustomers) {
-        if (customer.nguoiDung != null && customer.nguoiDung!.isNotEmpty) {
-          allStaff.add(customer.nguoiDung!);
-        }
+    // Get ALL orders for checking quote history
+    final allOrders = await _dbHelper.getAllDonHang();
+    
+    // Get orders within selected period for L3, L4, L5 calculation
+    final periodOrders = allOrders.where((order) {
+      if (order.ngay == null || order.ngay!.isEmpty) return false;
+      try {
+        DateTime orderDate = DateTime.parse(order.ngay!);
+        return orderDate.isAfter(_startDate.subtract(Duration(days: 1))) &&
+               orderDate.isBefore(_endDate.add(Duration(days: 1)));
+      } catch (e) {
+        print('Error parsing date: ${order.ngay}');
+        return false;
       }
-      for (var order in periodOrders) {
-        if (order.nguoiTao != null && order.nguoiTao!.isNotEmpty) {
-          allStaff.add(order.nguoiTao!);
-        }
+    }).toList();
+
+    // Calculate transaction KPI for each staff
+    final staffTransactionKPIMap = <String, StaffTransactionKPI>{};
+    final transactionDetailsMap = <String, TransactionDetail>{};
+
+    // Initialize staff KPI from both customers and orders
+    final allStaff = <String>{};
+    for (var customer in eligibleCustomers) {
+      if (customer.nguoiDung != null && customer.nguoiDung!.isNotEmpty) {
+        allStaff.add(customer.nguoiDung!);
       }
-
-      for (var staff in allStaff) {
-        staffTransactionKPIMap[staff] = StaffTransactionKPI(
-          staffName: staff,
-          l1Count: 0,
-          l2Count: 0,
-          l3Count: 0,
-          l4Count: 0,
-          l5Count: 0,
-        );
+    }
+    for (var order in periodOrders) {
+      if (order.nguoiTao != null && order.nguoiTao!.isNotEmpty) {
+        allStaff.add(order.nguoiTao!);
       }
+    }
 
-      // Calculate L1 and L2 (same as D1 and D2)
-      for (var customer in eligibleCustomers) {
-        final staff = customer.nguoiDung ?? 'Unknown';
+    for (var staff in allStaff) {
+      staffTransactionKPIMap[staff] = StaffTransactionKPI(
+        staffName: staff,
+        l1Count: 0,
+        l2Count: 0,
+        l3Count: 0,
+        l4Count: 0,
+        l5Count: 0,
+      );
+    }
 
-        // Calculate L1 (D1): customer with non-blank kenhTiepCan
-        bool isL1 = customer.kenhTiepCan != null && customer.kenhTiepCan!.trim().isNotEmpty;
+    // Calculate L1 and L2 (same as D1 and D2)
+    for (var customer in eligibleCustomers) {
+      final staff = customer.nguoiDung ?? 'Unknown';
+
+      // Calculate L1 (D1): customer with non-blank kenhTiepCan
+      bool isL1 = customer.kenhTiepCan != null && customer.kenhTiepCan!.trim().isNotEmpty;
+      
+      // Calculate L2 (D2): L1 + filled out info + contact record
+      bool isL2 = false;
+      if (isL1) {
+        // Check if basic info is filled
+        bool hasBasicInfo = (customer.tenDuAn != null && customer.tenDuAn!.trim().isNotEmpty) &&
+                           (customer.soDienThoai != null && customer.soDienThoai!.trim().isNotEmpty) &&
+                           (customer.phanLoai != null && customer.phanLoai!.trim().isNotEmpty);
         
-        // Calculate L2 (D2): L1 + filled out info + contact record
-        bool isL2 = false;
-        if (isL1) {
-          // Check if basic info is filled
-          bool hasBasicInfo = (customer.tenDuAn != null && customer.tenDuAn!.trim().isNotEmpty) &&
-                             (customer.soDienThoai != null && customer.soDienThoai!.trim().isNotEmpty) &&
-                             (customer.phanLoai != null && customer.phanLoai!.trim().isNotEmpty);
+        if (hasBasicInfo) {
+          // Check if there's at least one contact record with matching boPhan
+          bool hasContactRecord = allCustomerContacts.any((contact) => 
+            contact.boPhan != null && 
+            customer.uid != null && 
+            contact.boPhan == customer.uid
+          );
           
-          if (hasBasicInfo) {
-            // Check if there's at least one contact record with matching boPhan
-            bool hasContactRecord = allCustomerContacts.any((contact) => 
-              contact.boPhan != null && 
-              customer.uid != null && 
-              contact.boPhan == customer.uid
-            );
-            
-            isL2 = hasContactRecord;
-          }
-        }
-
-        // Update L1 and L2 counts
-        if (staffTransactionKPIMap.containsKey(staff)) {
-          if (isL1) {
-            staffTransactionKPIMap[staff]!.l1Count++;
-          }
-          if (isL2) {
-            staffTransactionKPIMap[staff]!.l2Count++;
-          }
+          isL2 = hasContactRecord;
         }
       }
 
-      // Calculate L3, L4, L5 from orders within selected period
-      for (var order in periodOrders) {
-        if (order.trangThai != 'Báo giá') continue; // Only quote orders
-        if (order.nguoiTao == null || order.nguoiTao!.isEmpty) continue;
-
-        final staff = order.nguoiTao!;
-        
-        // L3: All quote orders in period
-        if (staffTransactionKPIMap.containsKey(staff)) {
-          staffTransactionKPIMap[staff]!.l3Count++;
+      // Update L1 and L2 counts
+      if (staffTransactionKPIMap.containsKey(staff)) {
+        if (isL1) {
+          staffTransactionKPIMap[staff]!.l1Count++;
         }
+        if (isL2) {
+          staffTransactionKPIMap[staff]!.l2Count++;
+        }
+      }
+    }
 
-        // L4 and L5: Based on delivery date difference
-        if (order.ngayYeuCauGiao != null && order.ngayYeuCauGiao!.isNotEmpty) {
-          try {
-            DateTime orderDate = DateTime.parse(order.ngay!);
-            DateTime deliveryDate = DateTime.parse(order.ngayYeuCauGiao!);
-            int daysDifference = deliveryDate.difference(orderDate).inDays;
+    // NEW L3 CALCULATION: First-time quote customers within selected period
+    // Group all quote orders by customer name to track quote history
+    final quoteOrdersByCustomer = <String, List<dynamic>>{};
+    
+    for (var order in allOrders) {
+      if (order.trangThai != 'Báo giá') continue;
+      if (order.ngay == null || order.ngay!.isEmpty) continue;
+      
+      final customerName = order.tenKhachHang ?? order.tenKhachHang2 ?? '';
+      if (customerName.isEmpty) continue;
+      
+      if (!quoteOrdersByCustomer.containsKey(customerName)) {
+        quoteOrdersByCustomer[customerName] = [];
+      }
+      quoteOrdersByCustomer[customerName]!.add(order);
+    }
 
+    // For each customer, find their first quote and check if it's in the selected period
+    for (var customerName in quoteOrdersByCustomer.keys) {
+      final customerQuotes = quoteOrdersByCustomer[customerName]!;
+      
+      // Sort quotes by date to find the first one
+      customerQuotes.sort((a, b) {
+        try {
+          DateTime dateA = a.ngay != null && a.ngay!.isNotEmpty 
+              ? DateTime.parse(a.ngay!) 
+              : DateTime(3000); // Put invalid dates at the end
+          DateTime dateB = b.ngay != null && b.ngay!.isNotEmpty 
+              ? DateTime.parse(b.ngay!) 
+              : DateTime(3000);
+          return dateA.compareTo(dateB);
+        } catch (e) {
+          return 0;
+        }
+      });
+      
+      // Check if the first quote is within the selected period
+      final firstQuote = customerQuotes.first;
+      try {
+        if (firstQuote.ngay != null && firstQuote.ngay!.isNotEmpty) {
+          DateTime firstQuoteDate = DateTime.parse(firstQuote.ngay!);
+          
+          // Check if first quote is within selected period
+          bool isFirstQuoteInPeriod = firstQuoteDate.isAfter(_startDate.subtract(Duration(days: 1))) &&
+                                     firstQuoteDate.isBefore(_endDate.add(Duration(days: 1)));
+          
+          if (isFirstQuoteInPeriod && firstQuote.nguoiTao != null && firstQuote.nguoiTao!.isNotEmpty) {
+            final staff = firstQuote.nguoiTao!;
             if (staffTransactionKPIMap.containsKey(staff)) {
-              if (daysDifference > 40) {
-                staffTransactionKPIMap[staff]!.l4Count++;
-              } else {
-                staffTransactionKPIMap[staff]!.l5Count++;
-              }
+              staffTransactionKPIMap[staff]!.l3Count++;
             }
 
-            // Create transaction detail
-            String transactionKey = '${order.soPhieu}_${order.ngay}';
-            transactionDetailsMap[transactionKey] = TransactionDetail(
-              orderId: order.soPhieu ?? '',
-              customerName: order.tenKhachHang ?? order.tenKhachHang2 ?? '',
-              orderDate: orderDate,
-              deliveryDate: deliveryDate,
-              daysDifference: daysDifference,
+            // Create L3 transaction detail
+            String l3TransactionKey = 'L3_${firstQuote.soPhieu}_${firstQuote.ngay}';
+            transactionDetailsMap[l3TransactionKey] = TransactionDetail(
+              orderId: firstQuote.soPhieu ?? '',
+              customerName: customerName,
+              orderDate: firstQuoteDate,
+              deliveryDate: null, // No delivery date for L3
+              daysDifference: null, // No days difference for L3
               assignedStaff: staff,
-              status: order.trangThai ?? '',
-              isL4: daysDifference > 40,
-              isL5: daysDifference <= 40,
+              status: firstQuote.trangThai ?? '',
+              isL3: true,
+              isL4: false,
+              isL5: false,
             );
-          } catch (e) {
-            print('Error parsing dates for order ${order.soPhieu}: $e');
           }
         }
+      } catch (e) {
+        print('Error parsing first quote date for customer $customerName: $e');
       }
-
-      // Apply staff filter
-      List<StaffTransactionKPI> filteredStaffTransactionKPI = staffTransactionKPIMap.values.toList();
-      List<TransactionDetail> filteredTransactionDetails = transactionDetailsMap.values.toList();
-
-      if (_selectedStaff != null && _selectedStaff != 'Tất cả') {
-        filteredStaffTransactionKPI = filteredStaffTransactionKPI.where((kpi) => kpi.staffName == _selectedStaff).toList();
-        filteredTransactionDetails = filteredTransactionDetails.where((detail) => detail.assignedStaff == _selectedStaff).toList();
-      }
-
-      // Sort by total KPI descending
-      filteredStaffTransactionKPI.sort((a, b) => (b.getTotalKPI()).compareTo(a.getTotalKPI()));
-      
-      // Sort transaction details by order date descending
-      filteredTransactionDetails.sort((a, b) => b.orderDate.compareTo(a.orderDate));
-
-      _staffTransactionKPIList = filteredStaffTransactionKPI;
-      _transactionDetails = filteredTransactionDetails;
-
-    } catch (e) {
-      print('Error loading transaction KPI: $e');
     }
+
+    // Calculate L4 and L5 from quote orders within selected period (unchanged)
+    final quoteOrdersInPeriod = periodOrders.where((order) => order.trangThai == 'Báo giá').toList();
+    
+    for (var order in quoteOrdersInPeriod) {
+      if (order.nguoiTao == null || order.nguoiTao!.isEmpty) continue;
+
+      final staff = order.nguoiTao!;
+
+      // L4 and L5: Based on delivery date difference
+      if (order.ngayYeuCauGiao != null && order.ngayYeuCauGiao!.isNotEmpty) {
+        try {
+          DateTime orderDate = DateTime.parse(order.ngay!);
+          DateTime deliveryDate = DateTime.parse(order.ngayYeuCauGiao!);
+          int daysDifference = deliveryDate.difference(orderDate).inDays;
+
+          if (staffTransactionKPIMap.containsKey(staff)) {
+            if (daysDifference > 40) {
+              staffTransactionKPIMap[staff]!.l4Count++;
+            } else {
+              staffTransactionKPIMap[staff]!.l5Count++;
+            }
+          }
+
+          // Create L4/L5 transaction detail
+          String transactionKey = '${order.soPhieu}_${order.ngay}';
+          transactionDetailsMap[transactionKey] = TransactionDetail(
+            orderId: order.soPhieu ?? '',
+            customerName: order.tenKhachHang ?? order.tenKhachHang2 ?? '',
+            orderDate: orderDate,
+            deliveryDate: deliveryDate,
+            daysDifference: daysDifference,
+            assignedStaff: staff,
+            status: order.trangThai ?? '',
+            isL3: false,
+            isL4: daysDifference > 40,
+            isL5: daysDifference <= 40,
+          );
+        } catch (e) {
+          print('Error parsing dates for order ${order.soPhieu}: $e');
+        }
+      }
+    }
+
+    // Apply staff filter
+    List<StaffTransactionKPI> filteredStaffTransactionKPI = staffTransactionKPIMap.values.toList();
+    List<TransactionDetail> filteredTransactionDetails = transactionDetailsMap.values.toList();
+
+    if (_selectedStaff != null && _selectedStaff != 'Tất cả') {
+      filteredStaffTransactionKPI = filteredStaffTransactionKPI.where((kpi) => kpi.staffName == _selectedStaff).toList();
+      filteredTransactionDetails = filteredTransactionDetails.where((detail) => detail.assignedStaff == _selectedStaff).toList();
+    }
+
+    // Sort by total KPI descending
+    filteredStaffTransactionKPI.sort((a, b) => (b.getTotalKPI()).compareTo(a.getTotalKPI()));
+    
+    // Sort transaction details by order date descending
+    filteredTransactionDetails.sort((a, b) => b.orderDate.compareTo(a.orderDate));
+
+    _staffTransactionKPIList = filteredStaffTransactionKPI;
+    _transactionDetails = filteredTransactionDetails;
+
+  } catch (e) {
+    print('Error loading transaction KPI: $e');
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -852,62 +924,62 @@ String _formatCurrency(double amount) {
   return formatter.format(amount);
 }
  Widget _buildStaffTransactionKPITable() {
-   return Card(
-     child: Padding(
-       padding: EdgeInsets.all(16),
-       child: Column(
-         crossAxisAlignment: CrossAxisAlignment.start,
-         children: [
-           Text(
-             'Bảng điểm KPI Giao dịch theo Nhân viên',
-             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-           ),
-           SizedBox(height: 16),
-           SingleChildScrollView(
-             scrollDirection: Axis.horizontal,
-             child: Table(
-               border: TableBorder.all(color: Colors.grey[300]!),
-               columnWidths: {
-                 0: FixedColumnWidth(150),
-                 1: FixedColumnWidth(80),
-                 2: FixedColumnWidth(80),
-                 3: FixedColumnWidth(80),
-                 4: FixedColumnWidth(80),
-                 5: FixedColumnWidth(80),
-                 6: FixedColumnWidth(80),
-               },
-               children: [
-                 TableRow(
-                   decoration: BoxDecoration(color: Colors.green[50]),
-                   children: [
-                     _buildTableHeader('Nhân viên'),
-                     _buildTableHeader('L1\n(Kênh tiếp cận)'),
-                     _buildTableHeader('L2\n(Thông tin đầy đủ)'),
-                     _buildTableHeader('L3\n(Báo giá trong kỳ)'),
-                     _buildTableHeader('L4\n(Giao >40 ngày)'),
-                     _buildTableHeader('L5\n(Giao ≤40 ngày)'),
-                     _buildTableHeader('Tổng'),
-                   ],
-                 ),
-                 ..._staffTransactionKPIList.map((kpi) => TableRow(
-                   children: [
-                     _buildTableCell(kpi.staffName),
-                     _buildTableCell(kpi.l1Count.toString()),
-                     _buildTableCell(kpi.l2Count.toString()),
-                     _buildTableCell(kpi.l3Count.toString()),
-                     _buildTableCell(kpi.l4Count.toString()),
-                     _buildTableCell(kpi.l5Count.toString()),
-                     _buildTableCell(kpi.getTotalKPI().toString()),
-                   ],
-                 )),
-               ],
-             ),
-           ),
-         ],
-       ),
-     ),
-   );
- }
+  return Card(
+    child: Padding(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Bảng điểm KPI Giao dịch theo Nhân viên',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          SizedBox(height: 16),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Table(
+              border: TableBorder.all(color: Colors.grey[300]!),
+              columnWidths: {
+                0: FixedColumnWidth(150),
+                1: FixedColumnWidth(80),
+                2: FixedColumnWidth(80),
+                3: FixedColumnWidth(100), // Slightly wider for longer text
+                4: FixedColumnWidth(80),
+                5: FixedColumnWidth(80),
+                6: FixedColumnWidth(80),
+              },
+              children: [
+                TableRow(
+                  decoration: BoxDecoration(color: Colors.green[50]),
+                  children: [
+                    _buildTableHeader('Nhân viên'),
+                    _buildTableHeader('L1\n(Kênh tiếp cận)'),
+                    _buildTableHeader('L2\n(Thông tin đầy đủ)'),
+                    _buildTableHeader('L3\n(Báo giá lần đầu trong kỳ)'),
+                    _buildTableHeader('L4\n(Giao >40 ngày)'),
+                    _buildTableHeader('L5\n(Giao ≤40 ngày)'),
+                    _buildTableHeader('Tổng'),
+                  ],
+                ),
+                ..._staffTransactionKPIList.map((kpi) => TableRow(
+                  children: [
+                    _buildTableCell(kpi.staffName),
+                    _buildTableCell(kpi.l1Count.toString()),
+                    _buildTableCell(kpi.l2Count.toString()),
+                    _buildTableCell(kpi.l3Count.toString()),
+                    _buildTableCell(kpi.l4Count.toString()),
+                    _buildTableCell(kpi.l5Count.toString()),
+                    _buildTableCell(kpi.getTotalKPI().toString()),
+                  ],
+                )),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
 
  Widget _buildCustomerDetailsTable() {
   return Card(
@@ -1016,62 +1088,72 @@ String _formatCurrency(double amount) {
 }
 
  Widget _buildTransactionDetailsTable() {
-   return Card(
-     child: Padding(
-       padding: EdgeInsets.all(16),
-       child: Column(
-         crossAxisAlignment: CrossAxisAlignment.start,
-         children: [
-           Text(
-             'Chi tiết Giao dịch (Báo giá trong kỳ)',
-             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-           ),
-           SizedBox(height: 16),
-           SingleChildScrollView(
-             scrollDirection: Axis.horizontal,
-             child: DataTable(
-               border: TableBorder.all(color: Colors.grey[300]!),
-               headingRowColor: MaterialStateProperty.all(Colors.green[50]),
-               columnSpacing: 12,
-               columns: [
-                 DataColumn(label: Text('Mã đơn hàng', style: TextStyle(fontWeight: FontWeight.bold))),
-                 DataColumn(label: Text('Tên khách hàng', style: TextStyle(fontWeight: FontWeight.bold))),
-                 DataColumn(label: Text('Ngày đơn hàng', style: TextStyle(fontWeight: FontWeight.bold))),
-                 DataColumn(label: Text('Ngày yêu cầu giao', style: TextStyle(fontWeight: FontWeight.bold))),
-                 DataColumn(label: Text('Số ngày chênh lệch', style: TextStyle(fontWeight: FontWeight.bold))),
-                 DataColumn(label: Text('Nhân viên', style: TextStyle(fontWeight: FontWeight.bold))),
-                 DataColumn(label: Text('Trạng thái', style: TextStyle(fontWeight: FontWeight.bold))),
-                 DataColumn(label: Text('L4', style: TextStyle(fontWeight: FontWeight.bold))),
-                 DataColumn(label: Text('L5', style: TextStyle(fontWeight: FontWeight.bold))),
-               ],
-               rows: _transactionDetails.map((transaction) => DataRow(
-                 cells: [
-                   DataCell(Text(transaction.orderId)),
-                   DataCell(Text(transaction.customerName)),
-                   DataCell(Text(DateFormat('dd/MM/yyyy').format(transaction.orderDate))),
-                   DataCell(Text(DateFormat('dd/MM/yyyy').format(transaction.deliveryDate))),
-                   DataCell(Text('${transaction.daysDifference} ngày')),
-                   DataCell(Text(transaction.assignedStaff)),
-                   DataCell(Text(transaction.status)),
-                   DataCell(Icon(
-                     transaction.isL4 ? Icons.check_circle : Icons.cancel,
-                     color: transaction.isL4 ? Colors.orange : Colors.grey,
-                     size: 20,
-                   )),
-                   DataCell(Icon(
-                     transaction.isL5 ? Icons.check_circle : Icons.cancel,
-                     color: transaction.isL5 ? Colors.green : Colors.grey,
-                     size: 20,
-                   )),
-                 ],
-               )).toList(),
-             ),
-           ),
-         ],
-       ),
-     ),
-   );
- }
+  return Card(
+    child: Padding(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Chi tiết Giao dịch',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          SizedBox(height: 16),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              border: TableBorder.all(color: Colors.grey[300]!),
+              headingRowColor: MaterialStateProperty.all(Colors.green[50]),
+              columnSpacing: 12,
+              columns: [
+                DataColumn(label: Text('Mã đơn hàng', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Tên khách hàng', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Ngày đơn hàng', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Ngày yêu cầu giao', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Số ngày chênh lệch', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Nhân viên', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Trạng thái', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('L3', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('L4', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('L5', style: TextStyle(fontWeight: FontWeight.bold))),
+              ],
+              rows: _transactionDetails.map((transaction) => DataRow(
+                cells: [
+                  DataCell(Text(transaction.orderId)),
+                  DataCell(Text(transaction.customerName)),
+                  DataCell(Text(DateFormat('dd/MM/yyyy').format(transaction.orderDate))),
+                  DataCell(Text(transaction.deliveryDate != null 
+                      ? DateFormat('dd/MM/yyyy').format(transaction.deliveryDate!) 
+                      : 'N/A')), // Show N/A for L3 records
+                  DataCell(Text(transaction.daysDifference != null 
+                      ? '${transaction.daysDifference} ngày' 
+                      : 'N/A')), // Show N/A for L3 records
+                  DataCell(Text(transaction.assignedStaff)),
+                  DataCell(Text(transaction.status)),
+                  DataCell(Icon(
+                    transaction.isL3 ? Icons.check_circle : Icons.cancel,
+                    color: transaction.isL3 ? Colors.blue : Colors.grey,
+                    size: 20,
+                  )),
+                  DataCell(Icon(
+                    transaction.isL4 ? Icons.check_circle : Icons.cancel,
+                    color: transaction.isL4 ? Colors.orange : Colors.grey,
+                    size: 20,
+                  )),
+                  DataCell(Icon(
+                    transaction.isL5 ? Icons.check_circle : Icons.cancel,
+                    color: transaction.isL5 ? Colors.green : Colors.grey,
+                    size: 20,
+                  )),
+                ],
+              )).toList(),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
 
  Widget _buildTableHeader(String text) {
    return Padding(
@@ -1177,25 +1259,27 @@ class CustomerDetail {
 }
 
 class TransactionDetail {
- final String orderId;
- final String customerName;
- final DateTime orderDate;
- final DateTime deliveryDate;
- final int daysDifference;
- final String assignedStaff;
- final String status;
- final bool isL4;
- final bool isL5;
+  final String orderId;
+  final String customerName;
+  final DateTime orderDate;
+  final DateTime? deliveryDate; 
+  final int? daysDifference;
+  final String assignedStaff;
+  final String status;
+  final bool isL3;
+  final bool isL4;
+  final bool isL5;
 
- TransactionDetail({
-   required this.orderId,
-   required this.customerName,
-   required this.orderDate,
-   required this.deliveryDate,
-   required this.daysDifference,
-   required this.assignedStaff,
-   required this.status,
-   required this.isL4,
-   required this.isL5,
- });
+  TransactionDetail({
+    required this.orderId,
+    required this.customerName,
+    required this.orderDate,
+    this.deliveryDate,
+    this.daysDifference,
+    required this.assignedStaff,
+    required this.status,
+    this.isL3 = false,
+    required this.isL4,
+    required this.isL5,
+  });
 }

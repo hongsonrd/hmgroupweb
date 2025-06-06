@@ -7,6 +7,7 @@ import 'table_models.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'hd_chiphi.dart';
+import 'package:flutter/services.dart';
 
 class HDMoiScreen extends StatefulWidget {
   @override
@@ -16,7 +17,8 @@ class HDMoiScreen extends StatefulWidget {
 class _HDMoiScreenState extends State<HDMoiScreen> {
   final DBHelper _dbHelper = DBHelper();
   final _formKey = GlobalKey<FormState>();
-  
+  final TextEditingController _fileHopDongController = TextEditingController();
+
   // Arguments from navigation
   LinkHopDongModel? _editingContract;
   bool _isEdit = false;
@@ -77,7 +79,7 @@ bool _isDataLoaded = false;
   
   // Dropdown values
   String _selectedVungMien = '';
-  String _selectedTrangThai = 'Duy trì';
+  String _selectedTrangThai = '';
   String _selectedLoaiHinh = '';
   String _selectedNetVung = '';
   
@@ -160,14 +162,13 @@ void didChangeDependencies() {
       _nextPeriod = args['nextPeriod'] as String? ?? '';
       _selectedPeriod = args['selectedPeriod'] as String? ?? '';
       
-      // Set default thang for new contracts (first day of month)
       if (!_isEdit) {
-        _selectedThang = _formatToFirstDayOfMonth(_currentPeriod);
-        // Automatically fetch MaKinhDoanh for new contracts
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _fetchMaKinhDoanh();
-        });
-      }
+  _selectedThang = _formatToFirstDayOfMonth(_currentPeriod);
+  _selectedTrangThai = 'Tăng mới'; // Add this line
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _fetchMaKinhDoanh();
+  });
+}
       
       print('Route arguments loaded:');
       print('isEdit: $_isEdit');
@@ -234,6 +235,7 @@ String _formatToFirstDayOfMonth(String period) {
     _congNhanCaHCController.dispose();
     _congNhanCaKhacController.dispose();
     _congNhanGhiChuBoTriNhanSuController.dispose();
+    _fileHopDongController.dispose();
     super.dispose();
   }
 Future<void> _fetchMaKinhDoanh() async {
@@ -284,7 +286,8 @@ Future<void> _fetchMaKinhDoanh() async {
   void _loadContractData() {
     if (_editingContract != null && !_isDataLoaded) {
       final contract = _editingContract!;
-      
+      _fileHopDongController.text = contract.fileHopDong ?? '';
+
       // Load data synchronously to prevent reset issues
       _tenHopDongController.text = contract.tenHopDong ?? '';
       _maKinhDoanhController.text = contract.maKinhDoanh ?? '';
@@ -579,7 +582,7 @@ Map<String, dynamic> _prepareContractData() {
       'trangThai': _selectedTrangThai,
       'loaiHinh': _selectedLoaiHinh,
       'ghiChuHopDong': _ghiChuHopDongController.text.trim(),
-      
+      'fileHopDong': _fileHopDongController.text.trim(),
       // Worker info - FIX: Send as double, not boolean
       'congNhanHopDong': _parseDouble(_congNhanHopDongController.text),
       'giamSatCoDinh': _parseDouble(_giamSatCoDinhController.text),
@@ -988,6 +991,30 @@ List<DropdownMenuItem<String>> _buildSafeDropdownItems(List<String> predefinedIt
              enabled: _canEditThang,
              maxLines: 3,
            ),
+           SizedBox(height: 16),
+TextFormField(
+  controller: _fileHopDongController,
+  decoration: InputDecoration(
+    labelText: 'Mã số thuế *',
+    border: OutlineInputBorder(),
+    prefixIcon: Icon(Icons.assignment),
+    hintText: '0123456789-001',
+  ),
+  enabled: _canEditThang,
+  keyboardType: TextInputType.text,
+  inputFormatters: [
+    FilteringTextInputFormatter.allow(RegExp(r'[0-9\-]')), 
+  ],
+  validator: (value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Vui lòng nhập mã số thuế';
+    }
+    if (!RegExp(r'^[0-9\-]+$').hasMatch(value.trim())) {
+      return 'Chỉ được nhập số và dấu gạch ngang';
+    }
+    return null;
+  },
+),
          ],
        ),
      ),

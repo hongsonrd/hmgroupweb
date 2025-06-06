@@ -267,23 +267,28 @@ void _navigateToNewContract() {
     );
   }
 
-  bool _canEditContract(LinkHopDongModel contract) {
-    // Admin can edit any contract regardless of period
-    if (widget.userRole.toLowerCase() == 'admin') {
-      return true;
-    }
-    
-    // Regular user can edit only if they are the creator AND it's current or next period
-    String usernameLower = widget.username.toLowerCase();
-    String nguoiTaoLower = (contract.nguoiTao ?? '').toLowerCase();
-    
-    if (usernameLower == nguoiTaoLower) {
-      String contractPeriod = _extractPeriodFromThang(contract.thang);
-      return contractPeriod == widget.currentPeriod || contractPeriod == widget.nextPeriod;
-    }
-    
-    return false;
+bool _canEditContract(LinkHopDongModel contract) {
+  // Admin can edit any contract regardless of period
+  if (widget.userRole.toLowerCase().trim() == 'admin') {
+    return true;
   }
+  
+  // Regular user can edit only if they are the creator AND it's current or next period
+  String usernameLower = widget.username.toLowerCase().trim();
+  String nguoiTaoLower = (contract.nguoiTao ?? '').toLowerCase().trim();
+  
+  if (usernameLower == nguoiTaoLower && nguoiTaoLower.isNotEmpty) {
+    String contractPeriod = _extractPeriodFromThang(contract.thang);
+    
+    // Convert ISO date strings to YYYY-MM format for comparison
+    String currentPeriodFormatted = DateFormat('yyyy-MM').format(DateTime.parse(widget.currentPeriod));
+    String nextPeriodFormatted = DateFormat('yyyy-MM').format(DateTime.parse(widget.nextPeriod));
+    
+    return contractPeriod == currentPeriodFormatted || contractPeriod == nextPeriodFormatted;
+  }
+  
+  return false;
+}
 
   Widget _buildContractDetailDialog(LinkHopDongModel contract) {
   final revenue = _safeToDouble(contract.doanhThuDangThucHien);
@@ -421,6 +426,7 @@ void _navigateToNewContract() {
               if (contract.uid != null) ...[
                 _buildDetailSection('Thông tin hệ thống', [
                   _buildDetailRow('Mã hợp đồng', '${contract.uid}'),
+                  _buildDetailRow('Mã số thuế', '${contract.fileHopDong}'),
                   _buildDetailRow('Ngày cập nhật cuối', _formatDate(contract.ngayCapNhatCuoi)),
                 ]),
               ],

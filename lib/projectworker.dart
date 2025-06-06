@@ -534,7 +534,7 @@ Future<void> _saveChanges() async {
       }),
     ).timeout(const Duration(seconds: 300));
     
-    if (response.statusCode == 200 || response.statusCode == 400) {
+    if (response.statusCode == 200) {
       final result = json.decode(response.body);
 debugLog('Batch response: ${result.toString().substring(0, result.toString().length > 100 ? 100 : result.toString().length)}...');
       
