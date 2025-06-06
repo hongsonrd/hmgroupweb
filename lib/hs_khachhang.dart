@@ -8,10 +8,9 @@ import 'table_models.dart';
 import 'package:url_launcher/url_launcher.dart' as url_launcher;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:math';
-import 'package:provider/provider.dart';
-import 'user_credentials.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'hs_khachhangsua.dart';
+import 'dart:math';
 
 class HSKhachHangScreen extends StatefulWidget {
   @override
@@ -27,7 +26,10 @@ class _HSKhachHangScreenState extends State<HSKhachHangScreen> {
   String _filterBy = 'Tất cả';
   String _sortBy = 'tenDuAn';
   bool _sortAscending = true;
-String? username;
+  String? username;
+    bool _canEdit = false;
+  bool _canAdd = false;
+  Set<String> _allNguoiDungValues = <String>{};
   // Color scheme to match main app
   final Color appBarTop = Color(0xFF024965);
   final Color appBarBottom = Color(0xFF03a6cf);
@@ -40,16 +42,14 @@ String? username;
   @override
   void initState() {
     super.initState();
+    _loadUsername();
     _loadKhachHangData();
     _checkAndPerformDailySync();
   }
-@override
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (username == null) {
-      final userCredentials = Provider.of<UserCredentials>(context, listen: false);
-      username = userCredentials.username.toUpperCase();
-    }
   }
 
   @override
@@ -57,6 +57,102 @@ String? username;
     _searchController.dispose();
     super.dispose();
   }
+  Future<void> _loadUsername() async {
+    print('=== LOADING USERNAME ===');
+    final prefs = await SharedPreferences.getInstance();
+    final userObj = prefs.getString('current_user');
+    print('Raw user object from prefs: $userObj');
+
+    if (userObj != null && userObj.isNotEmpty) {
+      try {
+        final userData = json.decode(userObj);
+        setState(() {
+          username = userData['username']?.toString().toUpperCase() ?? '';
+          print("Loaded username from JSON prefs: $username");
+        });
+      } catch (e) {
+        setState(() {
+          username = userObj.toUpperCase();
+          print("Loaded username directly from prefs: $username");
+        });
+      }
+    } else {
+      print('No user data in SharedPreferences, trying UserCredentials provider');
+      try {
+        final userCredentials = Provider.of<UserCredentials>(context, listen: false);
+        setState(() {
+          username = userCredentials.username.toUpperCase();
+          print("Loaded username from UserCredentials: $username");
+        });
+        
+        await prefs.setString('current_user', username!);
+        print("Saved username to SharedPreferences: $username");
+      } catch (e) {
+        print('Error loading username from UserCredentials: $e');
+        setState(() {
+          username = '';
+          print("Using empty username");
+        });
+      }
+    }
+    print('=== USERNAME LOADING COMPLETE ===');
+  }
+void _checkPermissions() {
+  print('=== CHECKING PERMISSIONS ===');
+  print('Current username: "$username"');
+  print('Username length: ${username?.length ?? 0}');
+  
+  if (username == null || username!.isEmpty) {
+    print('Username is null or empty, cannot check permissions');
+    setState(() {
+      _canAdd = false;
+      _canEdit = false;
+    });
+    return;
+  }
+  // Get all unique nguoiDung values from the customer list
+  _allNguoiDungValues = _khachHangList
+      .where((customer) => customer.nguoiDung != null && customer.nguoiDung!.isNotEmpty)
+      .map((customer) => customer.nguoiDung!.toUpperCase())
+      .toSet();
+  print('Total customers: ${_khachHangList.length}');
+  print('Customers with nguoiDung: ${_khachHangList.where((c) => c.nguoiDung != null && c.nguoiDung!.isNotEmpty).length}');
+  print('All nguoiDung values found: $_allNguoiDungValues');
+  print('Username for comparison: "${username!.toUpperCase()}"');
+  // Add permission: current user exists in any nguoiDung value
+  _canAdd = _allNguoiDungValues.contains(username!.toUpperCase());
+  print('Can add permission: $_canAdd');
+  // Also log some sample customers for debugging
+  if (_khachHangList.isNotEmpty) {
+    print('Sample customer nguoiDung values:');
+    for (int i = 0; i < min(5, _khachHangList.length); i++) {
+      final customer = _khachHangList[i];
+      print('  Customer $i: ${customer.tenDuAn} - nguoiDung: "${customer.nguoiDung}"');
+    }
+  }
+  print('=== PERMISSIONS CHECK COMPLETE ===');
+  setState(() {
+    // Permissions are now calculated
+  });
+}
+bool _canEditCustomer(KhachHangModel customer) {
+  print('--- Checking edit permission for customer ---');
+  print('Customer UID: ${customer.uid}');
+  print('Customer tenDuAn: ${customer.tenDuAn}');
+  print('Customer nguoiDung: ${customer.nguoiDung}');
+  print('Current username: $username');
+  if (username == null || customer.nguoiDung == null) {
+    print('Username or customer.nguoiDung is null - no edit permission');
+    return false;
+  }
+  bool canEdit = username!.toUpperCase() == customer.nguoiDung!.toUpperCase();
+  print('Username uppercase: ${username!.toUpperCase()}');
+  print('Customer nguoiDung uppercase: ${customer.nguoiDung!.toUpperCase()}');
+  print('Can edit: $canEdit');
+  print('--- Edit permission check complete ---');
+  
+  return canEdit;
+}
   Future<void> _checkAndPerformDailySync() async {
     final prefs = await SharedPreferences.getInstance();
     final today = DateTime.now().toIso8601String().substring(0, 10); 
@@ -71,31 +167,46 @@ String? username;
       print('Daily sync already performed today');
     }
   }
+
   Future<void> _loadKhachHangData() async {
+  print('=== LOADING KHACH HANG DATA ===');
+  setState(() {
+    _isLoading = true;
+  });
+  
+  try {
+    final List<KhachHangModel> khachHangData = await _dbHelper.getAllKhachHang();
+    print('Loaded ${khachHangData.length} customers from database');
+    
+    // Log some sample data
+    if (khachHangData.isNotEmpty) {
+      print('Sample customer data:');
+      for (int i = 0; i < min(3, khachHangData.length); i++) {
+        final customer = khachHangData[i];
+        print('  Customer $i: ${customer.tenDuAn} - nguoiDung: "${customer.nguoiDung}"');
+      }
+    }
+    
     setState(() {
-      _isLoading = true;
+      _khachHangList = khachHangData;
+      _filteredList = List.from(khachHangData);
+      _applyFiltersAndSort();
+      _isLoading = false;
     });
     
-    try {
-      final List<KhachHangModel> khachHangData = await _dbHelper.getAllKhachHang();
-      setState(() {
-        _khachHangList = khachHangData;
-        _filteredList = List.from(khachHangData);
-        _applyFiltersAndSort();
-        _isLoading = false;
-      });
-    } catch (e) {
-      print('Error loading customer data: $e');
-      setState(() {
-        _isLoading = false;
-      });
-      
-      // Show error message to user
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Không thể tải dữ liệu khách hàng: $e'))
-      );
-    }
+    // Check permissions after loading data
+    _checkPermissions();
+  } catch (e) {
+    print('Error loading customer data: $e');
+    setState(() {
+      _isLoading = false;
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Không thể tải dữ liệu khách hàng: $e'))
+    );
   }
+}
 
   void _applyFiltersAndSort() {
     // First apply filters
@@ -125,7 +236,6 @@ String? username;
     _filteredList.sort((a, b) {
       dynamic valA, valB;
       
-      // Handle different sort fields
       switch (_sortBy) {
         case 'tenDuAn':
           valA = a.tenDuAn ?? '';
@@ -148,7 +258,6 @@ String? username;
           valB = b.tenDuAn ?? '';
       }
       
-      // Perform comparison based on value types
       int result;
       if (valA is String && valB is String) {
         result = valA.compareTo(valB);
@@ -191,23 +300,30 @@ String? username;
   }
 
   Future<void> _refreshData() async {
+  print('=== REFRESH DATA STARTED ===');
+  
+  // Make sure we have username before proceeding
+  if (username == null || username!.isEmpty) {
+    print('Username not available, reloading...');
+    await _loadUsername();
+  }
+  
   final userCredentials = Provider.of<UserCredentials>(context, listen: false);
-  final username = userCredentials.username;
+  final usernameForSync = userCredentials.username;
+  print('Refresh - username for sync: $usernameForSync');
+  print('Refresh - stored username: $username');
   
   try {
-    // Show refresh indicator
     setState(() {
       _isLoading = true;
     });
     
-    // Sync both KhachHang and KhachHangContact data
     await Future.wait([
-      _syncKhachHang(username),
-      _syncKhachHangContact(username)
+      _syncKhachHang(usernameForSync),
+      _syncKhachHangContact(usernameForSync)
     ]);
     
-    // Reload data from local database
-    await _loadKhachHangData();
+    await _loadKhachHangData(); // This will call _checkPermissions()
     
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Dữ liệu đã được cập nhật'))
@@ -222,66 +338,63 @@ String? username;
       _isLoading = false;
     });
   }
+  print('=== REFRESH DATA COMPLETE ===');
 }
 
-Future<void> _syncKhachHang(String username) async {
-  final String requestUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelkhachhang/$username';
-  print('Making request to: $requestUrl');
-  
-  final response = await http.get(
-    Uri.parse(requestUrl),
-    headers: {'Content-Type': 'application/json'},
-  );
-  
-  if (response.statusCode == 200) {
-    final List<dynamic> khachHangData = json.decode(response.body);
+  Future<void> _syncKhachHang(String username) async {
+    final String requestUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelkhachhang/$username';
+    print('Making request to: $requestUrl');
     
-    if (khachHangData.isNotEmpty) {
-      // Clear existing data
-      await _dbHelper.clearKhachHangTable();
+    final response = await http.get(
+      Uri.parse(requestUrl),
+      headers: {'Content-Type': 'application/json'},
+    );
+    
+    if (response.statusCode == 200) {
+      final List<dynamic> khachHangData = json.decode(response.body);
       
-      // Insert new data
-      for (var item in khachHangData) {
-        final khachHang = KhachHangModel.fromMap(item);
-        await _dbHelper.insertKhachHang(khachHang);
+      if (khachHangData.isNotEmpty) {
+        await _dbHelper.clearKhachHangTable();
+        
+        for (var item in khachHangData) {
+          final khachHang = KhachHangModel.fromMap(item);
+          await _dbHelper.insertKhachHang(khachHang);
+        }
+        
+        print('KhachHang sync completed successfully');
       }
-      
-      print('KhachHang sync completed successfully');
+    } else {
+      throw Exception('Failed to sync KhachHang data: ${response.statusCode}');
     }
-  } else {
-    throw Exception('Failed to sync KhachHang data: ${response.statusCode}');
   }
-}
 
-Future<void> _syncKhachHangContact(String username) async {
-  final String requestUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelkhachhangcontact/$username';
-  print('Making request to: $requestUrl');
-  
-  final response = await http.get(
-    Uri.parse(requestUrl),
-    headers: {'Content-Type': 'application/json'},
-  );
-  
-  if (response.statusCode == 200) {
-    final List<dynamic> contactData = json.decode(response.body);
+  Future<void> _syncKhachHangContact(String username) async {
+    final String requestUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelkhachhangcontact/$username';
+    print('Making request to: $requestUrl');
     
-    if (contactData.isNotEmpty) {
-      // Clear existing data
-      await _dbHelper.clearKhachHangContactTable();
+    final response = await http.get(
+      Uri.parse(requestUrl),
+      headers: {'Content-Type': 'application/json'},
+    );
+    
+    if (response.statusCode == 200) {
+      final List<dynamic> contactData = json.decode(response.body);
       
-      // Insert new data
-      for (var item in contactData) {
-        final contact = KhachHangContactModel.fromMap(item);
-        await _dbHelper.insertKhachHangContact(contact);
+      if (contactData.isNotEmpty) {
+        await _dbHelper.clearKhachHangContactTable();
+        
+        for (var item in contactData) {
+          final contact = KhachHangContactModel.fromMap(item);
+          await _dbHelper.insertKhachHangContact(contact);
+        }
+        
+        print('KhachHangContact sync completed successfully');
       }
-      
-      print('KhachHangContact sync completed successfully');
+    } else {
+      throw Exception('Failed to sync KhachHangContact data: ${response.statusCode}');
     }
-  } else {
-    throw Exception('Failed to sync KhachHangContact data: ${response.statusCode}');
   }
-}
-  
+    
   Future<void> _callCustomer(String phoneNumber) async {
     if (phoneNumber.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -300,67 +413,82 @@ Future<void> _syncKhachHangContact(String username) async {
     }
   }
 
-  @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    appBar: AppBar(
-  flexibleSpace: Container(
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [appBarTop, appBarBottom],
-      ),
-    ),
-  ),
-  title: Text('DS khách hàng', style: TextStyle(color: Colors.white)),
-  iconTheme: IconThemeData(color: Colors.white), 
-  actions: [
-    TextButton.icon(
-      icon: Icon(Icons.filter_list, color: Colors.white),
-      label: Text('Lọc', style: TextStyle(color: Colors.white)),
-      onPressed: () {
-        _showFilterDialog();
-      },
-    ),
-    TextButton.icon(
-      icon: Icon(Icons.sort, color: Colors.white),
-      label: Text('Sắp xếp', style: TextStyle(color: Colors.white)),
-      onPressed: () {
-        _showSortDialog();
-      },
-    ),
-  ],
-),
-    body: Column(
-      children: [
-        _buildSearchBar(),
-        _buildFilterChips(),
-        Expanded(
-          child: _buildCustomerList(),
+  void _editCustomer(KhachHangModel customer) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddKhachHangScreen(
+          editingCustomer: customer, 
         ),
-      ],
-    ),
-    floatingActionButton: Column(
+      ),
+    ).then((value) {
+      if (value == true) {
+        _refreshData();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [appBarTop, appBarBottom],
+            ),
+          ),
+        ),
+        title: Text('DS khách hàng', style: TextStyle(color: Colors.white)),
+        iconTheme: IconThemeData(color: Colors.white), 
+        actions: [
+          TextButton.icon(
+            icon: Icon(Icons.filter_list, color: Colors.white),
+            label: Text('Lọc', style: TextStyle(color: Colors.white)),
+            onPressed: () {
+              _showFilterDialog();
+            },
+          ),
+          TextButton.icon(
+            icon: Icon(Icons.sort, color: Colors.white),
+            label: Text('Sắp xếp', style: TextStyle(color: Colors.white)),
+            onPressed: () {
+              _showSortDialog();
+            },
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          _buildSearchBar(),
+          _buildFilterChips(),
+          Expanded(
+            child: _buildCustomerList(),
+          ),
+        ],
+      ),
+      floatingActionButton: Column(
   mainAxisAlignment: MainAxisAlignment.end,
   children: [
-    FloatingActionButton(
-      backgroundColor: Colors.blue[200],
-      heroTag: "add",
-      child: Icon(Icons.add),
-      onPressed: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => AddKhachHangScreen()),
-        ).then((value) {
-          if (value == true) {
-            // Refresh data if customer was added successfully
-            _refreshData();
-          }
-        });
-      },
-    ),
-    SizedBox(height: 16),
+    if (_canAdd) 
+      FloatingActionButton(
+        backgroundColor: Colors.blue[200],
+        heroTag: "add",
+        child: Icon(Icons.add),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => AddKhachHangScreen()),
+          ).then((value) {
+            if (value == true) {
+              _refreshData();
+            }
+          });
+        },
+      ),
+    if (_canAdd) SizedBox(height: 16), 
     FloatingActionButton(
       backgroundColor: Colors.blue[200],
       heroTag: "refresh",
@@ -369,8 +497,8 @@ Widget build(BuildContext context) {
     ),
   ],
 ),
-  );
-}
+    );
+  }
 
   Widget _buildSearchBar() {
     return Container(
@@ -404,7 +532,6 @@ Widget build(BuildContext context) {
   }
 
   Widget _buildFilterChips() {
-    // Get unique values for filter options
     final Set<String> phanLoaiSet = _khachHangList
         .where((c) => c.phanLoai != null && c.phanLoai!.isNotEmpty)
         .map((c) => c.phanLoai!)
@@ -415,7 +542,6 @@ Widget build(BuildContext context) {
         .map((c) => c.vungMien!)
         .toSet();
     
-    // Create a list of all filter values
     final List<String> filterOptions = ['Tất cả', ...phanLoaiSet, ...vungMienSet];
     
     return Container(
@@ -446,6 +572,38 @@ Widget build(BuildContext context) {
         },
       ),
     );
+  }
+
+  int _getItemsToShow(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    if (screenWidth < 600) return 1; 
+    if (screenWidth < 900) return 2; 
+    if (screenWidth < 1200) return 3; 
+    if (screenWidth < 1500) return 4; 
+    return 5;
+  }
+
+  Map<String, List<KhachHangModel>> _groupCustomersByDanhDau() {
+    final Map<String, List<KhachHangModel>> grouped = {
+      'marked': [], 
+      'unmarked': [], 
+    };
+    for (var customer in _filteredList) {
+      if (customer.danhDau != null && customer.danhDau!.isNotEmpty) {
+        grouped['marked']!.add(customer);
+      } else {
+        grouped['unmarked']!.add(customer);
+      }
+    }
+    return grouped;
+  }
+
+  List<KhachHangModel> _getOrderedCustomerList() {
+    final grouped = _groupCustomersByDanhDau();
+    final List<KhachHangModel> orderedList = [];
+    orderedList.addAll(grouped['marked']!);
+    orderedList.addAll(grouped['unmarked']!);
+    return orderedList;
   }
 
   Widget _buildCustomerList() {
@@ -481,1470 +639,320 @@ Widget build(BuildContext context) {
       );
     }
     
+    final orderedList = _getOrderedCustomerList();
+    final itemsToShow = _getItemsToShow(context);
+    
     return RefreshIndicator(
       onRefresh: _refreshData,
-      child: ListView.builder(
-        itemCount: _filteredList.length,
-        itemBuilder: (context, index) {
-          final customer = _filteredList[index];
-          return _buildCustomerCard(customer);
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (itemsToShow > 1) {
+            return GridView.builder(
+              padding: EdgeInsets.all(8),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: itemsToShow,
+                childAspectRatio: 4.5,
+                crossAxisSpacing: 6,
+                mainAxisSpacing: 6,
+              ),
+              itemCount: orderedList.length,
+              itemBuilder: (context, index) {
+                final customer = orderedList[index];
+                return _buildCustomerCard(customer);
+              },
+            );
+          } else {
+            return ListView.builder(
+              itemCount: orderedList.length,
+              itemBuilder: (context, index) {
+                final customer = orderedList[index];
+                return _buildCustomerCard(customer);
+              },
+            );
+          }
         },
       ),
     );
   }
-void _editCustomer(KhachHangModel customer) {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => AddKhachHangScreen(
-        editingCustomer: customer, 
-      ),
-    ),
-  ).then((value) {
-    if (value == true) {
-      _refreshData();
-    }
-  });
-}
+
   Widget _buildCustomerCard(KhachHangModel customer) {
-  // Determine VungMien color and text
-  Color vungMienColor;
-  String vungMienText = '?';
-  
-  if (customer.vungMien != null && customer.vungMien!.isNotEmpty) {
-    vungMienText = customer.vungMien!.substring(0, 1).toUpperCase();
-    switch (customer.vungMien!.toLowerCase()) {
-      case 'bắc':
-        vungMienColor = Colors.blue;
-        break;
-      case 'trung':
-        vungMienColor = Colors.red;
-        break;
-      default:
-        vungMienColor = Colors.green;
+    Color vungMienColor;
+    String vungMienText = '?';
+    
+    if (customer.vungMien != null && customer.vungMien!.isNotEmpty) {
+      vungMienText = customer.vungMien!.substring(0, 1).toUpperCase();
+      switch (customer.vungMien!.toLowerCase()) {
+        case 'bắc':
+          vungMienColor = Colors.blue;
+          break;
+        case 'trung':
+          vungMienColor = Colors.red;
+          break;
+        default:
+          vungMienColor = Colors.green;
+      }
+    } else {
+      vungMienColor = Colors.grey;
     }
-  } else {
-    vungMienColor = Colors.grey;
-  }
 
-  return Card(
-    margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    child: ExpansionTile(
-      leading: CircleAvatar(
-        backgroundColor: vungMienColor,
-        radius: 20,
-        child: Text(
-          vungMienText,
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-      ),
-      title: Text(
-        customer.tenDuAn ?? 'Không có tên',
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Colors.black87, // Explicitly set black color
-        ),
-      ),
-      subtitle: Text(
-        [
-          customer.nguoiDung ?? '',
-          customer.phanLoai ?? '',
-          customer.loaiCongTrinh ?? '',
-        ].where((text) => text.isNotEmpty).join(' • '),
-        style: TextStyle(
-          fontSize: 12,
-          color: Colors.grey[600], // Explicitly set grey color
-        ),
-      ),
-      // Remove iconColor and collapsedIconColor to use default colors
-      expandedCrossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    final bool isMarked = customer.danhDau != null && customer.danhDau!.isNotEmpty;
+    final Color titleColor = isMarked ? Colors.blueAccent : Colors.black87;
+    final FontWeight titleWeight = isMarked ? FontWeight.w900 : FontWeight.bold;
+
+    return Card(
+      margin: EdgeInsets.all(3),
+      elevation: isMarked ? 3 : 1,
+      child: InkWell(
+        onTap: () => _showCustomerDetailDialog(customer),
+        borderRadius: BorderRadius.circular(4),
+        child: Container(
+          padding: EdgeInsets.all(8), 
+          decoration: isMarked 
+            ? BoxDecoration(
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: Colors.green.withOpacity(0.3), width: 1),
+              )
+            : null,
+          child: Row(
             children: [
-              if (customer.tenKyThuat != null && customer.tenKyThuat!.isNotEmpty)
-                _buildInfoRow('Tên kỹ thuật:', customer.tenKyThuat!),
-              if (customer.diaChi != null && customer.diaChi!.isNotEmpty)
-                _buildInfoRow('Địa chỉ:', customer.diaChi!),
-              if (customer.diaChiVanPhong != null && customer.diaChiVanPhong!.isNotEmpty)
-                _buildInfoRow('Địa chỉ VP:', customer.diaChiVanPhong!),
-              if (customer.soDienThoai != null && customer.soDienThoai!.isNotEmpty)
-                _buildInfoRow('Điện thoại:', customer.soDienThoai!, isPhone: true),
-              if (customer.website != null && customer.website!.isNotEmpty)
-                _buildInfoRow('Website:', customer.website!),
-              if (customer.email != null && customer.email!.isNotEmpty)
-                _buildInfoRow('Email:', customer.email!),
-              if (customer.maSoThue != null && customer.maSoThue!.isNotEmpty)
-                _buildInfoRow('Mã số thuế:', customer.maSoThue!),
-              if (customer.giamSat != null && customer.giamSat!.isNotEmpty)
-                _buildInfoRow('Giám sát:', customer.giamSat!),
-              if (customer.qldv != null && customer.qldv!.isNotEmpty)
-                _buildInfoRow('QLDV:', customer.qldv!),
-              if (customer.ghiChu != null && customer.ghiChu!.isNotEmpty)
-                _buildInfoRow('Ghi chú:', customer.ghiChu!),
-              if (customer.ngayCapNhatCuoi != null)
-                _buildInfoRow('Cập nhật:', DateFormat('dd/MM/yyyy').format(customer.ngayCapNhatCuoi!)),
-              
-              SizedBox(height: 16),
-              Row(
-  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-  children: [
-    // Edit button (NEW)
-    ElevatedButton.icon(
-      icon: Icon(Icons.edit, color: Colors.white),
-      label: Text('Sửa', style: TextStyle(color: Colors.white)),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.orange,
-        foregroundColor: Colors.white,
-      ),
-      onPressed: () => _editCustomer(customer),
-    ),
-    if (customer.soDienThoai != null && customer.soDienThoai!.isNotEmpty)
-      ElevatedButton.icon(
-        icon: Icon(Icons.call, color: Colors.white),
-        label: Text('Gọi', style: TextStyle(color: Colors.white)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: buttonColor,
-          foregroundColor: Colors.white,
-        ),
-        onPressed: () => _callCustomer(customer.soDienThoai!),
-      ),
-    ElevatedButton.icon(
-      icon: Icon(Icons.directions, color: Colors.white),
-      label: Text('Chỉ đường', style: TextStyle(color: Colors.white)),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: buttonColor,
-        foregroundColor: Colors.white,
-      ),
-      onPressed: () => _openMaps(customer.diaChi ?? ''),
-    ),
-  ],
-),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-  Widget _buildInfoRow(String label, String value, {bool isPhone = false}) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[700],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          Expanded(
-            child: isPhone
-                ? GestureDetector(
-                    onTap: () => _callCustomer(value),
+              Stack(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: vungMienColor,
+                    radius: 16,
                     child: Text(
-                      value,
+                      vungMienText,
                       style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.blue,
-                        decoration: TextDecoration.underline,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
                       ),
                     ),
-                  )
-                : Text(
-                    value,
-                    style: TextStyle(fontSize: 14),
                   ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _openMaps(String address) async {
-    if (address.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Không có địa chỉ để mở bản đồ'))
-      );
-      return;
-    }
-    
-    final encodedAddress = Uri.encodeComponent(address);
-    final mapsUrl = Uri.parse('https://www.google.com/maps/search/?api=1&query=$encodedAddress');
-    
-    if (await url_launcher.canLaunchUrl(mapsUrl)) {
-      await url_launcher.launchUrl(mapsUrl, mode: url_launcher.LaunchMode.externalApplication);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Không thể mở bản đồ cho địa chỉ này'))
-      );
-    }
-  }
-
-  void _showFilterDialog() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('Lọc khách hàng'),
-          content: Container(
-            width: double.maxFinite,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildFilterOption('Tất cả'),
-                Divider(),
-                Text('Phân loại:', style: TextStyle(fontWeight: FontWeight.bold)),
-                ..._getUniqueValues('phanLoai').map((value) => _buildFilterOption(value)),
-                SizedBox(height: 8),
-                Text('Vùng miền:', style: TextStyle(fontWeight: FontWeight.bold)),
-                ..._getUniqueValues('vungMien').map((value) => _buildFilterOption(value)),
-                SizedBox(height: 8),
-                Text('Loại hình:', style: TextStyle(fontWeight: FontWeight.bold)),
-                ..._getUniqueValues('loaiHinh').map((value) => _buildFilterOption(value)),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              child: Text('Đóng'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  List<String> _getUniqueValues(String field) {
-    final Set<String> values = Set<String>();
-    
-    for (var customer in _khachHangList) {
-      String? value;
-      
-      switch (field) {
-        case 'phanLoai':
-          value = customer.phanLoai;
-          break;
-        case 'vungMien':
-          value = customer.vungMien;
-          break;
-        case 'loaiHinh':
-          value = customer.loaiHinh;
-          break;
-      }
-      
-      if (value != null && value.isNotEmpty) {
-        values.add(value);
-      }
-    }
-    
-    return values.toList()..sort();
-  }
-
-  Widget _buildFilterOption(String value) {
-    return RadioListTile<String>(
-      title: Text(value),
-      value: value,
-      groupValue: _filterBy,
-      onChanged: (newValue) {
-        Navigator.pop(context);
-        if (newValue != null) {
-          _updateFilter(newValue);
-        }
-      },
-    );
-  }
-
-  void _showSortDialog() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('Sắp xếp theo'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildSortOption('tenDuAn', 'Tên dự án'),
-              _buildSortOption('vungMien', 'Vùng miền'),
-              _buildSortOption('phanLoai', 'Phân loại'),
-              _buildSortOption('ngayCapNhatCuoi', 'Ngày cập nhật'),
-            ],
-          ),
-          actions: [
-            TextButton(
-              child: Text('Đóng'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildSortOption(String field, String label) {
-    return RadioListTile<String>(
-      title: Row(
-        children: [
-          Text(label),
-          SizedBox(width: 8),
-          if (_sortBy == field)
-            Icon(
-              _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
-              size: 16,
-            ),
-        ],
-      ),
-      value: field,
-      groupValue: _sortBy,
-      onChanged: (newValue) {
-        Navigator.pop(context);
-        if (newValue != null) {
-          _updateSort(newValue);
-        }
-      },
-    );
-  }
-}
-class AddKhachHangScreen extends StatefulWidget {
-  final KhachHangModel? editingCustomer; 
-  const AddKhachHangScreen({Key? key, this.editingCustomer}) : super(key: key);
-  @override
-  _AddKhachHangScreenState createState() => _AddKhachHangScreenState();
-}
-
-class _AddKhachHangScreenState extends State<AddKhachHangScreen> 
-    with SingleTickerProviderStateMixin { 
-  final _formKey = GlobalKey<FormState>();
-  final _contactFormKey = GlobalKey<FormState>();
-    bool get isEditMode => widget.editingCustomer != null;
-  // Customer data
-  Map<String, dynamic> newCustomer = {};
-    final DBHelper _dbHelper = DBHelper();
-
-  // Contact list
-  List<KhachHangContactDraft> contacts = [];
-  
-  // Current contact being edited
-  KhachHangContactDraft? currentContact;
-  
-  // Contact form controllers
-  TextEditingController hoTenController = TextEditingController();
-  TextEditingController chucDanhController = TextEditingController();
-  TextEditingController soDienThoaiContactController = TextEditingController();
-  TextEditingController emailContactController = TextEditingController();
-  
-  // Contact form values
-  String? selectedGioiTinh;
-  String? selectedNguonGoc;
-  
-  // Special usernames list for phanLoai auto-selection
-  final List<String> thuongMaiUsers = [
-    'hm.trangiang', 'hm.tranly', 'hm.nguyenhanh2', 'hm.dinhmai', 
-    'hm.hoangthao', 'hm.vutoan', 'hm.lehoa', 'hm.lemanh', 
-    'hm.nguyentoan', 'hm.nguyendung', 'hm.nguyennga', 'hm.conghai', 
-    'hm.thuytrang', 'hm.nguyenvy', 'hm.baoha', 'hm.trantien', 
-    'hm.myha', 'hm.phiminh', 'hm.thanhhao', 'hm.luongtrang', 
-    'hm.damlinh', 'hm.thanhthao', 'hm.damchinh', 'hm.quocchien', 
-    'hm.thuyvan', 'hotel.danang', 'hotel.nhatrang', 'hm.doanly'
-  ];
-  
-  // Predefined subject names for Dịch vụ type
-  final List<String> predefinedSubjects = [
-    "1. Nhân sự", 
-    "2. Tuyển dụng/ Chính sách", 
-    "10. Đối thủ", 
-    "5. Kiểm soát, ĐG Chất lượng DV", 
-    "8. Báo giá, đấu thầu", 
-    "6. Ý kiến KH", 
-    "4. Máy móc", 
-    "3. Vật tư", 
-    "7. HĐ, PL, Giải trình, CV", 
-    "9. Công nợ", 
-    "11. Khảo sát", 
-    "12. Phát triển TT", 
-    "14. Đánh giá KH"
-  ];
-  
-  // Main form controllers
-  TextEditingController tenDuAnController = TextEditingController();
-  TextEditingController ghiChuController = TextEditingController();
-  TextEditingController diaChiController = TextEditingController();
-  TextEditingController maSoThueController = TextEditingController();
-  TextEditingController soDienThoaiController = TextEditingController();
-  TextEditingController faxController = TextEditingController();
-  TextEditingController websiteController = TextEditingController();
-  TextEditingController emailController = TextEditingController();
-  TextEditingController soTaiKhoanController = TextEditingController();
-  TextEditingController nganHangController = TextEditingController();
-  TextEditingController tinhThanhController = TextEditingController();
-  TextEditingController quanHuyenController = TextEditingController();
-  TextEditingController phuongXaController = TextEditingController();
-  TextEditingController duKienTrienKhaiController = TextEditingController();
-  TextEditingController tiemNangDVTMController = TextEditingController();
-  TextEditingController yeuCauNhanSuController = TextEditingController();
-  TextEditingController cachThucTuyenController = TextEditingController();
-  TextEditingController mucLuongTuyenController = TextEditingController();
-  TextEditingController luongBPController = TextEditingController();
-  
-  // Dropdown values
-  String? selectedDanhDau = '';
-  String? selectedVungMien;
-  String selectedLoaiHinh = 'Dự án';
-  String? selectedLoaiCongTrinh;
-  String? selectedTrangThaiHopDong;
-  String? selectedLoaiMuaHang;
-  String? selectedKenhTiepCan;
-  
-  // App theme colors
-  final Color appBarTop = Color(0xFF024965);
-  final Color appBarBottom = Color(0xFF03a6cf);
-  final Color buttonColor = Color(0xFF33a7ce);
-  
-  // Tab controller for switching between customer and contact info
-  late TabController _tabController;
-  
-  // Loading state for API calls
-  bool _isSubmitting = false;
-  
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    
-    if (isEditMode) {
-      // Load existing customer data for editing
-      _loadExistingCustomerData();
-    } else {
-      // Create new customer (existing logic)
-      _initializeNewCustomer();
-    }
-  }
-  
-  // Extract the new customer initialization logic into a separate method
-  void _initializeNewCustomer() {
-    final userCredentials = Provider.of<UserCredentials>(context, listen: false);
-    final username = userCredentials.username;
-    
-    // Generate new UUID
-    newCustomer['uid'] = _generateUuid();
-    newCustomer['nguoiDung'] = username;
-    
-    // Set phanLoai based on username
-    if (thuongMaiUsers.contains(username)) {
-      newCustomer['phanLoai'] = 'Thương mại';
-    } else {
-      newCustomer['phanLoai'] = 'Dịch vụ';
-    }
-    
-    // Set default values
-    newCustomer['loaiHinh'] = 'Dự án';
-    
-    // Set current datetime for creation and update fields
-    final now = DateTime.now();
-    String formattedDateTime = _formatDateTimeForDb(now);
-    newCustomer['ngayCapNhatCuoi'] = formattedDateTime;
-    newCustomer['ngayKhoiTao'] = formattedDateTime;
-  }
-  
-  // Add this method to load existing customer data
-  void _loadExistingCustomerData() async {
-    if (widget.editingCustomer == null) return;
-    
-    final customer = widget.editingCustomer!;
-    
-    // Populate customer data
-    newCustomer['uid'] = customer.uid;
-    newCustomer['nguoiDung'] = customer.nguoiDung;
-    newCustomer['phanLoai'] = customer.phanLoai;
-    newCustomer['loaiHinh'] = customer.loaiHinh;
-    newCustomer['ngayKhoiTao'] = customer.ngayKhoiTao != null 
-        ? _formatDateTimeForDb(customer.ngayKhoiTao!) 
-        : _formatDateTimeForDb(DateTime.now());
-    
-    // Update ngayCapNhatCuoi to current time for edits
-    final now = DateTime.now();
-    newCustomer['ngayCapNhatCuoi'] = _formatDateTimeForDb(now);
-    
-    // Populate form controllers
-    tenDuAnController.text = customer.tenDuAn ?? '';
-    ghiChuController.text = customer.ghiChu ?? '';
-    diaChiController.text = customer.diaChi ?? '';
-    maSoThueController.text = customer.maSoThue ?? '';
-    soDienThoaiController.text = customer.soDienThoai ?? '';
-    faxController.text = customer.fax ?? '';
-    websiteController.text = customer.website ?? '';
-    emailController.text = customer.email ?? '';
-    soTaiKhoanController.text = customer.soTaiKhoan ?? '';
-    nganHangController.text = customer.nganHang ?? '';
-    tinhThanhController.text = customer.tinhThanh ?? '';
-    quanHuyenController.text = customer.quanHuyen ?? '';
-    phuongXaController.text = customer.phuongXa ?? '';
-    duKienTrienKhaiController.text = customer.duKienTrienKhai ?? '';
-    tiemNangDVTMController.text = customer.tiemNangDVTM ?? '';
-    yeuCauNhanSuController.text = customer.yeuCauNhanSu ?? '';
-    cachThucTuyenController.text = customer.cachThucTuyen ?? '';
-    mucLuongTuyenController.text = customer.mucLuongTuyen ?? '';
-    luongBPController.text = customer.luongBP ?? '';
-    
-    // Set dropdown values
-    setState(() {
-      selectedDanhDau = customer.danhDau;
-      selectedVungMien = customer.vungMien;
-      selectedLoaiHinh = customer.loaiHinh ?? 'Dự án';
-      selectedLoaiCongTrinh = customer.loaiCongTrinh;
-      selectedTrangThaiHopDong = customer.trangThaiHopDong;
-      selectedLoaiMuaHang = customer.loaiMuaHang;
-      selectedKenhTiepCan = customer.kenhTiepCan;
-    });
-    
-    // Load existing contacts
-    await _loadExistingContacts(customer.uid!);
-  }
-  
-  // Add this method to load existing contacts
-  Future<void> _loadExistingContacts(String customerUid) async {
-    try {
-      final contactList = await _dbHelper.getContactsByCustomerUid(customerUid);
-      
-      setState(() {
-        contacts = contactList.map((contact) => KhachHangContactDraft(
-          uid: contact.uid ?? _generateContactUuid(),
-          boPhan: contact.boPhan ?? customerUid,
-          nguoiDung: contact.nguoiDung ?? '',
-          ngayTao: contact.ngayTao?.toString() ?? _formatDateTimeForDb(DateTime.now()),
-          ngayCapNhat: _formatDateTimeForDb(DateTime.now()),
-          hoTen: contact.hoTen ?? '',
-          gioiTinh: contact.gioiTinh ?? '',
-          chucDanh: contact.chucDanh ?? '',
-          soDienThoai: contact.soDienThoai ?? '',
-          email: contact.email ?? '',
-          nguonGoc: contact.nguonGoc ?? '',
-        )).toList();
-      });
-    } catch (e) {
-      print('Error loading existing contacts: $e');
-    }
-  }
-  
-  @override
-  void dispose() {
-    // Dispose all controllers
-    tenDuAnController.dispose();
-    ghiChuController.dispose();
-    diaChiController.dispose();
-    maSoThueController.dispose();
-    soDienThoaiController.dispose();
-    faxController.dispose();
-    websiteController.dispose();
-    emailController.dispose();
-    soTaiKhoanController.dispose();
-    nganHangController.dispose();
-    tinhThanhController.dispose();
-    quanHuyenController.dispose();
-    phuongXaController.dispose();
-    duKienTrienKhaiController.dispose();
-    tiemNangDVTMController.dispose();
-    yeuCauNhanSuController.dispose();
-    cachThucTuyenController.dispose();
-    mucLuongTuyenController.dispose();
-    luongBPController.dispose();
-    
-    // Dispose contact controllers
-    hoTenController.dispose();
-    chucDanhController.dispose();
-    soDienThoaiContactController.dispose();
-    emailContactController.dispose();
-    
-    // Dispose tab controller
-    _tabController.dispose();
-    
-    super.dispose();
-  }
-  
-  String _generateUuid() {
-    var random = Random();
-    return 'cus_${DateTime.now().millisecondsSinceEpoch}_${random.nextInt(10000)}';
-  }
-  
-  String _generateContactUuid() {
-    var random = Random();
-    return 'con_${DateTime.now().millisecondsSinceEpoch}_${random.nextInt(10000)}';
-  }
-  
-  String _formatDateTimeForDb(DateTime dateTime) {
-    // Format to MariaDB datetime format (YYYY-MM-DD HH:MM:SS)
-    return "${dateTime.year}-${_twoDigits(dateTime.month)}-${_twoDigits(dateTime.day)} "
-           "${_twoDigits(dateTime.hour)}:${_twoDigits(dateTime.minute)}:${_twoDigits(dateTime.second)}";
-  }
-  
-  String _twoDigits(int n) {
-    if (n >= 10) return "$n";
-    return "0$n";
-  }
-  
-  void _saveCustomerForm() {
-    if (_formKey.currentState!.validate()) {
-      // Update customer data with form values
-      newCustomer['tenDuAn'] = tenDuAnController.text;
-      newCustomer['ghiChu'] = ghiChuController.text;
-      newCustomer['diaChi'] = diaChiController.text;
-      newCustomer['maSoThue'] = maSoThueController.text;
-      newCustomer['soDienThoai'] = soDienThoaiController.text;
-      newCustomer['fax'] = faxController.text;
-      newCustomer['website'] = websiteController.text;
-      newCustomer['email'] = emailController.text;
-      newCustomer['soTaiKhoan'] = soTaiKhoanController.text;
-      newCustomer['nganHang'] = nganHangController.text;
-      newCustomer['tinhThanh'] = tinhThanhController.text;
-      newCustomer['quanHuyen'] = quanHuyenController.text;
-      newCustomer['phuongXa'] = phuongXaController.text;
-      newCustomer['duKienTrienKhai'] = duKienTrienKhaiController.text;
-      newCustomer['tiemNangDVTM'] = tiemNangDVTMController.text;
-      newCustomer['yeuCauNhanSu'] = yeuCauNhanSuController.text;
-      newCustomer['cachThucTuyen'] = cachThucTuyenController.text;
-      newCustomer['mucLuongTuyen'] = mucLuongTuyenController.text;
-      newCustomer['luongBP'] = luongBPController.text;
-      
-      // Add dropdown values
-      newCustomer['danhDau'] = selectedDanhDau;
-      newCustomer['vungMien'] = selectedVungMien;
-      newCustomer['loaiCongTrinh'] = selectedLoaiCongTrinh;
-      newCustomer['trangThaiHopDong'] = selectedTrangThaiHopDong;
-      newCustomer['loaiMuaHang'] = selectedLoaiMuaHang;
-      newCustomer['kenhTiepCan'] = selectedKenhTiepCan;
-      
-      // Move to contacts tab
-      _tabController.animateTo(1);
-      
-      // If it's a "Dịch vụ" type customer and no contacts yet, offer to create predefined subjects
-      if (newCustomer['phanLoai'] == 'Dịch vụ' && contacts.isEmpty) {
-        _offerPredefinedSubjects();
-      }
-    }
-  }
-  
-  void _offerPredefinedSubjects() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Tạo danh mục (DỊCH VỤ))'),
-        content: Text(
-          'Bạn có muốn tạo các danh mục chủ đề mặc định cho khách hàng dịch vụ không?'
-        ),
-        actions: [
-          TextButton(
-            child: Text('Không'),
-            onPressed: () => Navigator.pop(context),
-          ),
-          ElevatedButton(
-            child: Text('Có, tạo danh mục'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: buttonColor,
-            ),
-            onPressed: () {
-              Navigator.pop(context);
-              _createPredefinedSubjects();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-  
-  void _createPredefinedSubjects() {
-    final userCredentials = Provider.of<UserCredentials>(context, listen: false);
-    final username = userCredentials.username;
-    final now = _formatDateTimeForDb(DateTime.now());
-    
-    setState(() {
-      for (String subject in predefinedSubjects) {
-        contacts.add(
-          KhachHangContactDraft(
-            uid: _generateContactUuid(),
-            boPhan: newCustomer['uid'],
-            nguoiDung: username,
-            ngayTao: now,
-            ngayCapNhat: now,
-            hoTen: subject,
-          )
-        );
-      }
-    });
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Đã tạo ${predefinedSubjects.length} danh mục người liên hệ'))
-    );
-  }
-  
-  void _addNewContact() {
-    // Clear form fields
-    hoTenController.clear();
-    chucDanhController.clear();
-    soDienThoaiContactController.clear();
-    emailContactController.clear();
-    selectedGioiTinh = null;
-    selectedNguonGoc = null;
-    
-    // Reset current contact
-    setState(() {
-      currentContact = null;
-    });
-    
-    // Show contact form dialog
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Thêm người liên hệ mới'),
-        content: SingleChildScrollView(
-          child: Form(
-            key: _contactFormKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Họ tên
-                _buildTextField(
-                  'Họ tên *',
-                  hoTenController,
-                  validator: (value) => value == null || value.isEmpty ? 'Vui lòng nhập họ tên' : null,
-                ),
-                
-                // Giới tính
-                _buildDropdownField(
-                  'Giới tính',
-                  ['Nam', 'Nữ'],
-                  selectedGioiTinh,
-                  (value) => setState(() => selectedGioiTinh = value),
-                ),
-                
-                // Chức danh
-                _buildTextField('Chức danh', chucDanhController),
-                
-                // Số điện thoại
-                _buildTextField(
-                  'Số điện thoại', 
-                  soDienThoaiContactController,
-                  keyboardType: TextInputType.phone
-                ),
-                
-                // Email
-                _buildTextField(
-                  'Email', 
-                  emailContactController,
-                  keyboardType: TextInputType.emailAddress
-                ),
-                
-                // Nguồn gốc
-                _buildDropdownField(
-                  'Nguồn gốc',
-                  [
-                    'Trực tiếp', 'Giới thiệu', 'Facebook', 'Zalo', 'Website',
-                    'Shopee', 'Tiki', 'Email', 'Viber', 'Telesale', 'Quảng cáo',
-                    'Nhắn tin', 'Khảo sát/ Form'
-                  ],
-                  selectedNguonGoc,
-                  (value) => setState(() => selectedNguonGoc = value),
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            child: Text('Hủy'),
-            onPressed: () => Navigator.pop(context),
-          ),
-          ElevatedButton(
-            child: Text('Lưu'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: buttonColor,
-            ),
-            onPressed: () {
-              if (_contactFormKey.currentState!.validate()) {
-                final userCredentials = Provider.of<UserCredentials>(context, listen: false);
-                final username = userCredentials.username;
-                final now = _formatDateTimeForDb(DateTime.now());
-                
-                final newContact = KhachHangContactDraft(
-                  uid: _generateContactUuid(),
-                  boPhan: newCustomer['uid'],
-                  nguoiDung: username,
-                  ngayTao: now,
-                  ngayCapNhat: now,
-                  hoTen: hoTenController.text,
-                  gioiTinh: selectedGioiTinh ?? '',
-                  chucDanh: chucDanhController.text,
-                  soDienThoai: soDienThoaiContactController.text,
-                  email: emailContactController.text,
-                  nguonGoc: selectedNguonGoc ?? '',
-                );
-                
-                setState(() {
-                  contacts.add(newContact);
-                });
-                
-                Navigator.pop(context);
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
-  
-  void _editContact(int index) {
-    final contact = contacts[index];
-    
-    // Set form values
-    hoTenController.text = contact.hoTen;
-    chucDanhController.text = contact.chucDanh;
-    soDienThoaiContactController.text = contact.soDienThoai;
-    emailContactController.text = contact.email;
-    
-    setState(() {
-      selectedGioiTinh = contact.gioiTinh.isNotEmpty ? contact.gioiTinh : null;
-      selectedNguonGoc = contact.nguonGoc.isNotEmpty ? contact.nguonGoc : null;
-      currentContact = contact;
-    });
-    
-    // Show contact form dialog
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Chỉnh sửa người liên hệ'),
-        content: SingleChildScrollView(
-          child: Form(
-            key: _contactFormKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Họ tên
-                _buildTextField(
-                  'Họ tên *',
-                  hoTenController,
-                  validator: (value) => value == null || value.isEmpty ? 'Vui lòng nhập họ tên' : null,
-                ),
-                
-                // Giới tính
-                _buildDropdownField(
-                  'Giới tính',
-                  ['Nam', 'Nữ'],
-                  selectedGioiTinh,
-                  (value) => setState(() => selectedGioiTinh = value),
-                ),
-                
-                // Chức danh
-                _buildTextField('Chức danh', chucDanhController),
-                
-                // Số điện thoại
-                _buildTextField(
-                  'Số điện thoại', 
-                  soDienThoaiContactController,
-                  keyboardType: TextInputType.phone
-                ),
-                
-                // Email
-                _buildTextField(
-                  'Email', 
-                  emailContactController,
-                  keyboardType: TextInputType.emailAddress
-                ),
-                
-                // Nguồn gốc
-                _buildDropdownField(
-                  'Nguồn gốc',
-                  [
-                    'Trực tiếp', 'Giới thiệu', 'Facebook', 'Zalo', 'Website',
-                    'Shopee', 'Tiki', 'Email', 'Viber', 'Telesale', 'Quảng cáo',
-                    'Nhắn tin', 'Khảo sát/ Form'
-                  ],
-                  selectedNguonGoc,
-                  (value) => setState(() => selectedNguonGoc = value),
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            child: Text('Hủy'),
-            onPressed: () => Navigator.pop(context),
-          ),
-          ElevatedButton(
-            child: Text('Cập nhật'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: buttonColor,
-            ),
-            onPressed: () {
-              if (_contactFormKey.currentState!.validate()) {
-                final now = _formatDateTimeForDb(DateTime.now());
-                
-                setState(() {
-                  // Update the contact fields
-                  contact.hoTen = hoTenController.text;
-                  contact.gioiTinh = selectedGioiTinh ?? '';
-                  contact.chucDanh = chucDanhController.text;
-                  contact.soDienThoai = soDienThoaiContactController.text;
-                  contact.email = emailContactController.text;
-                  contact.nguonGoc = selectedNguonGoc ?? '';
-                  contact.ngayCapNhat = now;
-                  
-                  contacts[index] = contact;
-                });
-                
-                Navigator.pop(context);
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
-  
-  void _deleteContact(int index) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Xóa người liên hệ'),
-        content: Text('Bạn có chắc chắn muốn xóa "${contacts[index].hoTen}"?'),
-        actions: [
-          TextButton(
-            child: Text('Hủy'),
-            onPressed: () => Navigator.pop(context),
-          ),
-          ElevatedButton(
-            child: Text('Xóa'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
-            onPressed: () {
-              setState(() {
-                contacts.removeAt(index);
-              });
-              Navigator.pop(context);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-  
-  Future<void> _submitData() async {
-    // Final validation
-    if (contacts.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Vui lòng thêm ít nhất một người liên hệ'))
-      );
-      return;
-    }
-    
-    setState(() {
-      _isSubmitting = true;
-    });
-    
-    try {
-      // Submit khachhang record
-      final customerResponse = await _submitCustomer();
-      
-      // Submit khachhangcontact records
-      final contactResponses = await _submitContacts();
-      
-      // Show recap and success message
-      _showSubmitRecapDialog(customerResponse, contactResponses);
-    } catch (e) {
-      print('Error submitting data: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi khi gửi dữ liệu: $e'))
-      );
-    } finally {
-      setState(() {
-        _isSubmitting = false;
-      });
-    }
-  }
-  
-  Future<Map<String, dynamic>> _submitCustomer() async {
-  final String endpoint = isEditMode 
-    ? 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelkhachhangupdate'
-    : 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelkhachhangmoi';
-  
-  final response = await http.post(
-    Uri.parse(endpoint),
-    headers: {'Content-Type': 'application/json'},
-    body: json.encode(newCustomer),
-  );
-  
-  print('Customer request body: ${json.encode(newCustomer)}');
-  print('Customer response code: ${response.statusCode}');
-  print('Customer response body: ${response.body}');
-  
-  if (response.statusCode == 200) {
-    return {
-      'success': true,
-      'message': isEditMode 
-        ? 'Dữ liệu khách hàng đã được cập nhật thành công'
-        : 'Dữ liệu khách hàng đã được gửi thành công',
-      'response': response.body,
-    };
-  } else {
-    throw Exception('Failed to ${isEditMode ? "update" : "submit"} customer data: ${response.statusCode}, ${response.body}');
-  }
-}
-
-Future<List<Map<String, dynamic>>> _submitContacts() async {
-  final String endpoint = isEditMode
-    ? 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelcontactupdate'
-    : 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelcontactmoi';
-    
-  List<Map<String, dynamic>> results = [];
-  
-  for (var contact in contacts) {
-    final requestBody = contact.toMap();
-    
-    final response = await http.post(
-      Uri.parse(endpoint),
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode(requestBody),
-    );
-    
-    print('Contact request body: ${json.encode(requestBody)}');
-    print('Contact response code: ${response.statusCode}');
-    print('Contact response body: ${response.body}');
-    
-    results.add({
-      'contact': contact.hoTen,
-      'success': response.statusCode == 200,
-      'message': response.statusCode == 200 
-        ? 'Thành công' 
-        : 'Lỗi: ${response.statusCode}',
-      'response': response.body,
-    });
-  }
-  
-  return results;
-}
-  
-  void _showSubmitRecapDialog(
-    Map<String, dynamic> customerResult,
-    List<Map<String, dynamic>> contactResults
-  ) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Text('Kết quả đồng bộ dữ liệu'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Customer result
-              Text(
-                'Khách hàng: ${customerResult['success'] ? '✅ Thành công' : '❌ Thất bại'}',
-                style: TextStyle(fontWeight: FontWeight.bold),
+                  if (isMarked)
+                    Positioned(
+                      right: -2,
+                      top: -2,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1),
+                        ),
+                        child: Icon(Icons.star, size: 6, color: Colors.white),
+                      ),
+                    ),
+                ],
               ),
-              Text(customerResult['message']),
-              SizedBox(height: 16),
               
-              // Contact results
-              Text(
-                'Người liên hệ:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              ...contactResults.map((result) => Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: Text(
-                  '${result['contact']}: ${result['success'] ? '✅' : '❌'} ${result['message']}',
+              SizedBox(width: 8),
+              
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min, 
+                  children: [
+                    Text(
+                      customer.tenDuAn ?? 'Không có tên',
+                      style: TextStyle(
+                        fontWeight: titleWeight,
+                        color: titleColor,
+                        fontSize: 13, 
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    
+                    SizedBox(height: 2), 
+                    
+                    Text(
+                      [
+                        customer.nguoiDung ?? '',
+                        customer.phanLoai ?? '',
+                        customer.loaiCongTrinh ?? '',
+                      ].where((text) => text.isNotEmpty).join(' • '),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey[600],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
-              )),
+              ),
+              
+              Icon(Icons.arrow_forward_ios, size: 12, color: Colors.grey),
             ],
           ),
         ),
-        actions: [
-          ElevatedButton(
-            child: Text('Hoàn tất'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: buttonColor,
-            ),
-            onPressed: () {
-              Navigator.pop(context); // Close dialog
-              Navigator.pop(context, true); // Return to customer list with success indicator
-            },
-          ),
-        ],
       ),
     );
   }
-  
-  void _showTenDuAnConfirmDialog() {
+
+  void _showCustomerDetailDialog(KhachHangModel customer) async {
+    List<KhachHangContactModel> contacts = [];
+    try {
+      contacts = await _dbHelper.getContactsByCustomerUid(customer.uid!);
+    } catch (e) {
+      print('Error loading contacts: $e');
+    }
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Xác nhận tên dự án'),
-        content: Text(
-          'Tên dự án "${tenDuAnController.text}" sẽ không thể thay đổi sau khi lưu. Bạn có chắc chắn muốn sử dụng tên này không?'
+      builder: (context) => Dialog(
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.95,
+          height: MediaQuery.of(context).size.height * 0.85,
+          child: DefaultTabController(
+            length: 2,
+            child: Scaffold(
+              appBar: AppBar(
+                automaticallyImplyLeading: false,
+                flexibleSpace: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [appBarTop, appBarBottom],
+                    ),
+                  ),
+                ),
+                title: Text(
+                  customer.tenDuAn ?? 'Chi tiết khách hàng',
+                  style: TextStyle(color: Colors.white, fontSize: 16),
+                ),
+                actions: [
+  Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (_canEditCustomer(customer)) 
+        IconButton(
+          icon: Icon(Icons.edit, color: Colors.white),
+          onPressed: () {
+            Navigator.pop(context);
+            _editCustomer(customer);
+          },
+          tooltip: 'Sửa',
         ),
-        actions: [
-          TextButton(
-            child: Text('Chỉnh sửa lại'),
-            onPressed: () => Navigator.pop(context),
-          ),
-          ElevatedButton(
-            child: Text('Xác nhận'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: buttonColor,
-            ),
-            onPressed: () => Navigator.pop(context),
-          ),
-        ],
+      
+      if (customer.soDienThoai != null && customer.soDienThoai!.isNotEmpty)
+        IconButton(
+          icon: Icon(Icons.call, color: Colors.white),
+          onPressed: () => _callCustomer(customer.soDienThoai!),
+          tooltip: 'Gọi',
+        ),
+      
+      IconButton(
+        icon: Icon(Icons.directions, color: Colors.white),
+        onPressed: () => _openMaps(customer.diaChi ?? ''),
+        tooltip: 'Chỉ đường',
       ),
-    );
-  }
-  
-  @override
-  Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-  flexibleSpace: Container(
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [appBarTop, appBarBottom],
+      
+      IconButton(
+        icon: Icon(Icons.close, color: Colors.white),
+        onPressed: () => Navigator.pop(context),
+        tooltip: 'Đóng',
       ),
-    ),
-  ),
-  title: Text(isEditMode ? 'Chỉnh sửa khách hàng' : 'Thêm khách hàng mới'),
-  bottom: TabBar(
-    controller: _tabController,
-    indicatorColor: Colors.white,
-    tabs: [
-      Tab(text: 'Thông tin khách hàng'),
-      Tab(text: 'Người liên hệ'),
     ],
   ),
-),
-        body: TabBarView(
-          controller: _tabController,
-          children: [
-            // Tab 1: Customer Information Form
-            SingleChildScrollView(
-              padding: EdgeInsets.all(16.0),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // UID field (non-editable)
-                    _buildInfoField('UID (tự động)', newCustomer['uid'] ?? '', enabled: false),
-                    SizedBox(height: 16),
-                    
-                    // Người dùng (username - non-editable)
-                    _buildInfoField('Người dùng', newCustomer['nguoiDung'] ?? '', enabled: false),
-                    SizedBox(height: 16),
-                    
-                    // Đánh dấu dropdown
-                    _buildDropdownField(
-                      'Đánh dấu',
-                      ['', '1'],
-                      selectedDanhDau,
-                      (value) => setState(() => selectedDanhDau = value),
-                    ),
-                    
-                    // Vùng miền dropdown
-                    _buildDropdownField(
-                      'Vùng miền *',
-                      ['Bắc', 'Trung', 'Nam'],
-                      selectedVungMien,
-                      (value) => setState(() => selectedVungMien = value),
-                      validator: (value) => value == null ? 'Vui lòng chọn vùng miền' : null,
-                    ),
-                    
-                    // Phân loại (non-editable)
-                    _buildInfoField('Phân loại', newCustomer['phanLoai'] ?? '', enabled: false),
-                    SizedBox(height: 16),
-                    
-                    // Loại hình (non-editable)
-                    _buildInfoField('Loại hình', selectedLoaiHinh, enabled: false),
-                    SizedBox(height: 16),
-                    
-                    // Loại công trình dropdown
-                    _buildDropdownField(
-                      'Loại công trình *',
-                      [
-                        'Đại lý', 'Khách hàng lẻ', 'Khách sạn 5*', 'Khách sạn 4*',
-                        'Khách sạn 3*', 'Nhà hàng', 'Giặt là', 'Resort', 'Nhà máy KCN',
-                        'Bệnh viện', 'Tòa nhà', 'Trường học', 'Sân bay Bến xe',
-                        'Khách thương mại', 'Du thuyền', 'Cty Dịch vụ', 'Căn hộ dịch vụ',
-                        'Khu đô thị', 'Chung cư', 'Tòa nhà cao cấp', 'VP lẻ',
-                        'Trung tâm thương mại', 'Homestay', 'Khách sạn'
-                      ].toSet().toList(),
-                      selectedLoaiCongTrinh,
-                      (value) => setState(() => selectedLoaiCongTrinh = value),
-                      validator: (value) => value == null ? 'Vui lòng chọn loại công trình' : null,
-                    ),
-                    
-                    // Trạng thái hợp đồng dropdown
-                    _buildDropdownField(
-                      'Trạng thái hợp đồng *',
-                      ['Tiếp cận', 'Quan tâm', 'Báo giá', 'Đã ký', 'Dừng', 'Thất bại'],
-                      selectedTrangThaiHopDong,
-                      (value) => setState(() => selectedTrangThaiHopDong = value),
-                      validator: (value) => value == null ? 'Vui lòng chọn trạng thái hợp đồng' : null,
-                    ),
-                    
-                    // Tên dự án (with warning)
-                    _buildTextField(
-                      'Tên dự án *',
-                      tenDuAnController,
-                      validator: (value) => value == null || value.isEmpty ? 'Vui lòng nhập tên dự án' : null,
-                      helperText: 'Lưu ý: Tên dự án không thể thay đổi sau khi lưu. Hãy kiểm tra kỹ trước khi nhập.',
-                      onEditingComplete: () {
-                        // Show confirmation dialog when user completes editing
-                        if (tenDuAnController.text.isNotEmpty) {
-                          _showTenDuAnConfirmDialog();
-                        }
-                      },
-                    ),
-                    
-                    // Ghi chú
-                    _buildTextField('Ghi chú', ghiChuController, maxLines: 3),
-                    
-                    // Địa chỉ
-                    _buildTextField('Địa chỉ', diaChiController),
-                    
-                    // Mã số thuế
-                    _buildTextField('Mã số thuế', maSoThueController),
-                    
-                    // Số điện thoại
-                    _buildTextField(
-                      'Số điện thoại', 
-                      soDienThoaiController,
-                      keyboardType: TextInputType.phone
-                    ),
-                    
-                    // Fax
-                    _buildTextField('Fax', faxController),
-                    
-                    // Website
-                    _buildTextField('Website', websiteController),
-                    
-                    // Email
-                    _buildTextField(
-                      'Email', 
-                      emailController,
-                      keyboardType: TextInputType.emailAddress
-                    ),
-                    
-                    // Số tài khoản
-                    _buildTextField('Số tài khoản', soTaiKhoanController),
-                    
-                    // Ngân hàng
-                    _buildTextField('Ngân hàng', nganHangController),
-                    
-                    // Loại mua hàng dropdown
-                    _buildDropdownField(
-                      'Loại mua hàng',
-                      ['C1 Khách hàng mở mới', 'C1 Khách dự án', 'C1 Khách chăm sóc lại', 'C2 Khách truyền thống'],
-                      selectedLoaiMuaHang,
-                      (value) => setState(() => selectedLoaiMuaHang = value),
-                    ),
-                    
-                    // Tỉnh thành
-                    _buildTextField('Tỉnh thành', tinhThanhController),
-                    
-                    // Quận huyện
-                    _buildTextField('Quận huyện', quanHuyenController),
-                    
-                    // Phường xã
-                    _buildTextField('Phường xã', phuongXaController),
-                    
-                    // Kênh tiếp cận dropdown
-                    _buildDropdownField(
-                      'Kênh tiếp cận',
-                      [
-                        'Trực tiếp', 'Giới thiệu', 'Facebook', 'Zalo', 'Website',
-                        'Shopee', 'Tiki', 'Email', 'Viber', 'Telesale', 'Quảng cáo',
-                        'Nhắn tin', 'Khảo sát/ Form'
-                      ],
-                      selectedKenhTiepCan,
-                      (value) => setState(() => selectedKenhTiepCan = value),
-                    ),
-                    
-                    // Dự kiến triển khai
-                    _buildTextField('Dự kiến triển khai', duKienTrienKhaiController),
-                    
-                    // Tiềm năng DVTM
-                    _buildTextField('Tiềm năng DVTM', tiemNangDVTMController),
-                    
-                    // Yêu cầu nhân sự
-                    _buildTextField('Yêu cầu nhân sự', yeuCauNhanSuController),
-                    
-                    // Cách thức tuyển
-                    _buildTextField('Cách thức tuyển', cachThucTuyenController),
-                    
-                    // Mức lương tuyển
-                    _buildTextField('Mức lương tuyển', mucLuongTuyenController),
-                    
-                    // Lương BP
-                    _buildTextField('Lương BP', luongBPController),
-                    
-                    SizedBox(height: 24),
-                    
-                    // Save and proceed button
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: buttonColor,
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      onPressed: _saveCustomerForm,
-                      child: Text(
-                        'Lưu và tiếp tục',
-                        style: TextStyle(fontSize: 16),
-                      ),
-                    ),
+],
+                bottom: TabBar(
+                  indicatorColor: Colors.orange,
+                  labelColor: Colors.white,
+                  unselectedLabelColor: Colors.white70,
+                  tabs: [
+                    Tab(text: 'Thông tin khách hàng'),
+                    Tab(text: 'Người liên hệ (${contacts.length})'),
                   ],
                 ),
               ),
+              body: TabBarView(
+                children: [
+                  _buildCustomerInfoTab(customer),
+                  _buildContactsTab(contacts),
+                ],
+              ),
             ),
-            
-            // Tab 2: Contact Management
-            Stack(
-              children: [
-                Column(
-                  children: [
-                    // Contacts list
-                    Expanded(
-                      child: _buildContactsList(),
-                    ),
-                    
-                    // Action buttons
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Row(
-                        children: [
-                          // Add predefined subjects
-                          if (newCustomer['phanLoai'] == 'Dịch vụ')
-                            Expanded(
-                              flex: 1,
-                              child: ElevatedButton.icon(
-                                icon: Icon(Icons.list),
-                                label: Text('Tạo danh mục'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.amber[700],
-                                  padding: EdgeInsets.symmetric(vertical: 12),
-                                ),
-                                onPressed: contacts.isEmpty ? _offerPredefinedSubjects : null,
-                              ),
-                            ),
-                          
-                          SizedBox(width: 8),
-                          
-                          // Add new contact
-                          Expanded(
-                            flex: 1,
-                            child: ElevatedButton.icon(
-                              icon: Icon(Icons.person_add),
-                              label: Text('Thêm liên hệ'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: buttonColor,
-                                padding: EdgeInsets.symmetric(vertical: 12),
-                              ),
-                              onPressed: _addNewContact,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    
-                    // Submit button
-                    Padding(
-                      padding: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 16.0),
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          padding: EdgeInsets.symmetric(vertical: 16),
-                        ),
-                        onPressed: _isSubmitting ? null : _submitData,
-                        child: _isSubmitting 
-  ? Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(
-            color: Colors.white,
-            strokeWidth: 2,
           ),
-        ),
-        SizedBox(width: 10),
-        Text(
-          isEditMode ? 'Đang cập nhật dữ liệu...' : 'Đang gửi dữ liệu...',
-          style: TextStyle(fontSize: 16),
-        ),
-      ],
-    )
-  : Text(
-      isEditMode ? 'Cập nhật dữ liệu' : 'Gửi dữ liệu lên server',
-      style: TextStyle(fontSize: 16),
-    ),
-                      ),
-                    ),
-                  ],
-                ),
-                
-                // Loading overlay
-                if (_isSubmitting)
-                  Container(
-                    color: Colors.black.withOpacity(0.3),
-                    child: Center(
-                      child: Card(
-                        elevation: 8,
-                        child: Padding(
-                          padding: const EdgeInsets.all(20.0),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              CircularProgressIndicator(color: buttonColor),
-                              SizedBox(height: 16),
-                              Text('Đang gửi dữ liệu...', style: TextStyle(fontSize: 16)),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ],
         ),
       ),
     );
   }
-  
-  Widget _buildContactsList() {
+
+  Widget _buildCustomerInfoTab(KhachHangModel customer) {
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader('Thông tin cơ bản'),
+          _buildDetailRow('UID:', customer.uid ?? ''),
+          _buildDetailRow('Tên dự án:', customer.tenDuAn ?? ''),
+          _buildDetailRow('Tên kỹ thuật:', customer.tenKyThuat ?? ''),
+          _buildDetailRow('Tên rút gọn:', customer.tenRutGon ?? ''),
+          _buildDetailRow('Người dùng:', customer.nguoiDung ?? ''),
+          _buildDetailRow('Phân loại:', customer.phanLoai ?? ''),
+          _buildDetailRow('Vùng miền:', customer.vungMien ?? ''),
+          _buildDetailRow('Loại hình:', customer.loaiHinh ?? ''),
+          _buildDetailRow('Loại công trình:', customer.loaiCongTrinh ?? ''),
+          _buildDetailRow('Trạng thái HĐ:', customer.trangThaiHopDong ?? ''),
+          
+          SizedBox(height: 20),
+          
+          _buildSectionHeader('Thông tin liên hệ'),
+          _buildDetailRow('Địa chỉ:', customer.diaChi ?? ''),
+          _buildDetailRow('Địa chỉ VP:', customer.diaChiVanPhong ?? ''),
+          _buildDetailRow('Tỉnh thành:', customer.tinhThanh ?? ''),
+          _buildDetailRow('Quận huyện:', customer.quanHuyen ?? ''),
+          _buildDetailRow('Phường xã:', customer.phuongXa ?? ''),
+          _buildDetailRow('Điện thoại:', customer.soDienThoai ?? '', isPhone: true),
+          _buildDetailRow('Fax:', customer.fax ?? ''),
+          _buildDetailRow('Website:', customer.website ?? ''),
+          _buildDetailRow('Email:', customer.email ?? ''),
+          
+          SizedBox(height: 20),
+          
+          _buildSectionHeader('Thông tin doanh nghiệp'),
+          _buildDetailRow('Mã số thuế:', customer.maSoThue ?? ''),
+          _buildDetailRow('Số tài khoản:', customer.soTaiKhoan ?? ''),
+          _buildDetailRow('Ngân hàng:', customer.nganHang ?? ''),
+          _buildDetailRow('Loại mua hàng:', customer.loaiMuaHang ?? ''),
+          _buildDetailRow('Kênh tiếp cận:', customer.kenhTiepCan ?? ''),
+          
+          SizedBox(height: 20),
+          
+          _buildSectionHeader('Thông tin dự án'),
+          _buildDetailRow('Dự kiến triển khai:', customer.duKienTrienKhai ?? ''),
+          _buildDetailRow('Tiềm năng DVTM:', customer.tiemNangDVTM ?? ''),
+          _buildDetailRow('Giám sát:', customer.giamSat ?? ''),
+          _buildDetailRow('QLDV:', customer.qldv ?? ''),
+          
+          SizedBox(height: 20),
+          
+          _buildSectionHeader('Thông tin nhân sự'),
+          _buildDetailRow('Yêu cầu nhân sự:', customer.yeuCauNhanSu ?? ''),
+          _buildDetailRow('Cách thức tuyển:', customer.cachThucTuyen ?? ''),
+          _buildDetailRow('Mức lương tuyển:', customer.mucLuongTuyen ?? ''),
+          _buildDetailRow('Lương BP:', customer.luongBP ?? ''),
+          
+          SizedBox(height: 20),
+          
+          _buildSectionHeader('Thông tin khác'),
+          _buildDetailRow('Ghi chú:', customer.ghiChu ?? ''),
+          _buildDetailRow('Đánh dấu:', customer.danhDau ?? ''),
+          if (customer.ngayKhoiTao != null)
+            _buildDetailRow('Ngày khởi tạo:', DateFormat('dd/MM/yyyy HH:mm').format(customer.ngayKhoiTao!)),
+          if (customer.ngayCapNhatCuoi != null)
+            _buildDetailRow('Cập nhật cuối:', DateFormat('dd/MM/yyyy HH:mm').format(customer.ngayCapNhatCuoi!)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContactsTab(List<KhachHangContactModel> contacts) {
     if (contacts.isEmpty) {
       return Center(
         child: Column(
@@ -1953,211 +961,335 @@ Future<List<Map<String, dynamic>>> _submitContacts() async {
             Icon(Icons.people_alt_outlined, size: 64, color: Colors.grey),
             SizedBox(height: 16),
             Text(
-              'Chưa có người liên hệ',
-              style: TextStyle(fontSize: 18, color: Colors.grey),
-            ),
-            Text(
-              'Vui lòng thêm ít nhất một người liên hệ',
-              style: TextStyle(fontSize: 14, color: Colors.grey),
-            ),
-          ],
-        ),
-      );
-    }
-    
-    return ListView.builder(
-      itemCount: contacts.length,
-      itemBuilder: (context, index) {
-        final contact = contacts[index];
-        
-        return Card(
-          margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: ListTile(
-            title: Text(
-              contact.hoTen,
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (contact.chucDanh.isNotEmpty)
-                  Text(contact.chucDanh),
-                if (contact.soDienThoai.isNotEmpty || contact.email.isNotEmpty)
-                  Text(
-                    [
-                      if (contact.soDienThoai.isNotEmpty) contact.soDienThoai,
-                      if (contact.email.isNotEmpty) contact.email,
-                    ].join(' • '),
-                    style: TextStyle(fontSize: 12),
-                  ),
-              ],
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: Icon(Icons.edit, color: buttonColor),
-                  onPressed: () => _editContact(index),
-                ),
-                IconButton(
-                  icon: Icon(Icons.delete, color: Colors.red),
-                  onPressed: () => _deleteContact(index),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-  
-  Widget _buildInfoField(String label, String value, {bool enabled = true}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
-          ),
-        ),
-        SizedBox(height: 4),
-        TextField(
-          controller: TextEditingController(text: value),
-          enabled: enabled,
-          decoration: InputDecoration(
-            border: OutlineInputBorder(),
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            filled: !enabled,
-            fillColor: enabled ? null : Colors.grey[200],
-          ),
-        ),
-      ],
-    );
-  }
-  
-  Widget _buildTextField(
-    String label, 
-    TextEditingController controller, {
-    int maxLines = 1,
-    String? Function(String?)? validator,
-    String? helperText,
-    TextInputType keyboardType = TextInputType.text,
-    Function()? onEditingComplete,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
-          SizedBox(height: 4),
-          TextFormField(
-            controller: controller,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              helperText: helperText,
-              helperMaxLines: 3,
-            ),
-            maxLines: maxLines,
-            validator: validator,
-            keyboardType: keyboardType,
-            onEditingComplete: onEditingComplete,
-          ),
-        ],
-      ),
-    );
-  }
-  
-  Widget _buildDropdownField(
-    String label,
-    List<String> items,
-    String? selectedValue,
-    Function(String?) onChanged, {
-    String? Function(String?)? validator,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
-          SizedBox(height: 4),
-          DropdownButtonFormField<String>(
-            value: selectedValue,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            ),
-            items: items.map((String value) {
-              return DropdownMenuItem<String>(
-                value: value,
-                child: Text(value),
-              );
-            }).toList(),
-            onChanged: onChanged,
-            validator: validator,
-          ),
-        ],
-      ),
-    );
-  }
-}
-class KhachHangContactDraft {
-  String uid;
-  String boPhan; // references KhachHang uid
-  String nguoiDung;
-  String ngayTao;
-  String ngayCapNhat;
-  String hoTen;
-  String gioiTinh;
-  String chucDanh;
-  String soDienThoai;
-  String email;
-  String nguonGoc;
-  
-  KhachHangContactDraft({
-    required this.uid,
-    required this.boPhan,
-    required this.nguoiDung,
-    required this.ngayTao,
-    required this.ngayCapNhat,
-    required this.hoTen,
-    this.gioiTinh = '',
-    this.chucDanh = '',
-    this.soDienThoai = '',
-    this.email = '',
-    this.nguonGoc = '',
-  });
-  
-  Map<String, dynamic> toMap() {
-    return {
-      'uid': uid,
-      'boPhan': boPhan,
-      'nguoiDung': nguoiDung,
-      'ngayTao': ngayTao,
-      'ngayCapNhat': ngayCapNhat,
-      'hoTen': hoTen,
-      'gioiTinh': gioiTinh,
-      'chucDanh': chucDanh,
-      'soDienThoai': soDienThoai,
-      'email': email,
-      'nguonGoc': nguonGoc,
-    };
-  }
-}
+             'Không có người liên hệ',
+             style: TextStyle(fontSize: 18, color: Colors.grey),
+           ),
+         ],
+       ),
+     );
+   }
 
+   return ListView.builder(
+     padding: EdgeInsets.all(16),
+     itemCount: contacts.length,
+     itemBuilder: (context, index) {
+       final contact = contacts[index];
+       return Card(
+         margin: EdgeInsets.only(bottom: 12),
+         child: Padding(
+           padding: EdgeInsets.all(16),
+           child: Column(
+             crossAxisAlignment: CrossAxisAlignment.start,
+             children: [
+               Row(
+                 children: [
+                   CircleAvatar(
+                     backgroundColor: buttonColor,
+                     child: Text(
+                       contact.hoTen?.isNotEmpty == true
+                           ? contact.hoTen!.substring(0, 1).toUpperCase()
+                           : '?',
+                       style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                     ),
+                   ),
+                   SizedBox(width: 12),
+                   Expanded(
+                     child: Column(
+                       crossAxisAlignment: CrossAxisAlignment.start,
+                       children: [
+                         Text(
+                           contact.hoTen ?? 'Không có tên',
+                           style: TextStyle(
+                             fontWeight: FontWeight.bold,
+                             fontSize: 16,
+                           ),
+                         ),
+                         if (contact.chucDanh != null && contact.chucDanh!.isNotEmpty)
+                           Text(
+                             contact.chucDanh!,
+                             style: TextStyle(
+                               color: Colors.grey[600],
+                               fontSize: 14,
+                             ),
+                           ),
+                       ],
+                     ),
+                   ),
+                 ],
+               ),
+               
+               if (contact.gioiTinh != null && contact.gioiTinh!.isNotEmpty ||
+                   contact.soDienThoai != null && contact.soDienThoai!.isNotEmpty ||
+                   contact.email != null && contact.email!.isNotEmpty ||
+                   contact.nguonGoc != null && contact.nguonGoc!.isNotEmpty)
+                 Padding(
+                   padding: EdgeInsets.only(top: 12),
+                   child: Column(
+                     crossAxisAlignment: CrossAxisAlignment.start,
+                     children: [
+                       if (contact.gioiTinh != null && contact.gioiTinh!.isNotEmpty)
+                         _buildContactDetailRow('Giới tính:', contact.gioiTinh!),
+                       if (contact.soDienThoai != null && contact.soDienThoai!.isNotEmpty)
+                         _buildContactDetailRow('Điện thoại:', contact.soDienThoai!, isPhone: true),
+                       if (contact.email != null && contact.email!.isNotEmpty)
+                         _buildContactDetailRow('Email:', contact.email!),
+                       if (contact.nguonGoc != null && contact.nguonGoc!.isNotEmpty)
+                         _buildContactDetailRow('Nguồn gốc:', contact.nguonGoc!),
+                       if (contact.ngayTao != null)
+                         _buildContactDetailRow('Ngày tạo:', DateFormat('dd/MM/yyyy').format(contact.ngayTao!)),
+                     ],
+                   ),
+                 ),
+             ],
+           ),
+         ),
+       );
+     },
+   );
+ }
+
+ Widget _buildSectionHeader(String title) {
+   return Padding(
+     padding: EdgeInsets.only(bottom: 12),
+     child: Text(
+       title,
+       style: TextStyle(
+         fontSize: 18,
+         fontWeight: FontWeight.bold,
+         color: appBarTop,
+       ),
+     ),
+   );
+ }
+
+ Widget _buildDetailRow(String label, String value, {bool isPhone = false}) {
+   if (value.isEmpty) return SizedBox.shrink();
+   
+   return Padding(
+     padding: EdgeInsets.only(bottom: 8),
+     child: Row(
+       crossAxisAlignment: CrossAxisAlignment.start,
+       children: [
+         SizedBox(
+           width: 120,
+           child: Text(
+             label,
+             style: TextStyle(
+               fontSize: 14,
+               color: Colors.grey[700],
+               fontWeight: FontWeight.w500,
+             ),
+           ),
+         ),
+         Expanded(
+           child: isPhone
+               ? GestureDetector(
+                   onTap: () => _callCustomer(value),
+                   child: Text(
+                     value,
+                     style: TextStyle(
+                       fontSize: 14,
+                       color: Colors.blue,
+                       decoration: TextDecoration.underline,
+                     ),
+                   ),
+                 )
+               : SelectableText(
+                   value,
+                   style: TextStyle(fontSize: 14),
+                 ),
+         ),
+       ],
+     ),
+   );
+ }
+
+ Widget _buildContactDetailRow(String label, String value, {bool isPhone = false}) {
+   return Padding(
+     padding: EdgeInsets.only(bottom: 4),
+     child: Row(
+       crossAxisAlignment: CrossAxisAlignment.start,
+       children: [
+         SizedBox(
+           width: 100,
+           child: Text(
+             label,
+             style: TextStyle(
+               fontSize: 12,
+               color: Colors.grey[600],
+               fontWeight: FontWeight.w500,
+             ),
+           ),
+         ),
+         Expanded(
+           child: isPhone
+               ? GestureDetector(
+                   onTap: () => _callCustomer(value),
+                   child: Text(
+                     value,
+                     style: TextStyle(
+                       fontSize: 12,
+                       color: Colors.blue,
+                       decoration: TextDecoration.underline,
+                     ),
+                   ),
+                 )
+               : Text(
+                   value,
+                   style: TextStyle(fontSize: 12),
+                 ),
+         ),
+       ],
+     ),
+   );
+ }
+
+ Future<void> _openMaps(String address) async {
+   if (address.isEmpty) {
+     ScaffoldMessenger.of(context).showSnackBar(
+       SnackBar(content: Text('Không có địa chỉ để mở bản đồ'))
+     );
+     return;
+   }
+   
+   final encodedAddress = Uri.encodeComponent(address);
+   final mapsUrl = Uri.parse('https://www.google.com/maps/search/?api=1&query=$encodedAddress');
+   
+   if (await url_launcher.canLaunchUrl(mapsUrl)) {
+     await url_launcher.launchUrl(mapsUrl, mode: url_launcher.LaunchMode.externalApplication);
+   } else {
+     ScaffoldMessenger.of(context).showSnackBar(
+       SnackBar(content: Text('Không thể mở bản đồ cho địa chỉ này'))
+     );
+   }
+ }
+
+ void _showFilterDialog() {
+   showDialog(
+     context: context,
+     builder: (context) {
+       return AlertDialog(
+         title: Text('Lọc khách hàng'),
+         content: Container(
+           width: double.maxFinite,
+           child: Column(
+             mainAxisSize: MainAxisSize.min,
+             children: [
+               _buildFilterOption('Tất cả'),
+               Divider(),
+               Text('Phân loại:', style: TextStyle(fontWeight: FontWeight.bold)),
+               ..._getUniqueValues('phanLoai').map((value) => _buildFilterOption(value)),
+               SizedBox(height: 8),
+               Text('Vùng miền:', style: TextStyle(fontWeight: FontWeight.bold)),
+               ..._getUniqueValues('vungMien').map((value) => _buildFilterOption(value)),
+               SizedBox(height: 8),
+               Text('Loại hình:', style: TextStyle(fontWeight: FontWeight.bold)),
+               ..._getUniqueValues('loaiHinh').map((value) => _buildFilterOption(value)),
+             ],
+           ),
+         ),
+         actions: [
+           TextButton(
+             child: Text('Đóng'),
+             onPressed: () {
+               Navigator.of(context).pop();
+             },
+           ),
+         ],
+       );
+     },
+   );
+ }
+
+ List<String> _getUniqueValues(String field) {
+   final Set<String> values = Set<String>();
+   
+   for (var customer in _khachHangList) {
+     String? value;
+     
+     switch (field) {
+       case 'phanLoai':
+         value = customer.phanLoai;
+         break;
+       case 'vungMien':
+         value = customer.vungMien;
+         break;
+       case 'loaiHinh':
+         value = customer.loaiHinh;
+         break;
+     }
+     
+     if (value != null && value.isNotEmpty) {
+       values.add(value);
+     }
+   }
+   
+   return values.toList()..sort();
+ }
+
+ Widget _buildFilterOption(String value) {
+   return RadioListTile<String>(
+     title: Text(value),
+     value: value,
+     groupValue: _filterBy,
+     onChanged: (newValue) {
+       Navigator.pop(context);
+       if (newValue != null) {
+         _updateFilter(newValue);
+       }
+     },
+   );
+ }
+
+ void _showSortDialog() {
+   showDialog(
+     context: context,
+     builder: (context) {
+       return AlertDialog(
+         title: Text('Sắp xếp theo'),
+         content: Column(
+           mainAxisSize: MainAxisSize.min,
+           children: [
+             _buildSortOption('tenDuAn', 'Tên dự án'),
+             _buildSortOption('vungMien', 'Vùng miền'),
+             _buildSortOption('phanLoai', 'Phân loại'),
+             _buildSortOption('ngayCapNhatCuoi', 'Ngày cập nhật'),
+           ],
+         ),
+         actions: [
+           TextButton(
+             child: Text('Đóng'),
+             onPressed: () {
+               Navigator.of(context).pop();
+             },
+           ),
+         ],
+       );
+     },
+   );
+ }
+
+ Widget _buildSortOption(String field, String label) {
+   return RadioListTile<String>(
+     title: Row(
+       children: [
+         Text(label),
+         SizedBox(width: 8),
+         if (_sortBy == field)
+           Icon(
+             _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
+             size: 16,
+           ),
+       ],
+     ),
+     value: field,
+     groupValue: _sortBy,
+     onChanged: (newValue) {
+       Navigator.pop(context);
+       if (newValue != null) {
+         _updateSort(newValue);
+       }
+     },
+   );
+ }
+}

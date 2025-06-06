@@ -1205,7 +1205,7 @@ Future<void> _checkForAutoCheckIn() async {
       } else {
         setState(() {
           _isLoading = false;
-          _message = 'Lỗi chấm công: ${response.statusCode}';
+          _message = 'Lỗi chấm công: ${response.statusCode}\n❌Thử dùng wifi/4G khác vì có thể mạng của bạn có vấn đề❌';
         });
       }
     } else {
@@ -1231,7 +1231,7 @@ Future<void> _checkForAutoCheckIn() async {
       } else {
         setState(() {
           _isLoading = false;
-          _message = 'Lỗi chấm công: ${response.statusCode}';
+          _message = 'Lỗi chấm công: ${response.statusCode}\n❌Thử dùng wifi/4G khác vì có thể mạng của bạn có vấn đề❌';
         });
       }
     }
@@ -1241,7 +1241,7 @@ Future<void> _checkForAutoCheckIn() async {
     print('ERROR in check-in process: $e');
     setState(() {
       _isLoading = false;
-      _message = 'Lỗi chấm công: $e';
+      _message = 'Lỗi chấm công: $e\n❌Thử dùng wifi/4G khác vì có thể mạng của bạn có vấn đề❌';
     });
   }
 }

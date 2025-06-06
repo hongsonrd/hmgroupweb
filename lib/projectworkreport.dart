@@ -595,8 +595,8 @@ late List<String> topicList;
       'ngay': formattedDate,
       'gio': formattedTime,
       'nguoiDung': username ?? '',
-      'boPhan': currentProject ?? '', // Explicitly use the current project value
-      'chiaSe': currentShares.join(','), // Explicitly use the current shares
+      'boPhan': currentProject ?? '', 
+      'chiaSe': currentShares.join(','), 
       'phanLoai': 'Cả ngày',
       'moTaChung': content.trim().isEmpty ? '.' : content.trim(),
       'nhom': 'Kế hoạch',
