@@ -30,6 +30,7 @@ class HSKhoScreen extends StatefulWidget {
 }
 
 class _HSKhoScreenState extends State<HSKhoScreen> with SingleTickerProviderStateMixin {
+    Set<String> _strikedThroughOrders = Set<String>();
   String _selectedThoiGianFilter = 'HN';
   List<GiaoDichKhoModel> _inputHistory = [];
   List<GiaoDichKhoModel> _outputHistory = [];
@@ -95,6 +96,7 @@ class _HSKhoScreenState extends State<HSKhoScreen> with SingleTickerProviderStat
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(_handleTabChange);
     _fetchPendingOrders();
+    _loadStrikedThroughOrders();
   }
 
   @override
@@ -104,6 +106,60 @@ class _HSKhoScreenState extends State<HSKhoScreen> with SingleTickerProviderStat
     _historySearchController.dispose(); 
     super.dispose();
   }
+  // Load striked through orders from SharedPreferences
+Future<void> _loadStrikedThroughOrders() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final strikedOrdersJson = prefs.getStringList('striked_through_orders') ?? [];
+    setState(() {
+      _strikedThroughOrders = strikedOrdersJson.toSet();
+    });
+  } catch (e) {
+    print('Error loading striked through orders: $e');
+  }
+}
+
+// Save striked through orders to SharedPreferences
+Future<void> _saveStrikedThroughOrders() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('striked_through_orders', _strikedThroughOrders.toList());
+  } catch (e) {
+    print('Error saving striked through orders: $e');
+  }
+}
+
+// Toggle strikethrough status for an order
+Future<void> _toggleOrderStrikethrough(DonHangModel order) async {
+  if (order.soPhieu == null) return;
+  
+  setState(() {
+    if (_strikedThroughOrders.contains(order.soPhieu)) {
+      _strikedThroughOrders.remove(order.soPhieu);
+    } else {
+      _strikedThroughOrders.add(order.soPhieu!);
+    }
+  });
+  
+  // Save to SharedPreferences
+  await _saveStrikedThroughOrders();
+  
+  // Show confirmation
+  final isStriked = _strikedThroughOrders.contains(order.soPhieu);
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(isStriked ? 'Đã gạch chéo đơn hàng' : 'Đã bỏ gạch chéo đơn hàng'),
+      backgroundColor: Colors.green,
+      duration: Duration(seconds: 2),
+    ),
+  );
+}
+
+// Check if an order is striked through
+bool _isOrderStrikedThrough(String? soPhieu) {
+  if (soPhieu == null) return false;
+  return _strikedThroughOrders.contains(soPhieu);
+}
 void _handleTabChange() {
   if (_tabController.index == 1 && _inputHistory.isEmpty) {
     _fetchInputHistory();
@@ -235,7 +291,7 @@ List<GiaoDichKhoModel> get _filteredOutputHistory {
       
       // Filter for orders with status "0" (Đang xử lý) or "Cần xuất"
       final pendingOrders = allOrders.where((order) {
-        return order.trangThai == "0" || order.trangThai == "Cần xuất";
+        return order.trangThai == "0" || order.trangThai == "Cần xuất" || order.trangThai == "Xuất Nội bộ xong";
       }).toList();
       
       setState(() {
@@ -1630,11 +1686,15 @@ void _showWarehouseDetails() async {
     separatorBuilder: (context, index) => SizedBox(height: 8),
     itemBuilder: (context, index) {
       final order = _filteredOrders[index];
+      final isStrikedThrough = _isOrderStrikedThrough(order.soPhieu);
+      
       return Card(
         elevation: 2,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),
+        // Add visual indication for striked through orders
+        color: isStrikedThrough ? Colors.grey[200] : Colors.white,
         child: Column(
           children: [
             ListTile(
@@ -1644,24 +1704,59 @@ void _showWarehouseDetails() async {
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
+                  // Apply strikethrough decoration
+                  decoration: isStrikedThrough ? TextDecoration.lineThrough : null,
+                  color: isStrikedThrough ? Colors.grey[600] : Colors.black87,
                 ),
               ),
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SizedBox(height: 4),
-                  Text('Khách hàng: ${order.tenKhachHang2 ?? order.tenKhachHang ?? "N/A"}'),
-                  Text('Ngày: ${order.ngay ?? "N/A"}, / KD: ${order.nguoiTao}'),
-                  Text('Trạng thái: ${_getStatusText(order.trangThai)}'),
+                  Text(
+                    'Khách hàng: ${order.tenKhachHang2 ?? order.tenKhachHang ?? "N/A"}',
+                    style: TextStyle(
+                      decoration: isStrikedThrough ? TextDecoration.lineThrough : null,
+                      color: isStrikedThrough ? Colors.grey[600] : Colors.black87,
+                    ),
+                  ),
+                  Text(
+                    'Ngày: ${order.ngay ?? "N/A"}, / KD: ${order.nguoiTao}',
+                    style: TextStyle(
+                      decoration: isStrikedThrough ? TextDecoration.lineThrough : null,
+                      color: isStrikedThrough ? Colors.grey[600] : Colors.black87,
+                    ),
+                  ),
+                  Text(
+                    'Trạng thái: ${_getStatusText(order.trangThai)}',
+                    style: TextStyle(
+                      decoration: isStrikedThrough ? TextDecoration.lineThrough : null,
+                      color: isStrikedThrough ? Colors.grey[600] : Colors.black87,
+                    ),
+                  ),
                 ],
               ),
-              trailing: IconButton(
-                icon: Icon(Icons.chevron_right),
-                onPressed: () {
-                  if (order.soPhieu != null) {
-                    _showOrderDetails(order.soPhieu!);
-                  }
-                },
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Add toggle button for strikethrough
+                  IconButton(
+                    icon: Icon(
+                      isStrikedThrough ? Icons.visibility : Icons.visibility_off,
+                      color: isStrikedThrough ? Colors.grey[600] : Color(0xFF837826),
+                    ),
+                    onPressed: () => _toggleOrderStrikethrough(order),
+                    tooltip: isStrikedThrough ? 'Bỏ gạch chéo' : 'Gạch chéo',
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.chevron_right),
+                    onPressed: () {
+                      if (order.soPhieu != null) {
+                        _showOrderDetails(order.soPhieu!);
+                      }
+                    },
+                  ),
+                ],
               ),
               isThreeLine: true,
               onTap: () {
@@ -1671,7 +1766,7 @@ void _showWarehouseDetails() async {
               },
             ),
             
-            // Add output and QR buttons
+            // Action buttons section (existing code)
             Container(
               width: double.infinity,
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1683,25 +1778,22 @@ void _showWarehouseDetails() async {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   ElevatedButton.icon(
-        onPressed: () {
-          // Generate PXK for order
-          _generatePXK(order);
-        },
-        icon: Icon(Icons.receipt_long, size: 16, color: Colors.white),
-        label: Text('PXK', style: TextStyle(color: Colors.white)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.green[700],
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-      ),
-                        SizedBox(width: 8),
-                  // Add QR button
+                    onPressed: () {
+                      _generatePXK(order);
+                    },
+                    icon: Icon(Icons.receipt_long, size: 16, color: Colors.white),
+                    label: Text('PXK', style: TextStyle(color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green[700],
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 8),
                   ElevatedButton.icon(
                     onPressed: () {
-                      // Generate QR for order
                       _showOrderQRCode(order);
                     },
                     icon: Icon(Icons.qr_code, size: 16, color: Colors.white),
@@ -1715,10 +1807,8 @@ void _showWarehouseDetails() async {
                     ),
                   ),
                   SizedBox(width: 8),
-                  // Export button
                   ElevatedButton.icon(
                     onPressed: () {
-                      // Direct export for this order
                       _directOrderExport(order);
                     },
                     icon: Icon(Icons.output, size: 16, color: Colors.white),

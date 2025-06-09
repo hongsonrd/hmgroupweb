@@ -314,7 +314,7 @@ if (title == 'Hợp đồng của tôi') {
     child: Platform.isWindows
         ? // Show image on Windows
           Container(
-            height: 600, 
+            height: 350, 
             decoration: BoxDecoration(
               image: DecorationImage(
                 image: AssetImage('assets/viddream.png'),
