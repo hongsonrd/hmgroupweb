@@ -27,6 +27,9 @@ import 'package:sqflite/sqflite.dart';
 import 'http_client.dart';
 import 'package:file_picker/file_picker.dart';
 import 'projecttimeline.dart';
+import 'projecttimeline2.dart';
+import 'dart:math' as Math;
+import 'dart:async';
 
 class ProjectManagement2 extends StatefulWidget {
     ProjectManagement2({Key? key}) : super(key: key);
@@ -1183,46 +1186,139 @@ if (taskHistories.isNotEmpty) {
     }
     // Step 6: Try to fetch department attendance history
 try {
-  print('Starting attendance history sync...');
+  print('=== STEP 6: ATTENDANCE HISTORY SYNC START ===');
+  print('Current time: ${DateTime.now()}');
+  print('Username: $username');
+  print('Base URL: $baseUrl');
+  
   setState(() => _syncStatus = 'Đang lấy lịch sử chấm công...');
   
-  print('Fetching attendance data from: $baseUrl/chamcongqldv/$username');
-  final chamCongResponse = await AuthenticatedHttpClient.get(
-    Uri.parse('$baseUrl/chamcongqldv/$username')
-  );
+  final attendanceUrl = '$baseUrl/chamcongqldv/$username';
+  print('Fetching attendance data from: $attendanceUrl');
+  
+  // Add timeout to the request
+  final chamCongResponse = await http.get(
+    Uri.parse(attendanceUrl)
+  ).timeout(Duration(seconds: 230));
 
   print('Attendance API response status: ${chamCongResponse.statusCode}');
+  print('Response headers: ${chamCongResponse.headers}');
+  print('Response body length: ${chamCongResponse.body.length}');
+  print('Response body preview (first 500 chars): ${chamCongResponse.body.length > 500 ? chamCongResponse.body.substring(0, 500) + "..." : chamCongResponse.body}');
+  
   if (chamCongResponse.statusCode == 200) {
-    print('Successfully received attendance data');
-    final List<dynamic> chamCongData = json.decode(chamCongResponse.body);
-    print('Parsed attendance records: ${chamCongData.length}');
+    print('✓ Successfully received attendance data');
+    
+    // Check if response is empty
+    if (chamCongResponse.body.trim().isEmpty) {
+      print('⚠️ WARNING: Response body is empty');
+      return;
+    }
+    
+    // Try to parse JSON
+    List<dynamic> chamCongData;
+    try {
+      chamCongData = json.decode(chamCongResponse.body);
+      print('✓ JSON parsing successful');
+      print('Parsed attendance records count: ${chamCongData.length}');
+    } catch (jsonError) {
+      print('❌ JSON parsing failed: $jsonError');
+      print('Raw response: ${chamCongResponse.body}');
+      return;
+    }
+    
+    // Check if data is empty
+    if (chamCongData.isEmpty) {
+      print('⚠️ WARNING: No attendance records returned from API');
+      return;
+    }
+    
+    // Log first few records for inspection
+    print('Sample attendance records:');
+    for (int i = 0; i < Math.min(3, chamCongData.length); i++) {
+      print('Record $i: ${chamCongData[i]}');
+    }
 
     print('Clearing existing attendance table...');
-    await dbHelper.clearTable(DatabaseTables.chamCongCNTable);
+    final clearResult = await dbHelper.clearTable(DatabaseTables.chamCongCNTable);
+    print('✓ Table cleared successfully');
 
     print('Converting attendance data to models...');
-    final chamCongModels = chamCongData.map((data) {
+    final List<ChamCongCNModel> chamCongModels = [];
+    int successCount = 0;
+    int errorCount = 0;
+    
+    for (int i = 0; i < chamCongData.length; i++) {
       try {
-        return ChamCongCNModel.fromMap(data as Map<String, dynamic>);
+        final model = ChamCongCNModel.fromMap(chamCongData[i] as Map<String, dynamic>);
+        chamCongModels.add(model);
+        successCount++;
+        
+        // Log every 100th record to track progress
+        if ((i + 1) % 100 == 0) {
+          print('Processed ${i + 1}/${chamCongData.length} records...');
+        }
       } catch (e) {
-        print('Error converting attendance record: $e');
-        print('Problematic attendance data: $data');
+        errorCount++;
+        print('❌ Error converting attendance record $i: $e');
+        print('Problematic attendance data: ${chamCongData[i]}');
+        
+        // Stop if too many errors
+        if (errorCount > 10) {
+          print('❌ Too many conversion errors, stopping...');
+          break;
+        }
+      }
+    }
+
+    print('Conversion summary:');
+    print('- Successfully converted: $successCount records');
+    print('- Failed to convert: $errorCount records');
+    print('- Total models to insert: ${chamCongModels.length}');
+
+    if (chamCongModels.isNotEmpty) {
+      print('Inserting ${chamCongModels.length} attendance records...');
+      
+      try {
+        await dbHelper.batchInsertChamCongCN(chamCongModels);
+        print('✓ Attendance records inserted successfully');
+        
+        // Verify insertion
+        final db = await dbHelper.database;
+        final verifyResult = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.chamCongCNTable}');
+        final insertedCount = Sqflite.firstIntValue(verifyResult) ?? 0;
+        print('✓ Verification: $insertedCount records found in database');
+        
+        if (insertedCount != chamCongModels.length) {
+          print('⚠️ WARNING: Expected ${chamCongModels.length} but found $insertedCount in database');
+        }
+        
+      } catch (insertError) {
+        print('❌ Error inserting attendance records: $insertError');
+        print('Insert error type: ${insertError.runtimeType}');
         rethrow;
       }
-    }).toList();
-
-    print('Inserting ${chamCongModels.length} attendance records...');
-    await dbHelper.batchInsertChamCongCN(chamCongModels);
-    print('Attendance history sync completed');
+    } else {
+      print('⚠️ WARNING: No valid attendance models to insert');
+    }
+    
+    print('✓ Attendance history sync completed successfully');
   } else {
-    print('Failed to fetch attendance data: ${chamCongResponse.body}');
+    print('❌ Failed to fetch attendance data');
+    print('Status code: ${chamCongResponse.statusCode}');
+    print('Status text: ${chamCongResponse.reasonPhrase}');
+    print('Response body: ${chamCongResponse.body}');
   }
 } catch (e) {
-  print('ERROR in attendance sync:');
+  print('=== ATTENDANCE SYNC ERROR ===');
   print('Error type: ${e.runtimeType}');
   print('Error message: $e');
-  print('Stack trace: ${StackTrace.current}');
-}
+  print('Stack trace:');
+  print(StackTrace.current);
+  print('=== END ATTENDANCE SYNC ERROR ===');
+} finally {
+  print('=== STEP 6: ATTENDANCE HISTORY SYNC END ===');
+} 
 
 // Step 7: Try to fetch order history
 try {
@@ -1732,6 +1828,21 @@ Widget build(BuildContext context) {
               context,
               MaterialPageRoute(
                 builder: (context) => ProjectTimeline(
+                  username: userCredentials.username.toLowerCase(),
+                ),
+              ),
+            ),
+          ),),
+          Expanded(
+            child:
+          _buildCompactButton(
+            'TV1',
+            Icons.timeline,
+            Color(0xFF3F51B5),
+            () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ImageSlideshow(
                   username: userCredentials.username.toLowerCase(),
                 ),
               ),

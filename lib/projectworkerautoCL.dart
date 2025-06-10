@@ -17,7 +17,8 @@ import 'projectworkerautoCLthang.dart';
 import 'package:sqflite/sqflite.dart';
 import 'http_client.dart';
 import 'package:file_picker/file_picker.dart';
-
+import 'package:provider/provider.dart';
+import 'user_credentials.dart';
 class ProjectWorkerAuto extends StatefulWidget {
   final String selectedBoPhan;
   final String username;
@@ -110,53 +111,85 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
     }
   }
   Future<void> _initializeData() async {
-    setState(() => _isLoading = true);
-    try {
-      final dbHelper = DBHelper();
-      
-      // Load all departments
-      try {
-        final response = await AuthenticatedHttpClient.get(
-          Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/${widget.username}'),
-          headers: {'Content-Type': 'application/json'},
-        );
-        
-        if (response.statusCode == 200) {
-          final List<dynamic> apiDepts = json.decode(response.body);
-          setState(() {
-            _departments = apiDepts.map((e) => e.toString()).toList();
-          });
-        }
-      } catch (e) {
-        print('Project API error: $e');
-      }
-
-      // Add departments from the database
-      final existingDepts = await dbHelper.rawQuery(
-        'SELECT DISTINCT BoPhan FROM chamcongcn ORDER BY BoPhan'
-      );
-      _departments.addAll(existingDepts.map((e) => e['BoPhan'] as String));
-      _departments = _departments.toSet().toList()..sort();
-      
-      // Get available months
-      final months = await dbHelper.rawQuery(
-        r"SELECT DISTINCT strftime('%Y-%m', Ngay) as month FROM chamcongcn ORDER BY month DESC"
-      );
-      _availableMonths = months.map((e) => e['month'] as String).toList();
-      
-      String currentMonth = DateFormat('yyyy-MM').format(DateTime.now());
-      if (!_availableMonths.contains(currentMonth)) {
-        _availableMonths.insert(0, currentMonth);
-      }
-      _selectedMonth = _availableMonths.first;
-      
-      await _loadAttendanceData();
-    } catch (e) {
-      print('Init error: $e');
-      _showError('Không thể tải dữ liệu');
+  setState(() => _isLoading = true);
+  try {
+    final dbHelper = DBHelper();
+    
+    // Load departments/projects first
+    await _loadDepartments();
+    
+    // Add departments from the database
+    final existingDepts = await dbHelper.rawQuery(
+      'SELECT DISTINCT BoPhan FROM chamcongcn ORDER BY BoPhan'
+    );
+    final dbDepartments = existingDepts.map((e) => e['BoPhan'] as String).toList();
+    
+    // Combine and deduplicate
+    _departments.addAll(dbDepartments);
+    _departments = _departments.toSet().toList()..sort();
+    
+    // Ensure selected department is valid
+    if (_selectedDepartment != null && !_departments.contains(_selectedDepartment)) {
+      _selectedDepartment = _departments.isNotEmpty ? _departments.first : null;
     }
-    setState(() => _isLoading = false);
+    
+    // Get available months
+    final months = await dbHelper.rawQuery(
+      r"SELECT DISTINCT strftime('%Y-%m', Ngay) as month FROM chamcongcn ORDER BY month DESC"
+    );
+    _availableMonths = months.map((e) => e['month'] as String).toList();
+    
+    String currentMonth = DateFormat('yyyy-MM').format(DateTime.now());
+    if (!_availableMonths.contains(currentMonth)) {
+      _availableMonths.insert(0, currentMonth);
+    }
+    _selectedMonth = _availableMonths.first;
+    
+    await _loadAttendanceData();
+    await _updateSyncStats();
+  } catch (e) {
+    print('Init error: $e');
+    _showError('Không thể tải dữ liệu');
   }
+  setState(() => _isLoading = false);
+}
+
+// Add this new method to handle department loading with proper username access
+Future<void> _loadDepartments() async {
+  try {
+    // Get username from UserCredentials provider
+    final userCredentials = Provider.of<UserCredentials>(context, listen: false);
+    final username = userCredentials.username.toLowerCase(); // Convert to lowercase to match API expectation
+    
+    print('Loading departments for username: $username'); // Debug print
+    
+    final response = await AuthenticatedHttpClient.get(
+      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/$username'),
+      headers: {'Content-Type': 'application/json'},
+    );
+    
+    print('API Response Status: ${response.statusCode}'); // Debug print
+    print('API Response Body: ${response.body}'); // Debug print
+    
+    if (response.statusCode == 200) {
+      final List<dynamic> apiDepts = json.decode(response.body);
+      setState(() {
+        _departments = apiDepts.map((e) => e.toString()).toList();
+      });
+      print('Loaded ${_departments.length} departments from API: $_departments');
+    } else {
+      print('API returned status code: ${response.statusCode}');
+      print('Response body: ${response.body}');
+      throw Exception('Failed to load departments: ${response.statusCode}');
+    }
+  } catch (e) {
+    print('Project API error: $e');
+    // Don't initialize as empty list, let it stay as initialized
+    if (_departments.isEmpty) {
+      _showError('Không thể tải danh sách dự án. Vui lòng kiểm tra kết nối mạng.');
+    }
+  }
+}
 
   Future<void> _loadAttendanceData() async {
     if (_selectedMonth == null || _selectedDepartment == null) return;

@@ -1248,7 +1248,9 @@ Widget build(BuildContext context) {
   }
 bool _isUserAllowedToApproveOrder(DonHangModel order) {
   final lowerStatus = (order.trangThai ?? '').toLowerCase();
-  
+  if (lowerStatus == 'xuất nội bộ xong') {
+    return true; 
+  }
   // Check if all conditions are met:
   // 1. User is in the admin list for the order's location
   // 2. Order has an approvable status
