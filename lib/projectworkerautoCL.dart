@@ -17,8 +17,8 @@ import 'projectworkerautoCLthang.dart';
 import 'package:sqflite/sqflite.dart';
 import 'http_client.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:provider/provider.dart';
-import 'user_credentials.dart';
+import 'export_helper_period.dart';
+
 class ProjectWorkerAuto extends StatefulWidget {
   final String selectedBoPhan;
   final String username;
@@ -45,7 +45,9 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
   Map<String, Color> _staffColors = {};
   DateTime? _lastSyncTime;
   Map<String, dynamic> _syncStats = {};
-
+DateTime? _periodStartDate;
+DateTime? _periodEndDate;
+bool _isPeriodMode = false;
   @override
   void initState() {
     super.initState();
@@ -115,23 +117,32 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
   try {
     final dbHelper = DBHelper();
     
-    // Load departments/projects first
-    await _loadDepartments();
-    
+    // Load all departments
+    try {
+      final response = await AuthenticatedHttpClient.get(
+        Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/${widget.username}'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      
+      if (response.statusCode == 200) {
+        final List<dynamic> apiDepts = json.decode(response.body);
+        setState(() {
+          _departments = apiDepts.map((e) => e.toString()).toList();
+        });
+      }
+    } catch (e) {
+      print('Project API error: $e');
+    }
+
     // Add departments from the database
     final existingDepts = await dbHelper.rawQuery(
       'SELECT DISTINCT BoPhan FROM chamcongcn ORDER BY BoPhan'
     );
-    final dbDepartments = existingDepts.map((e) => e['BoPhan'] as String).toList();
-    
-    // Combine and deduplicate
-    _departments.addAll(dbDepartments);
+    _departments.addAll(existingDepts.map((e) => e['BoPhan'] as String));
     _departments = _departments.toSet().toList()..sort();
     
-    // Ensure selected department is valid
-    if (_selectedDepartment != null && !_departments.contains(_selectedDepartment)) {
-      _selectedDepartment = _departments.isNotEmpty ? _departments.first : null;
-    }
+    // Add "Tất cả" option at the beginning
+    _departments.insert(0, 'Tất cả');
     
     // Get available months
     final months = await dbHelper.rawQuery(
@@ -146,97 +157,259 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
     _selectedMonth = _availableMonths.first;
     
     await _loadAttendanceData();
-    await _updateSyncStats();
   } catch (e) {
     print('Init error: $e');
     _showError('Không thể tải dữ liệu');
   }
   setState(() => _isLoading = false);
 }
+Future<void> _selectPeriodAndExport() async {
+  // Show date range picker dialog
+  final DateTimeRange? picked = await showDateRangePicker(
+    context: context,
+    firstDate: DateTime(2020),
+    lastDate: DateTime.now().add(Duration(days: 365)),
+    initialDateRange: _selectedMonth != null 
+      ? DateTimeRange(
+          start: DateTime.parse('$_selectedMonth-01'),
+          end: DateTime.parse('$_selectedMonth-01').add(Duration(days: 30))
+        )
+      : null,
+    builder: (context, child) {
+      return Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: ColorScheme.light(
+            primary: Colors.teal,
+            onPrimary: Colors.white,
+            surface: Colors.white,
+            onSurface: Colors.black,
+          ),
+        ),
+        child: child!,
+      );
+    },
+  );
 
-// Add this new method to handle department loading with proper username access
-Future<void> _loadDepartments() async {
-  try {
-    // Get username from UserCredentials provider
-    final userCredentials = Provider.of<UserCredentials>(context, listen: false);
-    final username = userCredentials.username.toLowerCase(); // Convert to lowercase to match API expectation
+  if (picked != null) {
+    setState(() {
+      _periodStartDate = picked.start;
+      _periodEndDate = picked.end;
+      _isPeriodMode = true;
+    });
     
-    print('Loading departments for username: $username'); // Debug print
+    // Reload data with period filter
+    await _loadAttendanceData();
     
-    final response = await AuthenticatedHttpClient.get(
-      Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/$username'),
-      headers: {'Content-Type': 'application/json'},
+    // Show format selection dialog
+    final String? format = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Chọn định dạng xuất'),
+          content: Text('Giai đoạn: ${DateFormat('dd/MM/yyyy').format(picked.start)} - ${DateFormat('dd/MM/yyyy').format(picked.end)}'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop('pdf'),
+              child: Text('PDF'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop('excel'),
+              child: Text('Excel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(null),
+              child: Text('Hủy'),
+            ),
+          ],
+        );
+      },
     );
-    
-    print('API Response Status: ${response.statusCode}'); // Debug print
-    print('API Response Body: ${response.body}'); // Debug print
-    
-    if (response.statusCode == 200) {
-      final List<dynamic> apiDepts = json.decode(response.body);
-      setState(() {
-        _departments = apiDepts.map((e) => e.toString()).toList();
-      });
-      print('Loaded ${_departments.length} departments from API: $_departments');
-    } else {
-      print('API returned status code: ${response.statusCode}');
-      print('Response body: ${response.body}');
-      throw Exception('Failed to load departments: ${response.statusCode}');
+
+    if (format != null) {
+      if (format == 'pdf') {
+        await _exportPdf();
+      } else if (format == 'excel') {
+        await _exportExcel();
+      }
     }
-  } catch (e) {
-    print('Project API error: $e');
-    // Don't initialize as empty list, let it stay as initialized
-    if (_departments.isEmpty) {
-      _showError('Không thể tải danh sách dự án. Vui lòng kiểm tra kết nối mạng.');
-    }
+    
+    // Reset to normal mode and reload original data
+    setState(() {
+      _isPeriodMode = false;
+      _periodStartDate = null;
+      _periodEndDate = null;
+    });
+    await _loadAttendanceData();
   }
 }
-
   Future<void> _loadAttendanceData() async {
-    if (_selectedMonth == null || _selectedDepartment == null) return;
-    setState(() => _isLoading = true);
+  if (_selectedMonth == null || _selectedDepartment == null) return;
+  
+  setState(() => _isLoading = true);
+  
+  try {
+    final dbHelper = DBHelper();
+    String query;
+    List<dynamic> params;
     
-    try {
-      final dbHelper = DBHelper();
-      final data = await dbHelper.rawQuery('''
-        SELECT * FROM chamcongcn 
-        WHERE BoPhan = ? AND strftime('%Y-%m', Ngay) = ?
-        ORDER BY MaNV, Ngay
-      ''', [_selectedDepartment, _selectedMonth]);
-      
-      setState(() {
-        _attendanceData = List<Map<String, dynamic>>.from(data.map((record) => {
-          'UID': record['UID'] ?? '',
-          'Ngay': record['Ngay'] ?? '',
-          'Gio': record['Gio'] ?? DateFormat('HH:mm:ss').format(DateTime.now()),
-          'NguoiDung': record['NguoiDung'] ?? widget.username,
-          'BoPhan': record['BoPhan'] ?? _selectedDepartment,
-          'MaBP': record['MaBP'] ?? _selectedDepartment,
-          'PhanLoai': record['PhanLoai']?.toString() ?? '',
-          'MaNV': record['MaNV'] ?? '',
-          'CongThuongChu': record['CongThuongChu'] ?? 'Ro',
-          'NgoaiGioThuong': record['NgoaiGioThuong']?.toString() ?? '0',
-          'NgoaiGioKhac': record['NgoaiGioKhac']?.toString() ?? '0',
-          'NgoaiGiox15': record['NgoaiGiox15']?.toString() ?? '0',
-          'NgoaiGiox2': record['NgoaiGiox2']?.toString() ?? '0',
-          'HoTro': record['HoTro']?.toString() ?? '0',
-          'PartTime': record['PartTime'].toString() ?? '0',
-          'PartTimeSang': record['PartTimeSang'].toString() ?? '0',
-          'PartTimeChieu': record['PartTimeChieu'].toString() ?? '0',
-          'CongLe': record['CongLe']?.toString() ?? '0',
-        }));
-      });
-      
-      final employeeIds = _getUniqueEmployees();
-      await _loadStaffNames(employeeIds);
-      
-    } catch (e) {
-      print('Error loading attendance data: $e');
-      _showError('Không thể tải dữ liệu chấm công');
+    if (_isPeriodMode && _periodStartDate != null && _periodEndDate != null) {
+      // Filter by period dates
+      if (_selectedDepartment == 'Tất cả') {
+        query = '''
+          SELECT * FROM chamcongcn 
+          WHERE date(Ngay) BETWEEN date(?) AND date(?)
+          ORDER BY BoPhan, MaNV, Ngay
+        ''';
+        params = [
+          DateFormat('yyyy-MM-dd').format(_periodStartDate!),
+          DateFormat('yyyy-MM-dd').format(_periodEndDate!)
+        ];
+      } else {
+        query = '''
+          SELECT * FROM chamcongcn 
+          WHERE BoPhan = ? AND date(Ngay) BETWEEN date(?) AND date(?)
+          ORDER BY MaNV, Ngay
+        ''';
+        params = [
+          _selectedDepartment, 
+          DateFormat('yyyy-MM-dd').format(_periodStartDate!),
+          DateFormat('yyyy-MM-dd').format(_periodEndDate!)
+        ];
+      }
+    } else {
+      // Filter by month
+      if (_selectedDepartment == 'Tất cả') {
+        query = '''
+          SELECT * FROM chamcongcn 
+          WHERE strftime('%Y-%m', Ngay) = ?
+          ORDER BY BoPhan, MaNV, Ngay
+        ''';
+        params = [_selectedMonth];
+      } else {
+        query = '''
+          SELECT * FROM chamcongcn 
+          WHERE BoPhan = ? AND strftime('%Y-%m', Ngay) = ?
+          ORDER BY MaNV, Ngay
+        ''';
+        params = [_selectedDepartment, _selectedMonth];
+      }
     }
     
-    setState(() => _isLoading = false);
+    final data = await dbHelper.rawQuery(query, params);
+    
+    // If "Tất cả" is selected, don't store all data in memory to avoid crashes
+    // Just store a small sample for UI purposes
+    List<Map<String, dynamic>> dataToStore;
+    if (_selectedDepartment == 'Tất cả') {
+      // Only store first 50 records for UI display purposes
+      dataToStore = data.take(50).map((record) => {
+        'UID': record['UID'] ?? '',
+        'Ngay': record['Ngay'] ?? '',
+        'Gio': record['Gio'] ?? DateFormat('HH:mm:ss').format(DateTime.now()),
+        'NguoiDung': record['NguoiDung'] ?? widget.username,
+        'BoPhan': record['BoPhan'] ?? _selectedDepartment,
+        'MaBP': record['MaBP'] ?? _selectedDepartment,
+        'PhanLoai': record['PhanLoai']?.toString() ?? '',
+        'MaNV': record['MaNV'] ?? '',
+        'CongThuongChu': record['CongThuongChu'] ?? 'Ro',
+        'NgoaiGioThuong': record['NgoaiGioThuong']?.toString() ?? '0',
+        'NgoaiGioKhac': record['NgoaiGioKhac']?.toString() ?? '0',
+        'NgoaiGiox15': record['NgoaiGiox15']?.toString() ?? '0',
+        'NgoaiGiox2': record['NgoaiGiox2']?.toString() ?? '0',
+        'HoTro': record['HoTro']?.toString() ?? '0',
+        'PartTime': record['PartTime'].toString() ?? '0',
+        'PartTimeSang': record['PartTimeSang'].toString() ?? '0',
+        'PartTimeChieu': record['PartTimeChieu'].toString() ?? '0',
+        'CongLe': record['CongLe']?.toString() ?? '0',
+      }).toList();
+    } else {
+      // For single project, store all data as before
+      dataToStore = List<Map<String, dynamic>>.from(data.map((record) => {
+        'UID': record['UID'] ?? '',
+        'Ngay': record['Ngay'] ?? '',
+        'Gio': record['Gio'] ?? DateFormat('HH:mm:ss').format(DateTime.now()),
+        'NguoiDung': record['NguoiDung'] ?? widget.username,
+        'BoPhan': record['BoPhan'] ?? _selectedDepartment,
+        'MaBP': record['MaBP'] ?? _selectedDepartment,
+        'PhanLoai': record['PhanLoai']?.toString() ?? '',
+        'MaNV': record['MaNV'] ?? '',
+        'CongThuongChu': record['CongThuongChu'] ?? 'Ro',
+        'NgoaiGioThuong': record['NgoaiGioThuong']?.toString() ?? '0',
+        'NgoaiGioKhac': record['NgoaiGioKhac']?.toString() ?? '0',
+        'NgoaiGiox15': record['NgoaiGiox15']?.toString() ?? '0',
+        'NgoaiGiox2': record['NgoaiGiox2']?.toString() ?? '0',
+        'HoTro': record['HoTro']?.toString() ?? '0',
+        'PartTime': record['PartTime'].toString() ?? '0',
+        'PartTimeSang': record['PartTimeSang'].toString() ?? '0',
+        'PartTimeChieu': record['PartTimeChieu'].toString() ?? '0',
+        'CongLe': record['CongLe']?.toString() ?? '0',
+      }));
+    }
+    
+    setState(() {
+      _attendanceData = dataToStore;
+    });
+    
+    final employeeIds = _getUniqueEmployees();
+    await _loadStaffNames(employeeIds);
+    
+  } catch (e) {
+    print('Error loading attendance data: $e');
+    _showError('Không thể tải dữ liệu chấm công');
   }
-
+  
+  setState(() => _isLoading = false);
+}
+Future<List<Map<String, dynamic>>> _loadProjectAttendanceData(String projectName) async {
+  if (_selectedMonth == null) return [];
+  
+  final dbHelper = DBHelper();
+  String query;
+  List<dynamic> params;
+  
+  if (_isPeriodMode && _periodStartDate != null && _periodEndDate != null) {
+    query = '''
+      SELECT * FROM chamcongcn 
+      WHERE BoPhan = ? AND date(Ngay) BETWEEN date(?) AND date(?)
+      ORDER BY MaNV, Ngay
+    ''';
+    params = [
+      projectName, 
+      DateFormat('yyyy-MM-dd').format(_periodStartDate!),
+      DateFormat('yyyy-MM-dd').format(_periodEndDate!)
+    ];
+  } else {
+    query = '''
+      SELECT * FROM chamcongcn 
+      WHERE BoPhan = ? AND strftime('%Y-%m', Ngay) = ?
+      ORDER BY MaNV, Ngay
+    ''';
+    params = [projectName, _selectedMonth];
+  }
+  
+  final data = await dbHelper.rawQuery(query, params);
+  
+  return List<Map<String, dynamic>>.from(data.map((record) => {
+    'UID': record['UID'] ?? '',
+    'Ngay': record['Ngay'] ?? '',
+    'Gio': record['Gio'] ?? DateFormat('HH:mm:ss').format(DateTime.now()),
+    'NguoiDung': record['NguoiDung'] ?? widget.username,
+    'BoPhan': record['BoPhan'] ?? projectName,
+    'MaBP': record['MaBP'] ?? projectName,
+    'PhanLoai': record['PhanLoai']?.toString() ?? '',
+    'MaNV': record['MaNV'] ?? '',
+    'CongThuongChu': record['CongThuongChu'] ?? 'Ro',
+    'NgoaiGioThuong': record['NgoaiGioThuong']?.toString() ?? '0',
+    'NgoaiGioKhac': record['NgoaiGioKhac']?.toString() ?? '0',
+    'NgoaiGiox15': record['NgoaiGiox15']?.toString() ?? '0',
+    'NgoaiGiox2': record['NgoaiGiox2']?.toString() ?? '0',
+    'HoTro': record['HoTro']?.toString() ?? '0',
+    'PartTime': record['PartTime'].toString() ?? '0',
+    'PartTimeSang': record['PartTimeSang'].toString() ?? '0',
+    'PartTimeChieu': record['PartTimeChieu'].toString() ?? '0',
+    'CongLe': record['CongLe']?.toString() ?? '0',
+  }));
+}
   Future<void> _loadStaffNames(List<String> employeeIds) async {
     if (employeeIds.isEmpty) return;
     
@@ -317,22 +490,131 @@ Future<void> _loadDepartments() async {
     setState(() => _isLoading = false);
   }
 }
-
+Future<List<String>> _getAllProjectsWithData() async {
+  final dbHelper = DBHelper();
+  List<Map<String, Object?>> projectsWithData;
+  
+  if (_isPeriodMode && _periodStartDate != null && _periodEndDate != null) {
+    projectsWithData = await dbHelper.rawQuery('''
+      SELECT DISTINCT BoPhan FROM chamcongcn 
+      WHERE date(Ngay) BETWEEN date(?) AND date(?)
+      ORDER BY BoPhan
+    ''', [
+      DateFormat('yyyy-MM-dd').format(_periodStartDate!),
+      DateFormat('yyyy-MM-dd').format(_periodEndDate!)
+    ]);
+  } else {
+    projectsWithData = await dbHelper.rawQuery('''
+      SELECT DISTINCT BoPhan FROM chamcongcn 
+      WHERE strftime('%Y-%m', Ngay) = ?
+      ORDER BY BoPhan
+    ''', [_selectedMonth]);
+  }
+  
+  return projectsWithData.map((p) => p['BoPhan'] as String).toList();
+}
   Future<void> _exportPdf() async {
   setState(() => _isLoading = true);
   
   try {
-    await ExportHelper.exportToPdf(
-      selectedDepartment: _selectedDepartment ?? '',
-      selectedMonth: _selectedMonth ?? '',
-      allEmployees: _getUniqueEmployees(),
-      staffNames: _staffNames,
-      getEmployeesWithValueInColumn: _getEmployeesWithValueInColumn,
-      getDaysInMonth: _getDaysInMonth,
-      getAttendanceForDay: _getAttendanceForDay,
-      calculateSummary: _calculateSummary,
-      context: context,
-    );
+    if (_selectedDepartment == 'Tất cả') {
+      // Get all projects and export each to separate PDFs
+      final allProjects = await _getAllProjectsWithData();
+      
+      if (allProjects.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Không tìm thấy dự án nào có dữ liệu'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+      
+      // Show confirmation dialog
+      final bool? proceed = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text('Xuất PDF tất cả dự án'),
+            content: Text('Sẽ tạo ${allProjects.length} file PDF riêng biệt cho từng dự án. Tiếp tục?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text('Hủy'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text('Tiếp tục'),
+              ),
+            ],
+          );
+        },
+      );
+      
+      if (proceed != true) return;
+      
+      // Export PDFs for each project one by one
+      for (int i = 0; i < allProjects.length; i++) {
+        final project = allProjects[i];
+        
+        // Load data for this specific project
+        final projectData = await _loadProjectAttendanceData(project);
+        final originalData = _attendanceData;
+        final originalStaffNames = Map<String, String>.from(_staffNames);
+        
+        // Temporarily set data for this project
+        setState(() {
+          _attendanceData = projectData;
+        });
+        
+        // Load staff names for this project
+        final employeeIds = _getUniqueEmployees();
+        await _loadStaffNames(employeeIds);
+        
+        // Export PDF for this project
+        await ExportHelper.exportToPdf(
+          selectedDepartment: project,
+          selectedMonth: _selectedMonth ?? '',
+          allEmployees: _getUniqueEmployees(),
+          staffNames: _staffNames,
+          getEmployeesWithValueInColumn: _getEmployeesWithValueInColumn,
+          getDaysInMonth: _getDaysInMonth,
+          getAttendanceForDay: _getAttendanceForDay,
+          calculateSummary: _calculateSummary,
+          context: context,
+        );
+        
+        // Restore original data
+        setState(() {
+          _attendanceData = originalData;
+          _staffNames = originalStaffNames;
+        });
+        
+        // Small delay between exports
+        await Future.delayed(Duration(milliseconds: 500));
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đã xuất PDF cho ${allProjects.length} dự án'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      // Single project export (original logic)
+      await ExportHelper.exportToPdf(
+        selectedDepartment: _selectedDepartment ?? '',
+        selectedMonth: _selectedMonth ?? '',
+        allEmployees: _getUniqueEmployees(),
+        staffNames: _staffNames,
+        getEmployeesWithValueInColumn: _getEmployeesWithValueInColumn,
+        getDaysInMonth: _getDaysInMonth,
+        getAttendanceForDay: _getAttendanceForDay,
+        calculateSummary: _calculateSummary,
+        context: context,
+      );
+    }
   } catch (e) {
     print('PDF export error: $e');
     _showError('Lỗi khi xuất PDF: $e');
@@ -345,17 +627,23 @@ Future<void> _exportExcel() async {
   setState(() => _isLoading = true);
   
   try {
-    await ExportHelper.exportToExcel(
-      selectedDepartment: _selectedDepartment ?? '',
-      selectedMonth: _selectedMonth ?? '',
-      allEmployees: _getUniqueEmployees(),
-      staffNames: _staffNames,
-      getEmployeesWithValueInColumn: _getEmployeesWithValueInColumn,
-      getDaysInMonth: _getDaysInMonth,
-      getAttendanceForDay: _getAttendanceForDay,
-      calculateSummary: _calculateSummary,
-      context: context,
-    );
+    if (_selectedDepartment == 'Tất cả') {
+      // For "Tất cả", redirect to the comprehensive Excel export
+      await _exportExcelAllProjects();
+    } else {
+      // Single project export (original logic)
+      await ExportHelper.exportToExcel(
+        selectedDepartment: _selectedDepartment ?? '',
+        selectedMonth: _selectedMonth ?? '',
+        allEmployees: _getUniqueEmployees(),
+        staffNames: _staffNames,
+        getEmployeesWithValueInColumn: _getEmployeesWithValueInColumn,
+        getDaysInMonth: _getDaysInMonth,
+        getAttendanceForDay: _getAttendanceForDay,
+        calculateSummary: _calculateSummary,
+        context: context,
+      );
+    }
   } catch (e) {
     print('Excel export error: $e');
     _showError('Lỗi khi xuất Excel: $e');
@@ -408,7 +696,20 @@ Future<void> _exportExcel() async {
     }).toList();
   }
 
-  List<int> _getDaysInMonth() {
+List<int> _getDaysInMonth() {
+  if (_isPeriodMode && _periodStartDate != null && _periodEndDate != null) {
+    // Return days in the selected period
+    List<int> days = [];
+    DateTime current = _periodStartDate!;
+    
+    while (current.isBefore(_periodEndDate!) || current.isAtSameMomentAs(_periodEndDate!)) {
+      days.add(current.day);
+      current = current.add(Duration(days: 1));
+    }
+    
+    return days;
+  } else {
+    // Original logic for month
     if (_selectedMonth == null) return [];
     final parts = _selectedMonth!.split('-');
     final year = int.parse(parts[0]);
@@ -416,17 +717,41 @@ Future<void> _exportExcel() async {
     final daysInMonth = DateTime(year, month + 1, 0).day;
     return List.generate(daysInMonth, (i) => i + 1);
   }
-
-  String? _getAttendanceForDay(String empId, int day, String columnType) {
-    final dateStr = '$_selectedMonth-${day.toString().padLeft(2, '0')}';
-    final record = _attendanceData.firstWhere(
-      (record) => 
-        record['MaNV'] == empId && 
-        record['Ngay'].split('T')[0] == dateStr,
-      orElse: () => {},
-    );
-    return record[columnType]?.toString() ?? (columnType == 'CongThuongChu' ? 'Ro' : '0');
+}
+String? _getAttendanceForDay(String empId, int day, String columnType) {
+  String dateStr;
+  
+  if (_isPeriodMode && _periodStartDate != null && _periodEndDate != null) {
+    // In period mode, find the date that matches the day number
+    DateTime current = _periodStartDate!;
+    DateTime? foundDate;
+    
+    while (current.isBefore(_periodEndDate!) || current.isAtSameMomentAs(_periodEndDate!)) {
+      if (current.day == day) {
+        foundDate = current;
+        break;
+      }
+      current = current.add(Duration(days: 1));
+    }
+    
+    if (foundDate == null) {
+      return columnType == 'CongThuongChu' ? 'Ro' : '0';
+    }
+    
+    dateStr = DateFormat('yyyy-MM-dd').format(foundDate);
+  } else {
+    // Original logic
+    dateStr = '$_selectedMonth-${day.toString().padLeft(2, '0')}';
   }
+  
+  final record = _attendanceData.firstWhere(
+    (record) => 
+      record['MaNV'] == empId && 
+      record['Ngay'].split('T')[0] == dateStr,
+    orElse: () => {},
+  );
+  return record[columnType]?.toString() ?? (columnType == 'CongThuongChu' ? 'Ro' : '0');
+}
 
   Map<String, dynamic> _calculateSummary(String empId) {
   if (_selectedMonth == null) return {};
@@ -498,7 +823,18 @@ double tongCD = 0;
 
   // Process each day in the month
   for (int day = 1; day <= days.length; day++) {
-    final dateStr = '$_selectedMonth-${day.toString().padLeft(2, '0')}';
+   String dateStr;
+if (_isPeriodMode && _periodStartDate != null && _periodEndDate != null) {
+  // In period mode, construct actual date based on period dates
+  final dayIndex = day - 1; // Convert to 0-based index
+  final targetDate = _periodStartDate!.add(Duration(days: dayIndex));
+  if (targetDate.isAfter(_periodEndDate!)) {
+    continue; // Skip if beyond period end
+  }
+  dateStr = DateFormat('yyyy-MM-dd').format(targetDate);
+} else {
+  dateStr = '$_selectedMonth-${day.toString().padLeft(2, '0')}';
+}
     
     // Find attendance record for this employee on this day
     final recordList = _attendanceData.where(
@@ -2172,23 +2508,82 @@ String _extractCongThuongChuBase(String? value) {
 }
 
   Widget _buildCombinedView() {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildChuGioThuongSection(),
-          _buildRegularSection('HoTro', 'Hỗ trợ'),
-          _buildRegularSection('PartTime', 'Part time'),
-          _buildRegularSection('PartTimeSang', 'PT sáng'),
-          _buildRegularSection('PartTimeChieu', 'PT chiều'),
-          _buildRegularSection('NgoaiGioKhac', 'NG khác'),
-          _buildRegularSection('NgoaiGiox15', 'NG x1.5'),
-          _buildRegularSection('NgoaiGiox2', 'NG x2'),
-          _buildRegularSection('CongLe', 'Công lễ'),
-        ],
+  if (_selectedDepartment == 'Tất cả') {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.business,
+              size: 64,
+              color: Colors.blue,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Đã chọn "Tất cả" dự án',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.blue[700],
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Chế độ này chỉ hỗ trợ xuất báo cáo Excel tổng hợp',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+              ),
+            ),
+            SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue[200]!),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.blue[700]),
+                  SizedBox(height: 8),
+                  Text(
+                    'Để xem chi tiết từng dự án, vui lòng chọn dự án cụ thể từ danh sách trên',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.blue[700],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
+
+  return SingleChildScrollView(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildChuGioThuongSection(),
+        _buildRegularSection('HoTro', 'Hỗ trợ'),
+        _buildRegularSection('PartTime', 'Part time'),
+        _buildRegularSection('PartTimeSang', 'PT sáng'),
+        _buildRegularSection('PartTimeChieu', 'PT chiều'),
+        _buildRegularSection('NgoaiGioKhac', 'NG khác'),
+        _buildRegularSection('NgoaiGiox15', 'NG x1.5'),
+        _buildRegularSection('NgoaiGiox2', 'NG x2'),
+        _buildRegularSection('CongLe', 'Công lễ'),
+      ],
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -2310,7 +2705,6 @@ String _extractCongThuongChuBase(String? value) {
                           child: Text('Xuất Excel'),
                         ),
                          SizedBox(width: 10),
-                         SizedBox(width: 10),
         ElevatedButton(
           onPressed: _exportExcelAllProjects,
           child: Text('Xuất Excel 100%'),
@@ -2319,6 +2713,7 @@ String _extractCongThuongChuBase(String? value) {
             foregroundColor: Colors.white,
           ),
         ),
+                SizedBox(width: 10),
         ElevatedButton(
           onPressed: () {
             Navigator.push(
@@ -2343,6 +2738,15 @@ String _extractCongThuongChuBase(String? value) {
           onPressed: _syncChamCongCNThang,
           child: Text('Đồng bộ lại 100%'),
         ),
+        SizedBox(width: 10),
+ElevatedButton(
+  onPressed: _selectPeriodAndExport,
+  child: Text('Xuất theo giai đoạn'),
+  style: ElevatedButton.styleFrom(
+    backgroundColor: Colors.teal,
+    foregroundColor: Colors.white,
+  ),
+),
                       ],
                     ),
                   ),
@@ -2436,37 +2840,15 @@ String _extractCongThuongChuBase(String? value) {
   setState(() => _isLoading = true);
   
   try {
-    // Show progress dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Đang xuất Excel cho tất cả dự án'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Vui lòng đợi trong giây lát...')
-            ],
-          ),
-        );
-      },
-    );
+    List<String> projectsList;
     
-    // Get all departments that have data for the selected month
-    final dbHelper = DBHelper();
-    final projectsWithData = await dbHelper.rawQuery('''
-      SELECT DISTINCT BoPhan FROM chamcongcn 
-      WHERE strftime('%Y-%m', Ngay) = ?
-      ORDER BY BoPhan
-    ''', [_selectedMonth]);
-    
-    final projectsList = projectsWithData.map((p) => p['BoPhan'] as String).toList();
-    
-    // Close progress dialog
-    Navigator.of(context).pop();
+    if (_selectedDepartment == 'Tất cả') {
+      // Get all projects with data for the selected month
+      projectsList = await ExportAllProjectsHelper.getAllProjectsWithData(_selectedMonth ?? '');
+    } else {
+      // Use current selected department
+      projectsList = [_selectedDepartment!];
+    }
     
     if (projectsList.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2478,15 +2860,23 @@ String _extractCongThuongChuBase(String? value) {
       return;
     }
     
-    // Use the helper to export all projects
-    await ExportHelper.exportAllProjectsToExcel(
+    // Store original state
+    final originalDepartment = _selectedDepartment;
+    
+    // Use the helper to export all projects to single sheet
+    await ExportAllProjectsHelper.exportAllProjectsToSingleSheet(
       projects: projectsList,
       selectedMonth: _selectedMonth ?? '',
+      context: context,
       loadProjectData: (project) async {
+        // Temporarily change selected department to load data for this specific project
         setState(() {
           _selectedDepartment = project;
         });
         await _loadAttendanceData();
+        
+        // Small delay to prevent overwhelming the device
+        await Future.delayed(Duration(milliseconds: 100));
       },
       getUniqueEmployees: _getUniqueEmployees,
       getStaffNames: () => _staffNames,
@@ -2494,21 +2884,22 @@ String _extractCongThuongChuBase(String? value) {
       getDaysInMonth: _getDaysInMonth,
       getAttendanceForDay: _getAttendanceForDay,
       calculateSummary: _calculateSummary,
-      context: context,
     );
+    
+    // Restore original selection
+    setState(() {
+      _selectedDepartment = originalDepartment;
+    });
+    await _loadAttendanceData();
     
   } catch (e) {
     print('Excel all projects export error: $e');
     _showError('Lỗi khi xuất Excel tất cả dự án: $e');
-    
-    // Make sure dialog is closed in case of error
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    }
   }
   
   setState(() => _isLoading = false);
 }
+
   Widget _buildStatItem(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
