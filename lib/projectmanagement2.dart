@@ -28,6 +28,7 @@ import 'http_client.dart';
 import 'package:file_picker/file_picker.dart';
 import 'projecttimeline.dart';
 import 'projecttimeline2.dart';
+import 'projecttimeline3.dart';
 import 'dart:math' as Math;
 import 'dart:async';
 
@@ -1828,6 +1829,21 @@ Widget build(BuildContext context) {
               context,
               MaterialPageRoute(
                 builder: (context) => ProjectTimeline(
+                  username: userCredentials.username.toLowerCase(),
+                ),
+              ),
+            ),
+          ),),
+                    Expanded(
+            child:
+          _buildCompactButton(
+            'TV2',
+            Icons.timeline,
+            Color(0xFF3F51B5),
+            () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ProjectProgressDashboard(
                   username: userCredentials.username.toLowerCase(),
                 ),
               ),
