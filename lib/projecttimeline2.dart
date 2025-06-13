@@ -19,7 +19,7 @@ class ImageSlideshow extends StatefulWidget {
 class _ImageSlideshowState extends State<ImageSlideshow> {
   bool _isLoading = false;
   List<TaskHistoryModel> _imagesData = [];
-  List<TaskHistoryModel> _allData = []; // Store all data for stats
+  List<TaskHistoryModel> _allData = []; 
   int _currentImageIndex = 0;
   final dbHelper = DBHelper();
   final baseUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app';
@@ -28,13 +28,26 @@ class _ImageSlideshowState extends State<ImageSlideshow> {
   // Slideshow configuration
   Timer? _slideTimer;
   Timer? _syncTimer;
-  final Duration _slideDuration = Duration(seconds: 6); // 6 seconds per image
-  final Duration _syncInterval = Duration(minutes: 35); // Sync every 35 minutes
+  final Duration _slideDuration = Duration(seconds: 5); // 5 seconds per image
+  final Duration _syncInterval = Duration(minutes: 30); // Sync every 30 minutes
   
   // Animation
   PageController _pageController = PageController();
   bool _isTransitioning = false;
-
+bool _shouldFilterProject(String? projectName) {
+    if (projectName == null || projectName.trim().isEmpty) return true;
+    final name = projectName.toLowerCase();
+    
+    if (name.length < 10) return true;
+    if (name.startsWith('hm') && RegExp(r'^hm\d+').hasMatch(name)) return true;
+    if (name == 'unknown') return true;
+    if (projectName == projectName.toUpperCase() && !projectName.contains(' ')) return true;
+    
+    // Filter out project names that start with "http:" or "https:"
+    if (name.startsWith('http:') || name.startsWith('https:')) return true;
+    
+    return false;
+  }
   @override
   void initState() {
     super.initState();
@@ -204,7 +217,7 @@ class _ImageSlideshowState extends State<ImageSlideshow> {
         giaiPhap: item['GiaiPhap'],
       )).toList();
 
-      // Load images data
+      // Load images data with project filtering
       final List<Map<String, dynamic>> imageResults = await db.rawQuery('''
         SELECT * FROM ${DatabaseTables.taskHistoryTable}
         WHERE HinhAnh IS NOT NULL AND HinhAnh != ''
@@ -225,7 +238,7 @@ class _ImageSlideshowState extends State<ImageSlideshow> {
         phanLoai: item['PhanLoai'],
         hinhAnh: item['HinhAnh'],
         giaiPhap: item['GiaiPhap'],
-      )).where((item) => _isValidImage(item)).toList();
+      )).where((item) => _isValidImage(item) && !_shouldFilterProject(item.boPhan)).toList();
 
       setState(() {
         _imagesData = imagesData;
@@ -550,6 +563,14 @@ class _ImageSlideshowState extends State<ImageSlideshow> {
       ),
       child: Row(
         children: [
+          // Back button
+          IconButton(
+            icon: Icon(Icons.arrow_back, color: Colors.black87, size: 24),
+            onPressed: () => Navigator.of(context).pop(),
+            padding: EdgeInsets.zero,
+            constraints: BoxConstraints(),
+          ),
+          SizedBox(width: 16),
           Text(
             'Trình chiếu hình ảnh',
             style: TextStyle(

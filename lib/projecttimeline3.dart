@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'db_helper.dart';
 import 'table_models.dart';
+import 'package:intl/intl.dart';
 
 class ProjectProgressDashboard extends StatefulWidget {
   final String username;
@@ -19,7 +20,7 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
   
   // Timer configuration
   Timer? _reloadTimer;
-  final Duration _reloadInterval = Duration(minutes: 15); // Reload every 15 minutes
+  final Duration _reloadInterval = Duration(minutes: 15); 
   DateTime? _lastUpdate;
   
   @override
@@ -46,14 +47,19 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
     });
   }
 
-  bool _shouldFilterProject(String projectName) {
-    if (projectName.length < 10) return true;
-    if (projectName.toLowerCase().startsWith('hm') && 
-        RegExp(r'^hm\d+').hasMatch(projectName.toLowerCase())) return true;
-    if (projectName.toLowerCase() == 'unknown') return true;
-    if (projectName == projectName.toUpperCase() && !projectName.contains(' ')) return true;
-    return false;
-  }
+bool _shouldFilterProject(String projectName) {
+  if (projectName.length < 10) return true;
+  if (projectName.toLowerCase().startsWith('hm') && 
+      RegExp(r'^hm\d+').hasMatch(projectName.toLowerCase())) return true;
+  if (projectName.toLowerCase() == 'unknown') return true;
+  if (projectName == projectName.toUpperCase() && !projectName.contains(' ')) return true;
+  
+  // Filter out project names that start with "http:" or "https:"
+  if (projectName.toLowerCase().startsWith('http:') || 
+      projectName.toLowerCase().startsWith('https:')) return true;
+  
+  return false;
+}
 
   Future<void> _loadProjectsData() async {
     if (_isLoading) return;
@@ -87,7 +93,7 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
             projectName: item['project_name'] as String,
             totalReports: item['total_reports'] as int,
             imagesSubmitted: item['images_submitted'] as int,
-            targetImages: 15, // Required 15 images per day
+            targetImages: 15, 
           )).toList();
 
       setState(() {
@@ -116,215 +122,242 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
     }
   }
 
-  Color _getProgressColor(double percentage) {
-    if (percentage >= 100) return Colors.green;
-    if (percentage >= 80) return Colors.lightGreen;
-    if (percentage >= 60) return Colors.orange;
-    if (percentage >= 40) return Colors.deepOrange;
-    return Colors.red;
-  }
+Color _getProgressColor(double percentage) {
+  if (percentage >= 90) return Colors.tealAccent;
+  if (percentage >= 70) return Colors.blue;
+  if (percentage >= 50) return Colors.yellow[400]!;
+  if (percentage >= 30) return Colors.deepOrange[400]!;
+  return Colors.red[600]!;
+}
 
   int _getCrossAxisCount(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     
     if (screenWidth >= 1920) {
-      return 8; // Ultra wide screens
+      return 6;
     } else if (screenWidth >= 1600) {
-      return 7; // Large wide screens
+      return 6; 
     } else if (screenWidth >= 1400) {
-      return 6; // Wide screens
+      return 5; 
     } else if (screenWidth >= 1200) {
-      return 5; // Large screens
+      return 4; 
     } else if (screenWidth >= 900) {
-      return 4; // Medium screens
+      return 3; 
     } else if (screenWidth >= 600) {
-      return 3; // Small tablets
+      return 2; 
     } else {
-      return 2; // Mobile phones
+      return 1; // Mobile phones
     }
   }
 
   Widget _buildProjectCard(ProjectProgress project) {
     final percentage = (project.imagesSubmitted / project.targetImages * 100).clamp(0.0, 100.0);
     final progressColor = _getProgressColor(percentage);
-    final isCompleted = project.imagesSubmitted >= project.targetImages;
 
-    return Card(
-      elevation: 2,
+    return Container(
+      height: 100, 
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
+      decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          color: Colors.white,
+        border: Border.all(
+          color: progressColor,
+          width: 3,
         ),
-        child: Padding(
-          padding: EdgeInsets.all(8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Project name with status icon
-              Row(
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(5),
+        child: Stack(
+          children: [
+            // Background
+            Container(
+              width: double.infinity,
+              height: double.infinity,
+              color: Colors.white,
+            ),
+            // Progress fill - back to solid color
+            FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: percentage / 100,
+              child: Container(
+                height: double.infinity,
+                decoration: BoxDecoration(
+                  color: progressColor, // Full opacity solid color
+                ),
+              ),
+            ),
+            // Content overlay
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: isCompleted ? Colors.green : Colors.orange,
-                      shape: BoxShape.circle,
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        project.projectName,
+                        style: TextStyle(
+                          fontSize: 21,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          shadows: [
+                            Shadow(offset: Offset(-1.5, -1.5), color: progressColor),
+                            Shadow(offset: Offset(1.5, -1.5), color: progressColor),
+                            Shadow(offset: Offset(1.5, 1.5), color: progressColor),
+                            Shadow(offset: Offset(-1.5, 1.5), color: progressColor),
+                            Shadow(offset: Offset(-1.5, 0), color: progressColor),
+                            Shadow(offset: Offset(1.5, 0), color: progressColor),
+                            Shadow(offset: Offset(0, -1.5), color: progressColor),
+                            Shadow(offset: Offset(0, 1.5), color: progressColor),
+                          ],
+                        ),
+                        maxLines: 2, 
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center, // Center align for better appearance
+                      ),
                     ),
                   ),
-                  SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      project.projectName,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey[800],
+                  SizedBox(height: 4),
+                  // Count and percentage
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${project.imagesSubmitted}/${project.targetImages}',
+                        style: TextStyle(
+                          fontSize: 18, 
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black,
+                          shadows: [
+                            // Multiple shadows to create outline effect
+                            Shadow(offset: Offset(-1.5, -1.5), color: progressColor),
+                            Shadow(offset: Offset(1.5, -1.5), color: progressColor),
+                            Shadow(offset: Offset(1.5, 1.5), color: progressColor),
+                            Shadow(offset: Offset(-1.5, 1.5), color: progressColor),
+                            Shadow(offset: Offset(-1.5, 0), color: progressColor),
+                            Shadow(offset: Offset(1.5, 0), color: progressColor),
+                            Shadow(offset: Offset(0, -1.5), color: progressColor),
+                            Shadow(offset: Offset(0, 1.5), color: progressColor),
+                          ],
+                        ),
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                      Text(
+                        '${percentage.toStringAsFixed(0)}%',
+                        style: TextStyle(
+                          fontSize: 18, 
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                          shadows: [
+                            // Multiple shadows to create outline effect
+                            Shadow(offset: Offset(-1.5, -1.5), color: progressColor),
+                            Shadow(offset: Offset(1.5, -1.5), color: progressColor),
+                            Shadow(offset: Offset(1.5, 1.5), color: progressColor),
+                            Shadow(offset: Offset(-1.5, 1.5), color: progressColor),
+                            Shadow(offset: Offset(-1.5, 0), color: progressColor),
+                            Shadow(offset: Offset(1.5, 0), color: progressColor),
+                            Shadow(offset: Offset(0, -1.5), color: progressColor),
+                            Shadow(offset: Offset(0, 1.5), color: progressColor),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-              SizedBox(height: 6),
-              
-              // Images count
-              Text(
-                '${project.imagesSubmitted}/${project.targetImages}',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: progressColor,
-                ),
-              ),
-              SizedBox(height: 4),
-              
-              // Progress bar
-              Container(
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-                child: FractionallySizedBox(
-                  alignment: Alignment.centerLeft,
-                  widthFactor: percentage / 100,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: progressColor,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(height: 4),
-              
-              // Percentage
-              Text(
-                '${percentage.toStringAsFixed(0)}%',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.grey[600],
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
   Widget _buildHeader() {
-    return Container(
-      height: 50,
-      padding: EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            Color.fromARGB(255, 114, 255, 217),
-            Color.fromARGB(255, 79, 255, 214),
-          ],
-        ),
+    return AppBar(
+      elevation: 0,
+      backgroundColor: Color.fromARGB(255, 79, 255, 214),
+      leading: IconButton(
+        icon: Icon(Icons.arrow_back, color: Colors.black87),
+        onPressed: () => Navigator.of(context).pop(),
       ),
-      child: Row(
+      title: Row(
         children: [
           Icon(
             Icons.dashboard,
-            size: 20,
+            size: 24, 
             color: Colors.black87,
           ),
           SizedBox(width: 8),
           Text(
             'Tiến độ dự án',
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 24, 
               fontWeight: FontWeight.bold,
               color: Colors.black87,
             ),
           ),
-          SizedBox(width: 16),
-          if (_projectsData.isNotEmpty) ...[
-            Text(
-              '${_projectsData.length} dự án',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.black54,
+          SizedBox(height: 12),
+    Text(
+      'Ngày: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}',
+      style: TextStyle(
+        fontSize: 16,
+        color: Colors.black87,
+      ),
+    ),
+        ],
+      ),
+      actions: [
+        if (_projectsData.isNotEmpty) ...[
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: Center(
+              child: Text(
+                '${_projectsData.length} dự án • ${_projectsData.where((p) => p.imagesSubmitted >= p.targetImages).length} hoàn thành',
+                style: TextStyle(
+                  fontSize: 18, 
+                  color: Colors.black54,
+                ),
               ),
             ),
-            SizedBox(width: 8),
-            Text(
-              '•',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.black54,
-              ),
-            ),
-            SizedBox(width: 8),
-            Text(
-              '${_projectsData.where((p) => p.imagesSubmitted >= p.targetImages).length} hoàn thành',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.black54,
-              ),
-            ),
-          ],
-          Spacer(),
-          if (_isLoading)
-            SizedBox(
-              width: 16,
-              height: 16,
+          ),
+        ],
+        if (_isLoading)
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: SizedBox(
+              width: 24, // Increased size
+              height: 24,
               child: CircularProgressIndicator(
-                strokeWidth: 2,
+                strokeWidth: 3,
                 valueColor: AlwaysStoppedAnimation<Color>(Colors.black87),
               ),
             ),
-          if (!_isLoading && _lastUpdate != null) ...[
-            Icon(
-              Icons.access_time,
-              size: 14,
-              color: Colors.black54,
-            ),
-            SizedBox(width: 4),
-            Text(
-              '${_lastUpdate!.hour.toString().padLeft(2, '0')}:${_lastUpdate!.minute.toString().padLeft(2, '0')}',
-              style: TextStyle(
-                color: Colors.black87,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+          ),
+        if (!_isLoading && _lastUpdate != null)
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.access_time,
+                    size: 21, // Increased from 14 (50% bigger)
+                    color: Colors.black54,
+                  ),
+                  SizedBox(width: 4),
+                  Text(
+                    '${_lastUpdate!.hour.toString().padLeft(2, '0')}:${_lastUpdate!.minute.toString().padLeft(2, '0')}',
+                    style: TextStyle(
+                      color: Colors.black87,
+                      fontSize: 18, // Increased from 12 (50% bigger)
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ],
-      ),
+          ),
+      ],
     );
   }
 
@@ -332,61 +365,61 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[50],
-      body: Column(
-        children: [
-          _buildHeader(),
-          Expanded(
-            child: _projectsData.isEmpty && !_isLoading
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.folder_open,
-                          size: 48,
-                          color: Colors.grey[400],
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'Không có dự án hôm nay',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                        SizedBox(height: 12),
-                        ElevatedButton.icon(
-                          onPressed: _loadProjectsData,
-                          icon: Icon(Icons.refresh, size: 16),
-                          label: Text('Tải lại'),
-                          style: ElevatedButton.styleFrom(
-                            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : Padding(
-                    padding: EdgeInsets.all(8),
-                    child: GridView.builder(
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: _getCrossAxisCount(context),
-                        crossAxisSpacing: 8,
-                        mainAxisSpacing: 8,
-                        childAspectRatio: 1.4, // More compact aspect ratio
-                      ),
-                      itemCount: _projectsData.length,
-                      itemBuilder: (context, index) {
-                        return _buildProjectCard(_projectsData[index]);
-                      },
+      appBar: PreferredSize(
+        preferredSize: Size.fromHeight(kToolbarHeight),
+        child: _buildHeader(),
+      ),
+      body: _projectsData.isEmpty && !_isLoading
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.folder_open,
+                    size: 72, // Increased from 48 (50% bigger)
+                    color: Colors.grey[400],
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Không có dự án hôm nay',
+                    style: TextStyle(
+                      fontSize: 24, // Increased from 16 (50% bigger)
+                      color: Colors.grey[500],
                     ),
                   ),
-          ),
-        ],
-      ),
+                  SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: _loadProjectsData,
+                    icon: Icon(Icons.refresh, size: 24), // Increased from 16
+                    label: Text(
+                      'Tải lại',
+                      style: TextStyle(fontSize: 18), // Increased text size
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : Padding(
+              padding: EdgeInsets.all(8),
+              child: GridView.builder(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: _getCrossAxisCount(context),
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  childAspectRatio: 3.0,
+                ),
+                itemCount: _projectsData.length,
+                itemBuilder: (context, index) {
+                  return _buildProjectCard(_projectsData[index]);
+                },
+              ),
+            ),
       floatingActionButton: FloatingActionButton.small(
         onPressed: _loadProjectsData,
-        child: Icon(Icons.refresh, size: 18),
+        child: Icon(Icons.refresh, size: 27), 
         backgroundColor: Color.fromARGB(255, 79, 255, 214),
         tooltip: 'Tải lại',
       ),
