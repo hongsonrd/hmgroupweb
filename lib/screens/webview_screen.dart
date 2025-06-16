@@ -76,6 +76,7 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
   {'icon': 'assets/emaillogo.png', 'name': 'Tạo chữ ký email', 'link': 'https://yourworldtravel.vn/api/indexsignature.html', 'tab': 0},
   {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo hàng ngày', 'link': 'https://yourworldtravel.vn/drive/dailyreport.html', 'tab': 1},
   {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Robot tự động', 'link': 'https://yourworldtravel.vn/drive/dailyrobot.html', 'tab': 1},
+  {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Lịch chuyến bay', 'link': 'https://yourworldtravel.vn/drive/dailyrobot2.html', 'tab': 1},
   {'icon': 'assets/logokt.png', 'important': 'true','name': 'HM Kỹ thuật', 'link': 'https://www.appsheet.com/start/f2040b99-7558-4e2c-9e02-df100c83d8ce', 'tab': 0},
   {'icon': 'assets/zalologo.png', 'name': 'Zalo Hoàn Mỹ', 'link': 'https://zalo.me/2746464448500686217', 'tab': 0},
   {'icon': 'assets/fblogo.png','important': 'true', 'name': 'Facebook Hoàn Mỹ', 'link': 'https://www.facebook.com/Hoanmykleanco', 'tab': 0},
