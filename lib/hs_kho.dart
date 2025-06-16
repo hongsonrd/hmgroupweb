@@ -1093,6 +1093,10 @@ Future<void> _createPhieuTongPDF(
   try {
     final pdf = pw.Document();
     
+    // ADD THIS: Load Vietnamese-compatible font
+    final fontData = await rootBundle.load("assets/fonts/RobotoCondensed-Regular.ttf");
+    final ttf = pw.Font.ttf(fontData);
+    
     // Format the date
     String formattedDate = '';
     try {
@@ -1133,6 +1137,7 @@ Future<void> _createPhieuTongPDF(
                   pw.Text(
                     title,
                     style: pw.TextStyle(
+                      font: ttf, // ADD THIS
                       fontSize: 24,
                       fontWeight: pw.FontWeight.bold,
                     ),
@@ -1141,6 +1146,7 @@ Future<void> _createPhieuTongPDF(
                   pw.Text(
                     'Ngày: $formattedDate',
                     style: pw.TextStyle(
+                      font: ttf, // ADD THIS
                       fontSize: 16,
                       fontWeight: pw.FontWeight.bold,
                     ),
@@ -1164,6 +1170,7 @@ Future<void> _createPhieuTongPDF(
                   pw.Text(
                     'TỔNG QUAN',
                     style: pw.TextStyle(
+                      font: ttf, // ADD THIS
                       fontSize: 16,
                       fontWeight: pw.FontWeight.bold,
                     ),
@@ -1172,29 +1179,53 @@ Future<void> _createPhieuTongPDF(
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
-                      pw.Text('Tổng số kho:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                      pw.Text('${warehouseGroups.length}'),
+                      pw.Text(
+                        'Tổng số kho:', 
+                        style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold)
+                      ),
+                      pw.Text(
+                        '${warehouseGroups.length}',
+                        style: pw.TextStyle(font: ttf)
+                      ),
                     ],
                   ),
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
-                      pw.Text('Tổng số lô hàng:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                      pw.Text('$totalBatches'),
+                      pw.Text(
+                        'Tổng số lô hàng:', 
+                        style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold)
+                      ),
+                      pw.Text(
+                        '$totalBatches',
+                        style: pw.TextStyle(font: ttf)
+                      ),
                     ],
                   ),
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
-                      pw.Text('Tổng số giao dịch:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                      pw.Text('$totalItems'),
+                      pw.Text(
+                        'Tổng số giao dịch:', 
+                        style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold)
+                      ),
+                      pw.Text(
+                        '$totalItems',
+                        style: pw.TextStyle(font: ttf)
+                      ),
                     ],
                   ),
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
-                      pw.Text('Tổng số lượng:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                      pw.Text('${totalQuantity.toStringAsFixed(2)}'),
+                      pw.Text(
+                        'Tổng số lượng:', 
+                        style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold)
+                      ),
+                      pw.Text(
+                        '${totalQuantity.toStringAsFixed(2)}',
+                        style: pw.TextStyle(font: ttf)
+                      ),
                     ],
                   ),
                 ],
@@ -1225,6 +1256,7 @@ Future<void> _createPhieuTongPDF(
                       child: pw.Text(
                         'KHO: $warehouseId (${transactions.length} giao dịch)',
                         style: pw.TextStyle(
+                          font: ttf, // ADD THIS
                           fontSize: 14,
                           fontWeight: pw.FontWeight.bold,
                         ),
@@ -1249,27 +1281,45 @@ Future<void> _createPhieuTongPDF(
                           children: [
                             pw.Container(
                               padding: pw.EdgeInsets.all(5),
-                              child: pw.Text('STT', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                              child: pw.Text(
+                                'STT', 
+                                style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold)
+                              ),
                             ),
                             pw.Container(
                               padding: pw.EdgeInsets.all(5),
-                              child: pw.Text('Mã lô hàng', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                              child: pw.Text(
+                                'Mã lô hàng', 
+                                style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold)
+                              ),
                             ),
                             pw.Container(
                               padding: pw.EdgeInsets.all(5),
-                              child: pw.Text('Số lượng', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                              child: pw.Text(
+                                'Số lượng', 
+                                style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold)
+                              ),
                             ),
                             pw.Container(
                               padding: pw.EdgeInsets.all(5),
-                              child: pw.Text('Giờ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                              child: pw.Text(
+                                'Giờ', 
+                                style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold)
+                              ),
                             ),
                             pw.Container(
                               padding: pw.EdgeInsets.all(5),
-                              child: pw.Text('Người thực hiện', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                              child: pw.Text(
+                                'Người thực hiện', 
+                                style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold)
+                              ),
                             ),
                             pw.Container(
                               padding: pw.EdgeInsets.all(5),
-                              child: pw.Text('Ghi chú', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                              child: pw.Text(
+                                'Ghi chú', 
+                                style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold)
+                              ),
                             ),
                           ],
                         ),
@@ -1283,27 +1333,45 @@ Future<void> _createPhieuTongPDF(
                             children: [
                               pw.Container(
                                 padding: pw.EdgeInsets.all(5),
-                                child: pw.Text('${index + 1}'),
+                                child: pw.Text(
+                                  '${index + 1}',
+                                  style: pw.TextStyle(font: ttf)
+                                ),
                               ),
                               pw.Container(
                                 padding: pw.EdgeInsets.all(5),
-                                child: pw.Text(transaction.loHangID ?? 'N/A'),
+                                child: pw.Text(
+                                  transaction.loHangID ?? 'N/A',
+                                  style: pw.TextStyle(font: ttf)
+                                ),
                               ),
                               pw.Container(
                                 padding: pw.EdgeInsets.all(5),
-                                child: pw.Text((transaction.soLuong ?? 0).toString()),
+                                child: pw.Text(
+                                  (transaction.soLuong ?? 0).toString(),
+                                  style: pw.TextStyle(font: ttf)
+                                ),
                               ),
                               pw.Container(
                                 padding: pw.EdgeInsets.all(5),
-                                child: pw.Text(transaction.gio ?? 'N/A'),
+                                child: pw.Text(
+                                  transaction.gio ?? 'N/A',
+                                  style: pw.TextStyle(font: ttf)
+                                ),
                               ),
                               pw.Container(
                                 padding: pw.EdgeInsets.all(5),
-                                child: pw.Text(transaction.nguoiDung ?? 'N/A'),
+                                child: pw.Text(
+                                  transaction.nguoiDung ?? 'N/A',
+                                  style: pw.TextStyle(font: ttf)
+                                ),
                               ),
                               pw.Container(
                                 padding: pw.EdgeInsets.all(5),
-                                child: pw.Text(transaction.ghiChu ?? ''),
+                                child: pw.Text(
+                                  transaction.ghiChu ?? '',
+                                  style: pw.TextStyle(font: ttf)
+                                ),
                               ),
                             ],
                           );
@@ -1315,25 +1383,34 @@ Future<void> _createPhieuTongPDF(
                           children: [
                             pw.Container(
                               padding: pw.EdgeInsets.all(5),
-                              child: pw.Text(''),
+                              child: pw.Text('', style: pw.TextStyle(font: ttf)),
                             ),
                             pw.Container(
                               padding: pw.EdgeInsets.all(5),
                               child: pw.Text(
                                 'Tổng kho:',
-                                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                                style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold),
                               ),
                             ),
                             pw.Container(
                               padding: pw.EdgeInsets.all(5),
                               child: pw.Text(
                                 transactions.fold<double>(0, (sum, t) => sum + (t.soLuong ?? 0)).toString(),
-                                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                                style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold),
                               ),
                             ),
-                            pw.Container(padding: pw.EdgeInsets.all(5), child: pw.Text('')),
-                            pw.Container(padding: pw.EdgeInsets.all(5), child: pw.Text('')),
-                            pw.Container(padding: pw.EdgeInsets.all(5), child: pw.Text('')),
+                            pw.Container(
+                              padding: pw.EdgeInsets.all(5), 
+                              child: pw.Text('', style: pw.TextStyle(font: ttf))
+                            ),
+                            pw.Container(
+                              padding: pw.EdgeInsets.all(5), 
+                              child: pw.Text('', style: pw.TextStyle(font: ttf))
+                            ),
+                            pw.Container(
+                              padding: pw.EdgeInsets.all(5), 
+                              child: pw.Text('', style: pw.TextStyle(font: ttf))
+                            ),
                           ],
                         ),
                       ],
@@ -1353,11 +1430,17 @@ Future<void> _createPhieuTongPDF(
                 children: [
                   pw.Text(
                     'Thông tin tạo phiếu:',
-                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold),
                   ),
                   pw.SizedBox(height: 5),
-                  pw.Text('Người tạo: $createdBy'),
-                  pw.Text('Thời gian tạo: ${DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now())}'),
+                  pw.Text(
+                    'Người tạo: $createdBy',
+                    style: pw.TextStyle(font: ttf)
+                  ),
+                  pw.Text(
+                    'Thời gian tạo: ${DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now())}',
+                    style: pw.TextStyle(font: ttf)
+                  ),
                   pw.SizedBox(height: 30),
                   
                   // Signature section
@@ -1367,25 +1450,43 @@ Future<void> _createPhieuTongPDF(
                       pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.center,
                         children: [
-                          pw.Text('Người lập phiếu'),
+                          pw.Text(
+                            'Người lập phiếu',
+                            style: pw.TextStyle(font: ttf)
+                          ),
                           pw.SizedBox(height: 50),
-                          pw.Text('(Ký và ghi rõ họ tên)'),
+                          pw.Text(
+                            '(Ký và ghi rõ họ tên)',
+                            style: pw.TextStyle(font: ttf)
+                          ),
                         ],
                       ),
                       pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.center,
                         children: [
-                          pw.Text('Thủ kho'),
+                          pw.Text(
+                            'Thủ kho',
+                            style: pw.TextStyle(font: ttf)
+                          ),
                           pw.SizedBox(height: 50),
-                          pw.Text('(Ký và ghi rõ họ tên)'),
+                          pw.Text(
+                            '(Ký và ghi rõ họ tên)',
+                            style: pw.TextStyle(font: ttf)
+                          ),
                         ],
                       ),
                       pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.center,
                         children: [
-                          pw.Text('Kế toán trưởng'),
+                          pw.Text(
+                            'Kế toán trưởng',
+                            style: pw.TextStyle(font: ttf)
+                          ),
                           pw.SizedBox(height: 50),
-                          pw.Text('(Ký và ghi rõ họ tên)'),
+                          pw.Text(
+                            '(Ký và ghi rõ họ tên)',
+                            style: pw.TextStyle(font: ttf)
+                          ),
                         ],
                       ),
                     ],
