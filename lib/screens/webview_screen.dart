@@ -71,7 +71,6 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
 },
   {'icon': 'assets/zaloviplogo.png','important': 'true', 'name': 'OA Kinh Doanh', 'link': 'https://zalo.me/g/rzccet697', 'tab': 0},
   {'icon': 'assets/zaloviplogo.png','important': 'true', 'name': 'OA QLDV', 'link': 'https://zalo.me/g/xbcalx122', 'tab': 0},
-  {'icon': 'assets/linklogo.png', 'name': 'HM Link', 'link': 'https://www.appsheet.com/start/28785d83-62f3-4ec6-8ddd-2780d413dfa7', 'tab': 0},
   {'icon': 'assets/logoonline.png', 'name': 'Đào tạo online', 'link': 'https://yourworldtravel.vn/api/index3.html', 'tab': 0},
   {'icon': 'assets/emaillogo.png', 'name': 'Tạo chữ ký email', 'link': 'https://yourworldtravel.vn/api/indexsignature.html', 'tab': 0},
   {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo hàng ngày', 'link': 'https://yourworldtravel.vn/drive/dailyreport.html', 'tab': 1},

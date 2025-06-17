@@ -67,7 +67,7 @@ class _ProjectWorkReportState extends State<ProjectWorkReport> with SingleTicker
     'Họp công nhân',
     'Gặp khách hàng',
     'Triển khai HĐ mới',
-    'Đề xuất/ Ý kiến sáng tạo'
+    'Đề xuất/ Ý kiến sáng tạo',
     'Làm thầu',
     'Tương tác: Biến động NS',
     'Tương tác: PA bố trí NS thiếu',
@@ -96,6 +96,7 @@ class _ProjectWorkReportState extends State<ProjectWorkReport> with SingleTicker
     'Yêu cầu cung cấp đồng phục ban đầu'
   ],
   'HM-CSKH': [
+    'Làm thầu',
     'Ý kiến KH',
     'Báo cáo doanh thu',
     'Báo giá/ Giải trình/ Dự toán chi phí',
@@ -125,7 +126,7 @@ class _ProjectWorkReportState extends State<ProjectWorkReport> with SingleTicker
 'Thị trường mới',
 'Đối thủ cạnh tranh'
   ],
-  'HM-NS': [
+  'HM-NS': [ 'Báo cáo', 'Phát sinh', 'Ý kiến KH', 
     'Hồ sơ',
     'Công lương',
     'Bảo hiểm',
@@ -133,7 +134,7 @@ class _ProjectWorkReportState extends State<ProjectWorkReport> with SingleTicker
     'Chế độ chính sách',
     'Đề xuất cải tiến', 'Khác'
   ],
-  'HM-RD': [
+    'HM-RD': [
     'Họp',
     'Hỗ trợ người dùng',
     'Cập nhật app',
@@ -145,7 +146,7 @@ class _ProjectWorkReportState extends State<ProjectWorkReport> with SingleTicker
     'Công lương',
     'Chung'
   ],
-  'HM-QA': [
+  'HM-QA': ['Bảo hiểm', 'Giải quyết sự vụ CN', 'Hồ sơ thầu', 'Xe',
     'Báo cáo',
 'Phát sinh',
 'Kế hoạch',
@@ -157,7 +158,7 @@ class _ProjectWorkReportState extends State<ProjectWorkReport> with SingleTicker
 'Kế hoạch',
 'Đề xuất'
   ],
-  'HM-TD': [
+  'HM-TD': ['Đề xuất',
     'Tuyển dụng',
     'Báo cáo',
     'Đề xuất',
@@ -167,7 +168,7 @@ class _ProjectWorkReportState extends State<ProjectWorkReport> with SingleTicker
 'Kế hoạch'
   ],
     'HM-HS': [
-    'Vướng mắc Đề xuất',
+'Vướng mắc Đề xuất',
 'Kế hoạch',
 'CV Khác',
 'Gọi điện thoại trao đổi',
