@@ -320,15 +320,19 @@ class DeliveryRequestFormGenerator {
                     _buildTableCell('Thành tiền', ttf, isBold: true),
                   ],
                 ),
-                
                 ...items.map((item) => pw.TableRow(
                   children: [
-                    _buildTableCell(item.idHang ?? 'N/A', ttf, textColor: PdfColors.red),
+                    _buildTableCell(item.tenHang ?? 'N/A', ttf, textColor: PdfColors.red),
                     _buildTableCell(item.maHang ?? 'N/A', ttf),
                     _buildTableCell(item.donViTinh ?? 'N/A', ttf),
                     _buildTableCell(item.soLuongYeuCau?.toString() ?? '0', ttf, align: pw.TextAlign.right),
-                    _buildTableCell(item.soLuongThucGiao?.toString() ?? '0', ttf, align: pw.TextAlign.right),
-                    _buildTableCell(_formatCurrency(item.donGia), ttf, align: pw.TextAlign.right),
+_buildTableCell(
+  (item.soLuongThucGiao == null || item.soLuongThucGiao == 0) 
+    ? '' 
+    : item.soLuongThucGiao.toString(), 
+  ttf, 
+  align: pw.TextAlign.right
+),                    _buildTableCell(_formatCurrency(item.donGia), ttf, align: pw.TextAlign.right),
                     _buildTableCell(item.phanTramVAT?.toString() ?? '10%', ttf, align: pw.TextAlign.center),
                     _buildTableCell(_formatCurrency(item.thanhTien), ttf, align: pw.TextAlign.right, textColor: PdfColors.red),
                   ],

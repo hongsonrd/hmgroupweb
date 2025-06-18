@@ -7,6 +7,7 @@ import 'package:flutter/cupertino.dart';
 import 'table_models.dart';
 import 'db_helper.dart';
 import 'hd_dashboard.dart';
+import 'hd_dashboard2.dart';
 import 'dart:io'; 
 class HDPage extends StatefulWidget {
  const HDPage({Key? key}) : super(key: key);
@@ -165,18 +166,32 @@ class _HDPageState extends State<HDPage> {
        if (_syncStepsCompleted.every((step) => step == true)) {
          try {
            print("Navigating to HD dashboard");
-           Navigator.pushReplacement(
-             context,
-             MaterialPageRoute(
-               builder: (context) => HDDashboard(
-                currentPeriod: _currentPeriod,
-                nextPeriod: _nextPeriod,
-                username: _username,
-               userRole: _userHdRole,
-               )
-             ),
-           );
-         } catch (navError) {
+           if (_userHdRole == 'Manager2') {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HDDashboard2(
+            currentPeriod: _currentPeriod,
+            nextPeriod: _nextPeriod,
+            username: _username,
+            userRole: _userHdRole,
+          )
+        ),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HDDashboard(
+            currentPeriod: _currentPeriod,
+            nextPeriod: _nextPeriod,
+            username: _username,
+            userRole: _userHdRole,
+          )
+        ),
+      );
+    }
+  } catch (navError) {
            print("Navigation error: $navError");
            setState(() {
              _isSyncing = false;
@@ -302,19 +317,32 @@ Future<void> _performSync() async {
 
   bool _allowSkipSync = false;
   Future<void> _skipRemainingSync() async {
-    setState(() {
-      _isSyncing = false;
-      // Mark all remaining steps as completed
-      for (int i = 0; i < _syncStepsCompleted.length; i++) {
-        _syncStepsCompleted[i] = true;
-      }
-    });
+  setState(() {
+    _isSyncing = false;
+    // Mark all remaining steps as completed
+    for (int i = 0; i < _syncStepsCompleted.length; i++) {
+      _syncStepsCompleted[i] = true;
+    }
+  });
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('last_sync_time', DateTime.now().toIso8601String());
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString('last_sync_time', DateTime.now().toIso8601String());
 
-    // Navigate to dashboard
-    if (mounted) {
+  // Navigate to appropriate dashboard based on user role
+  if (mounted) {
+    if (_userHdRole == 'Manager2') {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HDDashboard2(
+            currentPeriod: _currentPeriod,
+            nextPeriod: _nextPeriod,
+            username: _username,
+            userRole: _userHdRole,
+          ),
+        ),
+      );
+    } else {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -328,6 +356,7 @@ Future<void> _performSync() async {
       );
     }
   }
+}
 
  Future<void> _executeSyncStep(int step, String usernameForSync) async {
    if (usernameForSync.isEmpty) {
@@ -364,7 +393,7 @@ Future<void> _performSync() async {
              throw Exception('Invalid user. No role returned from server.');
            }
 
-           final validRoles = ['Admin', 'Manager', 'KinhDoanh'];
+           final validRoles = ['Admin', 'Manager', 'KinhDoanh', 'Manager2'];
            if (!validRoles.contains(userData['role'])) {
              setState(() {
                _syncFailed = true;
@@ -761,31 +790,45 @@ Future<void> _performSync() async {
                      width: double.infinity,
                      height: 36,
                      child: CupertinoButton(
-                       padding: EdgeInsets.zero,
-                       color: Color(0xFF34C759),
-                       borderRadius: BorderRadius.circular(18),
-                       onPressed: () {
-                         Navigator.pushReplacement(
-                           context,
-                           MaterialPageRoute(
-                             builder: (context) => HDDashboard(
-                               currentPeriod: _currentPeriod,
-                               nextPeriod: _nextPeriod,
-                               username: _username,
-                               userRole: _userHdRole,
-                             )
-                           ),
-                         );
-                       },
-                       child: Text(
-                         'Tiếp tục',
-                         style: TextStyle(
-                           fontSize: 14,
-                           fontWeight: FontWeight.w600,
-                           color: Colors.white,
-                         ),
-                       ),
-                     ),
+  padding: EdgeInsets.zero,
+  color: Color(0xFF34C759),
+  borderRadius: BorderRadius.circular(18),
+  onPressed: () {
+    if (_userHdRole == 'Manager2') {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HDDashboard2(
+            currentPeriod: _currentPeriod,
+            nextPeriod: _nextPeriod,
+            username: _username,
+            userRole: _userHdRole,
+          )
+        ),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HDDashboard(
+            currentPeriod: _currentPeriod,
+            nextPeriod: _nextPeriod,
+            username: _username,
+            userRole: _userHdRole,
+          )
+        ),
+      );
+    }
+  },
+  child: Text(
+    'Tiếp tục',
+    style: TextStyle(
+      fontSize: 14,
+      fontWeight: FontWeight.w600,
+      color: Colors.white,
+    ),
+  ),
+),
                    ),
                    Container(
                      margin: EdgeInsets.only(top: 8, bottom: 8),

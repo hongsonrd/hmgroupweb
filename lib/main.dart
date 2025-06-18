@@ -1388,131 +1388,304 @@ bool showAirportButton = airportPermissions.isEmpty || airportPermissions.contai
     location: BannerLocation.topEnd,
     color: const Color.fromARGB(255, 244, 54, 54),
     child: Scaffold(
-      body: visibleScreens[visibleSelectedIndex],
-      floatingActionButton: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+      body: Row(
         children: [
-          if (showAdminButton) Container(
-            height: 86,
-            width: 86,
-            margin: const EdgeInsets.only(bottom: 10, right: 10),
-            child: FloatingActionButton(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (context) => const ProjectDirectorScreen()),
-                );
-              },
-              backgroundColor: Colors.red,
-              elevation: 8,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(25),
+          // Enhanced Left Navigation Rail
+          Container(
+            width: 100,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.cyan[900]!.withOpacity(0.95),
+                  Colors.cyan[700]!.withOpacity(0.90),
+                  Colors.cyan[500]!.withOpacity(0.85),
+                ],
               ),
-              child: const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.admin_panel_settings, color: Colors.white, size: 35),
-                  Text('Quản trị', 
-                    style: TextStyle(fontSize: 16, color: Colors.white),
-                    textAlign: TextAlign.center,
-                  )
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.cyan.withOpacity(0.3),
+                  blurRadius: 15,
+                  offset: const Offset(3, 0),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                // Action buttons at the top
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  child: Column(
+                    children: [
+                      // Logo/Title
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 15),
+                        child: const Text(
+                          '0.8.8',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                      ),
+                      
+                      // Action buttons
+                      if (showAdminButton) _buildEnhancedActionButton(
+                        icon: Icons.admin_panel_settings,
+                        label: 'Quản trị',
+                        color: Colors.red,
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (context) => const ProjectDirectorScreen()),
+                        ),
+                      ),
+                      if (showSaBanButton) _buildEnhancedActionButton(
+                        icon: Icons.map,
+                        label: 'Sa bàn',
+                        color: Colors.green,
+                        onPressed: () {
+                          final username = _userState.currentUser?['username'] ?? '';
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => MapProjectScreen(username: username),
+                            ),
+                          );
+                        },
+                      ),
+                      if (showAirportButton) _buildEnhancedActionButton(
+                        icon: Icons.flight,
+                        label: 'Sân bay\nT1',
+                        color: const Color.fromARGB(255, 0, 99, 179),
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (context) => const ProjectDirector2Screen()),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Animated divider
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                  height: 2,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.transparent,
+                        Colors.white.withOpacity(0.7),
+                        Colors.transparent,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(1),
+                  ),
+                ),
+                
+                // Navigation items
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Column(
+                      children: visibleNavItems.asMap().entries.map((entry) {
+                        int index = entry.key;
+                        BottomNavigationBarItem item = entry.value;
+                        bool isSelected = index == visibleSelectedIndex;
+                        
+                        return _buildEnhancedNavItem(
+                          icon: item.icon as Icon,
+                          label: item.label!,
+                          isSelected: isSelected,
+                          onTap: () {
+                            setState(() {
+                              _selectedIndex = visibleToOriginalIndex[index]!;
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Vertical divider with gradient
+          Container(
+            width: 3,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.cyan[200]!.withOpacity(0.3),
+                  Colors.cyan[400]!.withOpacity(0.6),
+                  Colors.cyan[200]!.withOpacity(0.3),
                 ],
               ),
             ),
           ),
-          if (showSaBanButton) Container(
-  height: 86,
-  width: 86,
-  margin: const EdgeInsets.only(bottom: 10, right: 10),
-  child: FloatingActionButton(
-    onPressed: () {
-      final username = _userState.currentUser?['username'] ?? '';
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => MapProjectScreen(username: username),
-        ),
-      );
-    },
-    backgroundColor: Colors.green,
-    elevation: 8,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(25),
-    ),
-    child: const Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(Icons.map, color: Colors.white, size: 35),
-        Text('Sa bàn', 
-          style: TextStyle(fontSize: 16, color: Colors.white),
-          textAlign: TextAlign.center,
-        )
-      ],
-    ),
-  ),
-),
-          if (showAirportButton) Container(
-            height: 86,
-            width: 86,
-            margin: EdgeInsets.only(bottom: 10, left: airportLeftMargin),
-            child: FloatingActionButton(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (context) => const ProjectDirector2Screen()),
-                );
-              },
-              backgroundColor: const Color.fromARGB(255, 0, 99, 179),
-              elevation: 8,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(25),
-              ),
-              child: const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.flight, color: Colors.white, size: 35),
-                  Text('Sân bay\nT1', 
-                    style: TextStyle(fontSize: 16, color: Colors.white),
-                    textAlign: TextAlign.center,
-                  )
-                ],
-              ),
-            ),
+          
+          // Main content area
+          Expanded(
+            child: visibleScreens[visibleSelectedIndex],
           ),
         ],
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: MediaQuery.of(context).size.width < 600 ? 8.0 : 8.0,
-          vertical: MediaQuery.of(context).size.width < 600 ? 4.0 : 4.0,
-        ),
-        child: Container(
+    ),
+  );
+}
+
+// Enhanced action button with glassmorphism effect
+Widget _buildEnhancedActionButton({
+  required IconData icon,
+  required String label,
+  required Color color,
+  required VoidCallback onPressed,
+}) {
+  return Container(
+    margin: const EdgeInsets.symmetric(vertical: 6),
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(16),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: 85,
+          height: 85,
           decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                color.withOpacity(0.8),
+                color.withOpacity(0.6),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.2),
+              width: 1,
+            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.white.withOpacity(0.1),
-                blurRadius: 20,
-                spreadRadius: -5,
+                color: color.withOpacity(0.3),
+                blurRadius: 8,
                 offset: const Offset(0, 4),
               ),
             ],
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(30),
-            child: BottomNavigationBar(
-              items: visibleNavItems,
-              currentIndex: visibleSelectedIndex,
-              onTap: (index) {
-                setState(() {
-                  _selectedIndex = visibleToOriginalIndex[index]!;
-                });
-              },
-              backgroundColor: Colors.white,
-              selectedItemColor: const Color.fromARGB(255, 73, 54, 244),
-              unselectedItemColor: Colors.grey,
-              showSelectedLabels: true,
-              showUnselectedLabels: true,
-              type: BottomNavigationBarType.fixed,
-              elevation: 0,
-            ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                color: Colors.white,
+                size: 22,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 8,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+// Enhanced navigation item with hover effects and animations
+Widget _buildEnhancedNavItem({
+  required Icon icon,
+  required String label,
+  required bool isSelected,
+  required VoidCallback onTap,
+}) {
+  return Container(
+    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          decoration: BoxDecoration(
+            gradient: isSelected 
+              ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withOpacity(0.25),
+                    Colors.white.withOpacity(0.15),
+                  ],
+                )
+              : null,
+            borderRadius: BorderRadius.circular(16),
+            border: isSelected 
+              ? Border.all(
+                  color: Colors.white.withOpacity(0.3),
+                  width: 1,
+                )
+              : null,
+            boxShadow: isSelected 
+              ? [
+                  BoxShadow(
+                    color: Colors.white.withOpacity(0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isSelected 
+                    ? Colors.white.withOpacity(0.2)
+                    : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  icon.icon,
+                  color: isSelected 
+                    ? Colors.white 
+                    : Colors.white.withOpacity(0.7),
+                  size: isSelected ? 26 : 24,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isSelected 
+                    ? Colors.white 
+                    : Colors.white.withOpacity(0.8),
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                  letterSpacing: 0.5,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
         ),
       ),

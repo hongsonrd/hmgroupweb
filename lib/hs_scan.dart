@@ -34,7 +34,7 @@ class _HSScanScreenState extends State<HSScanScreen> {
   MobileScannerController? _scannerController;
   List<Map<String, dynamic>> _deliveryHistory = [];
   // List of authorized users who can confirm delivery
-  final List<String> _authorizedUsers = ['nvthunghiem', 'hm.tason', 'hm.anhviet','hm.manhha','hm.kimdung','hm.phiminh'];
+  final List<String> _authorizedUsers = ['nvthunghiem', 'hm.tason', 'hm.anhviet','hm.manhha','hm.kimdung','hm.phiminh' 'hm.trantien2', 'hotel.danang'];
   
   @override
   void initState() {

@@ -1,10 +1,16 @@
 // hd_thang.dart
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'db_helper.dart';
 import 'table_models.dart';
 import 'hd_moi.dart';
+import 'hd_thangexcel.dart';
+import 'package:excel/excel.dart' as xl; 
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'package:flutter/material.dart' as flutter;
+
 class HDThangScreen extends StatefulWidget {
   final String period;
   final String username;
@@ -27,7 +33,8 @@ class HDThangScreen extends StatefulWidget {
 
 class _HDThangScreenState extends State<HDThangScreen> {
   final DBHelper _dbHelper = DBHelper();
-  
+  bool _isGeneratingExcel = false;
+
   List<LinkHopDongModel> _contracts = [];
   List<LinkHopDongModel> _filteredContracts = [];
   bool _isLoading = true;
@@ -76,6 +83,54 @@ class _HDThangScreenState extends State<HDThangScreen> {
     _searchController.dispose();
     super.dispose();
   }
+Future<void> _generateAndShareExcel() async {
+  setState(() {
+    _isGeneratingExcel = true;
+  });
+
+  try {
+    final excelGenerator = HDThangExcelGenerator();
+    
+    final success = await excelGenerator.generateAndShareExcel(
+      contracts: _filteredContracts,
+      period: widget.period,
+      totalRevenue: _totalRevenue,
+      totalCosts: _totalCosts,
+      netProfit: _netProfit,
+      dbHelper: _dbHelper,
+      context: context,
+    );
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đã tạo file Excel thành công!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi khi tạo file Excel'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi: ${e.toString()}'),
+        backgroundColor: Colors.red,
+      ),
+    );
+    
+    print('Error generating Excel: $e');
+  } finally {
+    setState(() {
+      _isGeneratingExcel = false;
+    });
+  }
+}
 void _navigateToEditContract(LinkHopDongModel contract) async {
   final result = await Navigator.push(
     context,
@@ -124,6 +179,382 @@ void _navigateToNewContract() {
       _loadContractsForPeriod();
     }
   });
+}
+Future<Map<String, List<dynamic>>> _loadCostRecords(String contractId) async {
+  Map<String, List<dynamic>> costRecords = {};
+  
+  try {
+    // Load all cost records for this contract
+    costRecords['VatLieu'] = await _dbHelper.getLinkVatTusByContract(contractId);
+    costRecords['DinhKy'] = await _dbHelper.getLinkDinhKysByContract(contractId);
+    costRecords['LeTetTC'] = await _dbHelper.getLinkLeTetTCsByContract(contractId);
+    costRecords['PhuCap'] = await _dbHelper.getLinkPhuCapsByContract(contractId);
+    costRecords['NgoaiGiao'] = await _dbHelper.getLinkNgoaiGiaosByContract(contractId);
+    costRecords['MayMoc'] = await _dbHelper.getLinkMayMocsByContract(contractId);
+    costRecords['Luong'] = await _dbHelper.getLinkLuongsByContract(contractId);
+  } catch (e) {
+    print('Error loading cost records: $e');
+  }
+  
+  return costRecords;
+}
+
+Widget _buildCostRecordsSection(String contractId) {
+  return FutureBuilder<Map<String, List<dynamic>>>(
+    future: _loadCostRecords(contractId),
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return Center(child: CircularProgressIndicator());
+      }
+      
+      if (snapshot.hasError || !snapshot.hasData) {
+        return Container(
+          padding: EdgeInsets.all(16),
+          child: Text('Không thể tải chi tiết chi phí'),
+        );
+      }
+      
+      final costRecords = snapshot.data!;
+      bool hasRecords = costRecords.values.any((list) => list.isNotEmpty);
+      
+      if (!hasRecords) {
+        return Container(
+          padding: EdgeInsets.all(16),
+          child: Text(
+            'Chưa có bản ghi chi phí chi tiết',
+            style: TextStyle(color: Colors.grey[600]),
+          ),
+        );
+      }
+      
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Vat lieu records
+          if (costRecords['VatLieu']?.isNotEmpty == true)
+            _buildCostRecordCard(
+              'Chi phí Vật tư (${costRecords['VatLieu']!.length} mục)',
+              costRecords['VatLieu']!,
+              _buildVatLieuRecord,
+              Icons.build,
+              Colors.blue,
+            ),
+          
+          // Dinh ky records  
+          if (costRecords['DinhKy']?.isNotEmpty == true)
+            _buildCostRecordCard(
+              'Chi phí CV Định kỳ (${costRecords['DinhKy']!.length} mục)',
+              costRecords['DinhKy']!,
+              _buildDinhKyRecord,
+              Icons.schedule,
+              Colors.green,
+            ),
+          
+          // Le tet tang ca records
+          if (costRecords['LeTetTC']?.isNotEmpty == true)
+            _buildCostRecordCard(
+              'Chi phí Lễ tết Tăng ca (${costRecords['LeTetTC']!.length} mục)',
+              costRecords['LeTetTC']!,
+              _buildLeTetTCRecord,
+              Icons.celebration,
+              Colors.orange,
+            ),
+          
+          // Phu cap records
+          if (costRecords['PhuCap']?.isNotEmpty == true)
+            _buildCostRecordCard(
+              'Chi phí Phụ cấp (${costRecords['PhuCap']!.length} mục)',
+              costRecords['PhuCap']!,
+              _buildPhuCapRecord,
+              Icons.attach_money,
+              Colors.purple,
+            ),
+          
+          // Ngoai giao records
+          if (costRecords['NgoaiGiao']?.isNotEmpty == true)
+            _buildCostRecordCard(
+              'Chi phí Ngoại giao (${costRecords['NgoaiGiao']!.length} mục)',
+              costRecords['NgoaiGiao']!,
+              _buildNgoaiGiaoRecord,
+              Icons.business,
+              Colors.indigo,
+            ),
+          
+          // May moc records
+          if (costRecords['MayMoc']?.isNotEmpty == true)
+            _buildCostRecordCard(
+              'Chi phí Máy móc (${costRecords['MayMoc']!.length} mục)',
+              costRecords['MayMoc']!,
+              _buildMayMocRecord,
+              Icons.precision_manufacturing,
+              Colors.teal,
+            ),
+          
+          // Luong records
+          if (costRecords['Luong']?.isNotEmpty == true)
+            _buildCostRecordCard(
+              'Chi phí Lương (${costRecords['Luong']!.length} mục)',
+              costRecords['Luong']!,
+              _buildLuongRecord,
+              Icons.people,
+              Colors.red,
+            ),
+        ],
+      );
+    },
+  );
+}
+
+Widget _buildCostRecordCard(String title, List<dynamic> records, Widget Function(dynamic) recordBuilder, IconData icon, Color color) {
+  return Card(
+    elevation: 2,
+    margin: EdgeInsets.only(bottom: 12),
+    child: ExpansionTile(
+      leading: Icon(icon, color: color),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
+      ),
+      subtitle: Text(
+        'Tổng: ${_formatCurrency(_calculateCategoryTotal(records))}',
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      children: [
+        Container(
+          constraints: BoxConstraints(maxHeight: 300),
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: records.length,
+            separatorBuilder: (context, index) => Divider(height: 1),
+            itemBuilder: (context, index) => recordBuilder(records[index]),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+double _calculateCategoryTotal(List<dynamic> records) {
+  double total = 0.0;
+  for (var record in records) {
+    if (record is LinkVatTuModel) {
+      total += _safeToDouble(record.thanhTien);
+    } else if (record is LinkDinhKyModel) {
+      total += _safeToDouble(record.thanhTien);
+    } else if (record is LinkLeTetTCModel) {
+      total += _safeToDouble(record.thanhTienTrenThang);
+    } else if (record is LinkPhuCapModel) {
+      total += _safeToDouble(record.thanhTienTrenThang);
+    } else if (record is LinkNgoaiGiaoModel) {
+      total += _safeToDouble(record.thanhTienTrenThang);
+    } else if (record is LinkMayMocModel) {
+      total += _safeToDouble(record.thanhTienThang);
+    } else if (record is LinkLuongModel) {
+      total += _safeToDouble(record.thanhTien);
+    }
+  }
+  return total;
+}
+
+// Individual record builders
+Widget _buildVatLieuRecord(dynamic record) {
+  final vatLieu = record as LinkVatTuModel;
+  return ListTile(
+    dense: true,
+    title: Text(
+      vatLieu.danhMucVatTuTieuHao ?? 'N/A',
+      style: TextStyle(fontWeight: FontWeight.w500),
+    ),
+    subtitle: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (vatLieu.nhanHieu?.isNotEmpty == true)
+          Text('Nhãn hiệu: ${vatLieu.nhanHieu}'),
+        if (vatLieu.quyCach?.isNotEmpty == true)
+          Text('Quy cách: ${vatLieu.quyCach}'),
+        Text('Số lượng: ${vatLieu.soLuong ?? 0} | Đơn giá: ${_formatCurrency(_safeToDouble(vatLieu.donGiaCapKhachHang))}'),
+      ],
+    ),
+    trailing: Text(
+      _formatCurrency(_safeToDouble(vatLieu.thanhTien)),
+      style: TextStyle(
+        fontWeight: FontWeight.bold,
+        color: Colors.blue,
+      ),
+    ),
+  );
+}
+
+Widget _buildDinhKyRecord(dynamic record) {
+  final dinhKy = record as LinkDinhKyModel;
+  return ListTile(
+    dense: true,
+    title: Text(
+      dinhKy.danhMucCongViec ?? 'N/A',
+      style: TextStyle(fontWeight: FontWeight.w500),
+    ),
+    subtitle: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (dinhKy.chiTietCongViec?.isNotEmpty == true)
+          Text('Chi tiết: ${dinhKy.chiTietCongViec}'),
+        Text('Tần suất: ${dinhKy.tanSuatThucHienTrenThang ?? 0}/tháng | Số lượng: ${dinhKy.soLuong ?? 0}'),
+        Text('Đơn giá/tháng: ${_formatCurrency(_safeToDouble(dinhKy.donGiaTrenThang))}'),
+      ],
+    ),
+    trailing: Text(
+      _formatCurrency(_safeToDouble(dinhKy.thanhTien)),
+      style: TextStyle(
+        fontWeight: FontWeight.bold,
+        color: Colors.green,
+      ),
+    ),
+  );
+}
+
+Widget _buildLeTetTCRecord(dynamic record) {
+  final leTetTC = record as LinkLeTetTCModel;
+  return ListTile(
+    dense: true,
+    title: Text(
+      leTetTC.danhMucCongViec ?? 'N/A',
+      style: TextStyle(fontWeight: FontWeight.w500),
+    ),
+    subtitle: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (leTetTC.chiTietCongViec?.isNotEmpty == true)
+          Text('Chi tiết: ${leTetTC.chiTietCongViec}'),
+        Text('Số NV: ${leTetTC.soLuongNhanVien ?? 0} | Đơn giá: ${_formatCurrency(_safeToDouble(leTetTC.donGia))}'),
+        if (leTetTC.phanBoTrenThang != null)
+          Text('Phân bổ: ${leTetTC.phanBoTrenThang} tháng'),
+      ],
+    ),
+    trailing: Text(
+      _formatCurrency(_safeToDouble(leTetTC.thanhTienTrenThang)),
+      style: TextStyle(
+        fontWeight: FontWeight.bold,
+        color: Colors.orange,
+      ),
+    ),
+  );
+}
+
+Widget _buildPhuCapRecord(dynamic record) {
+  final phuCap = record as LinkPhuCapModel;
+  return ListTile(
+    dense: true,
+    title: Text(
+      phuCap.danhMucCongViec ?? 'N/A',
+      style: TextStyle(fontWeight: FontWeight.w500),
+    ),
+    subtitle: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (phuCap.chiTietCongViec?.isNotEmpty == true)
+          Text('Chi tiết: ${phuCap.chiTietCongViec}'),
+        Text('Số NV: ${phuCap.soLuongNhanVien ?? 0} | Đơn giá: ${_formatCurrency(_safeToDouble(phuCap.donGia))}'),
+        if (phuCap.phanBoTrenThang != null)
+          Text('Phân bổ: ${phuCap.phanBoTrenThang} tháng'),
+      ],
+    ),
+    trailing: Text(
+      _formatCurrency(_safeToDouble(phuCap.thanhTienTrenThang)),
+      style: TextStyle(
+        fontWeight: FontWeight.bold,
+        color: Colors.purple,
+      ),
+    ),
+  );
+}
+
+Widget _buildNgoaiGiaoRecord(dynamic record) {
+  final ngoaiGiao = record as LinkNgoaiGiaoModel;
+  return ListTile(
+    dense: true,
+    title: Text(
+      ngoaiGiao.danhMuc ?? 'N/A',
+      style: TextStyle(fontWeight: FontWeight.w500),
+    ),
+    subtitle: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (ngoaiGiao.noiDungChiTiet?.isNotEmpty == true)
+          Text('Nội dung: ${ngoaiGiao.noiDungChiTiet}'),
+        Text('Số lượng: ${ngoaiGiao.soLuong ?? 0} | Đơn giá: ${_formatCurrency(_safeToDouble(ngoaiGiao.donGia))}'),
+        if (ngoaiGiao.phanBoTrenThang != null)
+          Text('Phân bổ: ${ngoaiGiao.phanBoTrenThang} tháng'),
+      ],
+    ),
+    trailing: Text(
+      _formatCurrency(_safeToDouble(ngoaiGiao.thanhTienTrenThang)),
+      style: TextStyle(
+        fontWeight: FontWeight.bold,
+        color: Colors.indigo,
+      ),
+    ),
+  );
+}
+
+Widget _buildMayMocRecord(dynamic record) {
+  final mayMoc = record as LinkMayMocModel;
+  final tinhTrangPercent = ((mayMoc.tinhTrangThietBi ?? 0.0) * 100).toStringAsFixed(0);
+  
+  return ListTile(
+    dense: true,
+    title: Text(
+      '${mayMoc.loaiMay ?? 'N/A'} - ${mayMoc.tenMay ?? ''}',
+      style: TextStyle(fontWeight: FontWeight.w500),
+    ),
+    subtitle: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (mayMoc.hangSanXuat?.isNotEmpty == true)
+          Text('Hãng: ${mayMoc.hangSanXuat}'),
+        Text('Giá máy: ${_formatCurrency(_safeToDouble(mayMoc.donGiaMay))} | Tình trạng: $tinhTrangPercent%'),
+        Text('Khấu hao: ${mayMoc.khauHao ?? 0} | Số lượng: ${mayMoc.soLuongCap ?? 0}'),
+      ],
+    ),
+    trailing: Text(
+      _formatCurrency(_safeToDouble(mayMoc.thanhTienThang)),
+      style: TextStyle(
+        fontWeight: FontWeight.bold,
+        color: Colors.teal,
+      ),
+    ),
+  );
+}
+
+Widget _buildLuongRecord(dynamic record) {
+  final luong = record as LinkLuongModel;
+  return ListTile(
+    dense: true,
+    title: Text(
+      luong.hangMuc ?? 'N/A',
+      style: TextStyle(fontWeight: FontWeight.w500),
+    ),
+    subtitle: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (luong.moTa?.isNotEmpty == true)
+          Text('Mô tả: ${luong.moTa}'),
+        Text('Số lượng: ${luong.soLuong ?? 0} | Đơn giá: ${_formatCurrency(_safeToDouble(luong.donGia))}'),
+      ],
+    ),
+    trailing: Text(
+      _formatCurrency(_safeToDouble(luong.thanhTien)),
+      style: TextStyle(
+        fontWeight: FontWeight.bold,
+        color: Colors.red,
+      ),
+    ),
+  );
 }
   Future<void> _loadContractsForPeriod() async {
     try {
@@ -340,7 +771,14 @@ bool _canEditContract(LinkHopDongModel contract) {
                 _buildDetailRow('Ghi chú', contract.ghiChuHopDong),
               ]),
               SizedBox(height: 16),
-
+              if (contract.uid != null) ...[
+  _buildDetailSection('Chi tiết chi phí theo từng mục', [
+    Container(
+      child: _buildCostRecordsSection(contract.uid!),
+    ),
+  ]),
+  SizedBox(height: 16),
+],
               // Worker information
               _buildDetailSection('Thông tin công nhân', [
                 _buildDetailRow('Công nhân theo HĐ', contract.congNhanHopDong?.toString()),
@@ -738,28 +1176,52 @@ Widget _buildDetailRow(String label, String? value) {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Tìm kiếm và lọc',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF024965),
+  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  children: [
+    Text(
+      'Tìm kiếm và lọc',
+      style: TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.bold,
+        color: Color(0xFF024965),
+      ),
+    ),
+    Row(
+      children: [
+        ElevatedButton.icon(
+          onPressed: _isGeneratingExcel ? null : _generateAndShareExcel,
+          icon: _isGeneratingExcel 
+              ? SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
-                ),
-                ElevatedButton.icon(
-                  onPressed: _navigateToNewContract,
-                  icon: Icon(Icons.add, size: 18),
-                  label: Text('Thêm mới'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFF024965),
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  ),
-                ),
-              ],
-            ),
+                )
+              : Icon(Icons.download, size: 18),
+          label: Text(_isGeneratingExcel ? 'Đang tạo...' : 'Tải về'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+            foregroundColor: Colors.white,
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          ),
+        ),
+        SizedBox(width: 8),
+        ElevatedButton.icon(
+          onPressed: _navigateToNewContract,
+          icon: Icon(Icons.add, size: 18),
+          label: Text('Thêm mới'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Color(0xFF024965),
+            foregroundColor: Colors.white,
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          ),
+        ),
+      ],
+    ),
+  ],
+),
             SizedBox(height: 16),
             
             // Search bar
@@ -817,21 +1279,21 @@ Widget _buildDetailRow(String label, String? value) {
                   }),
                   SizedBox(width: 8),
                   Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: IconButton(
-                      icon: Icon(_sortAscending ? Icons.arrow_upward : Icons.arrow_downward),
-                      onPressed: () {
-                        setState(() {
-                          _sortAscending = !_sortAscending;
-                        });
-                        _applyFilters();
-                      },
-                      tooltip: _sortAscending ? 'Tăng dần' : 'Giảm dần',
-                    ),
-                  ),
+  decoration: BoxDecoration(
+    border: Border.all(color: Colors.grey), 
+    borderRadius: BorderRadius.circular(8),
+  ),
+  child: IconButton(
+    icon: Icon(_sortAscending ? Icons.arrow_upward : Icons.arrow_downward),
+    onPressed: () {
+      setState(() {
+        _sortAscending = !_sortAscending;
+      });
+      _applyFilters();
+    },
+    tooltip: _sortAscending ? 'Tăng dần' : 'Giảm dần',
+  ),
+),
                 ],
               ),
             ),
@@ -1276,37 +1738,37 @@ Widget _buildDetailRow(String label, String? value) {
   }
   Widget _buildStatCard(String title, String value, IconData icon, Color color) {
    return Container(
-     padding: EdgeInsets.all(16),
-     decoration: BoxDecoration(
-       color: color.withOpacity(0.1),
-       borderRadius: BorderRadius.circular(8),
-       border: Border.all(color: color.withOpacity(0.3)),
-     ),
-     child: Column(
-       children: [
-         Icon(icon, color: color, size: 24),
-         SizedBox(height: 8),
-         Text(
-           title,
-           style: TextStyle(
-             fontSize: 12,
-             color: Colors.grey[600],
-           ),
-           textAlign: TextAlign.center,
-         ),
-         SizedBox(height: 4),
-         Text(
-           value,
-           style: TextStyle(
-             fontSize: 14,
-             fontWeight: FontWeight.bold,
-             color: color,
-           ),
-           textAlign: TextAlign.center,
-         ),
-       ],
-     ),
-   );
+  padding: EdgeInsets.all(16),
+  decoration: BoxDecoration(
+    color: color.withOpacity(0.1),
+    borderRadius: BorderRadius.circular(8),
+    border: Border.all(color: color.withOpacity(0.3)), 
+  ),
+  child: Column(
+    children: [
+      Icon(icon, color: color, size: 24),
+      SizedBox(height: 8),
+      Text(
+        title,
+        style: TextStyle(
+          fontSize: 12,
+          color: Colors.grey[600],
+        ),
+        textAlign: TextAlign.center,
+      ),
+      SizedBox(height: 4),
+      Text(
+        value,
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
+        textAlign: TextAlign.center,
+      ),
+    ],
+  ),
+);
  }
 
  Widget _buildCostDetail(String title, dynamic cost) {

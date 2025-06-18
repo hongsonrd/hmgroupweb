@@ -16,12 +16,17 @@ class ProjectProgressDashboard extends StatefulWidget {
 class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
   bool _isLoading = false;
   List<ProjectProgress> _projectsData = [];
+  List<ProjectProgress> _filteredProjectsData = [];
   final dbHelper = DBHelper();
   
   // Timer configuration
   Timer? _reloadTimer;
   final Duration _reloadInterval = Duration(minutes: 15); 
   DateTime? _lastUpdate;
+  
+  // Filter dropdown
+  String? _selectedChiTiet2;
+  List<String> _chiTiet2Options = [];
   
   @override
   void initState() {
@@ -36,6 +41,7 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
   }
 
   Future<void> _initializeDashboard() async {
+    await _loadChiTiet2Options();
     await _loadProjectsData();
     _startReloadTimer();
   }
@@ -47,19 +53,43 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
     });
   }
 
-bool _shouldFilterProject(String projectName) {
-  if (projectName.length < 10) return true;
-  if (projectName.toLowerCase().startsWith('hm') && 
-      RegExp(r'^hm\d+').hasMatch(projectName.toLowerCase())) return true;
-  if (projectName.toLowerCase() == 'unknown') return true;
-  if (projectName == projectName.toUpperCase() && !projectName.contains(' ')) return true;
-  
-  // Filter out project names that start with "http:" or "https:"
-  if (projectName.toLowerCase().startsWith('http:') || 
-      projectName.toLowerCase().startsWith('https:')) return true;
-  
-  return false;
-}
+  Future<void> _loadChiTiet2Options() async {
+    try {
+      final db = await dbHelper.database;
+      final today = DateTime.now();
+      final startOfDay = DateTime(today.year, today.month, today.day);
+      final endOfDay = startOfDay.add(Duration(days: 1));
+
+      final List<Map<String, dynamic>> results = await db.rawQuery('''
+        SELECT DISTINCT ChiTiet2
+        FROM ${DatabaseTables.taskHistoryTable}
+        WHERE Ngay >= ? AND Ngay < ?
+        AND ChiTiet2 IS NOT NULL AND ChiTiet2 != ''
+        ORDER BY ChiTiet2
+      ''', [startOfDay.toIso8601String(), endOfDay.toIso8601String()]);
+
+      setState(() {
+        _chiTiet2Options = results.map((item) => item['ChiTiet2'] as String).toList();
+        _chiTiet2Options.insert(0, 'Tất cả'); // Add "All" option at the beginning
+      });
+    } catch (e) {
+      print('Error loading ChiTiet2 options: $e');
+    }
+  }
+
+  bool _shouldFilterProject(String projectName) {
+    if (projectName.length < 10) return true;
+    if (projectName.toLowerCase().startsWith('hm') && 
+        RegExp(r'^hm\d+').hasMatch(projectName.toLowerCase())) return true;
+    if (projectName.toLowerCase() == 'unknown') return true;
+    if (projectName == projectName.toUpperCase() && !projectName.contains(' ')) return true;
+    
+    // Filter out project names that start with "http:" or "https:"
+    if (projectName.toLowerCase().startsWith('http:') || 
+        projectName.toLowerCase().startsWith('https:')) return true;
+    
+    return false;
+  }
 
   Future<void> _loadProjectsData() async {
     if (_isLoading) return;
@@ -74,6 +104,15 @@ bool _shouldFilterProject(String projectName) {
       final startOfDay = DateTime(today.year, today.month, today.day);
       final endOfDay = startOfDay.add(Duration(days: 1));
 
+      // Build the query with optional ChiTiet2 filter
+      String whereClause = 'WHERE Ngay >= ? AND Ngay < ?';
+      List<String> queryParams = [startOfDay.toIso8601String(), endOfDay.toIso8601String()];
+      
+      if (_selectedChiTiet2 != null && _selectedChiTiet2 != 'Tất cả') {
+        whereClause += ' AND ChiTiet2 = ?';
+        queryParams.add(_selectedChiTiet2!);
+      }
+
       // Load data for today grouped by project (BoPhan)
       final List<Map<String, dynamic>> results = await db.rawQuery('''
         SELECT 
@@ -81,23 +120,29 @@ bool _shouldFilterProject(String projectName) {
           COUNT(*) as total_reports,
           COUNT(CASE WHEN HinhAnh IS NOT NULL AND HinhAnh != '' THEN 1 END) as images_submitted
         FROM ${DatabaseTables.taskHistoryTable}
-        WHERE Ngay >= ? AND Ngay < ?
+        $whereClause
         GROUP BY BoPhan
         HAVING BoPhan IS NOT NULL AND BoPhan != ''
         ORDER BY BoPhan
-      ''', [startOfDay.toIso8601String(), endOfDay.toIso8601String()]);
+      ''', queryParams);
 
       final projectsData = results
-          .where((item) => !_shouldFilterProject(item['project_name'] as String))
-          .map((item) => ProjectProgress(
-            projectName: item['project_name'] as String,
-            totalReports: item['total_reports'] as int,
-            imagesSubmitted: item['images_submitted'] as int,
-            targetImages: 15, 
-          )).toList();
+    .where((item) => !_shouldFilterProject(item['project_name'] as String))
+    .map((item) {
+      final projectName = item['project_name'] as String;
+      final targetImages = projectName.startsWith('Bệnh viện') ? 10 : 15;
+      
+      return ProjectProgress(
+        projectName: projectName,
+        totalReports: item['total_reports'] as int,
+        imagesSubmitted: item['images_submitted'] as int,
+        targetImages: targetImages,
+      );
+    }).toList();
 
       setState(() {
         _projectsData = projectsData;
+        _filteredProjectsData = projectsData;
         _lastUpdate = DateTime.now();
       });
     } catch (e) {
@@ -108,6 +153,13 @@ bool _shouldFilterProject(String projectName) {
         _isLoading = false;
       });
     }
+  }
+
+  void _onChiTiet2FilterChanged(String? value) {
+    setState(() {
+      _selectedChiTiet2 = value;
+    });
+    _loadProjectsData();
   }
 
   void _showError(String message) {
@@ -122,13 +174,13 @@ bool _shouldFilterProject(String projectName) {
     }
   }
 
-Color _getProgressColor(double percentage) {
-  if (percentage >= 90) return Colors.tealAccent;
-  if (percentage >= 70) return Colors.blue;
-  if (percentage >= 50) return Colors.yellow[400]!;
-  if (percentage >= 30) return Colors.deepOrange[400]!;
-  return Colors.red[600]!;
-}
+  Color _getProgressColor(double percentage) {
+    if (percentage >= 90) return Colors.tealAccent[400]!;
+    if (percentage >= 70) return Colors.blue[600]!;
+    if (percentage >= 50) return Colors.yellow[600]!;
+    if (percentage >= 30) return Colors.deepOrange[600]!;
+    return Colors.red[600]!;
+  }
 
   int _getCrossAxisCount(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -155,7 +207,7 @@ Color _getProgressColor(double percentage) {
     final progressColor = _getProgressColor(percentage);
 
     return Container(
-      height: 100, 
+      height: 120, // Increased height to accommodate 2 lines
       margin: EdgeInsets.zero,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
@@ -181,25 +233,28 @@ Color _getProgressColor(double percentage) {
               child: Container(
                 height: double.infinity,
                 decoration: BoxDecoration(
-                  color: progressColor, // Full opacity solid color
+                  color: progressColor,
                 ),
               ),
             ),
             // Content overlay
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  // Project name with more space
                   Expanded(
+                    flex: 3, 
                     child: Center(
                       child: Text(
                         project.projectName,
                         style: TextStyle(
-                          fontSize: 21,
+                          fontSize: 20, 
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
+                          height: 1.2, 
                           shadows: [
                             Shadow(offset: Offset(-1.5, -1.5), color: progressColor),
                             Shadow(offset: Offset(1.5, -1.5), color: progressColor),
@@ -211,62 +266,93 @@ Color _getProgressColor(double percentage) {
                             Shadow(offset: Offset(0, 1.5), color: progressColor),
                           ],
                         ),
-                        maxLines: 2, 
+                        maxLines: 3, // Allow up to 3 lines
                         overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center, // Center align for better appearance
+                        textAlign: TextAlign.center,
                       ),
                     ),
                   ),
-                  SizedBox(height: 4),
-                  // Count and percentage
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '${project.imagesSubmitted}/${project.targetImages}',
-                        style: TextStyle(
-                          fontSize: 18, 
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black,
-                          shadows: [
-                            // Multiple shadows to create outline effect
-                            Shadow(offset: Offset(-1.5, -1.5), color: progressColor),
-                            Shadow(offset: Offset(1.5, -1.5), color: progressColor),
-                            Shadow(offset: Offset(1.5, 1.5), color: progressColor),
-                            Shadow(offset: Offset(-1.5, 1.5), color: progressColor),
-                            Shadow(offset: Offset(-1.5, 0), color: progressColor),
-                            Shadow(offset: Offset(1.5, 0), color: progressColor),
-                            Shadow(offset: Offset(0, -1.5), color: progressColor),
-                            Shadow(offset: Offset(0, 1.5), color: progressColor),
-                          ],
+                  // Count and percentage section
+                  Container(
+                    padding: EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '${project.imagesSubmitted}/${project.targetImages}',
+                          style: TextStyle(
+                            fontSize: 16, 
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black,
+                            shadows: [
+                              Shadow(offset: Offset(-1.5, -1.5), color: progressColor),
+                              Shadow(offset: Offset(1.5, -1.5), color: progressColor),
+                              Shadow(offset: Offset(1.5, 1.5), color: progressColor),
+                              Shadow(offset: Offset(-1.5, 1.5), color: progressColor),
+                              Shadow(offset: Offset(-1.5, 0), color: progressColor),
+                              Shadow(offset: Offset(1.5, 0), color: progressColor),
+                              Shadow(offset: Offset(0, -1.5), color: progressColor),
+                              Shadow(offset: Offset(0, 1.5), color: progressColor),
+                            ],
+                          ),
                         ),
-                      ),
-                      Text(
-                        '${percentage.toStringAsFixed(0)}%',
-                        style: TextStyle(
-                          fontSize: 18, 
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                          shadows: [
-                            // Multiple shadows to create outline effect
-                            Shadow(offset: Offset(-1.5, -1.5), color: progressColor),
-                            Shadow(offset: Offset(1.5, -1.5), color: progressColor),
-                            Shadow(offset: Offset(1.5, 1.5), color: progressColor),
-                            Shadow(offset: Offset(-1.5, 1.5), color: progressColor),
-                            Shadow(offset: Offset(-1.5, 0), color: progressColor),
-                            Shadow(offset: Offset(1.5, 0), color: progressColor),
-                            Shadow(offset: Offset(0, -1.5), color: progressColor),
-                            Shadow(offset: Offset(0, 1.5), color: progressColor),
-                          ],
+                        Text(
+                          '${percentage.toStringAsFixed(0)}%',
+                          style: TextStyle(
+                            fontSize: 16, 
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                            shadows: [
+                              Shadow(offset: Offset(-1.5, -1.5), color: progressColor),
+                              Shadow(offset: Offset(1.5, -1.5), color: progressColor),
+                              Shadow(offset: Offset(1.5, 1.5), color: progressColor),
+                              Shadow(offset: Offset(-1.5, 1.5), color: progressColor),
+                              Shadow(offset: Offset(-1.5, 0), color: progressColor),
+                              Shadow(offset: Offset(1.5, 0), color: progressColor),
+                              Shadow(offset: Offset(0, -1.5), color: progressColor),
+                              Shadow(offset: Offset(0, 1.5), color: progressColor),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildFilterDropdown() {
+    return Container(
+      constraints: BoxConstraints(maxWidth: 150), 
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.grey[400]!),
+      ),
+      child: DropdownButton<String>(
+        value: _selectedChiTiet2 ?? 'Tất cả',
+        hint: Text('Filter', style: TextStyle(fontSize: 12)),
+        underline: Container(), 
+        isExpanded: true,
+        icon: Icon(Icons.arrow_drop_down, size: 20),
+        style: TextStyle(fontSize: 12, color: Colors.black87),
+        items: _chiTiet2Options.map((String value) {
+          return DropdownMenuItem<String>(
+            value: value,
+            child: Text(
+              value,
+              style: TextStyle(fontSize: 12),
+              overflow: TextOverflow.ellipsis,
+            ),
+          );
+        }).toList(),
+        onChanged: _onChiTiet2FilterChanged,
       ),
     );
   }
@@ -290,19 +376,24 @@ Color _getProgressColor(double percentage) {
           Text(
             'Tiến độ dự án',
             style: TextStyle(
-              fontSize: 24, 
+              fontSize: 20, // Slightly smaller to fit better
               fontWeight: FontWeight.bold,
               color: Colors.black87,
             ),
           ),
-          SizedBox(height: 12),
-    Text(
-      'Ngày: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}',
-      style: TextStyle(
-        fontSize: 16,
-        color: Colors.black87,
-      ),
-    ),
+          SizedBox(width: 12),
+          // Filter dropdown in app bar
+          if (_chiTiet2Options.isNotEmpty) ...[
+            _buildFilterDropdown(),
+            SizedBox(width: 8),
+          ],
+          Text(
+            DateFormat('dd/MM').format(DateTime.now()),
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.black87,
+            ),
+          ),
         ],
       ),
       actions: [
@@ -311,10 +402,11 @@ Color _getProgressColor(double percentage) {
             padding: EdgeInsets.symmetric(horizontal: 8),
             child: Center(
               child: Text(
-                '${_projectsData.length} dự án • ${_projectsData.where((p) => p.imagesSubmitted >= p.targetImages).length} hoàn thành',
+                '${_projectsData.length}/${_projectsData.where((p) => p.imagesSubmitted >= p.targetImages).length}',
                 style: TextStyle(
-                  fontSize: 18, 
+                  fontSize: 16, 
                   color: Colors.black54,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -324,24 +416,24 @@ Color _getProgressColor(double percentage) {
           Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: SizedBox(
-              width: 24, // Increased size
-              height: 24,
+              width: 20,
+              height: 20,
               child: CircularProgressIndicator(
-                strokeWidth: 3,
+                strokeWidth: 2,
                 valueColor: AlwaysStoppedAnimation<Color>(Colors.black87),
               ),
             ),
           ),
         if (!_isLoading && _lastUpdate != null)
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
+            padding: EdgeInsets.symmetric(horizontal: 12),
             child: Center(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     Icons.access_time,
-                    size: 21, // Increased from 14 (50% bigger)
+                    size: 16,
                     color: Colors.black54,
                   ),
                   SizedBox(width: 4),
@@ -349,7 +441,7 @@ Color _getProgressColor(double percentage) {
                     '${_lastUpdate!.hour.toString().padLeft(2, '0')}:${_lastUpdate!.minute.toString().padLeft(2, '0')}',
                     style: TextStyle(
                       color: Colors.black87,
-                      fontSize: 18, // Increased from 12 (50% bigger)
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -376,24 +468,24 @@ Color _getProgressColor(double percentage) {
                 children: [
                   Icon(
                     Icons.folder_open,
-                    size: 72, // Increased from 48 (50% bigger)
+                    size: 72,
                     color: Colors.grey[400],
                   ),
                   SizedBox(height: 16),
                   Text(
                     'Không có dự án hôm nay',
                     style: TextStyle(
-                      fontSize: 24, // Increased from 16 (50% bigger)
+                      fontSize: 24,
                       color: Colors.grey[500],
                     ),
                   ),
                   SizedBox(height: 12),
                   ElevatedButton.icon(
                     onPressed: _loadProjectsData,
-                    icon: Icon(Icons.refresh, size: 24), // Increased from 16
+                    icon: Icon(Icons.refresh, size: 24),
                     label: Text(
                       'Tải lại',
-                      style: TextStyle(fontSize: 18), // Increased text size
+                      style: TextStyle(fontSize: 18),
                     ),
                     style: ElevatedButton.styleFrom(
                       padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -409,7 +501,7 @@ Color _getProgressColor(double percentage) {
                   crossAxisCount: _getCrossAxisCount(context),
                   crossAxisSpacing: 8,
                   mainAxisSpacing: 8,
-                  childAspectRatio: 3.0,
+                  childAspectRatio: 2.5, 
                 ),
                 itemCount: _projectsData.length,
                 itemBuilder: (context, index) {

@@ -136,12 +136,12 @@ bool get _canEditThang {
       return true;
     }
     // Other users can only edit current or next period
-    if (contractThang != null) {
-      final canEdit = contractThang == _currentPeriod || contractThang == _nextPeriod;
-      print('Non-admin edit permission: $canEdit');
-      return canEdit;
-    }
-    return false;
+    //if (contractThang != null) {
+    //  final canEdit = contractThang == _currentPeriod || contractThang == _nextPeriod;
+    //  print('Non-admin edit permission: $canEdit');
+    //  return canEdit;
+    //}
+    return true;
   }
   // For new contracts, everyone can edit
   print('New contract - can edit');
