@@ -1338,7 +1338,7 @@ Widget build(BuildContext context) {
     ),
     BottomNavigationBarItem(
       icon: Icon(Icons.web),
-      label: 'Công việc',
+      label: 'Công\nviệc',
     ),
     BottomNavigationBarItem(
       icon: Icon(Icons.smart_toy),
@@ -1346,7 +1346,7 @@ Widget build(BuildContext context) {
     ),
     BottomNavigationBarItem(
       icon: Icon(Icons.home),
-      label: 'Hướng dẫn',
+      label: 'Hướng\ndẫn',
     ),
   ];
   
@@ -1392,7 +1392,7 @@ bool showAirportButton = airportPermissions.isEmpty || airportPermissions.contai
         children: [
           // Enhanced Left Navigation Rail
           Container(
-            width: 100,
+            width: 88,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
@@ -1422,7 +1422,7 @@ bool showAirportButton = airportPermissions.isEmpty || airportPermissions.contai
                       Container(
                         margin: const EdgeInsets.only(bottom: 15),
                         child: const Text(
-                          '0.8.8',
+                          '0.8.9',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 18,
@@ -1485,7 +1485,7 @@ bool showAirportButton = airportPermissions.isEmpty || airportPermissions.contai
                 // Navigation items
                 Expanded(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    padding: const EdgeInsets.symmetric(vertical: 6),
                     child: Column(
                       children: visibleNavItems.asMap().entries.map((entry) {
                         int index = entry.key;
@@ -1552,8 +1552,8 @@ Widget _buildEnhancedActionButton({
         borderRadius: BorderRadius.circular(16),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          width: 85,
-          height: 85,
+          width: 70,
+          height: 70,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
@@ -1582,7 +1582,7 @@ Widget _buildEnhancedActionButton({
               Icon(
                 icon,
                 color: Colors.white,
-                size: 22,
+                size: 20,
               ),
               const SizedBox(height: 2),
               Text(
@@ -1593,7 +1593,7 @@ Widget _buildEnhancedActionButton({
                   fontWeight: FontWeight.w600,
                 ),
                 textAlign: TextAlign.center,
-                maxLines: 2,
+                maxLines: 3,
                 overflow: TextOverflow.ellipsis,
               ),
             ],
@@ -1612,12 +1612,12 @@ Widget _buildEnhancedNavItem({
   required VoidCallback onTap,
 }) {
   return Container(
-    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
     child: Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
@@ -1633,7 +1633,7 @@ Widget _buildEnhancedNavItem({
                   ],
                 )
               : null,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             border: isSelected 
               ? Border.all(
                   color: Colors.white.withOpacity(0.3),
@@ -1655,7 +1655,7 @@ Widget _buildEnhancedNavItem({
             children: [
               AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   color: isSelected 
                     ? Colors.white.withOpacity(0.2)
@@ -1674,7 +1674,7 @@ Widget _buildEnhancedNavItem({
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 8,
                   color: isSelected 
                     ? Colors.white 
                     : Colors.white.withOpacity(0.8),
@@ -1682,7 +1682,7 @@ Widget _buildEnhancedNavItem({
                   letterSpacing: 0.5,
                 ),
                 textAlign: TextAlign.center,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
             ],

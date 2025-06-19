@@ -8,6 +8,7 @@ import 'hs_xuhuongxnk.dart';
 import 'hs_xuhuongkd.dart';
 import 'hs_xuhuongkho.dart';
 import 'hs_xuhuongkpi.dart';
+import 'hs_xuhuongkhach.dart';
 import 'http_client.dart';
 import 'dart:convert';
 class HSStatScreen extends StatefulWidget {
@@ -639,6 +640,19 @@ _buildActionButton(
     );
   },
   textColor: Colors.red,
+),
+const SizedBox(height: 16),
+_buildActionButton(
+  icon: Icons.volunteer_activism,
+  title: 'Khách hàng lâu chưa mua',
+  subtitle: 'Chú ý: bấm Đồng bộ toàn bộ lịch sử trước khi dùng',
+  onTap: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => InactiveCustomersScreen()),
+    );
+  },
+  textColor: Colors.teal,
 ),
                   ],
                 ),

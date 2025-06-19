@@ -143,6 +143,7 @@ class DBHelper {
   }
 }
 //ADDON 3:
+
 Future<void> clearDSHangTable() async {
   final db = await database;
   await db.delete('dshang');

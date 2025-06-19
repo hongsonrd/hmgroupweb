@@ -20,7 +20,7 @@ import 'dart:typed_data';
 import 'package:flutter/rendering.dart';
 import 'hs_pxkform2.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'hs_pycform.dart';
+import 'hs_pycform2.dart';
 import 'hs_donhangxnk.dart';
 import 'package:table_calendar/table_calendar.dart';
 
@@ -214,7 +214,6 @@ Future<void> _scheduleDeliveryDate(ChiTietDonModel item, int itemIndex) async {
     },
   );
 }
-
 Future<void> _confirmAndSubmitDeliveryDate(ChiTietDonModel item, DateTime selectedDate) async {
   final formattedDate = DateFormat('yyyy-MM-dd').format(selectedDate);
   final displayDate = DateFormat('dd/MM/yyyy').format(selectedDate);
@@ -269,21 +268,219 @@ Future<void> _confirmAndSubmitDeliveryDate(ChiTietDonModel item, DateTime select
             },
             child: Text('Hủy'),
           ),
-          ElevatedButton(
+          TextButton(
             onPressed: () {
               Navigator.pop(context);
               _submitDeliveryDate(item, formattedDate);
+            },
+            child: Text('Chỉ sản phẩm này'),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.grey[700],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _submitDeliveryDateForAllItems(item.soPhieu!, formattedDate, displayDate);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Color(0xFF534b0d),
               foregroundColor: Colors.white,
             ),
-            child: Text('Xác nhận'),
+            child: Text('Áp dụng cho tất cả'),
           ),
         ],
       );
     },
   );
+}
+Future<void> _submitDeliveryDateForAllItems(String soPhieu, String formattedDate, String displayDate) async {
+  // Show loading dialog
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) {
+      return AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Đang cập nhật ngày nhập cho tất cả sản phẩm...'),
+          ],
+        ),
+      );
+    },
+  );
+
+  try {
+    // Get all items in this order that don't have a date set yet
+    final allItems = await _dbHelper.getChiTietDonBySoPhieu(soPhieu);
+    final itemsToUpdate = allItems.where((item) => !_isDateInGhiChu(item.ghiChu)).toList();
+    
+    if (itemsToUpdate.isEmpty) {
+      Navigator.pop(context); // Close loading dialog
+      showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.info, color: Colors.blue),
+                SizedBox(width: 8),
+                Text('Thông báo'),
+              ],
+            ),
+            content: Text('Tất cả sản phẩm đã có ngày nhập được thiết lập.'),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
+                child: Text('OK'),
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
+
+    int successCount = 0;
+    int totalCount = itemsToUpdate.length;
+    
+    // Update each item
+    for (var item in itemsToUpdate) {
+      final itemData = {
+        'UID': item.uid,
+        'SoPhieu': item.soPhieu,
+        'TrangThai': item.trangThai,
+        'TenHang': item.tenHang,
+        'MaHang': item.maHang,
+        'DonViTinh': item.donViTinh,
+        'SoLuongYeuCau': item.soLuongYeuCau,
+        'DonGia': item.donGia,
+        'ThanhTien': item.thanhTien,
+        'SoLuongThucGiao': item.soLuongThucGiao,
+        'ChiNhanh': item.chiNhanh,
+        'IdHang': item.idHang,
+        'SoLuongKhachNhan': item.soLuongKhachNhan,
+        'Duyet': item.duyet,
+        'XuatXuHangKhac': item.xuatXuHangKhac,
+        'BaoGia': item.baoGia,
+        'HinhAnh': item.hinhAnh,
+        'GhiChu': formattedDate, // Update GhiChu with the selected date
+        'PhanTramVAT': item.phanTramVAT,
+        'VAT': item.vat,
+        'TenKhachHang': item.tenKhachHang,
+        'UpdateTime': DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
+      };
+
+      try {
+        final response = await http.post(
+          Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/hotelchitietdonmoi'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(itemData),
+        );
+
+        if (response.statusCode == 200) {
+          successCount++;
+        }
+      } catch (e) {
+        print('Error updating item ${item.maHang}: $e');
+      }
+    }
+
+    // Close loading dialog
+    Navigator.pop(context);
+
+    // Show result dialog
+    showDialog(
+      context: context,
+      builder: (context) {
+        final bool allSuccess = successCount == totalCount;
+        return AlertDialog(
+          title: Row(
+            children: [
+              Icon(
+                allSuccess ? Icons.check_circle : Icons.warning,
+                color: allSuccess ? Colors.green : Colors.orange,
+              ),
+              SizedBox(width: 8),
+              Text(allSuccess ? 'Thành công' : 'Hoàn thành một phần'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Ngày nhập đã chọn: $displayDate'),
+              SizedBox(height: 8),
+              Text('Đã cập nhật: $successCount/$totalCount sản phẩm'),
+              if (!allSuccess) ...[
+                SizedBox(height: 8),
+                Text(
+                  'Một số sản phẩm không thể cập nhật. Vui lòng thử lại sau.',
+                  style: TextStyle(color: Colors.orange[700]),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                // Refresh the data
+                _loadOrders();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: allSuccess ? Colors.green : Colors.orange,
+                foregroundColor: Colors.white,
+              ),
+              child: Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+
+  } catch (e) {
+    // Close loading dialog
+    Navigator.pop(context);
+    
+    // Show error dialog
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.error, color: Colors.red),
+              SizedBox(width: 8),
+              Text('Lỗi'),
+            ],
+          ),
+          content: Text('Đã xảy ra lỗi khi cập nhật: $e'),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
 Future<void> _submitDeliveryDate(ChiTietDonModel item, String formattedDate) async {
   // Show loading dialog
@@ -1715,7 +1912,38 @@ bool _isDateInGhiChu(String? ghiChu) {
       print('Error generating PXK: $e');
     }
   }
+void _editOrder(DonHangModel order) async {
+  try {
+    // Navigate to the edit screen and wait for result
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => HSDonHangXNKScreen(
+          editOrder: order, // Pass the order to edit
+        ),
+      ),
+    );
 
+    // If edit was successful, refresh the orders list
+    if (result != null && result['status'] == 'success') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đơn hàng đã được cập nhật thành công'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      _loadOrders(); // Refresh the list
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi khi mở chế độ sửa: ${e.toString()}'),
+        backgroundColor: Colors.red,
+      ),
+    );
+    print('Error opening edit mode: $e');
+  }
+}
   Widget _buildOrderItem(DonHangModel order, int columnCount) {
     final isProcessingApproval = order.soPhieu != null &&
         _processingApprovals.contains(order.soPhieu!);
@@ -1854,17 +2082,45 @@ bool _isDateInGhiChu(String? ghiChu) {
           ),
 
           // Button row at the bottom
-          if (showQrButton || canApprove)
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(4)),
+          if (showQrButton || canApprove || lowerStatus == 'xnk đặt hàng') // Add condition for edit button
+  Container(
+    width: double.infinity,
+    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    decoration: BoxDecoration(
+      color: Colors.grey[100],
+      borderRadius: BorderRadius.vertical(bottom: Radius.circular(4)),
+    ),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        // Add Edit button for XNK Đặt hàng orders
+        if (lowerStatus == 'xnk đặt hàng')
+          ElevatedButton.icon(
+            onPressed: () {
+              // Navigate to edit screen
+              _editOrder(order);
+            },
+            icon: Icon(
+              Icons.edit,
+              size: columnCount == 3 ? 12 : (columnCount == 2 ? 14 : 16),
+              color: Colors.white,
+            ),
+            label: Text(
+              'Sửa',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: microSize,
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue[600],
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              textStyle: TextStyle(fontSize: microSize),
+              minimumSize: Size(0, 28),
+            ),
+          ),
+        if (lowerStatus == 'xnk đặt hàng' && (showQrButton || canApprove))
+          SizedBox(width: 8),
                   if (showQrButton)
                     ElevatedButton.icon(
                       onPressed: () {
@@ -2396,541 +2652,695 @@ String _formatDateFromGhiChu(String ghiChu) {
   }
   return ghiChu;
 }
-  Future<void> _loadOrderItems(String soPhieu) async {
-    // Show loading indicator
-    showDialog(
+Future<void> _loadOrderItems(String soPhieu) async {
+  // Show loading indicator
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => Center(
+      child: CircularProgressIndicator(),
+    ),
+  );
+
+  try {
+    // Load order and its items
+    final order = await _dbHelper.getDonHangBySoPhieu(soPhieu);
+    final items = await _dbHelper.getChiTietDonBySoPhieu(soPhieu);
+    
+    // Get stock levels for all items
+    final stockLevels = await _getStockLevels(items);
+
+    // Close loading indicator
+    Navigator.pop(context);
+
+    if (order == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Không tìm thấy thông tin đơn hàng')),
+      );
+      return;
+    }
+
+    // Calculate totals
+    int totalAmount = 0;
+    for (var item in items) {
+      totalAmount += item.thanhTien ?? 0;
+    }
+
+    showModalBottomSheet(
       context: context,
-      barrierDismissible: false,
-      builder: (context) => Center(
-        child: CircularProgressIndicator(),
+      isScrollControlled: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-    );
-
-    try {
-      // Load order and its items
-      final order = await _dbHelper.getDonHangBySoPhieu(soPhieu);
-      final items = await _dbHelper.getChiTietDonBySoPhieu(soPhieu);
-
-      // Close loading indicator
-      Navigator.pop(context);
-
-      if (order == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Không tìm thấy thông tin đơn hàng')),
-        );
-        return;
-      }
-
-      // Calculate totals
-      int totalAmount = 0;
-      for (var item in items) {
-        totalAmount += item.thanhTien ?? 0;
-      }
-
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        builder: (context) => DraggableScrollableSheet(
-          initialChildSize: 0.9,
-          minChildSize: 0.5,
-          maxChildSize: 0.95,
-          expand: false,
-          builder: (context, scrollController) => Column(
-            children: [
-              // Header with order summary
-              Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                  color: Color(0xFF534b0d),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Chi tiết đơn hàng',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                          ),
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.close, color: Colors.white),
-                          onPressed: () => Navigator.pop(context),
-                          padding: EdgeInsets.zero,
-                          constraints: BoxConstraints(),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Text(
-                          'Số phiếu: $soPhieu',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                          ),
-                        ),
-                        Spacer(),
-                        Container(
-                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: _getStatusColor(order.trangThai).withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: _getStatusColor(order.trangThai),
-                              width: 1,
-                            ),
-                          ),
-                          child: Text(
-                            _getStatusDisplayName(order.trangThai ?? 'N/A'),
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.9,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => Column(
+          children: [
+            // Header with order summary
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                color: Color(0xFF534b0d),
               ),
-
-              // Order Details Section
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  children: [
-                    // Customer Information
-                    Container(
-                      color: Colors.grey[100],
-                      padding: EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Thông tin khách hàng',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: Colors.grey[800],
-                            ),
-                          ),
-                          SizedBox(height: 10),
-                          _buildDetailItem('Tên khách hàng', order.tenKhachHang),
-                          _buildDetailItem('Số điện thoại', order.sdtKhachHang),
-                          _buildDetailItem('Địa chỉ', order.diaChi),
-                          _buildDetailItem('Mã số thuế', order.mst),
-                        ],
-                      ),
-                    ),
-
-                    // Order Information
-                    Container(
-                      padding: EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Thông tin đơn hàng',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: Colors.grey[800],
-                            ),
-                          ),
-                          SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildDetailItem('Ngày tạo', order.ngay != null
-                                    ? DateFormat('dd/MM/yyyy').format(DateTime.parse(order.ngay!))
-                                    : 'N/A'),
-                              ),
-                              Expanded(
-                                child: _buildDetailItem('Số PO', order.soPO),
-                              ),
-                            ],
-                          ),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildDetailItem('Người tạo', order.nguoiTao),
-                              ),
-                              Expanded(
-                                child: _buildDetailItem('Thanh toán', order.phuongThucThanhToan),
-                              ),
-                            ],
-                          ),
-                          _buildDetailItem('Ghi chú', order.ghiChu ?? 'Không có'),
-                        ],
-                      ),
-                    ),
-
-                    // Order Items Section
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      color: Colors.grey[100],
-                      child: Row(
-                        children: [
-                          Text(
-                            'Danh sách sản phẩm (${items.length})',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: Colors.grey[800],
-                            ),
-                          ),
-                          Spacer(),
-                          Text(
-                            _formatCurrency(totalAmount),
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: Colors.green[700],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // List of items
-                    ...items.asMap().entries.map((entry) {
-  final int itemIndex = entry.key;
-  final ChiTietDonModel item = entry.value;
-  
-  // Check if we should show the "Hẹn ngày nhập" button
-  final shouldShowScheduleButton = 
-      (order.trangThai?.toLowerCase() ?? '') == 'xnk đặt hàng đã duyệt' &&
-      !_isDateInGhiChu(item.ghiChu);
-  
-  return Card(
-    margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    child: Padding(
-      padding: EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  item.idHang != null
-                      ? item.idHang!.contains(" - ")
-                      ? item.idHang!.split(" - ")[1]
-                      : item.idHang!
-                      : 'N/A',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-              SizedBox(width: 8),
-              Text(
-                _formatCurrency(item.thanhTien),
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: Colors.green[700],
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 8),
-          Row(
-            children: [
-              Text(
-                'Mã hàng: ',
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 14,
-                ),
-              ),
-              Text(
-                item.maHang ?? 'N/A',
-                style: TextStyle(fontSize: 14),
-              ),
-            ],
-          ),
-          SizedBox(height: 4),
-          Row(
-            children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    Text(
-                      'SL: ',
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 14,
-                      ),
-                    ),
-                    Text(
-                      '${item.soLuongYeuCau ?? 0} ${item.donViTinh ?? ''}',
-                      style: TextStyle(fontSize: 14),
-                    ),
-                  ],
-                ),
-              ),
-              Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'NVKD: ',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 14,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Chi tiết đơn hàng',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.close, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                        padding: EdgeInsets.zero,
+                        constraints: BoxConstraints(),
+                      ),
+                    ],
                   ),
-                  Text(
-                    item.baoGia ?? '?',
-                    style: TextStyle(fontSize: 14),
+                  SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text(
+                        'Số phiếu: $soPhieu',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                        ),
+                      ),
+                      Spacer(),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: _getStatusColor(order.trangThai).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: _getStatusColor(order.trangThai),
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                          _getStatusDisplayName(order.trangThai ?? 'N/A'),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
-          ),
-          
-          // Show GhiChu if it exists
-          if (item.ghiChu != null && item.ghiChu!.trim().isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Container(
-                padding: EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: _isDateInGhiChu(item.ghiChu) ? Colors.green[50] : Colors.grey[100],
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                    color: _isDateInGhiChu(item.ghiChu) ? Colors.green[200]! : Colors.grey[300]!,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      _isDateInGhiChu(item.ghiChu) ? Icons.event : Icons.note,
-                      size: 16,
-                      color: _isDateInGhiChu(item.ghiChu) ? Colors.green[700] : Colors.grey[600],
-                    ),
-                    SizedBox(width: 4),
-                    Text(
-                      _isDateInGhiChu(item.ghiChu) ? 'Ngày nhập: ' : 'Ghi chú: ',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: _isDateInGhiChu(item.ghiChu) ? Colors.green[700] : Colors.grey[600],
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        _isDateInGhiChu(item.ghiChu) 
-                            ? _formatDateFromGhiChu(item.ghiChu!)
-                            : item.ghiChu!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: _isDateInGhiChu(item.ghiChu) ? FontWeight.bold : FontWeight.normal,
-                          color: _isDateInGhiChu(item.ghiChu) ? Colors.green[700] : Colors.grey[700],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ),
-          
-          // Show "Hẹn ngày nhập" button if conditions are met
-          if (shouldShowScheduleButton)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  icon: Icon(Icons.event_available, size: 16),
-                  label: Text('Hẹn ngày nhập'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue[600],
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                  ),
-                  onPressed: () {
-                    _scheduleDeliveryDate(item, itemIndex);
-                  },
-                ),
-              ),
-            ),
-        ],
-      ),
-    ),
-  );
-}).toList(),
 
-                    // Footer with totals
-                    Container(
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        border: Border(
-                          top: BorderSide(color: Colors.grey[300]!),
+            // Order Details Section
+            Expanded(
+              child: ListView(
+                controller: scrollController,
+                children: [
+                  // Customer Information
+                  Container(
+                    color: Colors.grey[100],
+                    padding: EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Thông tin khách hàng',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Colors.grey[800],
+                          ),
                         ),
-                      ),
-                      child: Column(
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Tổng tiền:',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              Text(
-                                _formatCurrency(order.tongTien),
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                  color: Colors.green[700],
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('VAT:'),
-                              Text(_formatCurrency(order.vat10)),
-                            ],
-                          ),
-                          SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Tổng cộng:',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
-                                ),
-                              ),
-                              Text(
-                                _formatCurrency(order.tongCong),
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
-                                  color: Colors.green[700],
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (adminUsers.contains(_username) &&
-                              (order.trangThai?.toLowerCase() ?? '') == 'xnk đặt hàng' && // Only allow approval for 'xnk đặt hàng'
-                              _canUserApproveOrderLocation(order))
-                            Padding(
-                              padding: const EdgeInsets.only(top: 16),
-                              child: SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton.icon(
-                                  icon: Icon(
-                                      _processingApprovals.contains(soPhieu) ? Icons.hourglass_top : Icons.swap_horiz,
-                                      color: Colors.white
-                                  ),
-                                  label: Text(
-                                      _processingApprovals.contains(soPhieu)
-                                          ? 'Đang xử lý...'
-                                          : ((order.phuongThucGiaoHang?.toUpperCase() ?? '') == 'HMGROUP'
-                                          ? 'Chuyển TT nhanh'
-                                          : 'Chuyển trạng thái'),
-                                      style: TextStyle(color: Colors.white)
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: _processingApprovals.contains(soPhieu)
-                                        ? Colors.grey
-                                        : ((order.phuongThucGiaoHang?.toUpperCase() ?? '') == 'HMGROUP'
-                                        ? Colors.orange
-                                        : Colors.blue),
-                                    padding: EdgeInsets.symmetric(vertical: 12),
-                                  ),
-                                  onPressed: _processingApprovals.contains(soPhieu)
-                                      ? null
-                                      : () async {
-                                    Navigator.pop(context);
+                        SizedBox(height: 10),
+                        _buildDetailItem('Tên khách hàng', order.tenKhachHang),
+                        _buildDetailItem('Số điện thoại', order.sdtKhachHang),
+                        _buildDetailItem('Địa chỉ', order.diaChi),
+                        _buildDetailItem('Mã số thuế', order.mst),
+                      ],
+                    ),
+                  ),
 
-                                    // Check if this is an HMGROUP order
-                                    if ((order.phuongThucGiaoHang?.toUpperCase() ?? '') == 'HMGROUP') {
-                                      // Use quick approve method for HMGROUP orders
-                                      await _quickApproveOrder(soPhieu);
-                                    } else {
-                                      // Regular approval process
-                                      final confirm = await showDialog<bool>(
-                                        context: context,
-                                        builder: (context) => AlertDialog(
-                                          title: Text('Xác nhận chuyển trạng thái'),
-                                          content: Text('Xác nhận chuyển trạng thái đơn hàng ${order.soPhieu}?'),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () => Navigator.pop(context, false),
-                                              child: Text('Huỷ'),
-                                            ),
-                                            ElevatedButton(
-                                              onPressed: () => Navigator.pop(context, true),
-                                              child: Text('Chuyển'),
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: Colors.blue,
-                                              ),
-                                            ),
-                                          ],
+                  // Order Information
+                  Container(
+                    padding: EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Thông tin đơn hàng',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Colors.grey[800],
+                          ),
+                        ),
+                        SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildDetailItem('Ngày tạo', order.ngay != null
+                                  ? DateFormat('dd/MM/yyyy').format(DateTime.parse(order.ngay!))
+                                  : 'N/A'),
+                            ),
+                            Expanded(
+                              child: _buildDetailItem('Số PO', order.soPO),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildDetailItem('Người tạo', order.nguoiTao),
+                            ),
+                            Expanded(
+                              child: _buildDetailItem('Thanh toán', order.phuongThucThanhToan),
+                            ),
+                          ],
+                        ),
+                        _buildDetailItem('Ghi chú', order.ghiChu ?? 'Không có'),
+                      ],
+                    ),
+                  ),
+
+                  // Order Items Section
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    color: Colors.grey[100],
+                    child: Row(
+                      children: [
+                        Text(
+                          'Danh sách sản phẩm (${items.length})',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Colors.grey[800],
+                          ),
+                        ),
+                        Spacer(),
+                        Text(
+                          _formatCurrency(totalAmount),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Colors.green[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // List of items with stock information
+                  ...items.asMap().entries.map((entry) {
+                    final int itemIndex = entry.key;
+                    final ChiTietDonModel item = entry.value;
+                    
+                    // Get stock levels for this item
+                    final itemStockLevels = stockLevels[item.idHang] ?? {};
+                    
+                    // Check if we should show the "Hẹn ngày nhập" button
+                    final shouldShowScheduleButton = 
+                        (order.trangThai?.toLowerCase() ?? '') == 'xnk đặt hàng đã duyệt' &&
+                        !_isDateInGhiChu(item.ghiChu);
+                    
+                    return Card(
+                      margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      child: Padding(
+                        padding: EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    item.idHang != null
+                                        ? item.idHang!.contains(" - ")
+                                        ? item.idHang!.split(" - ")[1]
+                                        : item.idHang!
+                                        : 'N/A',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  _formatCurrency(item.thanhTien),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    color: Colors.green[700],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 8),
+                            Row(
+                              children: [
+                            Text(
+                                  'Giá ngoại tệ: ',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                Text(
+  '${item.soLuongKhachNhan ?? 0.0} ${item.xuatXuHangKhac ?? ''}',
+  style: TextStyle(fontSize: 14),
+),],
+                            ),
+                            SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Text(
+                                  'Mã hàng: ',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      Text(
+                                        'SL: ',
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 14,
                                         ),
-                                      ) ?? false;
-
-                                      if (confirm) {
-                                        final currentStatus = order.trangThai?.toLowerCase() ?? '';
-                                        final success = await _approveOrder(soPhieu, currentStatus);
-                                        if (success) {
-                                          // Reload orders after a slight delay to allow the server to process
-                                          Future.delayed(Duration(seconds: 3), () {
-                                            _loadOrders();
-                                          });
-                                        }
-                                      }
-                                    }
-                                  },
+                                      ),
+                                      Text(
+                                        '${item.soLuongYeuCau ?? 0} ${item.donViTinh ?? ''}',
+                                        style: TextStyle(fontSize: 14),
+                                      ),
+                                    ],
+                                  ),
                                 ),
+                                Row(
+                                  children: [
+                                    Text(
+                                      'NVKD: ',
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    Text(
+                                      item.baoGia ?? '?',
+                                      style: TextStyle(fontSize: 14),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            
+                            // Stock Level Information
+                            //if (itemStockLevels.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Container(
+                                  padding: EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue[50],
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.blue[200]!),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.inventory_2,
+                                            size: 16,
+                                            color: Colors.blue[700],
+                                          ),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            'Tồn kho hiện tại:',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.blue[700],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      SizedBox(height: 4),
+                                      ...itemStockLevels.entries.map((stockEntry) {
+                                        final warehouseName = stockEntry.key;
+                                        final stockQuantity = stockEntry.value;
+                                        final requestedQuantity = item.soLuongYeuCau ?? 0;
+                                        
+                                        // Determine stock status color
+                                        Color stockColor;
+                                        IconData stockIcon;
+                                        
+                                        if (stockQuantity >= requestedQuantity) {
+                                          stockColor = Colors.green[700]!;
+                                          stockIcon = Icons.check_circle;
+                                        } else if (stockQuantity > 0) {
+                                          stockColor = Colors.orange[700]!;
+                                          stockIcon = Icons.warning;
+                                        } else {
+                                          stockColor = Colors.red[700]!;
+                                          stockIcon = Icons.error;
+                                        }
+                                        
+                                        return Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 2),
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                stockIcon,
+                                                size: 14,
+                                                color: stockColor,
+                                              ),
+                                              SizedBox(width: 4),
+                                              Text(
+                                                '$warehouseName: ',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey[600],
+                                                ),
+                                              ),
+                                              Text(
+                                                '${stockQuantity.toStringAsFixed(stockQuantity % 1 == 0 ? 0 : 1)} ${item.donViTinh ?? ''}',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: stockColor,
+                                                ),
+                                              ),
+                                              if (stockQuantity < requestedQuantity)
+                                                Text(
+                                                  ' (Thiếu: ${(requestedQuantity - stockQuantity).toStringAsFixed((requestedQuantity - stockQuantity) % 1 == 0 ? 0 : 1)})',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.red[600],
+                                                    fontStyle: FontStyle.italic,
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            
+                            // Show GhiChu if it exists
+                            if (item.ghiChu != null && item.ghiChu!.trim().isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Container(
+                                  padding: EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: _isDateInGhiChu(item.ghiChu) ? Colors.green[50] : Colors.grey[100],
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: _isDateInGhiChu(item.ghiChu) ? Colors.green[200]! : Colors.grey[300]!,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        _isDateInGhiChu(item.ghiChu) ? Icons.event : Icons.note,
+                                        size: 16,
+                                        color: _isDateInGhiChu(item.ghiChu) ? Colors.green[700] : Colors.grey[600],
+                                      ),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        _isDateInGhiChu(item.ghiChu) ? 'Ngày nhập: ' : 'Ghi chú: ',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: _isDateInGhiChu(item.ghiChu) ? Colors.green[700] : Colors.grey[600],
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          _isDateInGhiChu(item.ghiChu) 
+                                              ? _formatDateFromGhiChu(item.ghiChu!)
+                                              : item.ghiChu!,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: _isDateInGhiChu(item.ghiChu) ? FontWeight.bold : FontWeight.normal,
+                                            color: _isDateInGhiChu(item.ghiChu) ? Colors.green[700] : Colors.grey[700],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            
+                            // Show "Hẹn ngày nhập" button if conditions are met
+                            if (shouldShowScheduleButton)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    icon: Icon(Icons.event_available, size: 16),
+                                    label: Text('Hẹn ngày nhập'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.blue[600],
+                                      foregroundColor: Colors.white,
+                                      padding: EdgeInsets.symmetric(vertical: 8),
+                                    ),
+                                    onPressed: () {
+                                      _scheduleDeliveryDate(item, itemIndex);
+                                    },
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+
+                  // Footer with totals
+                  Container(
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      border: Border(
+                        top: BorderSide(color: Colors.grey[300]!),
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Tổng tiền:',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
                               ),
                             ),
-                        ],
-                      ),
+                            Text(
+                              _formatCurrency(order.tongTien),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: Colors.green[700],
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('VAT:'),
+                            Text(_formatCurrency(order.vat10)),
+                          ],
+                        ),
+                        SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Tổng cộng:',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                              ),
+                            ),
+                            Text(
+                              _formatCurrency(order.tongCong),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                                color: Colors.green[700],
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (adminUsers.contains(_username) &&
+                            (order.trangThai?.toLowerCase() ?? '') == 'xnk đặt hàng' && // Only allow approval for 'xnk đặt hàng'
+                            _canUserApproveOrderLocation(order))
+                          Padding(
+                            padding: const EdgeInsets.only(top: 16),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                icon: Icon(
+                                    _processingApprovals.contains(soPhieu) ? Icons.hourglass_top : Icons.swap_horiz,
+                                    color: Colors.white
+                                ),
+                                label: Text(
+                                    _processingApprovals.contains(soPhieu)
+                                        ? 'Đang xử lý...'
+                                        : ((order.phuongThucGiaoHang?.toUpperCase() ?? '') == 'HMGROUP'
+                                        ? 'Chuyển TT nhanh'
+                                        : 'Chuyển trạng thái'),
+                                    style: TextStyle(color: Colors.white)
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _processingApprovals.contains(soPhieu)
+                                      ? Colors.grey
+                                      : ((order.phuongThucGiaoHang?.toUpperCase() ?? '') == 'HMGROUP'
+                                      ? Colors.orange
+                                      : Colors.blue),
+                                  padding: EdgeInsets.symmetric(vertical: 12),
+                                ),
+                                onPressed: _processingApprovals.contains(soPhieu)
+                                    ? null
+                                    : () async {
+                                  Navigator.pop(context);
+
+                                  // Check if this is an HMGROUP order
+                                  if ((order.phuongThucGiaoHang?.toUpperCase() ?? '') == 'HMGROUP') {
+                                    // Use quick approve method for HMGROUP orders
+                                    await _quickApproveOrder(soPhieu);
+                                  } else {
+                                    // Regular approval process
+                                    final confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: Text('Xác nhận chuyển trạng thái'),
+                                        content: Text('Xác nhận chuyển trạng thái đơn hàng ${order.soPhieu}?'),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(context, false),
+                                            child: Text('Huỷ'),
+                                          ),
+                                          ElevatedButton(
+                                            onPressed: () => Navigator.pop(context, true),
+                                            child: Text('Chuyển'),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.blue,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ) ?? false;
+
+                                    if (confirm) {
+                                      final currentStatus = order.trangThai?.toLowerCase() ?? '';
+                                      final success = await _approveOrder(soPhieu, currentStatus);
+                                      if (success) {
+                                        // Reload orders after a slight delay to allow the server to process
+                                        Future.delayed(Duration(seconds: 3), () {
+                                          _loadOrders();
+                                        });
+                                      }
+                                    }
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      );
-    } catch (e) {
-      // Close loading indicator
-      Navigator.pop(context);
+      ),
+    );
+  } catch (e) {
+    // Close loading indicator
+    Navigator.pop(context);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Lỗi: Không thể tải chi tiết đơn hàng'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      print('Error loading order items: $e');
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi: Không thể tải chi tiết đơn hàng'),
+        backgroundColor: Colors.red,
+      ),
+    );
+    print('Error loading order items: $e');
   }
-
+}
+Future<Map<String, Map<String, double>>> _getStockLevels(List<ChiTietDonModel> items) async {
+  Map<String, Map<String, double>> stockLevels = {};
+  
+  try {
+    for (var item in items) {
+      if (item.idHang != null) {
+        // Use the same logic as warehouse output - use the full idHang value
+        stockLevels[item.idHang!] = {};
+        
+        // Get all warehouses
+        final warehouses = await _dbHelper.getAllKho();
+        
+        for (var warehouse in warehouses) {
+          if (warehouse.khoHangID != null) {
+            // Get batches for this product from this warehouse
+            final batches = await _dbHelper.getLoHangByMaHangAndKho(
+              item.idHang!,  // Use full idHang, not extracted code
+              warehouse.khoHangID!
+            );
+            
+            // Calculate total available stock from all batches
+            double totalStock = 0;
+            for (var batch in batches) {
+              if ((batch.soLuongHienTai ?? 0) > 0) {
+                totalStock += batch.soLuongHienTai ?? 0;
+              }
+            }
+            
+            // Only add to map if there's stock available
+            if (totalStock > 0) {
+              stockLevels[item.idHang!]![warehouse.khoHangID!] = totalStock;
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    print('Error fetching stock levels: $e');
+  }
+  
+  return stockLevels;
+}
   Widget _buildDetailItem(String label, String? value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),

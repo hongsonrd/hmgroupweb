@@ -17,12 +17,14 @@ class CombinedItem {
   final String? idHang;
   final String? tenHang;
   final String? donViTinh;
-  final double? soLuongYeuCau; // Changed to double to match your model
+  final double? soLuongYeuCau; 
   final int? donGia;
   final int? thanhTien;
   final int? phanTramVAT;
   final String noteText;
-
+  final double? soLuongKhachNhan;
+  final String? xuatXuHangKhac;
+  final String? maHang;
   CombinedItem({
     this.idHang,
     this.tenHang,
@@ -32,6 +34,9 @@ class CombinedItem {
     this.thanhTien,
     this.phanTramVAT,
     this.noteText = '',
+    this.soLuongKhachNhan,
+    this.xuatXuHangKhac,
+    this.maHang,
   });
 }
 
@@ -149,22 +154,14 @@ class ExportFormGenerator {
                   'Total'
                 ],
                 data: combinedItems.map((item) => [
-                  (item.idHang == "KHAC")
-                      ? (item.tenHang ?? 'N/A')
-                      : ((item.idHang != null && item.idHang!.contains(' - '))
-                          ? item.idHang!.split(' - ')[1].trim()
-                          : (item.idHang ?? 'N/A')),
-                  item.noteText, // This will contain the baoGia information
-                  (item.idHang == "KHAC")
-                      ? (item.tenHang ?? 'N/A')
-                      : ((item.idHang != null && item.idHang!.contains(' - '))
-                          ? item.idHang!.split(' - ')[0].trim()
-                          : (item.idHang ?? 'N/A')),
+                  item.tenHang ?? 'N/A',
+                  item.noteText, 
+                  item.maHang ?? 'N/A',
                   item.donViTinh ?? 'N/A',
-                  _formatQuantity(item.soLuongYeuCau), // Format quantity properly
-                  _formatCurrency(item.donGia),
+                  _formatQuantity(item.soLuongYeuCau), 
+                  '${item.soLuongKhachNhan ?? 0.0} ${item.xuatXuHangKhac ?? ''}',
                   item.phanTramVAT?.toString() ?? '10%',
-                  _formatCurrency(item.thanhTien),
+                  '${item.thanhTien ?? 0.0} ${item.xuatXuHangKhac ?? ''}',
                 ]).toList(),
               ),
 
@@ -224,6 +221,9 @@ class ExportFormGenerator {
           thanhTien: (existing.thanhTien ?? 0) + (item.thanhTien ?? 0),
           phanTramVAT: existing.phanTramVAT,
           noteText: existing.noteText,
+          xuatXuHangKhac: existing.xuatXuHangKhac,
+          maHang: existing.maHang,
+          soLuongKhachNhan: existing.soLuongKhachNhan,
         );
         
         // Collect baoGia information
@@ -241,6 +241,9 @@ class ExportFormGenerator {
           donGia: item.donGia,
           thanhTien: item.thanhTien,
           phanTramVAT: item.phanTramVAT,
+          maHang: item.maHang,
+          soLuongKhachNhan: item.soLuongKhachNhan,
+          xuatXuHangKhac: item.xuatXuHangKhac,
         );
         
         // Initialize baoGia info list
@@ -269,6 +272,9 @@ class ExportFormGenerator {
         thanhTien: item.thanhTien,
         phanTramVAT: item.phanTramVAT,
         noteText: noteText,
+        maHang: item.maHang,
+        soLuongKhachNhan: item.soLuongKhachNhan,
+        xuatXuHangKhac: item.xuatXuHangKhac,
       ));
     });
 
@@ -361,7 +367,7 @@ class ExportFormGenerator {
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
             pw.Text(
-              'Kind attention: ...........', 
+              'Kind attention: ${order.tenKhachHang2}',
               style: pw.TextStyle(font: ttf, fontSize: 10),
             ),
             pw.Row(
@@ -419,7 +425,7 @@ class ExportFormGenerator {
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
               pw.Text(
-                'TỔNG',
+                'TOTAL',
                 style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold),
               ),
               pw.Text(
@@ -433,7 +439,7 @@ class ExportFormGenerator {
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
               pw.Text(
-                'TỔNG VAT',
+                '+VAT',
                 style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold),
               ),
               pw.Text(
@@ -447,7 +453,7 @@ class ExportFormGenerator {
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
               pw.Text(
-                'TỔNG CỘNG',
+                'GRAND TOTAL',
                 style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold),
               ),
               pw.Text(
@@ -630,7 +636,7 @@ class ExportFormGenerator {
         ),
         pw.SizedBox(height: 2),
         pw.Text(
-          '(ký, ghi rõ họ tên)',
+          '(name & signature)',
           style: pw.TextStyle(
             font: font,
             fontSize: 8,

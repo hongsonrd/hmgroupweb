@@ -138,7 +138,15 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
         imagesSubmitted: item['images_submitted'] as int,
         targetImages: targetImages,
       );
-    }).toList();
+    })
+    .toList()
+    ..sort((a, b) {
+      // Calculate percentage for both projects
+      final percentageA = (a.imagesSubmitted / a.targetImages * 100);
+      final percentageB = (b.imagesSubmitted / b.targetImages * 100);
+      // Sort from lowest to highest percentage
+      return percentageA.compareTo(percentageB);
+    });
 
       setState(() {
         _projectsData = projectsData;
