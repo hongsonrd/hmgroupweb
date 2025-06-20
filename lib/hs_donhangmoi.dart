@@ -770,7 +770,7 @@ void _showRecipientContactSelectionDialog() {
   }
   
   void _showAddProductDialog([DSHangModel? product]) {
-    final bool isSpecialProduct = product == null || product.uid == 'KHAC';
+    final bool isSpecialProduct = product == null || product.uid == 'KHACKHAC';
     
     TextEditingController tenHangController = TextEditingController(
         text: isSpecialProduct ? '' : product!.tenSanPham ?? '');
@@ -1057,7 +1057,7 @@ if (_orderType == 'Báo giá') {
   }
   
   void _showEditProductDialog(ChiTietDonModel chiTietDon, int index) {
-    final bool isSpecialProduct = chiTietDon.idHang == 'KHAC';
+    final bool isSpecialProduct = chiTietDon.idHang == 'KHACKHAC';
     
     TextEditingController tenHangController = TextEditingController(text: chiTietDon.tenHang ?? '');
     TextEditingController maHangController = TextEditingController(text: chiTietDon.maHang ?? '');

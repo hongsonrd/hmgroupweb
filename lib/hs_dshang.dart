@@ -63,7 +63,7 @@ class _HSDSHangScreenState extends State<HSDSHangScreen> with SingleTickerProvid
       setState(() {
         _currentUser = username;
         // Check if user has edit permissions - specifically for the authorized users
-        _canEditItems = ['hm.tason', 'hm.manhha', 'hm.lehoa', 'hm.phiminh', 'hm.dinhmai']
+        _canEditItems = ['hm.tason', 'hm.manhha', 'hm.lehoa', 'hm.phiminh']
             .contains(_currentUser);
       });
       
