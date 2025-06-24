@@ -920,12 +920,12 @@ if (baseCongThuongChu == 'XĐ' || baseCongThuongChu == '2XĐ') {
       
       // 2. NgoaiGioThuong row
       if (ngoaiGioThuong > 0) {
-        ngThuong_days12 += ngoaiGioThuong / 8;
+        ngThuong_days12 += ngoaiGioThuong ;
       }
       
       // ---- Hỗ trợ section ----
       if (hoTro > 0) {
-        hoTro_days12 += hoTro / 8;
+        hoTro_days12 += hoTro ;
       }
       
       // ---- Part time section ----
@@ -945,22 +945,22 @@ if (baseCongThuongChu == 'XĐ' || baseCongThuongChu == '2XĐ') {
       
       // ---- NG khác section ----
       if (ngoaiGioKhac > 0) {
-        ngKhac_days12 += ngoaiGioKhac / 8;
+        ngKhac_days12 += ngoaiGioKhac ;
       }
       
       // ---- NG x1.5 section ----
       if (ngoaiGiox15 > 0) {
-        ng15_days12 += ngoaiGiox15 / 8;
+        ng15_days12 += ngoaiGiox15 ;
       }
       
       // ---- NG x2 section ----
       if (ngoaiGiox2 > 0) {
-        ng2_days12 += ngoaiGiox2 / 8;
+        ng2_days12 += ngoaiGiox2 ;
       }
       
       // ---- Công lễ section ----
       if (congLe > 0) {
-        congLe_days12 += congLe / 8;
+        congLe_days12 += congLe ;
       }
       
     } else if (day <= 25) {
@@ -990,12 +990,12 @@ if (baseCongThuongChu == 'XĐ' || baseCongThuongChu == '2XĐ') {
       
       // 2. NgoaiGioThuong row
       if (ngoaiGioThuong > 0) {
-        ngThuong_days34 += ngoaiGioThuong / 8;
+        ngThuong_days34 += ngoaiGioThuong ;
       }
       
       // ---- Hỗ trợ section ----
       if (hoTro > 0) {
-        hoTro_days34 += hoTro / 8;
+        hoTro_days34 += hoTro ;
       }
       
       // ---- Part time section ----
@@ -1015,22 +1015,22 @@ if (baseCongThuongChu == 'XĐ' || baseCongThuongChu == '2XĐ') {
       
       // ---- NG khác section ----
       if (ngoaiGioKhac > 0) {
-        ngKhac_days34 += ngoaiGioKhac / 8;
+        ngKhac_days34 += ngoaiGioKhac ;
       }
       
       // ---- NG x1.5 section ----
       if (ngoaiGiox15 > 0) {
-        ng15_days34 += ngoaiGiox15 / 8;
+        ng15_days34 += ngoaiGiox15 ;
       }
       
       // ---- NG x2 section ----
       if (ngoaiGiox2 > 0) {
-        ng2_days34 += ngoaiGiox2 / 8;
+        ng2_days34 += ngoaiGiox2 ;
       }
       
       // ---- Công lễ section ----
       if (congLe > 0) {
-        congLe_days34 += congLe / 8;
+        congLe_days34 += congLe ;
       }
     } else {
       // ==== Days 26+ ====
@@ -1059,12 +1059,12 @@ if (baseCongThuongChu == 'XĐ' || baseCongThuongChu == '2XĐ') {
       
       // 2. NgoaiGioThuong row
       if (ngoaiGioThuong > 0) {
-        ngThuong_days5plus += ngoaiGioThuong / 8;
+        ngThuong_days5plus += ngoaiGioThuong ;
       }
       
       // ---- Hỗ trợ section ----
       if (hoTro > 0) {
-        hoTro_days5plus += hoTro / 8;
+        hoTro_days5plus += hoTro ;
       }
       
       // ---- Part time section ----
@@ -1084,22 +1084,22 @@ if (baseCongThuongChu == 'XĐ' || baseCongThuongChu == '2XĐ') {
       
       // ---- NG khác section ----
       if (ngoaiGioKhac > 0) {
-        ngKhac_days5plus += ngoaiGioKhac / 8;
+        ngKhac_days5plus += ngoaiGioKhac ;
       }
       
       // ---- NG x1.5 section ----
       if (ngoaiGiox15 > 0) {
-        ng15_days5plus += ngoaiGiox15 / 8;
+        ng15_days5plus += ngoaiGiox15 ;
       }
       
       // ---- NG x2 section ----
       if (ngoaiGiox2 > 0) {
-        ng2_days5plus += ngoaiGiox2 / 8;
+        ng2_days5plus += ngoaiGiox2 ;
       }
       
       // ---- Công lễ section ----
       if (congLe > 0) {
-        congLe_days5plus += congLe / 8;
+        congLe_days5plus += congLe ;
       }
     }
   }
@@ -1235,7 +1235,7 @@ double _calculateDailyTotal(int day) {
     final ngoaiGiox15 = double.tryParse(record['NgoaiGiox15']?.toString() ?? '0') ?? 0;
     final ngoaiGiox2 = double.tryParse(record['NgoaiGiox2']?.toString() ?? '0') ?? 0;
     
-    final ngoaiGioTotal = (ngoaiGioThuong + ngoaiGioKhac + ngoaiGiox15 + ngoaiGiox2) / 8;
+    final ngoaiGioTotal = (ngoaiGioThuong + ngoaiGioKhac + ngoaiGiox15 + ngoaiGiox2) ;
     
     // Add to total
     total += phanLoaiValue + ngoaiGioTotal;

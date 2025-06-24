@@ -21,6 +21,10 @@ class ExportAllProjectsHelper {
     required Map<String, dynamic> Function(String empId) calculateSummary,
   }) async {
     try {
+      // Show choice dialog first
+      final choice = await _showExportChoiceDialog(context);
+      if (choice == null) return; // User cancelled
+      
       // Show progress dialog with project counter
       int currentProjectIndex = 0;
       
@@ -116,8 +120,18 @@ class ExportAllProjectsHelper {
       // Style the sheet
       _styleSheet(sheet, currentRow - 1);
       
-      // Save and share the file
-      await _saveAndShareFile(excelFile, selectedMonth, context);
+      // Generate filename
+      final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      final fileName = 'TongHop_TatCaDuAn_${selectedMonth}_$timestamp.xlsx';
+      
+      // Save and handle based on user choice
+      final fileBytes = excelFile.encode()!;
+      
+      if (choice == 'share') {
+        await _handleShare(fileBytes, fileName, selectedMonth, context);
+      } else {
+        await _handleSaveToAppFolder(fileBytes, fileName, selectedMonth, context);
+      }
       
     } catch (e) {
       // Close progress dialog if still open
@@ -131,6 +145,186 @@ class ExportAllProjectsHelper {
           backgroundColor: Colors.red,
         ),
       );
+    }
+  }
+  
+  static Future<String?> _showExportChoiceDialog(BuildContext context) async {
+    return showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Xuất file Excel'),
+          content: Text('Bạn muốn chia sẻ file hay lưu vào thư mục ứng dụng?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(null),
+              child: Text('Hủy'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop('share'),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.share, size: 16),
+                  SizedBox(width: 4),
+                  Text('Chia sẻ'),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop('save'),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.folder, size: 16),
+                  SizedBox(width: 4),
+                  Text('Lưu vào thư mục'),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+  
+  static Future<void> _handleShare(List<int> fileBytes, String fileName, String selectedMonth, BuildContext context) async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/$fileName');
+      await file.writeAsBytes(fileBytes);
+      
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Báo cáo tổng hợp tất cả dự án tháng ${DateFormat('MM/yyyy').format(DateTime.parse('$selectedMonth-01'))}',
+      );
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đã chia sẻ file thành công: $fileName'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      print('Error sharing file: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi khi chia sẻ file: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+  
+  static Future<void> _handleSaveToAppFolder(List<int> fileBytes, String fileName, String selectedMonth, BuildContext context) async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final appFolder = Directory('${directory.path}/BaoCao_ChamCong');
+      
+      // Create folder if it doesn't exist
+      if (!await appFolder.exists()) {
+        await appFolder.create(recursive: true);
+      }
+      
+      final filePath = '${appFolder.path}/$fileName';
+      final file = File(filePath);
+      await file.writeAsBytes(fileBytes);
+      
+      // Show success dialog with option to open folder
+      await _showSaveSuccessDialog(context, appFolder.path, fileName, selectedMonth);
+      
+    } catch (e) {
+      print('Error saving to app folder: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi khi lưu file: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+  
+  static Future<void> _showSaveSuccessDialog(BuildContext context, String folderPath, String fileName, String selectedMonth) async {
+    return showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green),
+              SizedBox(width: 8),
+              Text('Lưu thành công'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('File báo cáo tổng hợp đã được lưu:'),
+              SizedBox(height: 8),
+              Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: SelectableText(
+                  fileName,
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              SizedBox(height: 8),
+              Text('Tháng: ${DateFormat('MM/yyyy').format(DateTime.parse('$selectedMonth-01'))}'),
+              SizedBox(height: 8),
+              Text('Đường dẫn thư mục:'),
+              SizedBox(height: 4),
+              Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: SelectableText(
+                  folderPath,
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Đóng'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _openFolder(folderPath);
+              },
+              icon: Icon(Icons.folder_open, size: 16),
+              label: Text('Mở thư mục'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+  
+  static Future<void> _openFolder(String folderPath) async {
+    try {
+      if (Platform.isWindows) {
+        await Process.run('explorer', [folderPath]);
+      } else if (Platform.isMacOS) {
+        await Process.run('open', [folderPath]);
+      } else if (Platform.isLinux) {
+        await Process.run('xdg-open', [folderPath]);
+      }
+    } catch (e) {
+      print('Error opening folder: $e');
     }
   }
   
@@ -243,28 +437,6 @@ class ExportAllProjectsHelper {
     for (int i = 3; i < 25; i++) {
       sheet.setColWidth(i, 10);
     }
-  }
-  
-  static Future<void> _saveAndShareFile(excel.Excel excelFile, String selectedMonth, BuildContext context) async {
-    final bytes = excelFile.encode()!;
-    final directory = await getApplicationDocumentsDirectory();
-    final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-    final fileName = 'TongHop_TatCaDuAn_${selectedMonth}_$timestamp.xlsx';
-    final file = File('${directory.path}/$fileName');
-    
-    await file.writeAsBytes(bytes);
-    
-    await Share.shareXFiles(
-      [XFile(file.path)],
-      text: 'Báo cáo tổng hợp tất cả dự án tháng ${DateFormat('MM/yyyy').format(DateTime.parse('$selectedMonth-01'))}',
-    );
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Đã xuất Excel thành công: $fileName'),
-        backgroundColor: Colors.green,
-      ),
-    );
   }
   
   static String _getColumnLetter(int columnIndex) {
