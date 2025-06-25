@@ -15,6 +15,10 @@ import 'package:dropdown_search/dropdown_search.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:multi_select_flutter/multi_select_flutter.dart';
 import 'http_client.dart';
+import 'package:excel/excel.dart' as xl;
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 
 class ProjectPlan extends StatefulWidget {
   final String? userType;
@@ -40,6 +44,7 @@ String? _filterByUser;
   List<String> _selectedShare = [];
   final dbHelper = DBHelper();
 List<String> _userList = [];
+  bool _isGeneratingExcel = false;
 
 Future<void> _loadSavedUserList() async {
   final prefs = await SharedPreferences.getInstance();
@@ -655,8 +660,8 @@ Widget _buildPlanList(bool isMyPlans) {
     if (isMyPlans) {
       return plan.nguoiDung == username;
     } else {
-      return plan.nguoiDung != username && 
-             (plan.chiaSe?.split(',').contains(username) ?? false);
+      return plan.nguoiDung != username ;
+      //&&        (plan.chiaSe?.split(',').contains(username) ?? false);
     }
   }).toList();
 
@@ -956,27 +961,420 @@ void _showReportDialog(BaocaoModel plan) {
         return Colors.transparent;
     }
   }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Lập kế hoạch'),
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color.fromARGB(255, 114, 255, 217),
-                Color.fromARGB(255, 201, 255, 236),
-                Color.fromARGB(255, 79, 255, 214),
-                Color.fromARGB(255, 188, 255, 235),
+Future<String?> _showExportChoiceDialog() async {
+  return showDialog<String>(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Text('Xuất file Excel'),
+        content: Text('Bạn muốn chia sẻ file hay lưu vào thư mục ứng dụng?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop('share'),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.share, size: 16),
+                SizedBox(width: 4),
+                Text('Chia sẻ'),
               ],
             ),
           ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop('save'),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.folder, size: 16),
+                SizedBox(width: 4),
+                Text('Lưu vào thư mục'),
+              ],
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+Future<void> _handleShare(List<int> fileBytes, String fileName) async {
+  try {
+    final tempDir = await getTemporaryDirectory();
+    final file = File('${tempDir.path}/$fileName');
+    await file.writeAsBytes(fileBytes);
+    
+    await Share.shareXFiles(
+      [XFile(file.path)],
+      text: 'Báo cáo kế hoạch dự án - ${DateFormat('dd/MM/yyyy').format(DateTime.now())}',
+    );
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Đã chia sẻ file thành công: $fileName'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 3),
+      ),
+    );
+  } catch (e) {
+    print('Error sharing file: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi khi chia sẻ file: $e'),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 5),
+      ),
+    );
+  }
+}
+
+Future<void> _handleSaveToAppFolder(List<int> fileBytes, String fileName) async {
+  try {
+    final directory = await getApplicationDocumentsDirectory();
+    final appFolder = Directory('${directory.path}/BaoCao_KeHoach');
+    
+    // Create folder if it doesn't exist
+    if (!await appFolder.exists()) {
+      await appFolder.create(recursive: true);
+    }
+    
+    final filePath = '${appFolder.path}/$fileName';
+    final file = File(filePath);
+    await file.writeAsBytes(fileBytes);
+    
+    // Show success dialog with option to open folder
+    await _showSaveSuccessDialog(appFolder.path, fileName);
+    
+  } catch (e) {
+    print('Error saving to app folder: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi khi lưu file: $e'),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 5),
+      ),
+    );
+  }
+}
+
+Future<void> _showSaveSuccessDialog(String folderPath, String fileName) async {
+  return showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green),
+            SizedBox(width: 8),
+            Text('Lưu thành công'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('File báo cáo kế hoạch đã được lưu:'),
+            SizedBox(height: 8),
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: SelectableText(
+                fileName,
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            SizedBox(height: 8),
+            Text('Ngày tạo: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}'),
+            SizedBox(height: 8),
+            Text('Đường dẫn thư mục:'),
+            SizedBox(height: 4),
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: SelectableText(
+                folderPath,
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Đóng'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              await _openFolder(folderPath);
+            },
+            icon: Icon(Icons.folder_open, size: 16),
+            label: Text('Mở thư mục'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+Future<void> _openFolder(String folderPath) async {
+  try {
+    if (Platform.isWindows) {
+      await Process.run('explorer', [folderPath]);
+    } else if (Platform.isMacOS) {
+      await Process.run('open', [folderPath]);
+    } else if (Platform.isLinux) {
+      await Process.run('xdg-open', [folderPath]);
+    }
+  } catch (e) {
+    print('Error opening folder: $e');
+  }
+}
+
+Future<void> _generateAndShareExcel() async {
+  setState(() {
+    _isGeneratingExcel = true;
+  });
+
+  try {
+    // Show choice dialog first
+    final choice = await _showExportChoiceDialog();
+    if (choice == null) {
+      setState(() {
+        _isGeneratingExcel = false;
+      });
+      return; // User cancelled
+    }
+
+    // Create Excel workbook
+    var excel = xl.Excel.createExcel();
+    
+    // Get or create sheet
+    xl.Sheet sheet;
+    if (excel.tables.containsKey('Sheet1')) {
+      sheet = excel.tables['Sheet1']!;
+    } else {
+      sheet = excel['Kế hoạch dự án'];
+    }
+    
+    // Add headers
+    List<String> headers = [
+      'STT',
+      'Người tạo',
+      'Ngày',
+      'Thời gian',
+      'Dự án',
+      'Chi tiết',
+      'Phát sinh',
+      'Trạng thái',
+      'Chia sẻ với'
+    ];
+    
+    for (int i = 0; i < headers.length; i++) {
+      var cell = sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+      cell.value = headers[i];
+      cell.cellStyle = xl.CellStyle(
+        bold: true,
+        backgroundColorHex: '#4472C4',
+        fontColorHex: '#FFFFFF',
+      );
+    }
+    
+    // Sort plans by date (newest first)
+    final sortedPlans = List<BaocaoModel>.from(_plans);
+    sortedPlans.sort((a, b) => b.ngay.compareTo(a.ngay));
+    
+    // Add data rows
+    for (int i = 0; i < sortedPlans.length; i++) {
+      var plan = sortedPlans[i];
+      
+      List<dynamic> rowData = [
+        i + 1,
+        plan.nguoiDung ?? '',
+        DateFormat('dd/MM/yyyy').format(plan.ngay),
+        plan.phanLoai ?? '',
+        plan.boPhan ?? '',
+        plan.moTaChung ?? '',
+        plan.phatSinh ?? 'Không',
+        plan.xetDuyet ?? 'Chưa duyệt',
+        plan.chiaSe ?? ''
+      ];
+      
+      for (int j = 0; j < rowData.length; j++) {
+        var cell = sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: j, rowIndex: i + 1));
+        cell.value = rowData[j];
+        
+        // Color coding based on status
+        if (j == 7) { // Status column
+          xl.CellStyle? cellStyle;
+          final status = plan.xetDuyet ?? 'Chưa duyệt';
+          if (status == 'Đồng ý') {
+            cellStyle = xl.CellStyle(
+              backgroundColorHex: '#C6EFCE',
+              fontColorHex: '#006100',
+            );
+          } else if (status == 'Từ chối') {
+            cellStyle = xl.CellStyle(
+              backgroundColorHex: '#FFC7CE',
+              fontColorHex: '#9C0006',
+            );
+          } else {
+            cellStyle = xl.CellStyle(
+              backgroundColorHex: '#FFEB9C',
+              fontColorHex: '#9C5700',
+            );
+          }
+          cell.cellStyle = cellStyle;
+        }
+        
+        // Highlight emergency plans (Phát sinh = Có)
+        if (j == 6 && plan.phatSinh == 'Có') {
+          var cell = sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: j, rowIndex: i + 1));
+          cell.cellStyle = xl.CellStyle(
+            backgroundColorHex: '#FFC7CE',
+            fontColorHex: '#9C0006',
+            bold: true,
+          );
+        }
+      }
+    }
+    
+    // Add summary row
+    int summaryRow = sortedPlans.length + 2;
+    
+    // Calculate statistics
+    int totalPlans = sortedPlans.length;
+    int approvedPlans = sortedPlans.where((p) => p.xetDuyet == 'Đồng ý').length;
+    int pendingPlans = sortedPlans.where((p) => p.xetDuyet == 'Chưa duyệt').length;
+    int rejectedPlans = sortedPlans.where((p) => p.xetDuyet == 'Từ chối').length;
+    int emergencyPlans = sortedPlans.where((p) => p.phatSinh == 'Có').length;
+    
+    // Summary row data
+    List<dynamic> summaryData = [
+      'TỔNG CỘNG',
+      '$totalPlans kế hoạch',
+      '',
+      '',
+      '',
+      'Đồng ý: $approvedPlans | Chưa duyệt: $pendingPlans | Từ chối: $rejectedPlans',
+      'Phát sinh: $emergencyPlans',
+      '',
+      ''
+    ];
+    
+    // Add summary row to sheet
+    for (int i = 0; i < summaryData.length; i++) {
+      var cell = sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: summaryRow));
+      cell.value = summaryData[i];
+      cell.cellStyle = xl.CellStyle(
+        bold: true,
+        backgroundColorHex: '#D9E1F2',
+      );
+    }
+    
+    // Add title row
+    var titleCell = sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: summaryRow + 2));
+    titleCell.value = 'Báo cáo kế hoạch dự án - ${DateFormat('dd/MM/yyyy').format(DateTime.now())}';
+    titleCell.cellStyle = xl.CellStyle(
+      bold: true,
+      fontSize: 14,
+    );
+    
+    // Add generation timestamp
+    var timestampCell = sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: summaryRow + 3));
+    timestampCell.value = 'Tạo lúc: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}';
+    timestampCell.cellStyle = xl.CellStyle(
+      italic: true,
+      fontSize: 10,
+    );
+    
+    // Generate filename
+    String fileName = 'KeHoachDuAn_${DateFormat('dd-MM-yyyy').format(DateTime.now())}.xlsx';
+    List<int>? fileBytes = excel.save();
+    
+    if (fileBytes != null) {
+      if (choice == 'share') {
+        await _handleShare(fileBytes, fileName);
+      } else {
+        await _handleSaveToAppFolder(fileBytes, fileName);
+      }
+    } else {
+      throw Exception('Không thể tạo file Excel');
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi khi tạo file Excel: ${e.toString()}'),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 5),
+      ),
+    );
+    print('Error generating Excel: $e');
+  } finally {
+    setState(() {
+      _isGeneratingExcel = false;
+    });
+  }
+}
+  @override
+Widget build(BuildContext context) {
+  return Scaffold(
+    appBar: AppBar(
+      title: Text('Lập kế hoạch'),
+      flexibleSpace: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color.fromARGB(255, 114, 255, 217),
+              Color.fromARGB(255, 201, 255, 236),
+              Color.fromARGB(255, 79, 255, 214),
+              Color.fromARGB(255, 188, 255, 235),
+            ],
+          ),
         ),
       ),
+      actions: [
+        // Excel export button
+        Container(
+          margin: EdgeInsets.only(right: 8),
+          decoration: BoxDecoration(
+            color: Colors.green,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: IconButton(
+            icon: _isGeneratingExcel 
+                ? SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : Icon(Icons.download, size: 20, color: Colors.white),
+            onPressed: _isGeneratingExcel ? null : () {
+              _generateAndShareExcel();
+            },
+            tooltip: 'Tải xuống Excel',
+          ),
+        ),
+      ],
+    ),
       body: Column(
         children: [
           TableCalendar(

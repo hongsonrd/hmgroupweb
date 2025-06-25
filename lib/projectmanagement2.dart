@@ -31,6 +31,7 @@ import 'projecttimeline2.dart';
 import 'projecttimeline3.dart';
 import 'dart:math' as Math;
 import 'dart:async';
+import 'projecttimeline3single.dart';
 
 class ProjectManagement2 extends StatefulWidget {
     ProjectManagement2({Key? key}) : super(key: key);
@@ -1923,6 +1924,20 @@ Widget build(BuildContext context) {
                 context,
                 MaterialPageRoute(
                   builder: (context) => ProjectManager(),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(width: 4),
+          Expanded(
+            child: _buildCompactButton(
+              'Xem theo BP', 
+              Icons.settings,
+              Color(0xFF795548),
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProjectTimeline3Single(username: 'damhoang'),
                 ),
               ),
             ),

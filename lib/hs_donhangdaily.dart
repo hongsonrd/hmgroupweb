@@ -73,7 +73,7 @@ final List<String> altStatusOrderUsers = [
   'hm.phiminh' ,'hm.damchinh','hm.quocchien'
 ];
 final List<String> allowedStatuses = [
-  'duyệt', 'cần xuất', 'đang xử lý', 'xuất nội bộ xong', 'hoàn thành'
+  'duyệt', 'cần xuất', 'đang xử lý', 'xuất nội bộ xong' , 'Xuất Nội bộ xong' , 'Xuất nội bộ xong', 'hoàn thành'
 ];
   // List of statuses that need approval
   final List<String> pendingStatuses = ['gửi', 'gửi xuất nội bộ'];
@@ -1248,7 +1248,7 @@ Widget build(BuildContext context) {
   }
 bool _isUserAllowedToApproveOrder(DonHangModel order) {
   final lowerStatus = (order.trangThai ?? '').toLowerCase();
-  if (lowerStatus == 'xuất nội bộ xong') {
+  if (lowerStatus == 'xuất nội bộ xong' || lowerStatus == 'Xuất Nội bộ xong' || lowerStatus == 'Xuất nội bộ xong' ) {
     return true; 
   }
   // Check if all conditions are met:

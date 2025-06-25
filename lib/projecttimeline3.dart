@@ -7,6 +7,7 @@ import 'package:excel/excel.dart' as xl;
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'projecttimeline3single.dart';
 
 class ProjectProgressDashboard extends StatefulWidget {
   final String username;
@@ -940,6 +941,32 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
              tooltip: 'Tải xuống Excel',
            ),
          ),
+         Container(
+  margin: EdgeInsets.only(left: 8),
+  decoration: BoxDecoration(
+    color: Colors.orange,
+    borderRadius: BorderRadius.circular(6),
+  ),
+  child: TextButton.icon(
+    icon: Icon(Icons.analytics, size: 18, color: Colors.white),
+    label: Text(
+      'Tổng hợp theo bộ phận',
+      style: TextStyle(fontSize: 12, color: Colors.white),
+    ),
+    onPressed: () {
+      _resetInactivityTimer();
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProjectTimeline3Single(username: widget.username),
+        ),
+      );
+    },
+    style: TextButton.styleFrom(
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    ),
+  ),
+),
          if (_isAutoScrolling) ...[
            SizedBox(width: 8),
            Icon(

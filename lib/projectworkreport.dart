@@ -34,7 +34,8 @@ class ProjectWorkReport extends StatefulWidget {
 class _ProjectWorkReportState extends State<ProjectWorkReport> with SingleTickerProviderStateMixin {
   final dbHelper = DBHelper();
   final baseUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app';
-  
+  bool _isGeneratingExcel = false;
+
   String? _selectedProject;
   String? _selectedTopic;
   List<String> _projectList = [];
@@ -969,7 +970,7 @@ Future<void> _showReportDialog() async {
       return report.nguoiDung == username && report.nhom == "Báo cáo";
     } else {
       return report.nguoiDung != username && 
-             (report.chiaSe?.split(',').contains(username) ?? false) &&
+             //(report.chiaSe?.split(',').contains(username) ?? false) &&
              report.nhom == "Báo cáo";
     }
   }).toList();
@@ -1297,20 +1298,203 @@ void _createDailySummarySheet(Excel excel, List<BaocaoModel> reports) {
     row++;
   });
 }
-
-Future<void> _generateReport(DateTime startDate, DateTime endDate) async {
-  // Show loading dialog
-  showDialog(
+Future<String?> _showExportChoiceDialog() async {
+  return showDialog<String>(
     context: context,
-    barrierDismissible: false,
     builder: (BuildContext context) {
-      return Center(
-        child: CircularProgressIndicator(),
+      return AlertDialog(
+        title: Text('Xuất file Excel'),
+        content: Text('Bạn muốn chia sẻ file hay lưu vào thư mục ứng dụng?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop('share'),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.share, size: 16),
+                SizedBox(width: 4),
+                Text('Chia sẻ'),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop('save'),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.folder, size: 16),
+                SizedBox(width: 4),
+                Text('Lưu vào thư mục'),
+              ],
+            ),
+          ),
+        ],
       );
     },
   );
+}
+
+Future<void> _handleShare(List<int> fileBytes, String fileName) async {
+  try {
+    final tempDir = await getTemporaryDirectory();
+    final file = File('${tempDir.path}/$fileName');
+    await file.writeAsBytes(fileBytes);
+    
+    await Share.shareXFiles(
+      [XFile(file.path)],
+      text: 'Báo cáo công việc - ${DateFormat('dd/MM/yyyy').format(DateTime.now())}',
+    );
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Đã chia sẻ file thành công: $fileName'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 3),
+      ),
+    );
+  } catch (e) {
+    print('Error sharing file: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi khi chia sẻ file: $e'),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 5),
+      ),
+    );
+  }
+}
+
+Future<void> _handleSaveToAppFolder(List<int> fileBytes, String fileName) async {
+  try {
+    final directory = await getApplicationDocumentsDirectory();
+    final appFolder = Directory('${directory.path}/BaoCao_CongViec');
+    
+    // Create folder if it doesn't exist
+    if (!await appFolder.exists()) {
+      await appFolder.create(recursive: true);
+    }
+    
+    final filePath = '${appFolder.path}/$fileName';
+    final file = File(filePath);
+    await file.writeAsBytes(fileBytes);
+    
+    // Show success dialog with option to open folder
+    await _showSaveSuccessDialog(appFolder.path, fileName);
+    
+  } catch (e) {
+    print('Error saving to app folder: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Lỗi khi lưu file: $e'),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 5),
+      ),
+    );
+  }
+}
+
+Future<void> _showSaveSuccessDialog(String folderPath, String fileName) async {
+  return showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green),
+            SizedBox(width: 8),
+            Text('Lưu thành công'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('File báo cáo công việc đã được lưu:'),
+            SizedBox(height: 8),
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: SelectableText(
+                fileName,
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            SizedBox(height: 8),
+            Text('Ngày tạo: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}'),
+            SizedBox(height: 8),
+            Text('Đường dẫn thư mục:'),
+            SizedBox(height: 4),
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: SelectableText(
+                folderPath,
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Đóng'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              await _openFolder(folderPath);
+            },
+            icon: Icon(Icons.folder_open, size: 16),
+            label: Text('Mở thư mục'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+Future<void> _openFolder(String folderPath) async {
+  try {
+    if (Platform.isWindows) {
+      await Process.run('explorer', [folderPath]);
+    } else if (Platform.isMacOS) {
+      await Process.run('open', [folderPath]);
+    } else if (Platform.isLinux) {
+      await Process.run('xdg-open', [folderPath]);
+    }
+  } catch (e) {
+    print('Error opening folder: $e');
+  }
+}
+Future<void> _generateReport(DateTime startDate, DateTime endDate) async {
+  setState(() {
+    _isGeneratingExcel = true;
+  });
 
   try {
+    // Show choice dialog first
+    final choice = await _showExportChoiceDialog();
+    if (choice == null) {
+      setState(() {
+        _isGeneratingExcel = false;
+      });
+      return; // User cancelled
+    }
+
     print('Start Date: $startDate');
     print('End Date: $endDate');
     
@@ -1325,7 +1509,9 @@ Future<void> _generateReport(DateTime startDate, DateTime endDate) async {
     print('Filtered Reports Count: ${filteredReports.length}');
 
     if (filteredReports.isEmpty) {
-      Navigator.of(context).pop(); // Hide loading
+      setState(() {
+        _isGeneratingExcel = false;
+      });
       _showError('Không có báo cáo trong khoảng thời gian này');
       return;
     }
@@ -1341,64 +1527,23 @@ Future<void> _generateReport(DateTime startDate, DateTime endDate) async {
     _createEmployeeSummarySheet(excel, filteredReports);
 
     // Format date for file naming
-    final dateStr = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-    final fileName = 'BaoCaoCongViec_${startDate.toString().split(' ')[0]}_${endDate.toString().split(' ')[0]}_$dateStr.xlsx';
+    final dateStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
+    final fileName = 'BaoCaoCongViec_${DateFormat('dd-MM-yyyy').format(startDate)}_${DateFormat('dd-MM-yyyy').format(endDate)}_$dateStr.xlsx';
     final fileBytes = excel.encode()!;
     
-    // Platform-specific saving logic
-    if (Platform.isWindows) {
-      try {
-        // First attempt: Use file_picker save dialog to let user choose location
-        String? outputFile = await FilePicker.platform.saveFile(
-          dialogTitle: 'Lưu báo cáo công việc',
-          fileName: fileName,
-          type: FileType.custom,
-          allowedExtensions: ['xlsx'],
-        );
-        
-        if (outputFile != null) {
-          // User selected a location
-          final file = File(outputFile);
-          await file.writeAsBytes(fileBytes);
-          
-          // Hide loading dialog
-          Navigator.of(context).pop();
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('File đã được lưu tại: $outputFile'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        } else {
-          // If user cancels dialog, fall back to saving in Downloads folder
-          await _saveToDownloadsWindows(fileBytes, fileName);
-          Navigator.of(context).pop(); // Hide loading dialog
-        }
-      } catch (e) {
-        // If FilePicker fails, fall back to Documents folder
-        await _saveToDocumentsWindows(fileBytes, fileName);
-        Navigator.of(context).pop(); // Hide loading dialog
-      }
+    if (choice == 'share') {
+      await _handleShare(fileBytes, fileName);
     } else {
-      // For mobile platforms, save to temp directory and use Share.shareFiles
-      final tempDir = await getTemporaryDirectory();
-      final file = File('${tempDir.path}/$fileName');
-      await file.writeAsBytes(fileBytes);
-
-      // Hide loading dialog
-      Navigator.of(context).pop();
-      
-      // Share file
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text: 'Báo cáo công việc',
-      );
+      await _handleSaveToAppFolder(fileBytes, fileName);
     }
+
   } catch (e) {
     print('Error generating report: $e');
-    Navigator.of(context).pop(); // Hide loading
     _showError('Lỗi tạo báo cáo: $e');
+  } finally {
+    setState(() {
+      _isGeneratingExcel = false;
+    });
   }
 }
 
@@ -1463,7 +1608,7 @@ void _showDateRangeDialog() {
   showDialog(
     context: context,
     barrierDismissible: false,
-    builder: (BuildContext dialogContext) {  // Use a separate context for dialog
+    builder: (BuildContext dialogContext) {
       return StatefulBuilder(
         builder: (context, setState) {
           return AlertDialog(
@@ -1512,17 +1657,30 @@ void _showDateRangeDialog() {
                 child: Text('Hủy'),
                 onPressed: () => Navigator.pop(dialogContext),
               ),
-              TextButton(
-  child: Text('Xác nhận'),
-  onPressed: () {
-    if (startDate != null && endDate != null) {
-      Navigator.pop(dialogContext);
-      _generateReport(startDate!, endDate!);
-    } else {
-      _showError('Vui lòng chọn ngày bắt đầu và kết thúc');
-    }
-  },
-),
+              ElevatedButton(
+                child: _isGeneratingExcel 
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(width: 8),
+                          Text('Đang tạo...'),
+                        ],
+                      )
+                    : Text('Xác nhận'),
+                onPressed: _isGeneratingExcel ? null : () {
+                  if (startDate != null && endDate != null) {
+                    Navigator.pop(dialogContext);
+                    _generateReport(startDate!, endDate!);
+                  } else {
+                    _showError('Vui lòng chọn ngày bắt đầu và kết thúc');
+                  }
+                },
+              ),
             ],
           );
         },
@@ -1714,28 +1872,34 @@ Widget build(BuildContext context) {
     ),
     SizedBox(width: 8),
     Expanded(
-      child: ElevatedButton(
-        onPressed: _showDateRangeDialog,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.summarize, size: 20),
-            Text(
-              'Tổng\nhợp', 
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.black87),
-            ),
-          ],
+  child: ElevatedButton(
+    onPressed: _isGeneratingExcel ? null : _showDateRangeDialog,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _isGeneratingExcel 
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Icon(Icons.summarize, size: 20),
+        Text(
+          _isGeneratingExcel ? 'Đang tạo...' : 'Tổng\nhợp', 
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.black87),
         ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.pink.shade100,
-          padding: EdgeInsets.symmetric(vertical: 8),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(4), // Reduced roundedness
-          ),
-        ),
+      ],
+    ),
+    style: ElevatedButton.styleFrom(
+      backgroundColor: Colors.pink.shade100,
+      padding: EdgeInsets.symmetric(vertical: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(4),
       ),
     ),
+  ),
+),
   ],
 ),
                 ],
@@ -1794,7 +1958,7 @@ Widget _buildReportTable(bool isMyReports) {
       return report.nguoiDung == username && report.nhom == "Báo cáo";
     } else {
       return report.nguoiDung != username && 
-             (report.chiaSe?.split(',').contains(username) ?? false) &&
+             //(report.chiaSe?.split(',').contains(username) ?? false) &&
              report.nhom == "Báo cáo";
     }
   }).toList();
