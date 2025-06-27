@@ -560,19 +560,20 @@ class _VatLieuDialogState extends State<_VatLieuDialog> {
                           ],
                         ),
                         SizedBox(height: 16),
-                        Row(
-                          children: [
-                            ElevatedButton(
-                              onPressed: _saveRecord,
-                              child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
-                            ),
-                            SizedBox(width: 8),
-                            TextButton(
-                              onPressed: _isEditMode ? _exitEditMode : _clearForm,
-                              child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
-                            ),
-                          ],
-                        ),
+                        Wrap(
+  spacing: 8,
+  runSpacing: 8,
+  children: [
+    ElevatedButton(
+      onPressed: _saveRecord,
+      child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
+    ),
+    TextButton(
+      onPressed: _isEditMode ? _exitEditMode : _clearForm,
+      child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
+    ),
+  ],
+),
                       ],
                     ),
                   ),
@@ -1040,19 +1041,20 @@ class _DinhKyDialogState extends State<_DinhKyDialog> {
                          ],
                        ),
                        SizedBox(height: 16),
-                        Row(
-                          children: [
-                            ElevatedButton(
-                              onPressed: _saveRecord,
-                              child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
-                            ),
-                            SizedBox(width: 8),
-                            TextButton(
-                              onPressed: _isEditMode ? _exitEditMode : _clearForm,
-                              child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
-                            ),
-                          ],
-                        ),
+                        Wrap(
+  spacing: 8,
+  runSpacing: 8,
+  children: [
+    ElevatedButton(
+      onPressed: _saveRecord,
+      child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
+    ),
+    TextButton(
+      onPressed: _isEditMode ? _exitEditMode : _clearForm,
+      child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
+    ),
+  ],
+),
                       ],
                     ),
                   ),
@@ -1537,19 +1539,20 @@ class _LeTetTCDialogState extends State<_LeTetTCDialog> {
                          ],
                        ),
                        SizedBox(height: 16),
-                       Row(
-                          children: [
-                            ElevatedButton(
-                              onPressed: _saveRecord,
-                              child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
-                            ),
-                            SizedBox(width: 8),
-                            TextButton(
-                              onPressed: _isEditMode ? _exitEditMode : _clearForm,
-                              child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
-                            ),
-                          ],
-                        ),
+                       Wrap(
+  spacing: 8,
+  runSpacing: 8,
+  children: [
+    ElevatedButton(
+      onPressed: _saveRecord,
+      child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
+    ),
+    TextButton(
+      onPressed: _isEditMode ? _exitEditMode : _clearForm,
+      child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
+    ),
+  ],
+),
                       ],
                     ),
                   ),
@@ -2045,19 +2048,20 @@ class _PhuCapDialogState extends State<_PhuCapDialog> {
                           ],
                         ),
                         SizedBox(height: 16),
-                        Row(
-                          children: [
-                            ElevatedButton(
-                              onPressed: _saveRecord,
-                              child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
-                            ),
-                            SizedBox(width: 8),
-                            TextButton(
-                              onPressed: _isEditMode ? _exitEditMode : _clearForm,
-                              child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
-                            ),
-                          ],
-                        ),
+                        Wrap(
+  spacing: 8,
+  runSpacing: 8,
+  children: [
+    ElevatedButton(
+      onPressed: _saveRecord,
+      child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
+    ),
+    TextButton(
+      onPressed: _isEditMode ? _exitEditMode : _clearForm,
+      child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
+    ),
+  ],
+),
                       ],
                     ),
                   ),
@@ -2550,19 +2554,20 @@ class _NgoaiGiaoDialogState extends State<_NgoaiGiaoDialog> {
                          ],
                        ),
                        SizedBox(height: 16),
-                       Row(
-                         children: [
-                           ElevatedButton(
-                             onPressed: _saveRecord,
-                             child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
-                           ),
-                           SizedBox(width: 8),
-                           TextButton(
-                             onPressed: _isEditMode ? _exitEditMode : _clearForm,
-                             child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
-                           ),
-                         ],
-                       ),
+                       Wrap(
+  spacing: 8,
+  runSpacing: 8,
+  children: [
+    ElevatedButton(
+      onPressed: _saveRecord,
+      child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
+    ),
+    TextButton(
+      onPressed: _isEditMode ? _exitEditMode : _clearForm,
+      child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
+    ),
+  ],
+),
                      ],
                    ),
                  ),
@@ -3087,19 +3092,20 @@ class _MayMocDialogState extends State<_MayMocDialog> {
                           ],
                         ),
                         SizedBox(height: 16),
-                        Row(
-                          children: [
-                            ElevatedButton(
-                              onPressed: _saveRecord,
-                              child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
-                            ),
-                            SizedBox(width: 8),
-                            TextButton(
-                              onPressed: _isEditMode ? _exitEditMode : _clearForm,
-                              child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
-                            ),
-                          ],
-                        ),
+                        Wrap(
+  spacing: 8,
+  runSpacing: 8,
+  children: [
+    ElevatedButton(
+      onPressed: _saveRecord,
+      child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
+    ),
+    TextButton(
+      onPressed: _isEditMode ? _exitEditMode : _clearForm,
+      child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
+    ),
+  ],
+),
                       ],
                     ),
                   ),
@@ -3499,19 +3505,20 @@ class _LuongDialogState extends State<_LuongDialog> {
                          ],
                        ),
                        SizedBox(height: 16),
-                       Row(
-                         children: [
-                           ElevatedButton(
-                             onPressed: _saveRecord,
-                             child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
-                           ),
-                           SizedBox(width: 8),
-                           TextButton(
-                             onPressed: _isEditMode ? _exitEditMode : _clearForm,
-                             child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
-                           ),
-                         ],
-                       ),
+                       Wrap(
+  spacing: 8,
+  runSpacing: 8,
+  children: [
+    ElevatedButton(
+      onPressed: _saveRecord,
+      child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
+    ),
+    TextButton(
+      onPressed: _isEditMode ? _exitEditMode : _clearForm,
+      child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
+    ),
+  ],
+),
                      ],
                    ),
                  ),
