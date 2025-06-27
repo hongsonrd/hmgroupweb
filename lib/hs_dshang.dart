@@ -283,14 +283,14 @@ class _HSDSHangScreenState extends State<HSDSHangScreen> with SingleTickerProvid
   @override
   Widget build(BuildContext context) {
     // Colors with hex values
-    final Color appBarTop = Color(0xFF534b0d);
-    final Color appBarBottom = Color(0xFFb2a41f);
+    final Color appBarTop = Color(0xFFb8cc32);
+    final Color appBarBottom = Color(0xFFe1ff72);
     final Color tabBarColor = Color(0xFF5a530f);
     final Color buttonColor = Color(0xFF837826);
     
     return Scaffold(
       appBar: AppBar(
-        title: Text('Hàng & Tồn kho', style: TextStyle(color: Colors.white)),
+        title: Text('Hàng & Tồn kho', style: TextStyle(color: Colors.black)),
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -303,8 +303,8 @@ class _HSDSHangScreenState extends State<HSDSHangScreen> with SingleTickerProvid
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.orange,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white.withOpacity(0.6),
+          labelColor: Colors.black,
+          unselectedLabelColor: Colors.black.withOpacity(0.6),
           tabs: [
             Tab(text: 'Danh sách hàng'),
             Tab(text: 'Tồn kho'),
@@ -318,8 +318,8 @@ class _HSDSHangScreenState extends State<HSDSHangScreen> with SingleTickerProvid
               child: OutlinedButton(
                 onPressed: () => _showEditItemDialog(null), // Pass null for new item
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: BorderSide(color: Colors.white),
+                  foregroundColor: Colors.black,
+                  side: BorderSide(color: Colors.orange),
                   padding: EdgeInsets.symmetric(horizontal: 12),
                 ),
                 child: Text('Thêm hàng'),

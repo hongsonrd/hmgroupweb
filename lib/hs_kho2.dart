@@ -759,7 +759,7 @@ Widget build(BuildContext context) {
         'Quản lý Khu vực kho',
         style: TextStyle(
           fontSize: 16,
-          color: Colors.white,
+          color: Colors.black,
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -767,12 +767,11 @@ Widget build(BuildContext context) {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              Color(0xFFD4AF37), // Gold
-              Color(0xFF8B4513), // Brown
-              Color(0xFFB8860B), // Dark gold
+              Color(0xFFb8cc32), // Gold
+              Color(0xFFe1ff72), // Brown
             ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
           ),
         ),
       ),

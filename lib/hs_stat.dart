@@ -415,8 +415,8 @@ Future<void> _syncAllHistoryData() async {
   @override
   Widget build(BuildContext context) {
     // Colors with hex values (matching your existing color scheme)
-    final Color appBarTop = const Color(0xFF534b0d);
-    final Color appBarBottom = const Color(0xFFb2a41f);
+    final Color appBarTop = const Color(0xFFb8cc32);
+    final Color appBarBottom = const Color(0xFFe1ff72);
     final Color buttonColor = const Color(0xFF837826);
     final Color cardBgColor = const Color(0xFFFAFAFA);
 
@@ -425,7 +425,7 @@ Future<void> _syncAllHistoryData() async {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Chỉ số hoạt động', style: TextStyle(fontSize: 18, color: Colors.yellow)),
+        title: const Text('Chỉ số hoạt động', style: TextStyle(fontSize: 18, color: Colors.black)),
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -449,12 +449,12 @@ Future<void> _syncAllHistoryData() async {
       : const Icon(Icons.cloud_download, color: Colors.yellow),
   label: const Text(
     'Đồng bộ toàn bộ lịch sử',
-    style: TextStyle(color: Colors.yellow),
+    style: TextStyle(color: Colors.brown),
   ),
   onPressed: _isSyncing ? null : _syncAllHistoryData,
 ),
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.yellow),
+            icon: const Icon(Icons.refresh, color: Colors.brown),
             onPressed: (_isLoading || _isSyncing) ? null : _refreshData,
             tooltip: 'Làm mới dữ liệu',
           ),

@@ -594,8 +594,8 @@ void _showWarehouseInputDialog() async {
 
  @override
   Widget build(BuildContext context) {
-    final Color appBarTop = Color(0xFF534b0d);
-    final Color appBarBottom = Color(0xFFb2a41f);
+    final Color appBarTop = Color(0xFFb8cc32);
+    final Color appBarBottom = Color(0xFFe1ff72);
     final Color buttonColor = Color(0xFF837826);
     
     return Scaffold(
@@ -611,7 +611,7 @@ void _showWarehouseInputDialog() async {
   ),
         title: Row(
           children: [
-            Text('Quản lý kho', style: TextStyle(color: Colors.white)),
+            Text('Quản lý kho', style: TextStyle(color: Colors.black)),
             SizedBox(width: 28),
             ElevatedButton(
               onPressed: _showWarehouseDetails,
@@ -643,8 +643,8 @@ void _showWarehouseInputDialog() async {
             controller: _tabController,
             indicatorColor: Colors.orange,
             indicatorWeight: 3,
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white.withOpacity(0.6),
+            labelColor: Colors.black,
+            unselectedLabelColor: Colors.black.withOpacity(0.6),
             tabs: [
               Tab(text: 'Đơn hàng'),
               Tab(text: 'Lịch sử nhập'),

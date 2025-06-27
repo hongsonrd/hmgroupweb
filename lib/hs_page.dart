@@ -385,14 +385,14 @@ void dispose() {
 
     final double bodyTextSize = 14.0;
     final double buttonTextSize = bodyTextSize - 1.0;
-    final double smallTextSize = bodyTextSize * 0.7;
+    final double smallTextSize = bodyTextSize * 0.6;
     
     final now = DateTime.now();
     final formattedDate = DateFormat('dd/MM/yyyy').format(now);
     final formattedTime = DateFormat('HH:mm').format(now);
 
     return Container(
-      width: MediaQuery.of(context).size.width * 0.15,
+      width: MediaQuery.of(context).size.width * 0.12,
       decoration: BoxDecoration(
         color: Colors.grey[100],
         border: Border(right: BorderSide(color: Colors.grey[300]!, width: 1)),
@@ -543,9 +543,9 @@ void dispose() {
                 return Container(
                   margin: EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                   decoration: BoxDecoration(
-                    color: isSelected ? Colors.blue[100] : Colors.transparent,
+                    color: isSelected ? Colors.limeAccent[100] : Colors.transparent,
                     borderRadius: BorderRadius.circular(6),
-                    border: isSelected ? Border.all(color: Colors.blue[300]!, width: 2) : null,
+                    border: isSelected ? Border.all(color: Colors.lime[400]!, width: 3) : null,
                   ),
                   child: ListTile(
                     dense: true,
@@ -572,7 +572,7 @@ void dispose() {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        color: isSelected ? Colors.blue[800] : Colors.black87,
+                        color: isSelected ? Colors.lime[900] : Colors.black87,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,

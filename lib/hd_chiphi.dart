@@ -433,7 +433,7 @@ class _VatLieuDialogState extends State<_VatLieuDialog> {
     return Dialog(
       child: Container(
         width: MediaQuery.of(context).size.width * 0.9,
-        height: MediaQuery.of(context).size.height * 0.9,
+        height: MediaQuery.of(context).size.height * 1.4,
         padding: EdgeInsets.all(16),
         child: Column(
           children: [
@@ -471,6 +471,21 @@ class _VatLieuDialogState extends State<_VatLieuDialog> {
                             ],
                           ],
                         ),
+                                                SizedBox(height: 8),
+                        Wrap(
+  spacing: 8,
+  runSpacing: 8,
+  children: [
+    ElevatedButton(
+      onPressed: _saveRecord,
+      child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
+    ),
+    TextButton(
+      onPressed: _isEditMode ? _exitEditMode : _clearForm,
+      child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
+    ),
+  ],
+),
                         SizedBox(height: 8),
                         Row(
                           children: [
@@ -559,21 +574,6 @@ class _VatLieuDialogState extends State<_VatLieuDialog> {
                             ),
                           ],
                         ),
-                        SizedBox(height: 16),
-                        Wrap(
-  spacing: 8,
-  runSpacing: 8,
-  children: [
-    ElevatedButton(
-      onPressed: _saveRecord,
-      child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
-    ),
-    TextButton(
-      onPressed: _isEditMode ? _exitEditMode : _clearForm,
-      child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
-    ),
-  ],
-),
                       ],
                     ),
                   ),
@@ -896,7 +896,7 @@ class _DinhKyDialogState extends State<_DinhKyDialog> {
     return Dialog(
       child: Container(
         width: MediaQuery.of(context).size.width * 0.9,
-        height: MediaQuery.of(context).size.height * 0.9,
+        height: MediaQuery.of(context).size.height * 1.4,
         padding: EdgeInsets.all(16),
         child: Column(
           children: [
@@ -932,6 +932,21 @@ class _DinhKyDialogState extends State<_DinhKyDialog> {
                             ],
                           ],
                         ),
+                                             SizedBox(height: 8),
+                        Wrap(
+  spacing: 8,
+  runSpacing: 8,
+  children: [
+    ElevatedButton(
+      onPressed: _saveRecord,
+      child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
+    ),
+    TextButton(
+      onPressed: _isEditMode ? _exitEditMode : _clearForm,
+      child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
+    ),
+  ],
+),
                         SizedBox(height: 8),
                         Row(
                           children: [
@@ -1040,21 +1055,7 @@ class _DinhKyDialogState extends State<_DinhKyDialog> {
                            ),
                          ],
                        ),
-                       SizedBox(height: 16),
-                        Wrap(
-  spacing: 8,
-  runSpacing: 8,
-  children: [
-    ElevatedButton(
-      onPressed: _saveRecord,
-      child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
-    ),
-    TextButton(
-      onPressed: _isEditMode ? _exitEditMode : _clearForm,
-      child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
-    ),
-  ],
-),
+
                       ],
                     ),
                   ),
@@ -1378,7 +1379,7 @@ class _LeTetTCDialogState extends State<_LeTetTCDialog> {
     return Dialog(
       child: Container(
         width: MediaQuery.of(context).size.width * 0.9,
-        height: MediaQuery.of(context).size.height * 0.9,
+        height: MediaQuery.of(context).size.height * 1.4,
         padding: EdgeInsets.all(16),
         child: Column(
           children: [
@@ -1414,6 +1415,21 @@ class _LeTetTCDialogState extends State<_LeTetTCDialog> {
                             ],
                           ],
                         ),
+                        SizedBox(height: 8),
+                       Wrap(
+  spacing: 8,
+  runSpacing: 8,
+  children: [
+    ElevatedButton(
+      onPressed: _saveRecord,
+      child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
+    ),
+    TextButton(
+      onPressed: _isEditMode ? _exitEditMode : _clearForm,
+      child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
+    ),
+  ],
+),
                         SizedBox(height: 8),
                        Row(
                          children: [
@@ -1538,21 +1554,7 @@ class _LeTetTCDialogState extends State<_LeTetTCDialog> {
                            ),
                          ],
                        ),
-                       SizedBox(height: 16),
-                       Wrap(
-  spacing: 8,
-  runSpacing: 8,
-  children: [
-    ElevatedButton(
-      onPressed: _saveRecord,
-      child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
-    ),
-    TextButton(
-      onPressed: _isEditMode ? _exitEditMode : _clearForm,
-      child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
-    ),
-  ],
-),
+
                       ],
                     ),
                   ),
@@ -1887,7 +1889,7 @@ class _PhuCapDialogState extends State<_PhuCapDialog> {
     return Dialog(
       child: Container(
         width: MediaQuery.of(context).size.width * 0.9,
-        height: MediaQuery.of(context).size.height * 0.9,
+        height: MediaQuery.of(context).size.height * 1.4,
         padding: EdgeInsets.all(16),
         child: Column(
           children: [
@@ -1923,6 +1925,21 @@ class _PhuCapDialogState extends State<_PhuCapDialog> {
                             ],
                           ],
                         ),
+                        SizedBox(height: 8),
+                        Wrap(
+  spacing: 8,
+  runSpacing: 8,
+  children: [
+    ElevatedButton(
+      onPressed: _saveRecord,
+      child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
+    ),
+    TextButton(
+      onPressed: _isEditMode ? _exitEditMode : _clearForm,
+      child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
+    ),
+  ],
+),
                         SizedBox(height: 8),
                         Row(
                           children: [
@@ -2047,21 +2064,7 @@ class _PhuCapDialogState extends State<_PhuCapDialog> {
                             ),
                           ],
                         ),
-                        SizedBox(height: 16),
-                        Wrap(
-  spacing: 8,
-  runSpacing: 8,
-  children: [
-    ElevatedButton(
-      onPressed: _saveRecord,
-      child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
-    ),
-    TextButton(
-      onPressed: _isEditMode ? _exitEditMode : _clearForm,
-      child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
-    ),
-  ],
-),
+
                       ],
                     ),
                   ),
@@ -2393,7 +2396,7 @@ class _NgoaiGiaoDialogState extends State<_NgoaiGiaoDialog> {
    return Dialog(
      child: Container(
        width: MediaQuery.of(context).size.width * 0.9,
-       height: MediaQuery.of(context).size.height * 0.9,
+       height: MediaQuery.of(context).size.height * 1.6,
        padding: EdgeInsets.all(16),
        child: Column(
          children: [
@@ -2429,6 +2432,21 @@ class _NgoaiGiaoDialogState extends State<_NgoaiGiaoDialog> {
                            ],
                          ],
                        ),
+                       SizedBox(height: 8),
+                       Wrap(
+  spacing: 8,
+  runSpacing: 8,
+  children: [
+    ElevatedButton(
+      onPressed: _saveRecord,
+      child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
+    ),
+    TextButton(
+      onPressed: _isEditMode ? _exitEditMode : _clearForm,
+      child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
+    ),
+  ],
+),
                        SizedBox(height: 8),
                        Row(
                          children: [
@@ -2553,21 +2571,7 @@ class _NgoaiGiaoDialogState extends State<_NgoaiGiaoDialog> {
                            ),
                          ],
                        ),
-                       SizedBox(height: 16),
-                       Wrap(
-  spacing: 8,
-  runSpacing: 8,
-  children: [
-    ElevatedButton(
-      onPressed: _saveRecord,
-      child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
-    ),
-    TextButton(
-      onPressed: _isEditMode ? _exitEditMode : _clearForm,
-      child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
-    ),
-  ],
-),
+
                      ],
                    ),
                  ),
@@ -2907,7 +2911,7 @@ class _MayMocDialogState extends State<_MayMocDialog> {
     return Dialog(
       child: Container(
         width: MediaQuery.of(context).size.width * 0.9,
-        height: MediaQuery.of(context).size.height * 0.9,
+        height: MediaQuery.of(context).size.height * 1.7,
         padding: EdgeInsets.all(16),
         child: Column(
           children: [
@@ -2943,7 +2947,22 @@ class _MayMocDialogState extends State<_MayMocDialog> {
                             ],
                           ],
                         ),
-                        SizedBox(height: 8),
+                        SizedBox(height: 2),
+                        Wrap(
+  spacing: 8,
+  runSpacing: 8,
+  children: [
+    ElevatedButton(
+      onPressed: _saveRecord,
+      child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
+    ),
+    TextButton(
+      onPressed: _isEditMode ? _exitEditMode : _clearForm,
+      child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
+    ),
+  ],
+),
+                        SizedBox(height: 2),
                         Row(
                           children: [
                             Expanded(
@@ -2956,7 +2975,7 @@ class _MayMocDialogState extends State<_MayMocDialog> {
                                 validator: (value) => value?.trim().isEmpty == true ? 'Bắt buộc' : null,
                               ),
                             ),
-                            SizedBox(width: 8),
+                            SizedBox(width: 2),
                             Expanded(
                               child: TextFormField(
                                 controller: _tenMayController,
@@ -2966,7 +2985,7 @@ class _MayMocDialogState extends State<_MayMocDialog> {
                                 ),
                               ),
                             ),
-                            SizedBox(width: 8),
+                            SizedBox(width: 2),
                             Expanded(
                               child: TextFormField(
                                 controller: _hangSanXuatController,
@@ -2976,7 +2995,7 @@ class _MayMocDialogState extends State<_MayMocDialog> {
                                 ),
                               ),
                             ),
-                            SizedBox(width: 8),
+                            SizedBox(width: 2),
                             Expanded(
                               child: TextFormField(
                                 controller: _tanSuatController,
@@ -2988,7 +3007,7 @@ class _MayMocDialogState extends State<_MayMocDialog> {
                             ),
                           ],
                         ),
-                        SizedBox(height: 8),
+                        SizedBox(height: 2),
                         Row(
                           children: [
                             Expanded(
@@ -3003,7 +3022,7 @@ class _MayMocDialogState extends State<_MayMocDialog> {
                                 validator: (value) => value?.trim().isEmpty == true ? 'Bắt buộc' : null,
                               ),
                             ),
-                            SizedBox(width: 8),
+                            SizedBox(width: 2),
                             Expanded(
                               child: TextFormField(
                                 controller: _tinhTrangThietBiController,
@@ -3021,7 +3040,7 @@ class _MayMocDialogState extends State<_MayMocDialog> {
                                 },
                               ),
                             ),
-                            SizedBox(width: 8),
+                            SizedBox(width: 2),
                             Expanded(
                               child: TextFormField(
                                 controller: _khauHaoController,
@@ -3034,7 +3053,7 @@ class _MayMocDialogState extends State<_MayMocDialog> {
                                 validator: (value) => value?.trim().isEmpty == true ? 'Bắt buộc' : null,
                               ),
                             ),
-                            SizedBox(width: 8),
+                            SizedBox(width: 2),
                             Expanded(
                               child: Container(
                                 padding: EdgeInsets.all(12),
@@ -3050,7 +3069,7 @@ class _MayMocDialogState extends State<_MayMocDialog> {
                             ),
                           ],
                         ),
-                        SizedBox(height: 8),
+                        SizedBox(height: 2),
                         Row(
                           children: [
                             Expanded(
@@ -3065,7 +3084,7 @@ class _MayMocDialogState extends State<_MayMocDialog> {
                                 validator: (value) => value?.trim().isEmpty == true ? 'Bắt buộc' : null,
                               ),
                             ),
-                            SizedBox(width: 8),
+                            SizedBox(width: 2),
                             Expanded(
                               child: Container(
                                 padding: EdgeInsets.all(12),
@@ -3079,7 +3098,7 @@ class _MayMocDialogState extends State<_MayMocDialog> {
                                 ),
                               ),
                             ),
-                            SizedBox(width: 8),
+                            SizedBox(width: 2),
                             Expanded(
                               child: TextFormField(
                                 controller: _ghiChuController,
@@ -3091,21 +3110,7 @@ class _MayMocDialogState extends State<_MayMocDialog> {
                             ),
                           ],
                         ),
-                        SizedBox(height: 16),
-                        Wrap(
-  spacing: 8,
-  runSpacing: 8,
-  children: [
-    ElevatedButton(
-      onPressed: _saveRecord,
-      child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
-    ),
-    TextButton(
-      onPressed: _isEditMode ? _exitEditMode : _clearForm,
-      child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
-    ),
-  ],
-),
+
                       ],
                     ),
                   ),
@@ -3113,7 +3118,7 @@ class _MayMocDialogState extends State<_MayMocDialog> {
               ),
             ),
             
-            SizedBox(height: 16),
+            SizedBox(height: 2),
             
             Expanded(
               flex: 2,
@@ -3441,6 +3446,21 @@ class _LuongDialogState extends State<_LuongDialog> {
                          ],
                        ),
                        SizedBox(height: 8),
+                       Wrap(
+  spacing: 8,
+  runSpacing: 8,
+  children: [
+    ElevatedButton(
+      onPressed: _saveRecord,
+      child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
+    ),
+    TextButton(
+      onPressed: _isEditMode ? _exitEditMode : _clearForm,
+      child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
+    ),
+  ],
+),
+                       SizedBox(height: 8),
                        Row(
                          children: [
                            Expanded(
@@ -3504,21 +3524,7 @@ class _LuongDialogState extends State<_LuongDialog> {
                            ),
                          ],
                        ),
-                       SizedBox(height: 16),
-                       Wrap(
-  spacing: 8,
-  runSpacing: 8,
-  children: [
-    ElevatedButton(
-      onPressed: _saveRecord,
-      child: Text(_isEditMode ? 'Cập nhật' : 'Lưu'),
-    ),
-    TextButton(
-      onPressed: _isEditMode ? _exitEditMode : _clearForm,
-      child: Text(_isEditMode ? 'Hủy' : 'Xóa form'),
-    ),
-  ],
-),
+
                      ],
                    ),
                  ),
