@@ -11,6 +11,7 @@ import 'dart:async';
 import 'package:uuid/uuid.dart';
 import 'package:http/http.dart' as http;
 import 'http_client.dart'; 
+import 'package:cached_network_image/cached_network_image.dart';
 
 class MapReportScreen extends StatefulWidget {
   final String mapUID;
@@ -42,7 +43,12 @@ class _MapReportScreenState extends State<MapReportScreen> with TickerProviderSt
   bool isLoading = false;
   String statusMessage = '';
   Set<String> visibleFloors = {};
-  
+  Timer? _inactivityTimer;
+  Timer? _autoCycleTimer;
+  bool _isAutoCycling = false;
+  int _currentFloorIndex = 0;
+  static const Duration _inactivityTimeout = Duration(seconds: 30);
+  static const Duration _cycleInterval = Duration(seconds: 5);
   // Add new variables to track sync times
   DateTime? _lastSyncTime;
   bool _hasPerformedMorningSync = false;
@@ -78,36 +84,38 @@ List<Map<String, dynamic>> hoverStats = [
   },
 ];
 bool _statsLoaded = false;
-  @override
 @override
-  void initState() {
-    super.initState();
-    print("MapReportScreen: initState called");
-    _loadMapData();
-    _loadFloors().then((_) => _preloadZones());
-    _loadHoverStats();
-    
-    // Initialize animation controller
-    print("Setting up animation controller");
-    _dotsAnimationController = AnimationController(
-      vsync: this,
-      duration: Duration(seconds: 5), 
-    );
-    _dotsAnimationController.addListener(() {
-      print("Animation value: ${_dotsAnimationController.value}");
-    });
-    
-    // Start the animation after a short delay
-    Future.delayed(Duration(milliseconds: 500), () {
-      if (mounted) {
-        print("Starting animation");
-        _dotsAnimationController.repeat(reverse: true);
-      }
-    });
-    
-    // Load the last sync time from SharedPreferences
-    _loadLastSyncTime();
-  }
+void initState() {
+  super.initState();
+  print("MapReportScreen: initState called");
+  _loadMapData();
+  _loadFloors().then((_) => _preloadZones());
+  _loadHoverStats();
+  
+  // Initialize animation controller
+  print("Setting up animation controller");
+  _dotsAnimationController = AnimationController(
+    vsync: this,
+    duration: Duration(seconds: 5), 
+  );
+  _dotsAnimationController.addListener(() {
+    print("Animation value: ${_dotsAnimationController.value}");
+  });
+  
+  // Start the animation after a short delay
+  Future.delayed(Duration(milliseconds: 500), () {
+    if (mounted) {
+      print("Starting animation");
+      _dotsAnimationController.repeat(reverse: true);
+    }
+  });
+  
+  // Load the last sync time from SharedPreferences
+  _loadLastSyncTime();
+  
+  // Start inactivity timer for auto-cycling
+  _startInactivityTimer();
+}
    @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -116,11 +124,90 @@ bool _statsLoaded = false;
     _checkAndPerformAutoSync();
   }
   @override
+@override
 void dispose() {
   _dotsAnimationController.dispose();
   _dotAnimationTimer?.cancel();
   _dotTargetTimer?.cancel();
+  
+  // Clean up auto-cycle timers
+  _cancelInactivityTimer();
+  _stopAutoCycle();
+  
   super.dispose();
+}
+void _startInactivityTimer() {
+  _cancelInactivityTimer();
+  _inactivityTimer = Timer(_inactivityTimeout, () {
+    if (mounted) {
+      _startAutoCycle();
+    }
+  });
+}
+
+// Method to cancel the inactivity timer
+void _cancelInactivityTimer() {
+  _inactivityTimer?.cancel();
+  _inactivityTimer = null;
+}
+
+// Method to reset the inactivity timer (called on user interaction)
+void _resetInactivityTimer() {
+  if (_isAutoCycling) {
+    _stopAutoCycle();
+  }
+  _startInactivityTimer();
+}
+
+// Method to start auto-cycling through floors
+void _startAutoCycle() {
+  if (floors.isEmpty) return;
+  
+  setState(() {
+    _isAutoCycling = true;
+  });
+  
+  print('Starting auto-cycle mode for TV display');
+  
+  // Set the first floor as current
+  _currentFloorIndex = 0;
+  if (floors.isNotEmpty) {
+    _handleFloorChange(floors[_currentFloorIndex].floorUID!);
+  }
+  
+  // Start cycling timer
+  _autoCycleTimer = Timer.periodic(_cycleInterval, (timer) {
+    if (!mounted || floors.isEmpty) {
+      timer.cancel();
+      return;
+    }
+    
+    // Move to next floor
+    _currentFloorIndex = (_currentFloorIndex + 1) % floors.length;
+    _handleFloorChange(floors[_currentFloorIndex].floorUID!);
+    
+    print('Auto-cycling to floor: ${floors[_currentFloorIndex].tenTang}');
+  });
+}
+
+// Method to stop auto-cycling
+void _stopAutoCycle() {
+  _autoCycleTimer?.cancel();
+  _autoCycleTimer = null;
+  
+  setState(() {
+    _isAutoCycling = false;
+  });
+  
+  print('Stopped auto-cycle mode');
+}
+
+// Method to handle user interaction and reset timers
+void _handleUserInteraction([_]) {
+  if (_isAutoCycling || _inactivityTimer != null) {
+    print('User interaction detected - resetting timers');
+    _resetInactivityTimer();
+  }
 }
 Future<void> _loadLastSyncTime() async {
     try {
@@ -886,184 +973,237 @@ void _startDotMovement() {
       print('Error loading floors: $e');
     }
   }
-  
-@override
+  @override
 Widget build(BuildContext context) {
-  return Scaffold(
-    appBar: AppBar(
-      title: Text('Báo cáo: ${widget.mapName}'),
-      actions: [
-        // Stats toggle button
-        IconButton(
-          icon: Icon(_statsVisible ? Icons.analytics : Icons.analytics_outlined),
-          tooltip: _statsVisible ? 'Ẩn thống kê' : 'Hiện thống kê',
-          onPressed: () {
-            setState(() {
-              _statsVisible = !_statsVisible;
-            });
-          },
-        ),
-        IconButton(
-          icon: _isSyncing
-              ? SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                )
-              : Icon(Icons.sync),
-          tooltip: 'Đồng bộ dữ liệu báo cáo bản đồ',
-          onPressed: _isSyncing ? null : _syncMapReports,
-        ),
-      ],
-      flexibleSpace: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.greenAccent.shade400, Colors.green.shade700],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-      ),
-    ),
-    body: isLoading 
-      ? Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text(statusMessage),
-            ],
-          ),
-        )
-      : Row(
+  return GestureDetector(
+    onTap: _handleUserInteraction,
+    onPanDown: _handleUserInteraction,
+    behavior: HitTestBehavior.translucent, // Allows gestures to pass through
+    child: Scaffold(
+      appBar: AppBar(
+        title: Row(
           children: [
-            // Main content area
-            Expanded(
-              child: Column(
-                children: [
-                  if (statusMessage.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Text(
-                        statusMessage,
-                        style: TextStyle(fontStyle: FontStyle.italic),
+            Text('Báo cáo: ${widget.mapName}'),
+            if (_isAutoCycling) ...[
+              SizedBox(width: 8),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade600,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.tv, size: 16, color: Colors.white),
+                    SizedBox(width: 4),
+                    Text(
+                      'TV Mode',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  Expanded(
-                    child: _buildMapView(),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            
-            // Right side stats panel with animation
-            AnimatedContainer(
-              duration: Duration(milliseconds: 300),
-              width: _statsVisible ? 200 : 0,
-              curve: Curves.easeInOut,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 5,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-              child: _statsVisible ? Column(
-                children: [
-                  // Stats header with close button
-                  Container(
-  padding: EdgeInsets.symmetric(vertical: 12),
-  decoration: BoxDecoration(
-    color: Colors.green.shade700,
-    boxShadow: [
-      BoxShadow(
-        color: Colors.black26,
-        blurRadius: 3,
-        spreadRadius: 0,
-        offset: Offset(0, 2),
-      ),
-    ],
-  ),
-  child: Column(
-    children: [
-      Text(
-        'Thống kê hôm nay',
-        style: TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      SizedBox(height: 8),
-      Align(
-        alignment: Alignment.centerRight,
-        child: Padding(
-          padding: EdgeInsets.only(right: 8),
-          child: InkWell(
-            onTap: () {
-              setState(() {
-                _statsVisible = false;
-              });
-            },
-            child: Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.3),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.close,
-                size: 16,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-      ),
-    ],
-  ),
-),
-                  Expanded(
-                    child: RefreshIndicator(
-                      onRefresh: _loadHoverStats,
-                      child: ListView.builder(
-                        itemCount: hoverStats.length,
-                        itemBuilder: (context, index) {
-                          final stat = hoverStats[index];
-                          return _buildStatCard(
-                            title: stat['title'],
-                            value: stat['value'],
-                            icon: stat['icon'],
-                            color: stat['color'],
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                  // Refresh button at bottom
-                  Container(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    child: TextButton.icon(
-                      onPressed: _loadHoverStats,
-                      icon: Icon(Icons.refresh),
-                      label: Text('Làm mới'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.green.shade700,
-                      ),
-                    ),
-                  ),
-                ],
-              ) : null,
-            ),
+            ],
           ],
         ),
+        actions: [
+          // Add manual stop auto-cycle button
+          if (_isAutoCycling)
+            IconButton(
+              icon: Icon(Icons.stop),
+              tooltip: 'Dừng chế độ tự động',
+              onPressed: () {
+                _resetInactivityTimer();
+              },
+            ),
+          // Stats toggle button
+          IconButton(
+            icon: Icon(_statsVisible ? Icons.analytics : Icons.analytics_outlined),
+            tooltip: _statsVisible ? 'Ẩn thống kê' : 'Hiện thống kê',
+            onPressed: () {
+              _handleUserInteraction(); // Reset timer on interaction
+              setState(() {
+                _statsVisible = !_statsVisible;
+              });
+            },
+          ),
+          IconButton(
+            icon: _isSyncing
+                ? SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : Icon(Icons.sync),
+            tooltip: 'Đồng bộ dữ liệu báo cáo bản đồ',
+            onPressed: _isSyncing ? null : () {
+              _handleUserInteraction(); // Reset timer on interaction
+              _syncMapReports();
+            },
+          ),
+        ],
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.greenAccent.shade400, Colors.green.shade700],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+      ),
+      body: isLoading 
+        ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text(statusMessage),
+              ],
+            ),
+          )
+        : Row(
+            children: [
+              // Main content area
+              Expanded(
+                child: Column(
+                  children: [
+                    if (statusMessage.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text(
+                          statusMessage,
+                          style: TextStyle(fontStyle: FontStyle.italic),
+                        ),
+                      ),
+                    Expanded(
+                      child: _buildMapView(),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Right side stats panel with animation
+              AnimatedContainer(
+                duration: Duration(milliseconds: 300),
+                width: _statsVisible ? 200 : 0,
+                curve: Curves.easeInOut,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 5,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: _statsVisible ? Column(
+                  children: [
+                    // Stats header with close button
+                    Container(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade700,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black26,
+                            blurRadius: 3,
+                            spreadRadius: 0,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Thống kê hôm nay',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Padding(
+                              padding: EdgeInsets.only(right: 8),
+                              child: InkWell(
+                                onTap: () {
+                                  _handleUserInteraction(); // Reset timer on interaction
+                                  setState(() {
+                                    _statsVisible = false;
+                                  });
+                                },
+                                child: Container(
+                                  width: 24,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.3),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.close,
+                                    size: 16,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: () {
+                          _handleUserInteraction(); // Reset timer on interaction
+                          return _loadHoverStats();
+                        },
+                        child: ListView.builder(
+                          itemCount: hoverStats.length,
+                          itemBuilder: (context, index) {
+                            final stat = hoverStats[index];
+                            return _buildStatCard(
+                              title: stat['title'],
+                              value: stat['value'],
+                              icon: stat['icon'],
+                              color: stat['color'],
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    // Refresh button at bottom
+                    Container(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: TextButton.icon(
+                        onPressed: () {
+                          _handleUserInteraction(); // Reset timer on interaction
+                          _loadHoverStats();
+                        },
+                        icon: Icon(Icons.refresh),
+                        label: Text('Làm mới'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.green.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ) : null,
+              ),
+            ],
+          ),
+    ),
   );
 }
 Widget _buildStatCard({
@@ -1189,15 +1329,16 @@ void _handleFloorChange(String floorUID) {
                 children: floors.map((floor) {
                   final isVisible = visibleFloors.contains(floor.floorUID);
                   return ChoiceChip(
-                    label: Text(floor.tenTang ?? 'Không tên'),
-                    selected: isVisible,
-                    onSelected: (selected) {
-  if (selected) {
-    _handleFloorChange(floor.floorUID!);
-  }
-},
-                    selectedColor: Colors.blue.withOpacity(0.3),
-                  );
+  label: Text(floor.tenTang ?? 'Không tên'),
+  selected: isVisible,
+  onSelected: (selected) {
+    if (selected) {
+      _handleUserInteraction(); // Reset timer on interaction
+      _handleFloorChange(floor.floorUID!);
+    }
+  },
+  selectedColor: Colors.blue.withOpacity(0.3),
+);
                 }).toList(),
               ),
             ],
@@ -1235,20 +1376,31 @@ void _handleFloorChange(String floorUID) {
                       child: Stack(
                         children: [
                           // Base map image
-                          if (mapData?.hinhAnhBanDo != null && mapData!.hinhAnhBanDo!.isNotEmpty)
-                            Positioned.fill(
-                              child: Opacity(
-                                opacity: 0.2,
-                                child: Image.network(
-                                  mapData!.hinhAnhBanDo!,
-                                  fit: BoxFit.fill,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(color: Colors.grey[200]);
-                                  },
-                                ),
-                              ),
-                            ),
-                          
+// Base map image
+if (mapData?.hinhAnhBanDo != null && mapData!.hinhAnhBanDo!.isNotEmpty)
+  Positioned.fill(
+    child: Opacity(
+      opacity: 0.2,
+      child: CachedNetworkImage(
+        imageUrl: mapData!.hinhAnhBanDo!,
+        fit: BoxFit.fill,
+        placeholder: (context, url) => Container(
+          color: Colors.grey[200],
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(strokeWidth: 2),
+                SizedBox(height: 8),
+                Text('Đang tải bản đồ...', style: TextStyle(fontSize: 10)),
+              ],
+            ),
+          ),
+        ),
+        errorWidget: (context, url, error) => Container(color: Colors.grey[200]),
+      ),
+    ),
+  ),                   
                           // Display floors at their actual positions and sizes
                           ...floors.where((floor) => 
                             visibleFloors.contains(floor.floorUID)
@@ -1285,16 +1437,24 @@ void _handleFloorChange(String floorUID) {
                                     ),
                                     child: Stack(
                                       children: [
-                                        if (floor.hinhAnhTang != null && floor.hinhAnhTang!.isNotEmpty)
-                                          Positioned.fill(
-                                            child: Image.network(
-                                              floor.hinhAnhTang!,
-                                              fit: BoxFit.fill,
-                                              errorBuilder: (context, error, stackTrace) {
-                                                return SizedBox();
-                                              },
-                                            ),
-                                          ),
+                                       if (floor.hinhAnhTang != null && floor.hinhAnhTang!.isNotEmpty)
+  Positioned.fill(
+    child: CachedNetworkImage(
+      imageUrl: floor.hinhAnhTang!,
+      fit: BoxFit.fill,
+      placeholder: (context, url) => Container(
+        color: Colors.transparent,
+        child: Center(
+          child: SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      ),
+      errorWidget: (context, url, error) => SizedBox(),
+    ),
+  ),
                                       ],
                                     ),
                                   ),
@@ -1549,13 +1709,14 @@ void _handleFloorChange(String floorUID) {
                                     boundaryMargin: EdgeInsets.all(20),
                                     minScale: 0.5,
                                     maxScale: 4,
-                                    child: Image.network(
-                                      reportImages[index],
-                                      fit: BoxFit.contain,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return Text('Không thể tải hình ảnh: $error');
-                                      },
-                                    ),
+                                    child: CachedNetworkImage(
+  imageUrl: reportImages[index],
+  fit: BoxFit.contain,
+  placeholder: (context, url) => Center(
+    child: CircularProgressIndicator(),
+  ),
+  errorWidget: (context, url, error) => Text('Không thể tải hình ảnh: $error'),
+),
                                   ),
                                 ),
                                 backgroundColor: Colors.black,
@@ -1571,18 +1732,20 @@ void _handleFloorChange(String floorUID) {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(7),
-                            child: Image.network(
-                              reportImages[index],
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  color: Colors.grey.shade200,
-                                  child: Icon(Icons.broken_image, color: Colors.grey),
-                                );
-                              },
-                            ),
-                          ),
+  borderRadius: BorderRadius.circular(7),
+  child: CachedNetworkImage(
+    imageUrl: reportImages[index],
+    fit: BoxFit.cover,
+    placeholder: (context, url) => Container(
+      color: Colors.grey.shade200,
+      child: Center(child: CircularProgressIndicator(strokeWidth: 1)),
+    ),
+    errorWidget: (context, url, error) => Container(
+      color: Colors.grey.shade200,
+      child: Icon(Icons.broken_image, color: Colors.grey),
+    ),
+  ),
+),
                         ),
                       );
                     },
@@ -2126,13 +2289,21 @@ void _showReportDetails(Map<String, dynamic> report) {
                                       boundaryMargin: EdgeInsets.all(20),
                                       minScale: 0.5,
                                       maxScale: 4,
-                                      child: Image.network(
-                                        report['HinhAnh'],
-                                        fit: BoxFit.contain,
-                                        errorBuilder: (context, error, stackTrace) {
-                                          return Text('Không thể tải hình ảnh: $error');
-                                        },
-                                      ),
+                                      child: ClipRRect(
+  borderRadius: BorderRadius.circular(3),
+  child: CachedNetworkImage(
+    imageUrl: report['HinhAnh'],
+    fit: BoxFit.cover,
+    placeholder: (context, url) => Center(
+      child: SizedBox(
+        width: 16,
+        height: 16,
+        child: CircularProgressIndicator(strokeWidth: 1),
+      ),
+    ),
+    errorWidget: (context, url, error) => Icon(Icons.broken_image, size: 20),
+  ),
+),
                                     ),
                                   ),
                                   backgroundColor: Colors.black,
@@ -2145,13 +2316,12 @@ void _showReportDetails(Map<String, dynamic> report) {
                               maxHeight: 200,
                               maxWidth: double.infinity,
                             ),
-                            child: Image.network(
-                              report['HinhAnh'],
-                              fit: BoxFit.contain,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Text('Không thể tải hình ảnh: $error');
-                              },
-                            ),
+                            child: CachedNetworkImage(
+  imageUrl: report['HinhAnh'],
+  fit: BoxFit.contain,
+  placeholder: (context, url) => Center(child: CircularProgressIndicator()),
+  errorWidget: (context, url, error) => Text('Không thể tải hình ảnh: $error'),
+),
                           ),
                         ),
                       ],
