@@ -339,7 +339,7 @@ class _MapFloorScreenState extends State<MapFloorScreen> with SingleTickerProvid
                         if (mapData?.hinhAnhBanDo != null && mapData!.hinhAnhBanDo!.isNotEmpty)
                           Positioned.fill(
                             child: Opacity(
-                              opacity: 0.2,
+                              opacity: 0.5,
                               child: Image.network(
                                 mapData!.hinhAnhBanDo!,
                                 fit: BoxFit.fill,
