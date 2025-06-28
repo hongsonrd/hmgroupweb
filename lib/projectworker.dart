@@ -809,7 +809,7 @@ Future<void> _addNewEmployee() async {
         'MaBP': _selectedDepartment,
         'PhanLoai': '',
         'MaNV': result['MaNV'],
-        'CongThuongChu': '',
+        'CongThuongChu': 'Ro',
         'NgoaiGioThuong': '0',
         'NgoaiGioKhac': '0',
         'NgoaiGiox15': '0',
@@ -1525,7 +1525,7 @@ Future<void> _copyFromYesterday() async {
   }
 }
 String _extractCongThuongChuBase(String? value) {
-  if (value == null) return 'Ro';
+  if (value == null || value.isEmpty) return 'Ro';
   if (value.endsWith('+P')) {
     return value.substring(0, value.length - 2);
   } else if (value.endsWith('+P/2')) {
