@@ -2187,7 +2187,7 @@ int thanhTien = (soLuongYeuCau * giaNegoaiTe).toInt();
          color: isSelected ? Colors.blue.shade50 : null, // Highlight selected
          child: ListTile(
            title: Text(
-             '${order.soPhieu ?? 'N/A'} - ${order.tenKhachHang ?? 'Không có tên'}',
+             '${order.soPhieu ?? 'N/A'} - ${order.tenKhachHang2 ?? 'Không có tên'}',
              style: TextStyle(fontWeight: FontWeight.bold),
            ),
            subtitle: Column(

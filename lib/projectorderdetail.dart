@@ -477,23 +477,28 @@ List<OrderMatHangModel> getSortedItems(List<OrderMatHangModel> items) {
                                )),
                                DataCell(Text(item.donVi ?? '')),
                                DataCell(TextField(
-                                 controller: soLuongControllers[item.itemId],
-                                 keyboardType: TextInputType.number,
-                                 decoration: InputDecoration(isDense: true, contentPadding: EdgeInsets.all(8)),
-                                 onChanged: (value) {
-                                   setState(() {
-                                     hasQuantity[item.itemId] = double.tryParse(value) != null && double.tryParse(value)! > 0;
-                                     selectedItems[item.itemId] = {
-                                       'soLuong': value,
-                                       'khachTra': khachTraValues[item.itemId],
-                                       'ghiChu': ghiChuControllers[item.itemId]?.text,
-                                       'item': item,
-                                     };
-                                     // Re-sort the list when quantities change
-                                     filteredItems = getSortedItems(filteredItems);
-                                   });
-                                 },
-                               )),
+  controller: soLuongControllers[item.itemId],
+  keyboardType: TextInputType.number,
+  decoration: InputDecoration(isDense: true, contentPadding: EdgeInsets.all(8)),
+  onChanged: (value) {
+    // Only update the data, don't re-sort
+    setState(() {
+      hasQuantity[item.itemId] = double.tryParse(value) != null && double.tryParse(value)! > 0;
+      selectedItems[item.itemId] = {
+        'soLuong': value,
+        'khachTra': khachTraValues[item.itemId],
+        'ghiChu': ghiChuControllers[item.itemId]?.text,
+        'item': item,
+      };
+    });
+  },
+  onEditingComplete: () {
+    // Re-sort only when user finishes editing
+    setState(() {
+      filteredItems = getSortedItems(filteredItems);
+    });
+  },
+),),
                                DataCell(Text(formatter.format(item.donGia ?? 0))),
                                DataCell(Text(formatter.format(thanhTien))),
                                DataCell(Checkbox(
