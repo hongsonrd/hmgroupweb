@@ -392,7 +392,7 @@ void _showRecipientContactSelectionDialog() {
     // Format: userPrefix-DDMMYY-randomNumber
     final now = DateTime.now();
     final dateStr = DateFormat('ddMMyy').format(now);
-    final randomNum = Random().nextInt(90) + 10; // Random number between 10-99
+    final randomNum = Random().nextInt(900) + 100; // Random number between 100-999
     
     return '$userPrefix-$dateStr-$randomNum';
   }

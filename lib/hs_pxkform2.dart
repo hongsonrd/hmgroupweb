@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'table_models.dart';
+import 'db_helper.dart'; // Add this import for database access
 
 // Create a helper class for combined items
 class CombinedItem {
@@ -25,6 +26,8 @@ class CombinedItem {
   final double? soLuongKhachNhan;
   final String? xuatXuHangKhac;
   final String? maHang;
+  final Map<String, double> stockLevels; // Add stock levels
+  
   CombinedItem({
     this.idHang,
     this.tenHang,
@@ -37,6 +40,7 @@ class CombinedItem {
     this.soLuongKhachNhan,
     this.xuatXuHangKhac,
     this.maHang,
+    this.stockLevels = const {}, // Initialize with empty map
   });
 }
 
@@ -80,8 +84,11 @@ class ExportFormGenerator {
       final qrImage = await _generateQRCodeImage(order.soPhieu ?? 'unknown');
       final qrImagePdf = qrImage != null ? pw.MemoryImage(qrImage) : null;
 
-      // Combine items with same idHang
-      final combinedItems = _combineItems(items);
+      // Get stock levels for all items
+      final stockLevels = await _getStockLevels(items);
+
+      // Combine items with same idHang including stock levels
+      final combinedItems = await _combineItems(items, stockLevels);
 
       pdf.addPage(
         pw.MultiPage(
@@ -132,6 +139,7 @@ class ExportFormGenerator {
                   5: pw.FlexColumnWidth(1.5),
                   6: pw.FlexColumnWidth(1),
                   7: pw.FlexColumnWidth(2),
+                  8: pw.FlexColumnWidth(1.5), // Add column for stock levels
                 },
                 cellAlignments: {
                   0: pw.Alignment.centerLeft,
@@ -142,6 +150,7 @@ class ExportFormGenerator {
                   5: pw.Alignment.centerRight,
                   6: pw.Alignment.center,
                   7: pw.Alignment.centerRight,
+                  8: pw.Alignment.centerLeft, // Stock levels alignment
                 },
                 headers: [
                   'Product Name',
@@ -151,7 +160,8 @@ class ExportFormGenerator {
                   'Quantity',
                   'Price',
                   '%VAT',
-                  'Total'
+                  'Total',
+                  'Stock Status', // Add stock status column
                 ],
                 data: combinedItems.map((item) => [
                   item.tenHang ?? 'N/A',
@@ -162,6 +172,7 @@ class ExportFormGenerator {
                   '${item.soLuongKhachNhan ?? 0.0} ${item.xuatXuHangKhac ?? ''}',
                   item.phanTramVAT?.toString() ?? '10%',
                   '${item.thanhTien ?? 0.0} ${item.xuatXuHangKhac ?? ''}',
+                  _formatStockStatus(item.stockLevels, item.soLuongYeuCau), // Add stock status
                 ]).toList(),
               ),
 
@@ -199,8 +210,71 @@ class ExportFormGenerator {
     }
   }
 
-  // Updated method to combine items with same idHang
-  static List<CombinedItem> _combineItems(List<ChiTietDonModel> items) {
+  // Add method to get stock levels (similar to the one in your daily screen)
+  static Future<Map<String, Map<String, double>>> _getStockLevels(List<ChiTietDonModel> items) async {
+    Map<String, Map<String, double>> stockLevels = {};
+    final DBHelper dbHelper = DBHelper();
+    
+    try {
+      for (var item in items) {
+        if (item.idHang != null) {
+          stockLevels[item.idHang!] = {};
+          
+          // Get all warehouses
+          final warehouses = await dbHelper.getAllKho();
+          
+          for (var warehouse in warehouses) {
+            if (warehouse.khoHangID != null) {
+              // Get batches for this product from this warehouse
+              final batches = await dbHelper.getLoHangByMaHangAndKho(
+                item.idHang!,  // Use full idHang
+                warehouse.khoHangID!
+              );
+              
+              // Calculate total available stock from all batches
+              double totalStock = 0;
+              for (var batch in batches) {
+                if ((batch.soLuongHienTai ?? 0) > 0) {
+                  totalStock += batch.soLuongHienTai ?? 0;
+                }
+              }
+              
+              // Only add to map if there's stock available
+              if (totalStock > 0) {
+                stockLevels[item.idHang!]![warehouse.khoHangID!] = totalStock;
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('Error fetching stock levels: $e');
+    }
+    
+    return stockLevels;
+  }
+
+  // Helper method to format stock status for PDF display
+  static String _formatStockStatus(Map<String, double> stockLevels, double? requiredQuantity) {
+    if (stockLevels.isEmpty) {
+      return 'No Stock';
+    }
+
+    double totalStock = stockLevels.values.fold(0.0, (sum, stock) => sum + stock);
+    double required = requiredQuantity ?? 0.0;
+
+    if (totalStock >= required) {
+      return 'Available: ${_formatQuantity(totalStock)}';
+    } else if (totalStock > 0) {
+      double shortage = required - totalStock;
+      return 'Partial: ${_formatQuantity(totalStock)}\n(Short: ${_formatQuantity(shortage)})';
+    } else {
+      return 'Out of Stock';
+    }
+  }
+
+  // Updated method to combine items with same idHang including stock levels
+  static Future<List<CombinedItem>> _combineItems(List<ChiTietDonModel> items, Map<String, Map<String, double>> stockLevels) async {
     Map<String, CombinedItem> combinedMap = {};
     Map<String, List<String>> baoGiaInfo = {};
 
@@ -224,6 +298,7 @@ class ExportFormGenerator {
           xuatXuHangKhac: existing.xuatXuHangKhac,
           maHang: existing.maHang,
           soLuongKhachNhan: existing.soLuongKhachNhan,
+          stockLevels: existing.stockLevels, // Keep existing stock levels
         );
         
         // Collect baoGia information
@@ -244,6 +319,7 @@ class ExportFormGenerator {
           maHang: item.maHang,
           soLuongKhachNhan: item.soLuongKhachNhan,
           xuatXuHangKhac: item.xuatXuHangKhac,
+          stockLevels: stockLevels[item.idHang] ?? {}, // Add stock levels for this item
         );
         
         // Initialize baoGia info list
@@ -275,6 +351,7 @@ class ExportFormGenerator {
         maHang: item.maHang,
         soLuongKhachNhan: item.soLuongKhachNhan,
         xuatXuHangKhac: item.xuatXuHangKhac,
+        stockLevels: item.stockLevels, // Include stock levels in final result
       ));
     });
 
