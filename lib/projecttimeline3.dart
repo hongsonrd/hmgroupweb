@@ -483,7 +483,7 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
   }
 
   void _startAutoScroll() {
-    if (!mounted || _projectsData.isEmpty) return;
+    if (!mounted || _filteredProjectsData.isEmpty) return; 
     
     setState(() {
       _isAutoScrolling = true;
@@ -588,71 +588,76 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
   }
 
   Future<void> _loadProjectsData() async {
-    if (_isLoading) return;
+  if (_isLoading) return;
+
+  setState(() {
+    _isLoading = true;
+  });
+
+  try {
+    final db = await dbHelper.database;
+    final startOfDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    final endOfDay = startOfDay.add(Duration(days: 1));
+
+    String whereClause = 'WHERE Ngay >= ? AND Ngay < ?';
+    List<String> queryParams = [startOfDay.toIso8601String(), endOfDay.toIso8601String()];
+    
+    if (_selectedChiTiet2 != null && _selectedChiTiet2 != 'Tất cả') {
+      whereClause += ' AND ChiTiet2 = ?';
+      queryParams.add(_selectedChiTiet2!);
+    }
+
+    final List<Map<String, dynamic>> results = await db.rawQuery('''
+      SELECT 
+        BoPhan as project_name,
+        COUNT(*) as total_reports,
+        COUNT(CASE WHEN HinhAnh IS NOT NULL AND HinhAnh != '' THEN 1 END) as images_submitted
+      FROM ${DatabaseTables.taskHistoryTable}
+      $whereClause
+      GROUP BY BoPhan
+      HAVING BoPhan IS NOT NULL AND BoPhan != ''
+      ORDER BY BoPhan
+    ''', queryParams);
+
+    final allProjectsData = results
+        .where((item) => !_shouldFilterProject(item['project_name'] as String))
+        .map((item) {
+          final projectName = item['project_name'] as String;
+          final targetImages = projectName.startsWith('Bệnh viện') ? 10 : 15;
+          
+          return ProjectProgress(
+            projectName: projectName,
+            totalReports: item['total_reports'] as int,
+            imagesSubmitted: item['images_submitted'] as int,
+            targetImages: targetImages,
+          );
+        })
+        .toList()
+        ..sort((a, b) {
+          final percentageA = (a.imagesSubmitted / a.targetImages * 100);
+          final percentageB = (b.imagesSubmitted / b.targetImages * 100);
+          return percentageA.compareTo(percentageB);
+        });
+
+    // Filter for display (hide projects with 0 counts)
+    final displayProjectsData = allProjectsData
+        .where((project) => project.imagesSubmitted > 0)
+        .toList();
 
     setState(() {
-      _isLoading = true;
+      _projectsData = allProjectsData; // Keep all projects for Excel export
+      _filteredProjectsData = displayProjectsData; // Only show non-zero projects in UI
+      _lastUpdate = DateTime.now();
     });
-
-    try {
-      final db = await dbHelper.database;
-      final startOfDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-      final endOfDay = startOfDay.add(Duration(days: 1));
-
-      String whereClause = 'WHERE Ngay >= ? AND Ngay < ?';
-      List<String> queryParams = [startOfDay.toIso8601String(), endOfDay.toIso8601String()];
-      
-      if (_selectedChiTiet2 != null && _selectedChiTiet2 != 'Tất cả') {
-        whereClause += ' AND ChiTiet2 = ?';
-        queryParams.add(_selectedChiTiet2!);
-      }
-
-      final List<Map<String, dynamic>> results = await db.rawQuery('''
-        SELECT 
-          BoPhan as project_name,
-          COUNT(*) as total_reports,
-          COUNT(CASE WHEN HinhAnh IS NOT NULL AND HinhAnh != '' THEN 1 END) as images_submitted
-        FROM ${DatabaseTables.taskHistoryTable}
-        $whereClause
-        GROUP BY BoPhan
-        HAVING BoPhan IS NOT NULL AND BoPhan != ''
-        ORDER BY BoPhan
-      ''', queryParams);
-
-      final projectsData = results
-    .where((item) => !_shouldFilterProject(item['project_name'] as String))
-    .map((item) {
-      final projectName = item['project_name'] as String;
-      final targetImages = projectName.startsWith('Bệnh viện') ? 10 : 15;
-      
-      return ProjectProgress(
-        projectName: projectName,
-        totalReports: item['total_reports'] as int,
-        imagesSubmitted: item['images_submitted'] as int,
-        targetImages: targetImages,
-      );
-    })
-    .toList()
-    ..sort((a, b) {
-      final percentageA = (a.imagesSubmitted / a.targetImages * 100);
-      final percentageB = (b.imagesSubmitted / b.targetImages * 100);
-      return percentageA.compareTo(percentageB);
+  } catch (e) {
+    print('Error loading projects data: $e');
+    _showError('Lỗi tải dữ liệu dự án: ${e.toString()}');
+  } finally {
+    setState(() {
+      _isLoading = false;
     });
-
-      setState(() {
-        _projectsData = projectsData;
-        _filteredProjectsData = projectsData;
-        _lastUpdate = DateTime.now();
-      });
-    } catch (e) {
-      print('Error loading projects data: $e');
-      _showError('Lỗi tải dữ liệu dự án: ${e.toString()}');
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
   }
+}
 
   void _onChiTiet2FilterChanged(String? value) {
     _resetInactivityTimer();
@@ -978,21 +983,21 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
        ],
      ),
      actions: [
-       if (_projectsData.isNotEmpty) ...[
-         Padding(
-           padding: EdgeInsets.symmetric(horizontal: 8),
-           child: Center(
-             child: Text(
-               '${_projectsData.length}/${_projectsData.where((p) => p.imagesSubmitted >= p.targetImages).length}',
-               style: TextStyle(
-                 fontSize: 16, 
-                 color: Colors.black54,
-                 fontWeight: FontWeight.w600,
-               ),
-             ),
-           ),
-         ),
-       ],
+       if (_filteredProjectsData.isNotEmpty) ...[  
+    Padding(
+      padding: EdgeInsets.symmetric(horizontal: 8),
+      child: Center(
+        child: Text(
+          '${_filteredProjectsData.length}/${_filteredProjectsData.where((p) => p.imagesSubmitted >= p.targetImages).length}', // Changed from _projectsData
+          style: TextStyle(
+            fontSize: 16, 
+            color: Colors.black54,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    ),
+  ],
        if (_isLoading)
          Padding(
            padding: EdgeInsets.symmetric(horizontal: 16),
@@ -1034,66 +1039,66 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
    );
  }
 
- @override
- Widget build(BuildContext context) {
-   return GestureDetector(
-     onTap: _resetInactivityTimer,
-     onPanUpdate: (_) => _resetInactivityTimer(),
-     child: Scaffold(
-       backgroundColor: Colors.grey[50],
-       appBar: PreferredSize(
-         preferredSize: Size.fromHeight(kToolbarHeight),
-         child: _buildHeader(),
-       ),
-       body: _projectsData.isEmpty && !_isLoading
-           ? Center(
-               child: Column(
-                 mainAxisAlignment: MainAxisAlignment.center,
-                 children: [
-                   Icon(
-                     Icons.folder_open,
-                     size: 72,
-                     color: Colors.grey[400],
-                   ),
-                   SizedBox(height: 16),
-                   Text(
-                     'Không có dự án ngày ${DateFormat('dd/MM/yyyy').format(_selectedDate)}',
-                     style: TextStyle(
-                       fontSize: 24,
-                       color: Colors.grey[500],
-                     ),
-                   ),
-                   SizedBox(height: 12),
-                   ElevatedButton.icon(
-                     onPressed: () {
-                       _resetInactivityTimer();
-                       _loadProjectsData();
-                     },
-                     icon: Icon(Icons.refresh, size: 24),
-                     label: Text(
-                       'Tải lại',
-                       style: TextStyle(fontSize: 18),
-                     ),
-                     style: ElevatedButton.styleFrom(
-                       padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                     ),
-                   ),
-                 ],
-               ),
-             )
-           : Padding(
-               padding: EdgeInsets.all(8),
-               child: GridView.builder(
-                 controller: _scrollController,
-                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+@override
+Widget build(BuildContext context) {
+  return GestureDetector(
+    onTap: _resetInactivityTimer,
+    onPanUpdate: (_) => _resetInactivityTimer(),
+    child: Scaffold(
+      backgroundColor: Colors.grey[50],
+      appBar: PreferredSize(
+        preferredSize: Size.fromHeight(kToolbarHeight),
+        child: _buildHeader(),
+      ),
+      body: _filteredProjectsData.isEmpty && !_isLoading // Changed from _projectsData to _filteredProjectsData
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.folder_open,
+                    size: 72,
+                    color: Colors.grey[400],
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Không có dự án ngày ${DateFormat('dd/MM/yyyy').format(_selectedDate)}',
+                    style: TextStyle(
+                      fontSize: 24,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                  SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      _resetInactivityTimer();
+                      _loadProjectsData();
+                    },
+                    icon: Icon(Icons.refresh, size: 24),
+                    label: Text(
+                      'Tải lại',
+                      style: TextStyle(fontSize: 18),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : Padding(
+              padding: EdgeInsets.all(8),
+              child: GridView.builder(
+                controller: _scrollController,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: _getCrossAxisCount(context),
                   crossAxisSpacing: 8,
                   mainAxisSpacing: 8,
                   childAspectRatio: 2.5, 
                 ),
-                itemCount: _projectsData.length,
+                itemCount: _filteredProjectsData.length, // Changed from _projectsData to _filteredProjectsData
                 itemBuilder: (context, index) {
-                  return _buildProjectCard(_projectsData[index]);
+                  return _buildProjectCard(_filteredProjectsData[index]); // Changed from _projectsData to _filteredProjectsData
                 },
               ),
             ),

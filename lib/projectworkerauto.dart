@@ -53,7 +53,6 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
     try {
       final dbHelper = DBHelper();
       
-      // Load all departments
       try {
         final response = await AuthenticatedHttpClient.get(
           Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/projectgs/${widget.username}'),
@@ -70,14 +69,12 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
         print('Project API error: $e');
       }
 
-      // Add departments from the database
       final existingDepts = await dbHelper.rawQuery(
         'SELECT DISTINCT BoPhan FROM chamcongcn ORDER BY BoPhan'
       );
       _departments.addAll(existingDepts.map((e) => e['BoPhan'] as String));
       _departments = _departments.toSet().toList()..sort();
       
-      // Get available months
       final months = await dbHelper.rawQuery(
         r"SELECT DISTINCT strftime('%Y-%m', Ngay) as month FROM chamcongcn ORDER BY month DESC"
       );
@@ -153,12 +150,10 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
       employeeIds,
     );
 
-    // Convert database results to a Map
     final Map<String, String> fetchedNames = {
       for (var row in result) row['MaNV'] as String: row['Ho_ten'] as String
     };
 
-    // Assign "???" to unmatched IDs
     final Map<String, String> staffNames = {
       for (var id in employeeIds) id: fetchedNames[id] ?? "???"
     };
@@ -169,106 +164,103 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
   }
 
   Future<void> _generateAutomaticLeave() async {
-  // Show confirmation dialog before proceeding
-  final bool? proceed = await showDialog<bool>(
-    context: context,
-    builder: (BuildContext context) {
-      return AlertDialog(
-        title: Text('Tạo phép tự động'),
-        content: Text(
-          'Quá trình này sẽ tự động tính toán và tạo phép cho nhân viên dựa trên dữ liệu hiện có. Để đảm bảo chính xác vui lòng:\n1. Đồng bộ danh sách công nhân mới nhất (bước 5 chọn Có khi bấm Đồng bộ)\n2.Đảm bảo mã công nhân chính xác\n3.Hiện tại đã chấm xong ngày 28 tháng hiện tại\n4.Chỉ được tạo phép tự động trước ngày mùng 2 của tháng kế tiếp\n5.Thời gian xử lý tự động có thể hơi lâu tuỳ vào số lượng NV '
-          'Tiếp tục?'
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text('Hủy'),
+    final bool? proceed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Tạo phép tự động'),
+          content: Text(
+            'Quá trình này sẽ tự động tính toán và tạo phép cho nhân viên dựa trên dữ liệu hiện có. Để đảm bảo chính xác vui lòng:\n1. Đồng bộ danh sách công nhân mới nhất (bước 5 chọn Có khi bấm Đồng bộ)\n2.Đảm bảo mã công nhân chính xác\n3.Hiện tại đã chấm xong ngày 28 tháng hiện tại\n4.Chỉ được tạo phép tự động trước ngày mùng 2 của tháng kế tiếp\n5.Thời gian xử lý tự động có thể hơi lâu tuỳ vào số lượng NV '
+            'Tiếp tục?'
           ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text('Tiếp tục'),
-          ),
-        ],
-      );
-    },
-  );
-
-  if (proceed != true) return;
-
-  setState(() => _isLoading = true);
-  
-  try {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ProjectWorkerPhep(
-          //selectedBoPhan: _selectedDepartment ?? '',
-          username: widget.username,
-          selectedMonth: _selectedMonth ?? '',
-        ),
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text('Hủy'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text('Tiếp tục'),
+            ),
+          ],
+        );
+      },
     );
+
+    if (proceed != true) return;
+
+    setState(() => _isLoading = true);
     
-    if (result == true) {
-      // If successful, reload the attendance data
-      await _loadAttendanceData();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Đã tạo phép tự động thành công'))
+    try {
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProjectWorkerPhep(
+            username: widget.username,
+            selectedMonth: _selectedMonth ?? '',
+          ),
+        ),
       );
+      
+      if (result == true) {
+        await _loadAttendanceData();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Đã tạo phép tự động thành công'))
+        );
+      }
+    } catch (e) {
+      print('Error generating automatic leave: $e');
+      _showError('Lỗi khi tạo phép tự động: $e');
+    } finally {
+      setState(() => _isLoading = false);
     }
-  } catch (e) {
-    print('Error generating automatic leave: $e');
-    _showError('Lỗi khi tạo phép tự động: $e');
-  } finally {
-    setState(() => _isLoading = false);
   }
-}
 
   Future<void> _exportPdf() async {
-  setState(() => _isLoading = true);
-  
-  try {
-    await ExportHelper.exportToPdf(
-      selectedDepartment: _selectedDepartment ?? '',
-      selectedMonth: _selectedMonth ?? '',
-      allEmployees: _getUniqueEmployees(),
-      staffNames: _staffNames,
-      getEmployeesWithValueInColumn: _getEmployeesWithValueInColumn,
-      getDaysInMonth: _getDaysInMonth,
-      getAttendanceForDay: _getAttendanceForDay,
-      calculateSummary: _calculateSummary,
-      context: context,
-    );
-  } catch (e) {
-    print('PDF export error: $e');
-    _showError('Lỗi khi xuất PDF: $e');
+    setState(() => _isLoading = true);
+    
+    try {
+      await ExportHelper.exportToPdf(
+        selectedDepartment: _selectedDepartment ?? '',
+        selectedMonth: _selectedMonth ?? '',
+        allEmployees: _getUniqueEmployees(),
+        staffNames: _staffNames,
+        getEmployeesWithValueInColumn: _getEmployeesWithValueInColumn,
+        getDaysInMonth: _getDaysInMonth,
+        getAttendanceForDay: _getAttendanceForDay,
+        calculateSummary: _calculateSummary,
+        context: context,
+      );
+    } catch (e) {
+      print('PDF export error: $e');
+      _showError('Lỗi khi xuất PDF: $e');
+    }
+    
+    setState(() => _isLoading = false);
   }
-  
-  setState(() => _isLoading = false);
-}
 
-Future<void> _exportExcel() async {
-  setState(() => _isLoading = true);
-  
-  try {
-    await ExportHelper.exportToExcel(
-      selectedDepartment: _selectedDepartment ?? '',
-      selectedMonth: _selectedMonth ?? '',
-      allEmployees: _getUniqueEmployees(),
-      staffNames: _staffNames,
-      getEmployeesWithValueInColumn: _getEmployeesWithValueInColumn,
-      getDaysInMonth: _getDaysInMonth,
-      getAttendanceForDay: _getAttendanceForDay,
-      calculateSummary: _calculateSummary,
-      context: context,
-    );
-  } catch (e) {
-    print('Excel export error: $e');
-    _showError('Lỗi khi xuất Excel: $e');
+  Future<void> _exportExcel() async {
+    setState(() => _isLoading = true);
+    
+    try {
+      await ExportHelper.exportToExcel(
+        selectedDepartment: _selectedDepartment ?? '',
+        selectedMonth: _selectedMonth ?? '',
+        allEmployees: _getUniqueEmployees(),
+        staffNames: _staffNames,
+        getEmployeesWithValueInColumn: _getEmployeesWithValueInColumn,
+        getDaysInMonth: _getDaysInMonth,
+        getAttendanceForDay: _getAttendanceForDay,
+        calculateSummary: _calculateSummary,
+        context: context,
+      );
+    } catch (e) {
+      print('Excel export error: $e');
+      _showError('Lỗi khi xuất Excel: $e');
+    }
+    
+    setState(() => _isLoading = false);
   }
-  
-  setState(() => _isLoading = false);
-}
 
   List<String> _getUniqueEmployees() {
     final employees = _attendanceData
@@ -279,14 +271,10 @@ Future<void> _exportExcel() async {
     return employees;
   }
 
-  // Get employees that have non-default values in specific column
   List<String> _getEmployeesWithValueInColumn(String columnType) {
-    // Get all unique days in the month
     final days = _getDaysInMonth();
-    // Get all employees
     final allEmployees = _getUniqueEmployees();
     
-    // For CongThuongChu, also check NgoaiGioThuong values
     if (columnType == 'CongThuongChu') {
       return allEmployees.where((empId) {
         for (var day in days) {
@@ -302,7 +290,6 @@ Future<void> _exportExcel() async {
       }).toList();
     }
     
-    // For other columns, just check the specific column
     return allEmployees.where((empId) {
       for (var day in days) {
         final value = _getAttendanceForDay(empId, day, columnType);
@@ -334,1946 +321,2010 @@ Future<void> _exportExcel() async {
     return record[columnType]?.toString() ?? (columnType == 'CongThuongChu' ? 'Ro' : '0');
   }
 
+  void _updateWeekData(
+    double phanLoaiValue, String baseCongThuongChu, bool hasFullPermission, bool hasHalfPermission,
+    double ngoaiGioThuong, double hoTro, double partTime, double partTimeSang, double partTimeChieu,
+    double ngoaiGioKhac, double ngoaiGiox15, double ngoaiGiox2, double congLe,
+    Function regularUpdate, Function permissionP, Function permissionPHalf,
+    Function permissionFull, Function permissionHalf, Function htUpdate,
+    Function ngUpdate, Function hoTroUpdate, Function partTimeUpdate,
+    Function ptSangUpdate, Function ptChieuUpdate, Function ngKhacUpdate,
+    Function ng15Update, Function ng2Update, Function congLeUpdate,
+  ) {
+    if (phanLoaiValue > 0) regularUpdate();
+    if (baseCongThuongChu == 'P') permissionP();
+    if (baseCongThuongChu == 'P/2') permissionPHalf();
+    if (hasFullPermission) permissionFull();
+    if (hasHalfPermission) permissionHalf();
+    if (baseCongThuongChu == 'HT') htUpdate();
+    if (ngoaiGioThuong > 0) ngUpdate();
+    if (hoTro > 0) hoTroUpdate();
+    if (partTime > 0) partTimeUpdate();
+    if (partTimeSang > 0) ptSangUpdate();
+    if (partTimeChieu > 0) ptChieuUpdate();
+    if (ngoaiGioKhac > 0) ngKhacUpdate();
+    if (ngoaiGiox15 > 0) ng15Update();
+    if (ngoaiGiox2 > 0) ng2Update();
+    if (congLe > 0) congLeUpdate();
+  }
+
   Map<String, dynamic> _calculateSummary(String empId) {
-  if (_selectedMonth == null) return {};
-  double tongHV = 0;
-double tongDem = 0;
-double tongCD = 0;
+    if (_selectedMonth == null) return {};
+    double tongHV = 0;
+    double tongDem = 0;
+    double tongCD = 0;
 
-  final days = _getDaysInMonth();
-  
-  // ====== For Chữ & Giờ thường section ======
-  // 1. CongThuongChu row
-  double congChu_regularDays12 = 0; // Based on PhanLoai
-  double congChu_permissionDays12 = 0; // P or +P or P/2 or +P/2
-  double congChu_htDays12 = 0; // HT
-  
-  double congChu_regularDays34 = 0;
-  double congChu_permissionDays34 = 0;
-  double congChu_htDays34 = 0;
-  
-  // Add new variables for days 26+
-  double congChu_regularDays5plus = 0;
-  double congChu_permissionDays5plus = 0;
-  double congChu_htDays5plus = 0;
-  
-  // 2. NgoaiGioThuong row
-  double ngThuong_days12 = 0; // NgoaiGioThuong/8
-  double ngThuong_days34 = 0;
-  double ngThuong_days5plus = 0;
-  
-  // ====== For Hỗ trợ section ======
-  double hoTro_days12 = 0;
-  double hoTro_days34 = 0;
-  double hoTro_days5plus = 0;
-  
-  // ====== For Part time section ======
-  double partTime_days12 = 0;
-  double partTime_days34 = 0;
-  double partTime_days5plus = 0;
-  
-  // ====== For PT sáng section ======
-  double ptSang_days12 = 0;
-  double ptSang_days34 = 0;
-  double ptSang_days5plus = 0;
-  
-  // ====== For PT chiều section ======
-  double ptChieu_days12 = 0;
-  double ptChieu_days34 = 0;
-  double ptChieu_days5plus = 0;
-  
-  // ====== For NG khác section ======
-  double ngKhac_days12 = 0;
-  double ngKhac_days34 = 0;
-  double ngKhac_days5plus = 0;
-  
-  // ====== For NG x1.5 section ======
-  double ng15_days12 = 0;
-  double ng15_days34 = 0;
-  double ng15_days5plus = 0;
-  
-  // ====== For NG x2 section ======
-  double ng2_days12 = 0;
-  double ng2_days34 = 0;
-  double ng2_days5plus = 0;
-  
-  // ====== For Công lễ section ======
-  double congLe_days12 = 0;
-  double congLe_days34 = 0;
-  double congLe_days5plus = 0;
+    final days = _getDaysInMonth();
+    
+    double congChu_regularDays1 = 0, congChu_permissionDays1 = 0, congChu_htDays1 = 0;
+    double congChu_regularDays2 = 0, congChu_permissionDays2 = 0, congChu_htDays2 = 0;
+    double congChu_regularDays3 = 0, congChu_permissionDays3 = 0, congChu_htDays3 = 0;
+    double congChu_regularDays4 = 0, congChu_permissionDays4 = 0, congChu_htDays4 = 0;
+    
+    double ngThuong_days1 = 0, ngThuong_days2 = 0, ngThuong_days3 = 0, ngThuong_days4 = 0;
+    double hoTro_days1 = 0, hoTro_days2 = 0, hoTro_days3 = 0, hoTro_days4 = 0;
+    double partTime_days1 = 0, partTime_days2 = 0, partTime_days3 = 0, partTime_days4 = 0;
+    double ptSang_days1 = 0, ptSang_days2 = 0, ptSang_days3 = 0, ptSang_days4 = 0;
+    double ptChieu_days1 = 0, ptChieu_days2 = 0, ptChieu_days3 = 0, ptChieu_days4 = 0;
+    double ngKhac_days1 = 0, ngKhac_days2 = 0, ngKhac_days3 = 0, ngKhac_days4 = 0;
+    double ng15_days1 = 0, ng15_days2 = 0, ng15_days3 = 0, ng15_days4 = 0;
+    double ng2_days1 = 0, ng2_days2 = 0, ng2_days3 = 0, ng2_days4 = 0;
+    double congLe_days1 = 0, congLe_days2 = 0, congLe_days3 = 0, congLe_days4 = 0;
 
-  // Process each day in the month
-  for (int day = 1; day <= days.length; day++) {
-    final dateStr = '$_selectedMonth-${day.toString().padLeft(2, '0')}';
-    
-    // Find attendance record for this employee on this day
-    final recordList = _attendanceData.where(
-      (record) => 
-        record['MaNV'] == empId && 
-        record['Ngay'].split('T')[0] == dateStr
-    ).toList();
-    
-    if (recordList.isEmpty) continue;
-    final record = recordList.first;
+    for (int day = 1; day <= days.length; day++) {
+      final dateStr = '$_selectedMonth-${day.toString().padLeft(2, '0')}';
+      
+      final recordList = _attendanceData.where(
+        (record) => 
+          record['MaNV'] == empId && 
+          record['Ngay'].split('T')[0] == dateStr
+      ).toList();
+      
+      if (recordList.isEmpty) continue;
+      final record = recordList.first;
 
-    // Get values from record
-    final congThuongChu = record['CongThuongChu'] ?? 'Ro';
-    final phanLoai = record['PhanLoai']?.toString() ?? '';
-    final ngoaiGioThuong = double.tryParse(record['NgoaiGioThuong']?.toString() ?? '0') ?? 0;
-    final ngoaiGioKhac = double.tryParse(record['NgoaiGioKhac']?.toString() ?? '0') ?? 0;
-    final ngoaiGiox15 = double.tryParse(record['NgoaiGiox15']?.toString() ?? '0') ?? 0;
-    final ngoaiGiox2 = double.tryParse(record['NgoaiGiox2']?.toString() ?? '0') ?? 0;
-    final hoTro = double.tryParse(record['HoTro']?.toString() ?? '0') ?? 0;
-    final partTime = double.tryParse(record['PartTime']?.toString() ?? '0') ?? 0;
-    final partTimeSang = double.tryParse(record['PartTimeSang']?.toString() ?? '0') ?? 0;
-    final partTimeChieu = double.tryParse(record['PartTimeChieu']?.toString() ?? '0') ?? 0;
-    final congLe = double.tryParse(record['CongLe']?.toString() ?? '0') ?? 0;
+      final congThuongChu = record['CongThuongChu'] ?? 'Ro';
+      final phanLoai = record['PhanLoai']?.toString() ?? '';
+      final ngoaiGioThuong = double.tryParse(record['NgoaiGioThuong']?.toString() ?? '0') ?? 0;
+      final ngoaiGioKhac = double.tryParse(record['NgoaiGioKhac']?.toString() ?? '0') ?? 0;
+      final ngoaiGiox15 = double.tryParse(record['NgoaiGiox15']?.toString() ?? '0') ?? 0;
+      final ngoaiGiox2 = double.tryParse(record['NgoaiGiox2']?.toString() ?? '0') ?? 0;
+      final hoTro = double.tryParse(record['HoTro']?.toString() ?? '0') ?? 0;
+      final partTime = double.tryParse(record['PartTime']?.toString() ?? '0') ?? 0;
+      final partTimeSang = double.tryParse(record['PartTimeSang']?.toString() ?? '0') ?? 0;
+      final partTimeChieu = double.tryParse(record['PartTimeChieu']?.toString() ?? '0') ?? 0;
+      final congLe = double.tryParse(record['CongLe']?.toString() ?? '0') ?? 0;
 
-    // Process base CongThuongChu value
-    final baseCongThuongChu = _extractCongThuongChuBase(congThuongChu);
-    
-double hvValue = 0;
-if (baseCongThuongChu == 'HV') {
-  hvValue = 1.0;
-} else if (baseCongThuongChu == '2HV') {
-  hvValue = 2.0;
-} else if (baseCongThuongChu == '3HV') {
-  hvValue = 3.0;
-}
-tongHV += hvValue;
-if (baseCongThuongChu == 'CĐ') {
-  tongCD += 1.0;
-}
-if (baseCongThuongChu == 'XĐ' || baseCongThuongChu == '2XĐ') {
-  // Count XĐ as 1.0 and 2XĐ as 2.0
-  tongDem += baseCongThuongChu.startsWith('2') ? 2.0 : 1.0;
-}
-    // Check if it has +P or +P/2 suffix
-    final bool hasFullPermission = congThuongChu.endsWith('+P');
-    final bool hasHalfPermission = congThuongChu.endsWith('+P/2');
+      final baseCongThuongChu = _extractCongThuongChuBase(congThuongChu);
+      
+      double hvValue = 0;
+      if (baseCongThuongChu == 'HV') {
+        hvValue = 1.0;
+      } else if (baseCongThuongChu == '2HV') {
+        hvValue = 2.0;
+      } else if (baseCongThuongChu == '3HV') {
+        hvValue = 3.0;
+      }
+      tongHV += hvValue;
+      
+      if (baseCongThuongChu == 'CĐ') {
+        tongCD += 1.0;
+      }
+      if (baseCongThuongChu == 'XĐ' || baseCongThuongChu == '2XĐ') {
+        tongDem += baseCongThuongChu.startsWith('2') ? 2.0 : 1.0;
+      }
 
-    // Get PhanLoai value for regular days calculation
-    double phanLoaiValue = 0;
-    if (phanLoai.isNotEmpty) {
-      try {
-        phanLoaiValue = double.parse(phanLoai);
-      } catch (e) {
-        print("Error parsing PhanLoai: $e");
-      }
-    }
+      final bool hasFullPermission = congThuongChu.endsWith('+P');
+      final bool hasHalfPermission = congThuongChu.endsWith('+P/2');
 
-    // Calculate values for each day based on day group
-    if (day <= 15) {
-      // ==== Days 1-15 ====
-      
-      // Processing for first half (same as original code)
-      // 1. CongThuongChu row
-      if (phanLoaiValue > 0) {
-        congChu_regularDays12 += phanLoaiValue;
+      double phanLoaiValue = 0;
+      if (phanLoai.isNotEmpty) {
+        try {
+          phanLoaiValue = double.parse(phanLoai);
+        } catch (e) {
+          print("Error parsing PhanLoai: $e");
+        }
       }
-      
-      if (baseCongThuongChu == 'P') {
-        congChu_permissionDays12 += 1.0;
-      } else if (baseCongThuongChu == 'P/2') {
-        congChu_permissionDays12 += 0.5;
-      }
-      
-      if (hasFullPermission) {
-        congChu_permissionDays12 += 1.0;
-      } else if (hasHalfPermission) {
-        congChu_permissionDays12 += 0.5;
-      }
-      
-      if (baseCongThuongChu == 'HT') {
-        congChu_htDays12 += 1.0;
-      }
-      
-      // 2. NgoaiGioThuong row
-      if (ngoaiGioThuong > 0) {
-        ngThuong_days12 += ngoaiGioThuong / 8;
-      }
-      
-      // ---- Hỗ trợ section ----
-      if (hoTro > 0) {
-        hoTro_days12 += hoTro / 8;
-      }
-      
-      // ---- Part time section ----
-      if (partTime > 0) {
-        partTime_days12 += partTime;
-      }
-      
-      // ---- PT sáng section ----
-      if (partTimeSang > 0) {
-        ptSang_days12 += partTimeSang;
-      }
-      
-      // ---- PT chiều section ----
-      if (partTimeChieu > 0) {
-        ptChieu_days12 += partTimeChieu;
-      }
-      
-      // ---- NG khác section ----
-      if (ngoaiGioKhac > 0) {
-        ngKhac_days12 += ngoaiGioKhac / 8;
-      }
-      
-      // ---- NG x1.5 section ----
-      if (ngoaiGiox15 > 0) {
-        ng15_days12 += ngoaiGiox15 / 8;
-      }
-      
-      // ---- NG x2 section ----
-      if (ngoaiGiox2 > 0) {
-        ng2_days12 += ngoaiGiox2 / 8;
-      }
-      
-      // ---- Công lễ section ----
-      if (congLe > 0) {
-        congLe_days12 += congLe / 8;
-      }
-      
-    } else if (day <= 25) {
-      // ==== Days 16-25 ====
-      
-      // Modified to only include days 16-25 in the "Tuan 3+4" calculations
-      // 1. CongThuongChu row
-      if (phanLoaiValue > 0) {
-        congChu_regularDays34 += phanLoaiValue;
-      }
-      
-      if (baseCongThuongChu == 'P') {
-        congChu_permissionDays34 += 1.0;
-      } else if (baseCongThuongChu == 'P/2') {
-        congChu_permissionDays34 += 0.5;
-      }
-      
-      if (hasFullPermission) {
-        congChu_permissionDays34 += 1.0;
-      } else if (hasHalfPermission) {
-        congChu_permissionDays34 += 0.5;
-      }
-      
-      if (baseCongThuongChu == 'HT') {
-        congChu_htDays34 += 1.0;
-      }
-      
-      // 2. NgoaiGioThuong row
-      if (ngoaiGioThuong > 0) {
-        ngThuong_days34 += ngoaiGioThuong / 8;
-      }
-      
-      // ---- Hỗ trợ section ----
-      if (hoTro > 0) {
-        hoTro_days34 += hoTro / 8;
-      }
-      
-      // ---- Part time section ----
-      if (partTime > 0) {
-        partTime_days34 += partTime;
-      }
-      
-      // ---- PT sáng section ----
-      if (partTimeSang > 0) {
-        ptSang_days34 += partTimeSang;
-      }
-      
-      // ---- PT chiều section ----
-      if (partTimeChieu > 0) {
-        ptChieu_days34 += partTimeChieu;
-      }
-      
-      // ---- NG khác section ----
-      if (ngoaiGioKhac > 0) {
-        ngKhac_days34 += ngoaiGioKhac / 8;
-      }
-      
-      // ---- NG x1.5 section ----
-      if (ngoaiGiox15 > 0) {
-        ng15_days34 += ngoaiGiox15 / 8;
-      }
-      
-      // ---- NG x2 section ----
-      if (ngoaiGiox2 > 0) {
-        ng2_days34 += ngoaiGiox2 / 8;
-      }
-      
-      // ---- Công lễ section ----
-      if (congLe > 0) {
-        congLe_days34 += congLe / 8;
-      }
-    } else {
-      // ==== Days 26+ ====
-      
-      // Add accounting for days 26+
-      // 1. CongThuongChu row
-      if (phanLoaiValue > 0) {
-        congChu_regularDays5plus += phanLoaiValue;
-      }
-      
-      if (baseCongThuongChu == 'P') {
-        congChu_permissionDays5plus += 1.0;
-      } else if (baseCongThuongChu == 'P/2') {
-        congChu_permissionDays5plus += 0.5;
-      }
-      
-      if (hasFullPermission) {
-        congChu_permissionDays5plus += 1.0;
-      } else if (hasHalfPermission) {
-        congChu_permissionDays5plus += 0.5;
-      }
-      
-      if (baseCongThuongChu == 'HT') {
-        congChu_htDays5plus += 1.0;
-      }
-      
-      // 2. NgoaiGioThuong row
-      if (ngoaiGioThuong > 0) {
-        ngThuong_days5plus += ngoaiGioThuong / 8;
-      }
-      
-      // ---- Hỗ trợ section ----
-      if (hoTro > 0) {
-        hoTro_days5plus += hoTro / 8;
-      }
-      
-      // ---- Part time section ----
-      if (partTime > 0) {
-        partTime_days5plus += partTime;
-      }
-      
-      // ---- PT sáng section ----
-      if (partTimeSang > 0) {
-        ptSang_days5plus += partTimeSang;
-      }
-      
-      // ---- PT chiều section ----
-      if (partTimeChieu > 0) {
-        ptChieu_days5plus += partTimeChieu;
-      }
-      
-      // ---- NG khác section ----
-      if (ngoaiGioKhac > 0) {
-        ngKhac_days5plus += ngoaiGioKhac / 8;
-      }
-      
-      // ---- NG x1.5 section ----
-      if (ngoaiGiox15 > 0) {
-        ng15_days5plus += ngoaiGiox15 / 8;
-      }
-      
-      // ---- NG x2 section ----
-      if (ngoaiGiox2 > 0) {
-        ng2_days5plus += ngoaiGiox2 / 8;
-      }
-      
-      // ---- Công lễ section ----
-      if (congLe > 0) {
-        congLe_days5plus += congLe / 8;
-      }
-    }
-  }
-  
-  // Calculate totals for each section - include all days in total
-  
-  // Chữ & Giờ thường - CongThuongChu row
-  // For Tuan 1+2 - reduce by P1+2
-congChu_regularDays12 = congChu_regularDays12 - congChu_permissionDays12;
-if (congChu_regularDays12 < 0) congChu_regularDays12 = 0;
 
-// For Tuan 3+4 - reduce by P3+4
-congChu_regularDays34 = congChu_regularDays34 - congChu_permissionDays34;
-if (congChu_regularDays34 < 0) congChu_regularDays34 = 0;
-
-// For Tuan 5+ - reduce by P5+
-congChu_regularDays5plus = congChu_regularDays5plus - congChu_permissionDays5plus;
-if (congChu_regularDays5plus < 0) congChu_regularDays5plus = 0;
-  final double congChu_totalPermission = congChu_permissionDays12 + congChu_permissionDays34 + congChu_permissionDays5plus;
-  final double congChu_totalRegular = congChu_regularDays12 + congChu_regularDays34 + congChu_regularDays5plus;
-  final double congChu_totalHT = congChu_htDays12 + congChu_htDays34 + congChu_htDays5plus;
-  
-  // Chữ & Giờ thường - NgoaiGioThuong row
-  final double ngThuong_total = ngThuong_days12 + ngThuong_days34 + ngThuong_days5plus;
-  
-  // Other sections
-  final double hoTro_total = hoTro_days12 + hoTro_days34 + hoTro_days5plus;
-  final double partTime_total = partTime_days12 + partTime_days34 + partTime_days5plus;
-  final double ptSang_total = ptSang_days12 + ptSang_days34 + ptSang_days5plus;
-  final double ptChieu_total = ptChieu_days12 + ptChieu_days34 + ptChieu_days5plus;
-  final double ngKhac_total = ngKhac_days12 + ngKhac_days34 + ngKhac_days5plus;
-  final double ng15_total = ng15_days12 + ng15_days34 + ng15_days5plus;
-  final double ng2_total = ng2_days12 + ng2_days34 + ng2_days5plus;
-  final double congLe_total = congLe_days12 + congLe_days34 + congLe_days5plus;
-  
-  // Return formatted values with the same structure as before
-  return {
-    // ==== Chữ & Giờ thường section - CongThuongChu row ====
-    'tuan12': _formatNumberValue(congChu_regularDays12),
-    'p12': _formatNumberValue(congChu_permissionDays12),
-    'ht12': _formatNumberValue(congChu_htDays12),
-    'tuan34': _formatNumberValue(congChu_regularDays34),
-    'p34': _formatNumberValue(congChu_permissionDays34),
-    'ht34': _formatNumberValue(congChu_htDays34),
-    'cong': _formatNumberValue(congChu_totalRegular),
-    'phep': _formatNumberValue(congChu_totalPermission),
-    'ht': _formatNumberValue(congChu_totalHT),
-    
-    // Added data for days 26+ if you want to display it
-    'tuan5plus': _formatNumberValue(congChu_regularDays5plus),
-    'p5plus': _formatNumberValue(congChu_permissionDays5plus),
-    'ht5plus': _formatNumberValue(congChu_htDays5plus),
-    
-    // ==== Ngày 1-15 for other sections ====
-    'ng_days12': _formatNumberValue(ngThuong_days12),
-    'hotro_days12': _formatNumberValue(hoTro_days12),
-    'pt_days12': _formatNumberValue(partTime_days12),
-    'pts_days12': _formatNumberValue(ptSang_days12),
-    'ptc_days12': _formatNumberValue(ptChieu_days12),
-    'ngk_days12': _formatNumberValue(ngKhac_days12),
-    'ng15_days12': _formatNumberValue(ng15_days12),
-    'ng2_days12': _formatNumberValue(ng2_days12),
-    'congle_days12': _formatNumberValue(congLe_days12),
-    
-    // ==== Ngày 16-25 for other sections ====
-    'ng_days34': _formatNumberValue(ngThuong_days34),
-    'hotro_days34': _formatNumberValue(hoTro_days34),
-    'pt_days34': _formatNumberValue(partTime_days34),
-    'pts_days34': _formatNumberValue(ptSang_days34),
-    'ptc_days34': _formatNumberValue(ptChieu_days34),
-    'ngk_days34': _formatNumberValue(ngKhac_days34),
-    'ng15_days34': _formatNumberValue(ng15_days34),
-    'ng2_days34': _formatNumberValue(ng2_days34),
-    'congle_days34': _formatNumberValue(congLe_days34),
-    
-    // ==== Ngày 26+ for other sections if you need them ====
-    'ng_days5plus': _formatNumberValue(ngThuong_days5plus),
-    'hotro_days5plus': _formatNumberValue(hoTro_days5plus),
-    'pt_days5plus': _formatNumberValue(partTime_days5plus),
-    'pts_days5plus': _formatNumberValue(ptSang_days5plus),
-    'ptc_days5plus': _formatNumberValue(ptChieu_days5plus),
-    'ngk_days5plus': _formatNumberValue(ngKhac_days5plus),
-    'ng15_days5plus': _formatNumberValue(ng15_days5plus),
-    'ng2_days5plus': _formatNumberValue(ng2_days5plus),
-    'congle_days5plus': _formatNumberValue(congLe_days5plus),
-    
-    // ==== Totals for other sections ====
-    'ng_total': _formatNumberValue(ngThuong_total),
-    'hotro_total': _formatNumberValue(hoTro_total),
-    'pt_total': _formatNumberValue(partTime_total),
-    'pts_total': _formatNumberValue(ptSang_total),
-    'ptc_total': _formatNumberValue(ptChieu_total),
-    'ngk_total': _formatNumberValue(ngKhac_total),
-    'ng15_total': _formatNumberValue(ng15_total),
-    'ng2_total': _formatNumberValue(ng2_total),
-    'congle_total': _formatNumberValue(congLe_total),
-    
-    // Placeholder for other values
-    'le': _formatNumberValue(congLe_total),
-    'hv': _formatNumberValue(tongHV),
-    'dem': _formatNumberValue(tongDem),
-'cd': _formatNumberValue(tongCD),
-  };
-}
-double _calculateDailyTotal(int day) {
-  double total = 0.0;
-  
-  // Get all employees
-  final allEmployees = _getUniqueEmployees();
-  
-  for (var empId in allEmployees) {
-    final dateStr = '$_selectedMonth-${day.toString().padLeft(2, '0')}';
-    
-    // Find attendance record for this employee on this day
-    final records = _attendanceData.where(
-      (record) => 
-        record['MaNV'] == empId && 
-        record['Ngay'].split('T')[0] == dateStr
-    ).toList();
-    
-    if (records.isEmpty) continue;
-    final record = records.first;
-    
-    // Get PhanLoai value
-    double phanLoaiValue = 0;
-    if (record['PhanLoai'] != null && record['PhanLoai'].toString().isNotEmpty) {
-      try {
-        phanLoaiValue = double.parse(record['PhanLoai'].toString());
-      } catch (e) {
-        print("Error parsing PhanLoai: $e");
+      if (day <= 7) {
+        _updateWeekData(
+          phanLoaiValue, baseCongThuongChu, hasFullPermission, hasHalfPermission,
+          ngoaiGioThuong, hoTro, partTime, partTimeSang, partTimeChieu,
+          ngoaiGioKhac, ngoaiGiox15, ngoaiGiox2, congLe,
+          () => congChu_regularDays1 += phanLoaiValue,
+          () => congChu_permissionDays1 += 1.0,
+          () => congChu_permissionDays1 += 0.5,
+          () => congChu_permissionDays1 += 1.0,
+          () => congChu_permissionDays1 += 0.5,
+          () => congChu_htDays1 += 1.0,
+          () => ngThuong_days1 += ngoaiGioThuong / 8,
+          () => hoTro_days1 += hoTro / 8,
+          () => partTime_days1 += partTime,
+          () => ptSang_days1 += partTimeSang,
+          () => ptChieu_days1 += partTimeChieu,
+          () => ngKhac_days1 += ngoaiGioKhac / 8,
+          () => ng15_days1 += ngoaiGiox15 / 8,
+          () => ng2_days1 += ngoaiGiox2 / 8,
+          () => congLe_days1 += congLe / 8,
+        );
+      } else if (day <= 15) {
+        _updateWeekData(
+          phanLoaiValue, baseCongThuongChu, hasFullPermission, hasHalfPermission,
+          ngoaiGioThuong, hoTro, partTime, partTimeSang, partTimeChieu,
+          ngoaiGioKhac, ngoaiGiox15, ngoaiGiox2, congLe,
+          () => congChu_regularDays2 += phanLoaiValue,
+          () => congChu_permissionDays2 += 1.0,
+          () => congChu_permissionDays2 += 0.5,
+          () => congChu_permissionDays2 += 1.0,
+          () => congChu_permissionDays2 += 0.5,
+          () => congChu_htDays2 += 1.0,
+          () => ngThuong_days2 += ngoaiGioThuong / 8,
+          () => hoTro_days2 += hoTro / 8,
+          () => partTime_days2 += partTime,
+          () => ptSang_days2 += partTimeSang,
+          () => ptChieu_days2 += partTimeChieu,
+          () => ngKhac_days2 += ngoaiGioKhac / 8,
+          () => ng15_days2 += ngoaiGiox15 / 8,
+          () => ng2_days2 += ngoaiGiox2 / 8,
+          () => congLe_days2 += congLe / 8,
+        );
+      } else if (day <= 22) {
+        _updateWeekData(
+          phanLoaiValue, baseCongThuongChu, hasFullPermission, hasHalfPermission,
+          ngoaiGioThuong, hoTro, partTime, partTimeSang, partTimeChieu,
+          ngoaiGioKhac, ngoaiGiox15, ngoaiGiox2, congLe,
+          () => congChu_regularDays3 += phanLoaiValue,
+          () => congChu_permissionDays3 += 1.0,
+          () => congChu_permissionDays3 += 0.5,
+          () => congChu_permissionDays3 += 1.0,
+          () => congChu_permissionDays3 += 0.5,
+          () => congChu_htDays3 += 1.0,
+          () => ngThuong_days3 += ngoaiGioThuong / 8,
+          () => hoTro_days3 += hoTro / 8,
+          () => partTime_days3 += partTime,
+          () => ptSang_days3 += partTimeSang,
+          () => ptChieu_days3 += partTimeChieu,
+          () => ngKhac_days3 += ngoaiGioKhac / 8,
+          () => ng15_days3 += ngoaiGiox15 / 8,
+          () => ng2_days3 += ngoaiGiox2 / 8,
+          () => congLe_days3 += congLe / 8,
+        );
+      } else {
+        _updateWeekData(
+          phanLoaiValue, baseCongThuongChu, hasFullPermission, hasHalfPermission,
+          ngoaiGioThuong, hoTro, partTime, partTimeSang, partTimeChieu,
+          ngoaiGioKhac, ngoaiGiox15, ngoaiGiox2, congLe,
+          () => congChu_regularDays4 += phanLoaiValue,
+          () => congChu_permissionDays4 += 1.0,
+          () => congChu_permissionDays4 += 0.5,
+          () => congChu_permissionDays4 += 1.0,
+          () => congChu_permissionDays4 += 0.5,
+          () => congChu_htDays4 += 1.0,
+          () => ngThuong_days4 += ngoaiGioThuong / 8,
+          () => hoTro_days4 += hoTro / 8,
+          () => partTime_days4 += partTime,
+          () => ptSang_days4 += partTimeSang,
+          () => ptChieu_days4 += partTimeChieu,
+          () => ngKhac_days4 += ngoaiGioKhac / 8,
+          () => ng15_days4 += ngoaiGiox15 / 8,
+          () => ng2_days4 += ngoaiGiox2 / 8,
+          () => congLe_days4 += congLe / 8,
+        );
       }
     }
     
-    // Get all NgoaiGio fields and divide by 8
-    final ngoaiGioThuong = double.tryParse(record['NgoaiGioThuong']?.toString() ?? '0') ?? 0;
-    final ngoaiGioKhac = double.tryParse(record['NgoaiGioKhac']?.toString() ?? '0') ?? 0;
-    final ngoaiGiox15 = double.tryParse(record['NgoaiGiox15']?.toString() ?? '0') ?? 0;
-    final ngoaiGiox2 = double.tryParse(record['NgoaiGiox2']?.toString() ?? '0') ?? 0;
-    
-    final ngoaiGioTotal = (ngoaiGioThuong + ngoaiGioKhac + ngoaiGiox15 + ngoaiGiox2) / 8;
-    
-    // Add to total
-    total += phanLoaiValue + ngoaiGioTotal;
-  }
-  
-  return total;
-}
-Widget _buildRegularSection(String columnType, String sectionTitle) {
-  final days = _getDaysInMonth();
-  final employees = _getEmployeesWithValueInColumn(columnType);
-  
-  if (employees.isEmpty) {
-    return SizedBox.shrink();
-  }
-  
-  String days12Key, days34Key, totalKey;
-  bool showPermissionColumns = false;
-  bool isNgoaiGioThuongRow = false;
-  bool showLeColumn = false;
-  
-  switch (columnType) {
-    case 'NgoaiGioThuong':
-      days12Key = 'ng_days12';
-      days34Key = 'ng_days34';
-      totalKey = 'ng_total';
-      isNgoaiGioThuongRow = true;
-      break;
-    case 'HoTro':
-      days12Key = 'hotro_days12';
-      days34Key = 'hotro_days34';
-      totalKey = 'hotro_total';
-      break;
-    case 'PartTime':
-      days12Key = 'pt_days12';
-      days34Key = 'pt_days34';
-      totalKey = 'pt_total';
-      break;
-    case 'PartTimeSang':
-      days12Key = 'pts_days12';
-      days34Key = 'pts_days34';
-      totalKey = 'pts_total';
-      break;
-    case 'PartTimeChieu':
-      days12Key = 'ptc_days12';
-      days34Key = 'ptc_days34';
-      totalKey = 'ptc_total';
-      break;
-    case 'NgoaiGioKhac':
-      days12Key = 'ngk_days12';
-      days34Key = 'ngk_days34';
-      totalKey = 'ngk_total';
-      break;
-    case 'NgoaiGiox15':
-      days12Key = 'ng15_days12';
-      days34Key = 'ng15_days34';
-      totalKey = 'ng15_total';
-      break;
-    case 'NgoaiGiox2':
-      days12Key = 'ng2_days12';
-      days34Key = 'ng2_days34';
-      totalKey = 'ng2_total';
-      break;
-    case 'CongLe':
-      days12Key = 'congle_days12';
-      days34Key = 'congle_days34';
-      totalKey = 'congle_total';
-      break;
-    case 'CongThuongChu':
-      days12Key = 'tuan12';
-      days34Key = 'tuan34';
-      totalKey = 'cong';
-      showPermissionColumns = true;
-      showLeColumn = true;
-      break;
-    default:
-      days12Key = 'tuan12';
-      days34Key = 'tuan34';
-      totalKey = 'cong';
-  }
-  
-  // Create a scroll controller
-  final ScrollController horizontalController = ScrollController();
-  
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-        child: Text(
-          sectionTitle,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.purple,
-          ),
-        ),
-      ),
-      
-      // Add scroll controls
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            ElevatedButton.icon(
-              onPressed: () {
-                horizontalController.animateTo(
-                  0,
-                  duration: Duration(milliseconds: 300),
-                  curve: Curves.easeOut,
-                );
-              },
-              icon: Icon(Icons.first_page),
-              label: Text('Đầu bảng'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-              ),
-            ),
-            Row(
-              children: [
-                ElevatedButton.icon(
-                  onPressed: () {
-                    double newOffset = (horizontalController.offset - 300);
-                    if (newOffset < 0) newOffset = 0;
-                    horizontalController.animateTo(
-                      newOffset,
-                      duration: Duration(milliseconds: 300),
-                      curve: Curves.easeOut,
-                    );
-                  },
-                  icon: Icon(Icons.arrow_back),
-                  label: Text('Trái'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey.shade700,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-                SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    double newOffset = (horizontalController.offset + 300);
-                    if (horizontalController.hasClients) {
-                      double maxScroll = horizontalController.position.maxScrollExtent;
-                      if (newOffset > maxScroll) newOffset = maxScroll;
-                      horizontalController.animateTo(
-                        newOffset,
-                        duration: Duration(milliseconds: 300),
-                        curve: Curves.easeOut,
-                      );
-                    }
-                  },
-                  icon: Icon(Icons.arrow_forward),
-                  label: Text('Phải'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey.shade700,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-            ElevatedButton.icon(
-              onPressed: () {
-                if (horizontalController.hasClients) {
-                  horizontalController.animateTo(
-                    horizontalController.position.maxScrollExtent,
-                    duration: Duration(milliseconds: 300),
-                    curve: Curves.easeOut,
-                  );
-                }
-              },
-              icon: Icon(Icons.last_page),
-              label: Text('Cuối bảng'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
-        ),
-      ),
-      
-      SingleChildScrollView(
-        controller: horizontalController, // Add this line
-        scrollDirection: Axis.horizontal,
-        child: Table(
-          border: TableBorder(
-            horizontalInside: BorderSide(color: Colors.grey.shade300),
-            verticalInside: BorderSide(color: Colors.grey.shade300),
-            bottom: BorderSide(color: Colors.grey.shade300),
-            right: BorderSide(color: Colors.grey.shade300),
-            left: BorderSide(color: Colors.grey.shade300),
-            top: BorderSide(color: Colors.grey.shade300),
-          ),
-          columnWidths: {
-            0: FixedColumnWidth(120),
-            1: FixedColumnWidth(60),
-            2: FixedColumnWidth(60),
-            3: FixedColumnWidth(60),
-            4: FixedColumnWidth(60),
-            5: FixedColumnWidth(60),
-            6: FixedColumnWidth(60),
-            7: FixedColumnWidth(60),
-            8: FixedColumnWidth(60),
-            9: FixedColumnWidth(60),
-            10: FixedColumnWidth(60),
-            11: FixedColumnWidth(60),
-            12: FixedColumnWidth(60),
-            13: FixedColumnWidth(60),
-            for (int i = 0; i < days.length; i++)
-              i + 14: FixedColumnWidth(60),
-          },
-          defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-          children: [
-            TableRow(
-              decoration: BoxDecoration(color: Colors.grey.shade200),
-              children: [
-                TableCell(child: Padding(padding: const EdgeInsets.all(8.0), child: Text(''))),
-                TableCell(
-                  verticalAlignment: TableCellVerticalAlignment.fill,
-                  child: Container(
-                    color: Colors.blue.shade100,
-                    child: Center(child: Text('Ngày 1-15', style: TextStyle(fontWeight: FontWeight.bold))),
-                  ),
-                ),
-                TableCell(child: Container(color: Colors.blue.shade100, child: Text(''))),
-                TableCell(child: Container(color: Colors.blue.shade100, child: Text(''))),
-                TableCell(
-                  verticalAlignment: TableCellVerticalAlignment.fill,
-                  child: Container(
-                    color: Colors.green.shade100,
-                    child: Center(child: Text('Ngày 16-25', style: TextStyle(fontWeight: FontWeight.bold))),
-                  ),
-                ),
-                TableCell(child: Container(color: Colors.green.shade100, child: Text(''))),
-                TableCell(child: Container(color: Colors.green.shade100, child: Text(''))),
-                TableCell(
-                  verticalAlignment: TableCellVerticalAlignment.fill,
-                  child: Container(
-                    color: Colors.orange.shade100,
-                    child: Center(child: Text('Tổng tháng', style: TextStyle(fontWeight: FontWeight.bold))),
-                  ),
-                ),
-                TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
-                TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
-                TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
-                TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
-                TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
-                TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
-                ...days.map((_) => TableCell(child: Text(''))),
-              ],
-            ),
-            TableRow(
-              decoration: BoxDecoration(color: Colors.grey.shade200),
-              children: [
-                TableCell(
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text('Mã NV', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ),
-                TableCell(
-                  child: Container(
-                    color: Colors.blue.shade100,
-                    padding: EdgeInsets.all(8.0),
-                    child: Center(child: Text('Tuần 1+2', style: TextStyle(fontWeight: FontWeight.bold))),
-                  ),
-                ),
-                TableCell(
-                  child: Container(
-                    color: Colors.blue.shade100,
-                    padding: EdgeInsets.all(8.0),
-                    child: Center(child: Text('P1+2', style: TextStyle(fontWeight: FontWeight.bold))),
-                  ),
-                ),
-                TableCell(
-                  child: Container(
-                    color: Colors.blue.shade100,
-                    padding: EdgeInsets.all(8.0),
-                    child: Center(child: Text('HT1+2', style: TextStyle(fontWeight: FontWeight.bold))),
-                  ),
-                ),
-                TableCell(
-                  child: Container(
-                    color: Colors.green.shade100,
-                    padding: EdgeInsets.all(8.0),
-                    child: Center(child: Text('Tuần 3+4', style: TextStyle(fontWeight: FontWeight.bold))),
-                  ),
-                ),
-                TableCell(
-                  child: Container(
-                    color: Colors.green.shade100,
-                    padding: EdgeInsets.all(8.0),
-                    child: Center(child: Text('P3+4', style: TextStyle(fontWeight: FontWeight.bold))),
-                  ),
-                ),
-                TableCell(
-                  child: Container(
-                    color: Colors.green.shade100,
-                    padding: EdgeInsets.all(8.0),
-                    child: Center(child: Text('HT3+4', style: TextStyle(fontWeight: FontWeight.bold))),
-                  ),
-                ),
-                TableCell(
-                  child: Container(
-                    color: Colors.orange.shade100,
-                    padding: EdgeInsets.all(8.0),
-                    child: Center(child: Text('Công', style: TextStyle(fontWeight: FontWeight.bold))),
-                  ),
-                ),
-                TableCell(
-                  child: Container(
-                    color: Colors.orange.shade100,
-                    padding: EdgeInsets.all(8.0),
-                    child: Center(child: Text('Phép', style: TextStyle(fontWeight: FontWeight.bold))),
-                  ),
-                ),
-                TableCell(
-                  child: Container(
-                    color: Colors.orange.shade100,
-                    padding: EdgeInsets.all(8.0),
-                    child: Center(child: Text('Lễ', style: TextStyle(fontWeight: FontWeight.bold))),
-                  ),
-                ),
-                TableCell(
-                  child: Container(
-                    color: Colors.orange.shade100,
-                    padding: EdgeInsets.all(8.0),
-                    child: Center(child: Text('HV', style: TextStyle(fontWeight: FontWeight.bold))),
-                  ),
-                ),
-                TableCell(
-                  child: Container(
-                    color: Colors.orange.shade100,
-                    padding: EdgeInsets.all(8.0),
-                    child: Center(child: Text('Đêm', style: TextStyle(fontWeight: FontWeight.bold))),
-                  ),
-                ),
-                TableCell(
-                  child: Container(
-                    color: Colors.orange.shade100,
-                    padding: EdgeInsets.all(8.0),
-                    child: Center(child: Text('CĐ', style: TextStyle(fontWeight: FontWeight.bold))),
-                  ),
-                ),
-                TableCell(
-                  child: Container(
-                    color: Colors.orange.shade100,
-                    padding: EdgeInsets.all(8.0),
-                    child: Center(child: Text('HT', style: TextStyle(fontWeight: FontWeight.bold))),
-                  ),
-                ),
-                ...days.map((day) => TableCell(
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(4.0),
-            child: Text(
-              _formatNumberValue(_calculateDailyTotal(day)),
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.red,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(4.0),
-            child: Text(
-              day.toString(), 
-              style: TextStyle(fontWeight: FontWeight.bold)
-            ),
-          ),
-        ],
-      ),
-    )),
-  ],
-),
-            for (var empId in employees) ...[
-              TableRow(
-                decoration: BoxDecoration(
-                  color: _staffColors[empId] ?? Colors.transparent,
-                ),
-                children: [
-                  TableCell(
-                    child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(empId, style: TextStyle(fontWeight: FontWeight.bold)),
-                          Text(
-                            _staffNames[empId] ?? '',
-                            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                          ),
-                          if (columnType == 'CongThuongChu')
-                            Text(
-                              'Công chữ',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey[700],
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          if (columnType == 'NgoaiGioThuong')
-                            Text(
-                              'NG thường',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey[700],
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  ...(() {
-                    final summary = _calculateSummary(empId);
-                    return [
-                      // Tuần 1+2
-                      TableCell(
-                        child: Container(
-                          color: Colors.blue.shade50,
-                          padding: EdgeInsets.all(8.0),
-                          child: Center(child: Text(summary[days12Key] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
-                        ),
-                      ),
-                      // P1+2
-                      TableCell(
-                        child: Container(
-                          color: Colors.blue.shade50,
-                          padding: EdgeInsets.all(8.0),
-                          child: Center(child: Text(
-                            showPermissionColumns ? (summary['p12'] ?? '') : '',
-                            style: TextStyle(fontWeight: FontWeight.bold)
-                          )),
-                        ),
-                      ),
-                      // HT1+2
-                      TableCell(
-                        child: Container(
-                          color: Colors.blue.shade50,
-                          padding: EdgeInsets.all(8.0),
-                          child: Center(child: Text(summary['ht12'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
-                        ),
-                      ),
-                      // Tuần 3+4
-                      TableCell(
-                        child: Container(
-                          color: Colors.green.shade50,
-                          padding: EdgeInsets.all(8.0),
-                          child: Center(child: Text(summary[days34Key] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
-                        ),
-                      ),
-                      // P3+4
-                      TableCell(
-                        child: Container(
-                          color: Colors.green.shade50,
-                          padding: EdgeInsets.all(8.0),
-                          child: Center(child: Text(
-                            showPermissionColumns ? (summary['p34'] ?? '') : '',
-                            style: TextStyle(fontWeight: FontWeight.bold)
-                          )),
-                        ),
-                      ),
-                      // HT3+4
-                      TableCell(
-                        child: Container(
-                          color: Colors.green.shade50,
-                          padding: EdgeInsets.all(8.0),
-                          child: Center(child: Text(summary['ht34'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
-                        ),
-                      ),
-                      // Công
-                      TableCell(
-                        child: Container(
-                          color: Colors.orange.shade50,
-                          padding: EdgeInsets.all(8.0),
-                          child: Center(child: Text(summary[totalKey] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
-                        ),
-                      ),
-                      // Phép
-                      TableCell(
-                        child: Container(
-                          color: Colors.orange.shade50,
-                          padding: EdgeInsets.all(8.0),
-                          child: Center(child: Text(
-                            showPermissionColumns ? (summary['phep'] ?? '') : '',
-                            style: TextStyle(fontWeight: FontWeight.bold)
-                          )),
-                        ),
-                      ),
-                      // Lễ
-                      TableCell(
-                        child: Container(
-                          color: Colors.orange.shade50,
-                          padding: EdgeInsets.all(8.0),
-                          child: Center(child: Text(
-                            showLeColumn ? (summary['le'] ?? '') : '',
-                            style: TextStyle(fontWeight: FontWeight.bold)
-                          )),
-                        ),
-                      ),
-                      // HV
-                      TableCell(
-                        child: Container(
-                          color: Colors.orange.shade50,
-                          padding: EdgeInsets.all(8.0),
-                          child: Center(child: Text(
-                            showPermissionColumns ? (summary['hv'] ?? '') : '',
-                            style: TextStyle(fontWeight: FontWeight.bold)
-                          )),
-                        ),
-                      ),
-                      // Đêm
-                      TableCell(
-                        child: Container(
-                          color: Colors.orange.shade50,
-                          padding: EdgeInsets.all(8.0),
-                          child: Center(child: Text(
-                            showPermissionColumns ? (summary['dem'] ?? '') : '',
-                            style: TextStyle(fontWeight: FontWeight.bold)
-                          )),
-                        ),
-                      ),
-                      // CĐ
-                      TableCell(
-                        child: Container(
-                          color: Colors.orange.shade50,
-                          padding: EdgeInsets.all(8.0),
-                          child: Center(child: Text(
-                            showPermissionColumns ? (summary['cd'] ?? '') : '',
-                            style: TextStyle(fontWeight: FontWeight.bold)
-                          )),
-                        ),
-                      ),
-                      // HT
-                      TableCell(
-                        child: Container(
-                          color: Colors.orange.shade50,
-                          padding: EdgeInsets.all(8.0),
-                          child: Center(child: Text(
-                            summary['ht'] ?? '',
-                            style: TextStyle(fontWeight: FontWeight.bold)
-                          )),
-                        ),
-                      ),
-                    ];
-                  })(),
-                  ...days.map((day) {
-                    final value = _getAttendanceForDay(empId, day, columnType);
-                    final displayValue = (value == '0' || value == 'Ro') ? '' : value;
-                    return TableCell(
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Center(
-                          child: Text(
-                            displayValue ?? '',
-                            style: TextStyle(
-                              color: (displayValue != null && displayValue.isNotEmpty) ? Colors.blue : null,
-                              fontWeight: (displayValue != null && displayValue.isNotEmpty) ? FontWeight.bold : null,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-                ],
-              ),
-              if (empId != employees.last)
-                TableRow(
-                  children: [
-                    TableCell(child: SizedBox(height: 4)),
-                    ...List.generate(13, (index) => TableCell(child: SizedBox(height: 4))),
-                    ...days.map((_) => TableCell(child: SizedBox(height: 4))),
-                  ],
-                ),
-            ],
-          ],
-        ),
-      ),
-      Divider(thickness: 1, height: 32),
-    ],
-  );
-}
-  String _formatNumberValue(double value) {
-  if (value == value.toInt()) {
-    // Display as integer if it's a whole number
-    return value.toInt().toString();
-  } else {
-    // Display with 1 decimal place if it has fractional part
-    return value.toStringAsFixed(1);
-  }
-}
-// Extract the base CongThuongChu value without permission suffixes
-String _extractCongThuongChuBase(String? value) {
-  if (value == null) return 'Ro';
-  if (value.endsWith('+P')) {
-    return value.substring(0, value.length - 2);
-  } else if (value.endsWith('+P/2')) {
-    return value.substring(0, value.length - 4);
-  }
-  return value;
-}
+    congChu_regularDays1 = congChu_regularDays1 - congChu_permissionDays1;
+    if (congChu_regularDays1 < 0) congChu_regularDays1 = 0;
 
-  void _showError(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.red)
-      );
-    }
-  }
+    congChu_regularDays2 = congChu_regularDays2 - congChu_permissionDays2;
+    if (congChu_regularDays2 < 0) congChu_regularDays2 = 0;
 
-  Widget _buildChuGioThuongSection() {
- final days = _getDaysInMonth();
- final employees = _getEmployeesWithValueInColumn('CongThuongChu');
- 
- if (employees.isEmpty) {
-   return SizedBox.shrink();
+    congChu_regularDays3 = congChu_regularDays3 - congChu_permissionDays3;
+    if (congChu_regularDays3 < 0) congChu_regularDays3 = 0;
+
+    congChu_regularDays4 = congChu_regularDays4 - congChu_permissionDays4;
+    if (congChu_regularDays4 < 0) congChu_regularDays4 = 0;
+
+    final double congChu_totalPermission = congChu_permissionDays1 + congChu_permissionDays2 + congChu_permissionDays3 + congChu_permissionDays4;
+    final double congChu_totalRegular = congChu_regularDays1 + congChu_regularDays2 + congChu_regularDays3 + congChu_regularDays4;
+    final double congChu_totalHT = congChu_htDays1 + congChu_htDays2 + congChu_htDays3 + congChu_htDays4;
+    
+    final double ngThuong_total = ngThuong_days1 + ngThuong_days2 + ngThuong_days3 + ngThuong_days4;
+    final double hoTro_total = hoTro_days1 + hoTro_days2 + hoTro_days3 + hoTro_days4;
+    final double partTime_total = partTime_days1 + partTime_days2 + partTime_days3 + partTime_days4;
+    final double ptSang_total = ptSang_days1 + ptSang_days2 + ptSang_days3 + ptSang_days4;
+    final double ptChieu_total = ptChieu_days1 + ptChieu_days2 + ptChieu_days3 + ptChieu_days4;
+    final double ngKhac_total = ngKhac_days1 + ngKhac_days2 + ngKhac_days3 + ngKhac_days4;
+    final double ng15_total = ng15_days1 + ng15_days2 + ng15_days3 + ng15_days4;
+    final double ng2_total = ng2_days1 + ng2_days2 + ng2_days3 + ng2_days4;
+    final double congLe_total = congLe_days1 + congLe_days2 + congLe_days3 + congLe_days4;
+    
+    return {
+      'tuan1': _formatNumberValue(congChu_regularDays1),
+      'p1': _formatNumberValue(congChu_permissionDays1),
+     'ht1': _formatNumberValue(congChu_htDays1),
+     'tuan2': _formatNumberValue(congChu_regularDays2),
+     'p2': _formatNumberValue(congChu_permissionDays2),
+     'ht2': _formatNumberValue(congChu_htDays2),
+     'tuan3': _formatNumberValue(congChu_regularDays3),
+     'p3': _formatNumberValue(congChu_permissionDays3),
+     'ht3': _formatNumberValue(congChu_htDays3),
+     'tuan4': _formatNumberValue(congChu_regularDays4),
+     'p4': _formatNumberValue(congChu_permissionDays4),
+     'ht4': _formatNumberValue(congChu_htDays4),
+     'cong': _formatNumberValue(congChu_totalRegular),
+     'phep': _formatNumberValue(congChu_totalPermission),
+     'ht': _formatNumberValue(congChu_totalHT),
+     
+     'ng_days1': _formatNumberValue(ngThuong_days1),
+     'hotro_days1': _formatNumberValue(hoTro_days1),
+     'pt_days1': _formatNumberValue(partTime_days1),
+     'pts_days1': _formatNumberValue(ptSang_days1),
+     'ptc_days1': _formatNumberValue(ptChieu_days1),
+     'ngk_days1': _formatNumberValue(ngKhac_days1),
+     'ng15_days1': _formatNumberValue(ng15_days1),
+     'ng2_days1': _formatNumberValue(ng2_days1),
+     'congle_days1': _formatNumberValue(congLe_days1),
+     
+     'ng_days2': _formatNumberValue(ngThuong_days2),
+     'hotro_days2': _formatNumberValue(hoTro_days2),
+     'pt_days2': _formatNumberValue(partTime_days2),
+     'pts_days2': _formatNumberValue(ptSang_days2),
+     'ptc_days2': _formatNumberValue(ptChieu_days2),
+     'ngk_days2': _formatNumberValue(ngKhac_days2),
+     'ng15_days2': _formatNumberValue(ng15_days2),
+     'ng2_days2': _formatNumberValue(ng2_days2),
+     'congle_days2': _formatNumberValue(congLe_days2),
+     
+     'ng_days3': _formatNumberValue(ngThuong_days3),
+     'hotro_days3': _formatNumberValue(hoTro_days3),
+     'pt_days3': _formatNumberValue(partTime_days3),
+     'pts_days3': _formatNumberValue(ptSang_days3),
+     'ptc_days3': _formatNumberValue(ptChieu_days3),
+     'ngk_days3': _formatNumberValue(ngKhac_days3),
+     'ng15_days3': _formatNumberValue(ng15_days3),
+     'ng2_days3': _formatNumberValue(ng2_days3),
+     'congle_days3': _formatNumberValue(congLe_days3),
+     
+     'ng_days4': _formatNumberValue(ngThuong_days4),
+     'hotro_days4': _formatNumberValue(hoTro_days4),
+     'pt_days4': _formatNumberValue(partTime_days4),
+     'pts_days4': _formatNumberValue(ptSang_days4),
+     'ptc_days4': _formatNumberValue(ptChieu_days4),
+     'ngk_days4': _formatNumberValue(ngKhac_days4),
+     'ng15_days4': _formatNumberValue(ng15_days4),
+     'ng2_days4': _formatNumberValue(ng2_days4),
+     'congle_days4': _formatNumberValue(congLe_days4),
+     
+     'ng_total': _formatNumberValue(ngThuong_total),
+     'hotro_total': _formatNumberValue(hoTro_total),
+     'pt_total': _formatNumberValue(partTime_total),
+     'pts_total': _formatNumberValue(ptSang_total),
+     'ptc_total': _formatNumberValue(ptChieu_total),
+     'ngk_total': _formatNumberValue(ngKhac_total),
+     'ng15_total': _formatNumberValue(ng15_total),
+     'ng2_total': _formatNumberValue(ng2_total),
+     'congle_total': _formatNumberValue(congLe_total),
+     
+     'le': _formatNumberValue(congLe_total),
+     'hv': _formatNumberValue(tongHV),
+     'dem': _formatNumberValue(tongDem),
+     'cd': _formatNumberValue(tongCD),
+   };
  }
- 
- // Add scroll controller
- final ScrollController horizontalController = ScrollController();
- 
- return Column(
-   crossAxisAlignment: CrossAxisAlignment.start,
-   children: [
-     Padding(
-       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-       child: Text(
-         'Chữ & Giờ thường',
-         style: TextStyle(
-           fontSize: 18,
-           fontWeight: FontWeight.bold,
-           color: Colors.purple,
+
+ double _calculateDailyTotal(int day) {
+   double total = 0.0;
+   
+   final allEmployees = _getUniqueEmployees();
+   
+   for (var empId in allEmployees) {
+     final dateStr = '$_selectedMonth-${day.toString().padLeft(2, '0')}';
+     
+     final records = _attendanceData.where(
+       (record) => 
+         record['MaNV'] == empId && 
+         record['Ngay'].split('T')[0] == dateStr
+     ).toList();
+     
+     if (records.isEmpty) continue;
+     final record = records.first;
+     
+     double phanLoaiValue = 0;
+     if (record['PhanLoai'] != null && record['PhanLoai'].toString().isNotEmpty) {
+       try {
+         phanLoaiValue = double.parse(record['PhanLoai'].toString());
+       } catch (e) {
+         print("Error parsing PhanLoai: $e");
+       }
+     }
+     
+     final ngoaiGioThuong = double.tryParse(record['NgoaiGioThuong']?.toString() ?? '0') ?? 0;
+     final ngoaiGioKhac = double.tryParse(record['NgoaiGioKhac']?.toString() ?? '0') ?? 0;
+     final ngoaiGiox15 = double.tryParse(record['NgoaiGiox15']?.toString() ?? '0') ?? 0;
+     final ngoaiGiox2 = double.tryParse(record['NgoaiGiox2']?.toString() ?? '0') ?? 0;
+     
+     final ngoaiGioTotal = (ngoaiGioThuong + ngoaiGioKhac + ngoaiGiox15 + ngoaiGiox2) / 8;
+     
+     total += phanLoaiValue + ngoaiGioTotal;
+   }
+   
+   return total;
+ }
+
+ Widget _buildRegularSection(String columnType, String sectionTitle) {
+   final days = _getDaysInMonth();
+   final employees = _getEmployeesWithValueInColumn(columnType);
+   
+   if (employees.isEmpty) {
+     return SizedBox.shrink();
+   }
+   
+   String days1Key, days2Key, days3Key, days4Key, totalKey;
+   bool showPermissionColumns = false;
+   bool isNgoaiGioThuongRow = false;
+   bool showLeColumn = false;
+   
+   switch (columnType) {
+     case 'NgoaiGioThuong':
+       days1Key = 'ng_days1';
+       days2Key = 'ng_days2';
+       days3Key = 'ng_days3';
+       days4Key = 'ng_days4';
+       totalKey = 'ng_total';
+       isNgoaiGioThuongRow = true;
+       break;
+     case 'HoTro':
+       days1Key = 'hotro_days1';
+       days2Key = 'hotro_days2';
+       days3Key = 'hotro_days3';
+       days4Key = 'hotro_days4';
+       totalKey = 'hotro_total';
+       break;
+     case 'PartTime':
+       days1Key = 'pt_days1';
+       days2Key = 'pt_days2';
+       days3Key = 'pt_days3';
+       days4Key = 'pt_days4';
+       totalKey = 'pt_total';
+       break;
+     case 'PartTimeSang':
+       days1Key = 'pts_days1';
+       days2Key = 'pts_days2';
+       days3Key = 'pts_days3';
+       days4Key = 'pts_days4';
+       totalKey = 'pts_total';
+       break;
+     case 'PartTimeChieu':
+       days1Key = 'ptc_days1';
+       days2Key = 'ptc_days2';
+       days3Key = 'ptc_days3';
+       days4Key = 'ptc_days4';
+       totalKey = 'ptc_total';
+       break;
+     case 'NgoaiGioKhac':
+       days1Key = 'ngk_days1';
+       days2Key = 'ngk_days2';
+       days3Key = 'ngk_days3';
+       days4Key = 'ngk_days4';
+       totalKey = 'ngk_total';
+       break;
+     case 'NgoaiGiox15':
+       days1Key = 'ng15_days1';
+       days2Key = 'ng15_days2';
+       days3Key = 'ng15_days3';
+       days4Key = 'ng15_days4';
+       totalKey = 'ng15_total';
+       break;
+     case 'NgoaiGiox2':
+       days1Key = 'ng2_days1';
+       days2Key = 'ng2_days2';
+       days3Key = 'ng2_days3';
+       days4Key = 'ng2_days4';
+       totalKey = 'ng2_total';
+       break;
+     case 'CongLe':
+       days1Key = 'congle_days1';
+       days2Key = 'congle_days2';
+       days3Key = 'congle_days3';
+       days4Key = 'congle_days4';
+       totalKey = 'congle_total';
+       break;
+     case 'CongThuongChu':
+       days1Key = 'tuan1';
+       days2Key = 'tuan2';
+       days3Key = 'tuan3';
+       days4Key = 'tuan4';
+       totalKey = 'cong';
+       showPermissionColumns = true;
+       showLeColumn = true;
+       break;
+     default:
+       days1Key = 'tuan1';
+       days2Key = 'tuan2';
+       days3Key = 'tuan3';
+       days4Key = 'tuan4';
+       totalKey = 'cong';
+   }
+   
+   final ScrollController horizontalController = ScrollController();
+   
+   return Column(
+     crossAxisAlignment: CrossAxisAlignment.start,
+     children: [
+       Padding(
+         padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+         child: Text(
+           sectionTitle,
+           style: TextStyle(
+             fontSize: 18,
+             fontWeight: FontWeight.bold,
+             color: Colors.purple,
+           ),
          ),
        ),
-     ),
-     
-     // Add scroll controls
-     Padding(
-       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-       child: Row(
-         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-         children: [
-           ElevatedButton.icon(
-             onPressed: () {
-               horizontalController.animateTo(
-                 0,
-                 duration: Duration(milliseconds: 300),
-                 curve: Curves.easeOut,
-               );
-             },
-             icon: Icon(Icons.first_page),
-             label: Text('Đầu bảng'),
-             style: ElevatedButton.styleFrom(
-               backgroundColor: Colors.blue,
-               foregroundColor: Colors.white,
-             ),
-           ),
-           Row(
-             children: [
-               ElevatedButton.icon(
-                 onPressed: () {
-                   double newOffset = (horizontalController.offset - 300);
-                   if (newOffset < 0) newOffset = 0;
-                   horizontalController.animateTo(
-                     newOffset,
-                     duration: Duration(milliseconds: 300),
-                     curve: Curves.easeOut,
-                   );
-                 },
-                 icon: Icon(Icons.arrow_back),
-                 label: Text('Trái'),
-                 style: ElevatedButton.styleFrom(
-                   backgroundColor: Colors.grey.shade700,
-                   foregroundColor: Colors.white,
-                 ),
+       
+       Padding(
+         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+         child: Row(
+           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+           children: [
+             ElevatedButton.icon(
+               onPressed: () {
+                 horizontalController.animateTo(
+                   0,
+                   duration: Duration(milliseconds: 300),
+                   curve: Curves.easeOut,
+                 );
+               },
+               icon: Icon(Icons.first_page),
+               label: Text('Đầu bảng'),
+               style: ElevatedButton.styleFrom(
+                 backgroundColor: Colors.blue,
+                 foregroundColor: Colors.white,
                ),
-               SizedBox(width: 8),
-               ElevatedButton.icon(
-                 onPressed: () {
-                   double newOffset = (horizontalController.offset + 300);
-                   if (horizontalController.hasClients) {
-                     double maxScroll = horizontalController.position.maxScrollExtent;
-                     if (newOffset > maxScroll) newOffset = maxScroll;
+             ),
+             Row(
+               children: [
+                 ElevatedButton.icon(
+                   onPressed: () {
+                     double newOffset = (horizontalController.offset - 300);
+                     if (newOffset < 0) newOffset = 0;
                      horizontalController.animateTo(
                        newOffset,
                        duration: Duration(milliseconds: 300),
                        curve: Curves.easeOut,
                      );
-                   }
-                 },
-                 icon: Icon(Icons.arrow_forward),
-                 label: Text('Phải'),
-                 style: ElevatedButton.styleFrom(
-                   backgroundColor: Colors.grey.shade700,
-                   foregroundColor: Colors.white,
-                 ),
-               ),
-             ],
-           ),
-           ElevatedButton.icon(
-             onPressed: () {
-               if (horizontalController.hasClients) {
-                 horizontalController.animateTo(
-                   horizontalController.position.maxScrollExtent,
-                   duration: Duration(milliseconds: 300),
-                   curve: Curves.easeOut,
-                 );
-               }
-             },
-             icon: Icon(Icons.last_page),
-             label: Text('Cuối bảng'),
-             style: ElevatedButton.styleFrom(
-               backgroundColor: Colors.blue,
-               foregroundColor: Colors.white,
-             ),
-           ),
-         ],
-       ),
-     ),
-     
-     SingleChildScrollView(
-       controller: horizontalController, 
-       scrollDirection: Axis.horizontal,
-       child: Table(
-         border: TableBorder(
-           horizontalInside: BorderSide(color: Colors.grey.shade300),
-           verticalInside: BorderSide(color: Colors.grey.shade300),
-           bottom: BorderSide(color: Colors.grey.shade300),
-           right: BorderSide(color: Colors.grey.shade300),
-           left: BorderSide(color: Colors.grey.shade300),
-           top: BorderSide(color: Colors.grey.shade300),
-         ),
-         columnWidths: {
-           0: FixedColumnWidth(120),
-           1: FixedColumnWidth(60),
-           2: FixedColumnWidth(60),
-           3: FixedColumnWidth(60),
-           4: FixedColumnWidth(60),
-           5: FixedColumnWidth(60),
-           6: FixedColumnWidth(60),
-           7: FixedColumnWidth(60),
-           8: FixedColumnWidth(60),
-           9: FixedColumnWidth(60),
-           10: FixedColumnWidth(60),
-           11: FixedColumnWidth(60),
-           12: FixedColumnWidth(60),
-           13: FixedColumnWidth(60),
-           for (int i = 0; i < days.length; i++)
-             i + 14: FixedColumnWidth(60),
-         },
-         defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-         children: [
-           TableRow(
-             decoration: BoxDecoration(color: Colors.grey.shade200),
-             children: [
-               TableCell(child: Padding(padding: const EdgeInsets.all(8.0), child: Text(''))),
-               TableCell(
-                 verticalAlignment: TableCellVerticalAlignment.fill,
-                 child: Container(
-                   color: Colors.blue.shade100,
-                   child: Center(child: Text('Ngày 1-15', style: TextStyle(fontWeight: FontWeight.bold))),
-                 ),
-               ),
-               TableCell(child: Container(color: Colors.blue.shade100, child: Text(''))),
-               TableCell(child: Container(color: Colors.blue.shade100, child: Text(''))),
-               TableCell(
-                 verticalAlignment: TableCellVerticalAlignment.fill,
-                 child: Container(
-                   color: Colors.green.shade100,
-                   child: Center(child: Text('Ngày 16-25', style: TextStyle(fontWeight: FontWeight.bold))),
-                 ),
-               ),
-               TableCell(child: Container(color: Colors.green.shade100, child: Text(''))),
-               TableCell(child: Container(color: Colors.green.shade100, child: Text(''))),
-               TableCell(
-                 verticalAlignment: TableCellVerticalAlignment.fill,
-                 child: Container(
-                   color: Colors.orange.shade100,
-                   child: Center(child: Text('Tổng tháng', style: TextStyle(fontWeight: FontWeight.bold))),
-                 ),
-               ),
-               TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
-               TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
-               TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
-               TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
-               TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
-               TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
-               ...days.map((_) => TableCell(child: Text(''))),
-             ],
-           ),
-           TableRow(
-             decoration: BoxDecoration(color: Colors.grey.shade200),
-             children: [
-               TableCell(
-                 child: Padding(
-                   padding: const EdgeInsets.all(8.0),
-                   child: Text('Mã NV', style: TextStyle(fontWeight: FontWeight.bold)),
-                 ),
-               ),
-               TableCell(
-                 child: Container(
-                   color: Colors.blue.shade100,
-                   padding: EdgeInsets.all(8.0),
-                   child: Center(child: Text('Tuần 1+2', style: TextStyle(fontWeight: FontWeight.bold))),
-                 ),
-               ),
-               TableCell(
-                 child: Container(
-                   color: Colors.blue.shade100,
-                   padding: EdgeInsets.all(8.0),
-                   child: Center(child: Text('P1+2', style: TextStyle(fontWeight: FontWeight.bold))),
-                 ),
-               ),
-               TableCell(
-                 child: Container(
-                   color: Colors.blue.shade100,
-                   padding: EdgeInsets.all(8.0),
-                   child: Center(child: Text('HT1+2', style: TextStyle(fontWeight: FontWeight.bold))),
-                 ),
-               ),
-               TableCell(
-                 child: Container(
-                   color: Colors.green.shade100,
-                   padding: EdgeInsets.all(8.0),
-                   child: Center(child: Text('Tuần 3+4', style: TextStyle(fontWeight: FontWeight.bold))),
-                 ),
-               ),
-               TableCell(
-                 child: Container(
-                   color: Colors.green.shade100,
-                   padding: EdgeInsets.all(8.0),
-                   child: Center(child: Text('P3+4', style: TextStyle(fontWeight: FontWeight.bold))),
-                 ),
-               ),
-               TableCell(
-                 child: Container(
-                   color: Colors.green.shade100,
-                   padding: EdgeInsets.all(8.0),
-                   child: Center(child: Text('HT3+4', style: TextStyle(fontWeight: FontWeight.bold))),
-                 ),
-               ),
-               TableCell(
-                 child: Container(
-                   color: Colors.orange.shade100,
-                   padding: EdgeInsets.all(8.0),
-                   child: Center(child: Text('Công', style: TextStyle(fontWeight: FontWeight.bold))),
-                 ),
-               ),
-               TableCell(
-                 child: Container(
-                   color: Colors.orange.shade100,
-                   padding: EdgeInsets.all(8.0),
-                   child: Center(child: Text('Phép', style: TextStyle(fontWeight: FontWeight.bold))),
-                 ),
-               ),
-               TableCell(
-                 child: Container(
-                   color: Colors.orange.shade100,
-                   padding: EdgeInsets.all(8.0),
-                   child: Center(child: Text('Lễ', style: TextStyle(fontWeight: FontWeight.bold))),
-                 ),
-               ),
-               TableCell(
-                 child: Container(
-                   color: Colors.orange.shade100,
-                   padding: EdgeInsets.all(8.0),
-                   child: Center(child: Text('HV', style: TextStyle(fontWeight: FontWeight.bold))),
-                 ),
-               ),
-               TableCell(
-                 child: Container(
-                   color: Colors.orange.shade100,
-                   padding: EdgeInsets.all(8.0),
-                   child: Center(child: Text('Đêm', style: TextStyle(fontWeight: FontWeight.bold))),
-                 ),
-               ),
-               TableCell(
-                 child: Container(
-                   color: Colors.orange.shade100,
-                   padding: EdgeInsets.all(8.0),
-                   child: Center(child: Text('CĐ', style: TextStyle(fontWeight: FontWeight.bold))),
-                 ),
-               ),
-               TableCell(
-                 child: Container(
-                   color: Colors.orange.shade100,
-                   padding: EdgeInsets.all(8.0),
-                   child: Center(child: Text('HT', style: TextStyle(fontWeight: FontWeight.bold))),
-                 ),
-               ),
-               ...days.map((day) => TableCell(
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(4.0),
-            child: Text(
-              _formatNumberValue(_calculateDailyTotal(day)),
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.red,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(4.0),
-            child: Text(
-              day.toString(), 
-              style: TextStyle(fontWeight: FontWeight.bold)
-            ),
-          ),
-        ],
-      ),
-    )),
-  ],
-),
-           for (var empId in employees) ...[
-             TableRow(
-               decoration: BoxDecoration(
-                 color: _staffColors[empId] ?? Colors.transparent,
-               ),
-               children: [
-                 TableCell(
-                   child: Padding(
-                     padding: const EdgeInsets.all(8.0),
-                     child: Column(
-                       crossAxisAlignment: CrossAxisAlignment.start,
-                       children: [
-                         Text(empId, style: TextStyle(fontWeight: FontWeight.bold)),
-                         Text(
-                           _staffNames[empId] ?? '',
-                           style: TextStyle(
-                             fontSize: 12,
-                             color: Colors.grey[600],
-                           ),
-                         ),
-                         Text(
-                           'Công chữ',
-                           style: TextStyle(
-                             fontSize: 10,
-                             color: Colors.grey[700],
-                             fontStyle: FontStyle.italic,
-                           ),
-                         ),
-                       ],
-                     ),
+                   },
+                   icon: Icon(Icons.arrow_back),
+                   label: Text('Trái'),
+                   style: ElevatedButton.styleFrom(
+                     backgroundColor: Colors.grey.shade700,
+                     foregroundColor: Colors.white,
                    ),
                  ),
-                 ...(() {
-                   final summary = _calculateSummary(empId);
-                   return [
-                     TableCell(
-                       child: Container(
-                         color: Colors.blue.shade50,
-                         padding: EdgeInsets.all(8.0),
-                         child: Center(
-                           child: Text(
-                             summary['tuan12'] ?? '',
-                             style: TextStyle(fontWeight: FontWeight.bold),
-                           ),
-                         ),
-                       ),
-                     ),
-                     TableCell(
-                       child: Container(
-                         color: Colors.blue.shade50,
-                         padding: EdgeInsets.all(8.0),
-                         child: Center(
-                           child: Text(
-                             summary['p12'] ?? '',
-                             style: TextStyle(fontWeight: FontWeight.bold),
-                           ),
-                         ),
-                       ),
-                     ),
-                     TableCell(
-                       child: Container(
-                         color: Colors.blue.shade50,
-                         padding: EdgeInsets.all(8.0),
-                         child: Center(
-                           child: Text(
-                             summary['ht12'] ?? '',
-                             style: TextStyle(fontWeight: FontWeight.bold),
-                           ),
-                         ),
-                       ),
-                     ),
-                     TableCell(
-                       child: Container(
-                         color: Colors.green.shade50,
-                         padding: EdgeInsets.all(8.0),
-                         child: Center(
-                           child: Text(
-                             summary['tuan34'] ?? '',
-                             style: TextStyle(fontWeight: FontWeight.bold),
-                           ),
-                         ),
-                       ),
-                     ),
-                     TableCell(
-                       child: Container(
-                         color: Colors.green.shade50,
-                         padding: EdgeInsets.all(8.0),
-                         child: Center(
-                           child: Text(
-                             summary['p34'] ?? '',
-                             style: TextStyle(fontWeight: FontWeight.bold),
-                           ),
-                         ),
-                       ),
-                     ),
-                     TableCell(
-                       child: Container(
-                         color: Colors.green.shade50,
-                         padding: EdgeInsets.all(8.0),
-                         child: Center(
-                           child: Text(
-                             summary['ht34'] ?? '',
-                             style: TextStyle(fontWeight: FontWeight.bold),
-                           ),
-                         ),
-                       ),
-                     ),
-                     TableCell(
-                       child: Container(
-                         color: Colors.orange.shade50,
-                         padding: EdgeInsets.all(8.0),
-                         child: Center(
-                           child: Text(
-                             summary['cong'] ?? '',
-                             style: TextStyle(fontWeight: FontWeight.bold),
-                           ),
-                         ),
-                       ),
-                     ),
-                     TableCell(
-                       child: Container(
-                         color: Colors.orange.shade50,
-                         padding: EdgeInsets.all(8.0),
-                         child: Center(
-                           child: Text(
-                             summary['phep'] ?? '',
-                             style: TextStyle(fontWeight: FontWeight.bold),
-                           ),
-                         ),
-                       ),
-                     ),
-                     TableCell(
-                       child: Container(
-                         color: Colors.orange.shade50,
-                         padding: EdgeInsets.all(8.0),
-                         child: Center(
-                           child: Text(
-                             summary['le'] ?? '',
-                             style: TextStyle(fontWeight: FontWeight.bold),
-                           ),
-                         ),
-                       ),
-                     ),
-                     TableCell(
-                       child: Container(
-                         color: Colors.orange.shade50,
-                         padding: EdgeInsets.all(8.0),
-                         child: Center(
-                           child: Text(
-                             summary['hv'] ?? '',
-                             style: TextStyle(fontWeight: FontWeight.bold),
-                           ),
-                         ),
-                       ),
-                     ),
-                     TableCell(
-                       child: Container(
-                         color: Colors.orange.shade50,
-                         padding: EdgeInsets.all(8.0),
-                         child: Center(
-                           child: Text(
-                             summary['dem'] ?? '',
-                             style: TextStyle(fontWeight: FontWeight.bold),
-                           ),
-                         ),
-                       ),
-                     ),
-                     TableCell(
-                       child: Container(
-                         color: Colors.orange.shade50,
-                         padding: EdgeInsets.all(8.0),
-                         child: Center(
-                           child: Text(
-                             summary['cd'] ?? '',
-                             style: TextStyle(fontWeight: FontWeight.bold),
-                           ),
-                         ),
-                       ),
-                     ),
-                     TableCell(
-                       child: Container(
-                         color: Colors.orange.shade50,
-                         padding: EdgeInsets.all(8.0),
-                         child: Center(
-                           child: Text(
-                             summary['ht'] ?? '',
-                             style: TextStyle(fontWeight: FontWeight.bold),
-                           ),
-                         ),
-                       ),
-                     ),
-                   ];
-                 })(),
-                 ...days.map((day) {
-                   final value = _getAttendanceForDay(empId, day, 'CongThuongChu');
-                   final displayValue = (value == 'Ro') ? '' : value;
-                   
-                   return TableCell(
-                     child: Padding(
-                       padding: const EdgeInsets.all(8.0),
-                       child: Center(
-                         child: Text(
-                           displayValue ?? '',
-                           style: TextStyle(
-                             color: (displayValue != null && displayValue.isNotEmpty) 
-                               ? Colors.blue 
-                               : null,
-                             fontWeight: (displayValue != null && displayValue.isNotEmpty) 
-                               ? FontWeight.bold 
-                               : null,
-                           ),
-                         ),
-                       ),
-                     ),
+                 SizedBox(width: 8),
+                 ElevatedButton.icon(
+                   onPressed: () {
+                     double newOffset = (horizontalController.offset + 300);
+                     if (horizontalController.hasClients) {
+                       double maxScroll = horizontalController.position.maxScrollExtent;
+                       if (newOffset > maxScroll) newOffset = maxScroll;
+                       horizontalController.animateTo(
+                         newOffset,
+                         duration: Duration(milliseconds: 300),
+                         curve: Curves.easeOut,
+                       );
+                     }
+                   },
+                   icon: Icon(Icons.arrow_forward),
+                   label: Text('Phải'),
+                   style: ElevatedButton.styleFrom(
+                     backgroundColor: Colors.grey.shade700,
+                     foregroundColor: Colors.white,
+                   ),
+                 ),
+               ],
+             ),
+             ElevatedButton.icon(
+               onPressed: () {
+                 if (horizontalController.hasClients) {
+                   horizontalController.animateTo(
+                     horizontalController.position.maxScrollExtent,
+                     duration: Duration(milliseconds: 300),
+                     curve: Curves.easeOut,
                    );
-                 }),
+                 }
+               },
+               icon: Icon(Icons.last_page),
+               label: Text('Cuối bảng'),
+               style: ElevatedButton.styleFrom(
+                 backgroundColor: Colors.blue,
+                 foregroundColor: Colors.white,
+               ),
+             ),
+           ],
+         ),
+       ),
+       
+       SingleChildScrollView(
+         controller: horizontalController,
+         scrollDirection: Axis.horizontal,
+         child: Table(
+           border: TableBorder(
+             horizontalInside: BorderSide(color: Colors.grey.shade300),
+             verticalInside: BorderSide(color: Colors.grey.shade300),
+             bottom: BorderSide(color: Colors.grey.shade300),
+             right: BorderSide(color: Colors.grey.shade300),
+             left: BorderSide(color: Colors.grey.shade300),
+             top: BorderSide(color: Colors.grey.shade300),
+           ),
+           columnWidths: {
+             0: FixedColumnWidth(120),
+             1: FixedColumnWidth(60),
+             2: FixedColumnWidth(60),
+             3: FixedColumnWidth(60),
+             4: FixedColumnWidth(60),
+             5: FixedColumnWidth(60),
+             6: FixedColumnWidth(60),
+             7: FixedColumnWidth(60),
+             8: FixedColumnWidth(60),
+             9: FixedColumnWidth(60),
+             10: FixedColumnWidth(60),
+             11: FixedColumnWidth(60),
+             12: FixedColumnWidth(60),
+             13: FixedColumnWidth(60),
+             14: FixedColumnWidth(60),
+             15: FixedColumnWidth(60),
+             16: FixedColumnWidth(60),
+             17: FixedColumnWidth(60),
+             for (int i = 0; i < days.length; i++)
+               i + 18: FixedColumnWidth(60),
+           },
+           defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+           children: [
+             TableRow(
+               decoration: BoxDecoration(color: Colors.grey.shade200),
+               children: [
+                 TableCell(child: Padding(padding: const EdgeInsets.all(8.0), child: Text(''))),
+                 TableCell(
+                   verticalAlignment: TableCellVerticalAlignment.fill,
+                   child: Container(
+                     color: Colors.blue.shade100,
+                     child: Center(child: Text('Tuần 1', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(child: Container(color: Colors.blue.shade100, child: Text(''))),
+                 TableCell(child: Container(color: Colors.blue.shade100, child: Text(''))),
+                 TableCell(
+                   verticalAlignment: TableCellVerticalAlignment.fill,
+                   child: Container(
+                     color: Colors.green.shade100,
+                     child: Center(child: Text('Tuần 2', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(child: Container(color: Colors.green.shade100, child: Text(''))),
+                 TableCell(child: Container(color: Colors.green.shade100, child: Text(''))),
+                 TableCell(
+                   verticalAlignment: TableCellVerticalAlignment.fill,
+                   child: Container(
+                     color: Colors.yellow.shade100,
+                     child: Center(child: Text('Tuần 3', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(child: Container(color: Colors.yellow.shade100, child: Text(''))),
+                 TableCell(child: Container(color: Colors.yellow.shade100, child: Text(''))),
+                 TableCell(
+                   verticalAlignment: TableCellVerticalAlignment.fill,
+                   child: Container(
+                     color: Colors.red.shade100,
+                     child: Center(child: Text('Tuần 4', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(child: Container(color: Colors.red.shade100, child: Text(''))),
+                 TableCell(child: Container(color: Colors.red.shade100, child: Text(''))),
+                 TableCell(
+                   verticalAlignment: TableCellVerticalAlignment.fill,
+                   child: Container(
+                     color: Colors.orange.shade100,
+                     child: Center(child: Text('Tổng tháng', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
+                 TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
+                 TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
+                 TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
+                 ...days.map((_) => TableCell(child: Text(''))),
                ],
              ),
              TableRow(
-               decoration: BoxDecoration(
-                 color: _staffColors[empId] != null 
-                   ? _staffColors[empId]!.withOpacity(0.7) 
-                   : Colors.grey.shade50,
-               ),
+               decoration: BoxDecoration(color: Colors.grey.shade200),
                children: [
                  TableCell(
                    child: Padding(
                      padding: const EdgeInsets.all(8.0),
-                     child: Text(
-                       'NG thường',
-                       style: TextStyle(
-                         fontSize: 10,
-                         color: Colors.grey[700],
-                         fontStyle: FontStyle.italic,
+                     child: Text('Mã NV', style: TextStyle(fontWeight: FontWeight.bold)),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.blue.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('Tuần 1', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.blue.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('P1', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.blue.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('HT1', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.green.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('Tuần 2', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.green.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('P2', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.green.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('HT2', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.yellow.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('Tuần 3', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.yellow.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('P3', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.yellow.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('HT3', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.red.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('Tuần 4', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.red.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('P4', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.red.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('HT4', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.orange.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('Công', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.orange.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('Phép', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.orange.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('Lễ', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.orange.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('HV', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.orange.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('Đêm', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 ...days.map((day) => TableCell(
+                   child: Column(
+                     children: [
+                       Padding(
+                         padding: const EdgeInsets.all(4.0),
+                         child: Text(
+                           _formatNumberValue(_calculateDailyTotal(day)),
+                           style: TextStyle(
+                             fontWeight: FontWeight.bold,
+                             color: Colors.red,
+                             fontSize: 12,
+                           ),
+                         ),
+                       ),
+                       Padding(
+                         padding: const EdgeInsets.all(4.0),
+                         child: Text(
+                           day.toString(), 
+                           style: TextStyle(fontWeight: FontWeight.bold)
+                         ),
+                       ),
+                     ],
+                   ),
+                 )),
+               ],
+             ),
+             for (var empId in employees) ...[
+               TableRow(
+                 decoration: BoxDecoration(
+                   color: _staffColors[empId] ?? Colors.transparent,
+                 ),
+                 children: [
+                   TableCell(
+                     child: Padding(
+                       padding: const EdgeInsets.all(8.0),
+                       child: Column(
+                         crossAxisAlignment: CrossAxisAlignment.start,
+                         children: [
+                           Text(empId, style: TextStyle(fontWeight: FontWeight.bold)),
+                           Text(
+                             _staffNames[empId] ?? '',
+                             style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                           ),
+                           if (columnType == 'CongThuongChu')
+                             Text(
+                               'Công chữ',
+                               style: TextStyle(
+                                 fontSize: 10,
+                                 color: Colors.grey[700],
+                                 fontStyle: FontStyle.italic,
+                               ),
+                             ),
+                           if (columnType == 'NgoaiGioThuong')
+                             Text(
+                               'NG thường',
+                               style: TextStyle(
+                                 fontSize: 10,
+                                 color: Colors.grey[700],
+                                 fontStyle: FontStyle.italic,
+                               ),
+                             ),
+                         ],
                        ),
                      ),
                    ),
-                 ),
-                 ...(() {
-                   final summary = _calculateSummary(empId);
-                   
-                   return [
-                     TableCell(
-                       child: Container(
-                         color: Colors.blue.shade50,
-                         padding: EdgeInsets.all(8.0),
-                         child: Center(child: Text(summary['ng_days12'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ...(() {
+                     final summary = _calculateSummary(empId);
+                     return [
+                       TableCell(
+                         child: Container(
+                           color: Colors.blue.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(child: Text(summary[days1Key] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
+                         ),
                        ),
-                     ),
-                     TableCell(
-                       child: Container(
-                         color: Colors.blue.shade50,
-                         padding: EdgeInsets.all(8.0),
-                         child: Text(''),
+                       TableCell(
+                         child: Container(
+                           color: Colors.blue.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(child: Text(
+                             showPermissionColumns ? (summary['p1'] ?? '') : '',
+                             style: TextStyle(fontWeight: FontWeight.bold)
+                           )),
+                         ),
                        ),
-                     ),
-                     TableCell(
-                       child: Container(
-                         color: Colors.blue.shade50,
-                         padding: EdgeInsets.all(8.0),
-                         child: Text(''),
+                       TableCell(
+                         child: Container(
+                           color: Colors.blue.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(child: Text(summary['ht1'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
+                         ),
                        ),
-                     ),
-                     TableCell(
-                       child: Container(
-                         color: Colors.green.shade50,
-                         padding: EdgeInsets.all(8.0),
-                         child: Center(child: Text(summary['ng_days34'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
+                       TableCell(
+                         child: Container(
+                           color: Colors.green.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(child: Text(summary[days2Key] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
+                         ),
                        ),
-                     ),
-                     TableCell(
-                       child: Container(
-                         color: Colors.green.shade50,
-                         padding: EdgeInsets.all(8.0),
-                         child: Text(''),
+                       TableCell(
+                         child: Container(
+                           color: Colors.green.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(child: Text(
+                             showPermissionColumns ? (summary['p2'] ?? '') : '',
+                             style: TextStyle(fontWeight: FontWeight.bold)
+                           )),
+                         ),
                        ),
-                     ),
-                     TableCell(
-                       child: Container(
-                         color: Colors.green.shade50,
-                         padding: EdgeInsets.all(8.0),
-                         child: Text(''),
+                       TableCell(
+                         child: Container(
+                           color: Colors.green.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(child: Text(summary['ht2'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
+                         ),
                        ),
-                     ),
-                     TableCell(
-                       child: Container(
-                         color: Colors.orange.shade50,
-                         padding: EdgeInsets.all(8.0),
-                         child: Center(child: Text(summary['ng_total'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
+                       TableCell(
+                         child: Container(
+                           color: Colors.yellow.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(child: Text(summary[days3Key] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
+                         ),
                        ),
-                     ),
-                     ...List.generate(6, (index) => 
+                       TableCell(
+                         child: Container(
+                           color: Colors.yellow.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(child: Text(
+                             showPermissionColumns ? (summary['p3'] ?? '') : '',
+                             style: TextStyle(fontWeight: FontWeight.bold)
+                           )),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.yellow.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(child: Text(summary['ht3'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.red.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(child: Text(summary[days4Key] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.red.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(child: Text(
+                             showPermissionColumns ? (summary['p4'] ?? '') : '',
+                             style: TextStyle(fontWeight: FontWeight.bold)
+                           )),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.red.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(child: Text(summary['ht4'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
+                         ),
+                       ),
                        TableCell(
                          child: Container(
                            color: Colors.orange.shade50,
                            padding: EdgeInsets.all(8.0),
-                           child: Text(''),
+                           child: Center(child: Text(summary[totalKey] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
                          ),
-                       )
-                     ),
-                   ];
-                 })(),
-                 ...days.map((day) {
-                   final value = _getAttendanceForDay(empId, day, 'NgoaiGioThuong');
-                   final displayValue = (value == '0') ? '' : value;
-                   
-                   return TableCell(
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.orange.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(child: Text(
+                             showPermissionColumns ? (summary['phep'] ?? '') : '',
+                             style: TextStyle(fontWeight: FontWeight.bold)
+                           )),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.orange.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(child: Text(
+                             showLeColumn ? (summary['le'] ?? '') : '',
+                             style: TextStyle(fontWeight: FontWeight.bold)
+                           )),),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.orange.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(child: Text(
+                             showPermissionColumns ? (summary['hv'] ?? '') : '',
+                             style: TextStyle(fontWeight: FontWeight.bold)
+                           )),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.orange.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(child: Text(
+                             showPermissionColumns ? (summary['dem'] ?? '') : '',
+                             style: TextStyle(fontWeight: FontWeight.bold)
+                           )),
+                         ),
+                       ),
+                     ];
+                   })(),
+                   ...days.map((day) {
+                     final value = _getAttendanceForDay(empId, day, columnType);
+                     final displayValue = (value == '0' || value == 'Ro') ? '' : value;
+                     return TableCell(
+                       child: Padding(
+                         padding: const EdgeInsets.all(8.0),
+                         child: Center(
+                           child: Text(
+                             displayValue ?? '',
+                             style: TextStyle(
+                               color: (displayValue != null && displayValue.isNotEmpty) ? Colors.blue : null,
+                               fontWeight: (displayValue != null && displayValue.isNotEmpty) ? FontWeight.bold : null,
+                             ),
+                           ),
+                         ),
+                       ),
+                     );
+                   }),
+                 ],
+               ),
+               if (empId != employees.last)
+                 TableRow(
+                   children: [
+                     TableCell(child: SizedBox(height: 4)),
+                     ...List.generate(17, (index) => TableCell(child: SizedBox(height: 4))),
+                     ...days.map((_) => TableCell(child: SizedBox(height: 4))),
+                   ],
+                 ),
+             ],
+           ],
+         ),
+       ),
+       Divider(thickness: 1, height: 32),
+     ],
+   );
+ }
+
+ String _formatNumberValue(double value) {
+   if (value == value.toInt()) {
+     return value.toInt().toString();
+   } else {
+     return value.toStringAsFixed(1);
+   }
+ }
+
+ String _extractCongThuongChuBase(String? value) {
+   if (value == null) return 'Ro';
+   if (value.endsWith('+P')) {
+     return value.substring(0, value.length - 2);
+   } else if (value.endsWith('+P/2')) {
+     return value.substring(0, value.length - 4);
+   }
+   return value;
+ }
+
+ void _showError(String message) {
+   if (mounted) {
+     ScaffoldMessenger.of(context).showSnackBar(
+       SnackBar(content: Text(message), backgroundColor: Colors.red)
+     );
+   }
+ }
+
+ Widget _buildChuGioThuongSection() {
+   final days = _getDaysInMonth();
+   final employees = _getEmployeesWithValueInColumn('CongThuongChu');
+   
+   if (employees.isEmpty) {
+     return SizedBox.shrink();
+   }
+   
+   final ScrollController horizontalController = ScrollController();
+   
+   return Column(
+     crossAxisAlignment: CrossAxisAlignment.start,
+     children: [
+       Padding(
+         padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+         child: Text(
+           'Chữ & Giờ thường',
+           style: TextStyle(
+             fontSize: 18,
+             fontWeight: FontWeight.bold,
+             color: Colors.purple,
+           ),
+         ),
+       ),
+       
+       Padding(
+         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+         child: Row(
+           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+           children: [
+             ElevatedButton.icon(
+               onPressed: () {
+                 horizontalController.animateTo(
+                   0,
+                   duration: Duration(milliseconds: 300),
+                   curve: Curves.easeOut,
+                 );
+               },
+               icon: Icon(Icons.first_page),
+               label: Text('Đầu bảng'),
+               style: ElevatedButton.styleFrom(
+                 backgroundColor: Colors.blue,
+                 foregroundColor: Colors.white,
+               ),
+             ),
+             Row(
+               children: [
+                 ElevatedButton.icon(
+                   onPressed: () {
+                     double newOffset = (horizontalController.offset - 300);
+                     if (newOffset < 0) newOffset = 0;
+                     horizontalController.animateTo(
+                       newOffset,
+                       duration: Duration(milliseconds: 300),
+                       curve: Curves.easeOut,
+                     );
+                   },
+                   icon: Icon(Icons.arrow_back),
+                   label: Text('Trái'),
+                   style: ElevatedButton.styleFrom(
+                     backgroundColor: Colors.grey.shade700,
+                     foregroundColor: Colors.white,
+                   ),
+                 ),
+                 SizedBox(width: 8),
+                 ElevatedButton.icon(
+                   onPressed: () {
+                     double newOffset = (horizontalController.offset + 300);
+                     if (horizontalController.hasClients) {
+                       double maxScroll = horizontalController.position.maxScrollExtent;
+                       if (newOffset > maxScroll) newOffset = maxScroll;
+                       horizontalController.animateTo(
+                         newOffset,
+                         duration: Duration(milliseconds: 300),
+                         curve: Curves.easeOut,
+                       );
+                     }
+                   },
+                   icon: Icon(Icons.arrow_forward),
+                   label: Text('Phải'),
+                   style: ElevatedButton.styleFrom(
+                     backgroundColor: Colors.grey.shade700,
+                     foregroundColor: Colors.white,
+                   ),
+                 ),
+               ],
+             ),
+             ElevatedButton.icon(
+               onPressed: () {
+                 if (horizontalController.hasClients) {
+                   horizontalController.animateTo(
+                     horizontalController.position.maxScrollExtent,
+                     duration: Duration(milliseconds: 300),
+                     curve: Curves.easeOut,
+                   );
+                 }
+               },
+               icon: Icon(Icons.last_page),
+               label: Text('Cuối bảng'),
+               style: ElevatedButton.styleFrom(
+                 backgroundColor: Colors.blue,
+                 foregroundColor: Colors.white,
+               ),
+             ),
+           ],
+         ),
+       ),
+       
+       SingleChildScrollView(
+         controller: horizontalController, 
+         scrollDirection: Axis.horizontal,
+         child: Table(
+           border: TableBorder(
+             horizontalInside: BorderSide(color: Colors.grey.shade300),
+             verticalInside: BorderSide(color: Colors.grey.shade300),
+             bottom: BorderSide(color: Colors.grey.shade300),
+             right: BorderSide(color: Colors.grey.shade300),
+             left: BorderSide(color: Colors.grey.shade300),
+             top: BorderSide(color: Colors.grey.shade300),
+           ),
+           columnWidths: {
+             0: FixedColumnWidth(120),
+             1: FixedColumnWidth(60),
+             2: FixedColumnWidth(60),
+             3: FixedColumnWidth(60),
+             4: FixedColumnWidth(60),
+             5: FixedColumnWidth(60),
+             6: FixedColumnWidth(60),
+             7: FixedColumnWidth(60),
+             8: FixedColumnWidth(60),
+             9: FixedColumnWidth(60),
+             10: FixedColumnWidth(60),
+             11: FixedColumnWidth(60),
+             12: FixedColumnWidth(60),
+             13: FixedColumnWidth(60),
+             14: FixedColumnWidth(60),
+             15: FixedColumnWidth(60),
+             16: FixedColumnWidth(60),
+             17: FixedColumnWidth(60),
+             for (int i = 0; i < days.length; i++)
+               i + 18: FixedColumnWidth(60),
+           },
+           defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+           children: [
+             TableRow(
+               decoration: BoxDecoration(color: Colors.grey.shade200),
+               children: [
+                 TableCell(child: Padding(padding: const EdgeInsets.all(8.0), child: Text(''))),
+                 TableCell(
+                   verticalAlignment: TableCellVerticalAlignment.fill,
+                   child: Container(
+                     color: Colors.blue.shade100,
+                     child: Center(child: Text('Tuần 1', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(child: Container(color: Colors.blue.shade100, child: Text(''))),
+                 TableCell(child: Container(color: Colors.blue.shade100, child: Text(''))),
+                 TableCell(
+                   verticalAlignment: TableCellVerticalAlignment.fill,
+                   child: Container(
+                     color: Colors.green.shade100,
+                     child: Center(child: Text('Tuần 2', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(child: Container(color: Colors.green.shade100, child: Text(''))),
+                 TableCell(child: Container(color: Colors.green.shade100, child: Text(''))),
+                 TableCell(
+                   verticalAlignment: TableCellVerticalAlignment.fill,
+                   child: Container(
+                     color: Colors.yellow.shade100,
+                     child: Center(child: Text('Tuần 3', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(child: Container(color: Colors.yellow.shade100, child: Text(''))),
+                 TableCell(child: Container(color: Colors.yellow.shade100, child: Text(''))),
+                 TableCell(
+                   verticalAlignment: TableCellVerticalAlignment.fill,
+                   child: Container(
+                     color: Colors.red.shade100,
+                     child: Center(child: Text('Tuần 4', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(child: Container(color: Colors.red.shade100, child: Text(''))),
+                 TableCell(child: Container(color: Colors.red.shade100, child: Text(''))),
+                 TableCell(
+                   verticalAlignment: TableCellVerticalAlignment.fill,
+                   child: Container(
+                     color: Colors.orange.shade100,
+                     child: Center(child: Text('Tổng tháng', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
+                 TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
+                 TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
+                 TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
+                 ...days.map((_) => TableCell(child: Text(''))),
+               ],
+             ),
+             TableRow(
+               decoration: BoxDecoration(color: Colors.grey.shade200),
+               children: [
+                 TableCell(
+                   child: Padding(
+                     padding: const EdgeInsets.all(8.0),
+                     child: Text('Mã NV', style: TextStyle(fontWeight: FontWeight.bold)),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.blue.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('Tuần 1', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.blue.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('P1', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.blue.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('HT1', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.green.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('Tuần 2', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.green.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('P2', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.green.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('HT2', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.yellow.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('Tuần 3', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.yellow.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('P3', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.yellow.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('HT3', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.red.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('Tuần 4', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.red.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('P4', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.red.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('HT4', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.orange.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('Công', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.orange.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('Phép', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.orange.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('Lễ', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.orange.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('HV', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 TableCell(
+                   child: Container(
+                     color: Colors.orange.shade100,
+                     padding: EdgeInsets.all(8.0),
+                     child: Center(child: Text('Đêm', style: TextStyle(fontWeight: FontWeight.bold))),
+                   ),
+                 ),
+                 ...days.map((day) => TableCell(
+                   child: Column(
+                     children: [
+                       Padding(
+                         padding: const EdgeInsets.all(4.0),
+                         child: Text(
+                           _formatNumberValue(_calculateDailyTotal(day)),
+                           style: TextStyle(
+                             fontWeight: FontWeight.bold,
+                             color: Colors.red,
+                             fontSize: 12,
+                           ),
+                         ),
+                       ),
+                       Padding(
+                         padding: const EdgeInsets.all(4.0),
+                         child: Text(
+                           day.toString(), 
+                           style: TextStyle(fontWeight: FontWeight.bold)
+                         ),
+                       ),
+                     ],
+                   ),
+                 )),
+               ],
+             ),
+             for (var empId in employees) ...[
+               TableRow(
+                 decoration: BoxDecoration(
+                   color: _staffColors[empId] ?? Colors.transparent,
+                 ),
+                 children: [
+                   TableCell(
                      child: Padding(
                        padding: const EdgeInsets.all(8.0),
+                       child: Column(
+                         crossAxisAlignment: CrossAxisAlignment.start,
+                         children: [
+                           Text(empId, style: TextStyle(fontWeight: FontWeight.bold)),
+                           Text(
+                             _staffNames[empId] ?? '',
+                             style: TextStyle(
+                               fontSize: 12,
+                               color: Colors.grey[600],
+                             ),
+                           ),
+                           Text(
+                             'Công chữ',
+                             style: TextStyle(
+                               fontSize: 10,
+                               color: Colors.grey[700],
+                               fontStyle: FontStyle.italic,
+                             ),
+                           ),
+                         ],
+                       ),
+                     ),
+                   ),
+                   ...(() {
+                     final summary = _calculateSummary(empId);
+                     return [
+                       TableCell(
+                         child: Container(
+                           color: Colors.blue.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(
+                             child: Text(
+                               summary['tuan1'] ?? '',
+                               style: TextStyle(fontWeight: FontWeight.bold),
+                             ),
+                           ),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.blue.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(
+                             child: Text(
+                               summary['p1'] ?? '',
+                               style: TextStyle(fontWeight: FontWeight.bold),
+                             ),
+                           ),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.blue.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(
+                             child: Text(
+                               summary['ht1'] ?? '',
+                               style: TextStyle(fontWeight: FontWeight.bold),
+                             ),
+                           ),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.green.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(
+                             child: Text(
+                               summary['tuan2'] ?? '',
+                               style: TextStyle(fontWeight: FontWeight.bold),
+                             ),
+                           ),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.green.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(
+                             child: Text(
+                               summary['p2'] ?? '',
+                               style: TextStyle(fontWeight: FontWeight.bold),
+                             ),
+                           ),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.green.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(
+                             child: Text(
+                               summary['ht2'] ?? '',
+                               style: TextStyle(fontWeight: FontWeight.bold),
+                             ),
+                           ),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.yellow.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(
+                             child: Text(
+                               summary['tuan3'] ?? '',
+                               style: TextStyle(fontWeight: FontWeight.bold),
+                             ),
+                           ),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.yellow.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(
+                             child: Text(
+                               summary['p3'] ?? '',
+                               style: TextStyle(fontWeight: FontWeight.bold),
+                             ),
+                           ),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.yellow.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(
+                             child: Text(
+                               summary['ht3'] ?? '',
+                               style: TextStyle(fontWeight: FontWeight.bold),
+                             ),
+                           ),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.red.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(
+                             child: Text(
+                               summary['tuan4'] ?? '',
+                               style: TextStyle(fontWeight: FontWeight.bold),
+                             ),
+                           ),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.red.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(
+                             child: Text(
+                               summary['p4'] ?? '',
+                               style: TextStyle(fontWeight: FontWeight.bold),
+                             ),
+                           ),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.red.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(
+                             child: Text(
+                               summary['ht4'] ?? '',
+                               style: TextStyle(fontWeight: FontWeight.bold),
+                             ),
+                           ),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.orange.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(
+                             child: Text(
+                               summary['cong'] ?? '',
+                               style: TextStyle(fontWeight: FontWeight.bold),
+                             ),
+                           ),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.orange.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(
+                             child: Text(
+                               summary['phep'] ?? '',
+                               style: TextStyle(fontWeight: FontWeight.bold),
+                             ),
+                           ),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.orange.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(
+                             child: Text(
+                               summary['le'] ?? '',
+                               style: TextStyle(fontWeight: FontWeight.bold),
+                             ),
+                           ),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.orange.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(
+                             child: Text(
+                               summary['hv'] ?? '',
+                               style: TextStyle(fontWeight: FontWeight.bold),
+                             ),
+                           ),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.orange.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(
+                             child: Text(
+                               summary['dem'] ?? '',
+                               style: TextStyle(fontWeight: FontWeight.bold),
+                             ),
+                           ),
+                         ),
+                       ),
+                     ];
+                   })(),
+                   ...days.map((day) {
+                     final value = _getAttendanceForDay(empId, day, 'CongThuongChu');
+                     final displayValue = (value == 'Ro') ? '' : value;
+                     
+                     return TableCell(
+                       child: Padding(
+                         padding: const EdgeInsets.all(8.0),
+                         child: Center(
+                           child: Text(
+                             displayValue ?? '',
+                             style: TextStyle(
+                               color: (displayValue != null && displayValue.isNotEmpty) 
+                                 ? Colors.blue 
+                                 : null,
+                               fontWeight: (displayValue != null && displayValue.isNotEmpty) 
+                                 ? FontWeight.bold 
+                                 : null,
+                             ),
+                           ),
+                         ),
+                       ),
+                     );
+                   }),
+                 ],
+               ),
+               TableRow(
+                 decoration: BoxDecoration(
+                   color: _staffColors[empId] != null 
+                     ? _staffColors[empId]!.withOpacity(0.7) 
+                     : Colors.grey.shade50,
+                 ),
+                 children: [
+                   TableCell(
+                     child: Padding(
+                       padding: const EdgeInsets.all(8.0),
+                       child: Text(
+                         'NG thường',
+                         style: TextStyle(
+                           fontSize: 10,
+                           color: Colors.grey[700],
+                           fontStyle: FontStyle.italic,
+                         ),
+                       ),
+                     ),
+                   ),
+                   ...(() {
+                     final summary = _calculateSummary(empId);
+                     
+                     return [
+                       TableCell(
+                         child: Container(
+                           color: Colors.blue.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(child: Text(summary['ng_days1'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.blue.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Text(''),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.blue.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Text(''),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.green.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(child: Text(summary['ng_days2'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.green.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Text(''),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.green.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Text(''),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.yellow.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(child: Text(summary['ng_days3'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.yellow.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Text(''),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.yellow.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Text(''),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.red.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(child: Text(summary['ng_days4'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.red.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Text(''),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.red.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Text(''),
+                         ),
+                       ),
+                       TableCell(
+                         child: Container(
+                           color: Colors.orange.shade50,
+                           padding: EdgeInsets.all(8.0),
+                           child: Center(child: Text(summary['ng_total'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
+                         ),
+                       ),
+                       ...List.generate(4, (index) => 
+                         TableCell(
+                           child: Container(
+                             color: Colors.orange.shade50,
+                             padding: EdgeInsets.all(8.0),
+                             child: Text(''),
+                           ),
+                         )
+                       ),
+                     ];
+                   })(),
+                   ...days.map((day) {
+                     final value = _getAttendanceForDay(empId, day, 'NgoaiGioThuong');
+                     final displayValue = (value == '0') ? '' : value;
+                     
+                     return TableCell(
+                       child: Padding(
+                         padding: const EdgeInsets.all(8.0),
+                         child: Center(
+                           child: Text(
+                             displayValue ?? '',
+                             style: TextStyle(
+                               color: (displayValue != null && displayValue.isNotEmpty) 
+                                 ? Colors.blue 
+                                 : null,
+                               fontWeight: (displayValue != null && displayValue.isNotEmpty) 
+                                 ? FontWeight.bold 
+                                 : null,
+                             ),
+                           ),
+                         ),
+                       ),
+                     );
+                   }),
+                 ],
+               ),
+               if (empId != employees.last)
+                 TableRow(
+                   children: [
+                     TableCell(
+                       child: SizedBox(height: 4),
+                     ),
+                     ...List.generate(17, (index) => 
+                       TableCell(
+                         child: SizedBox(height: 4),
+                       )
+                     ),
+                     ...days.map((_) => TableCell(
+                       child: SizedBox(height: 4),)),
+                   ],
+                 ),
+             ],
+           ],
+         ),
+       ),
+       Divider(thickness: 1, height: 32),
+     ],
+   );
+ }
+
+ Widget _buildCombinedView() {
+   return SingleChildScrollView(
+     child: Column(
+       crossAxisAlignment: CrossAxisAlignment.start,
+       children: [
+         _buildChuGioThuongSection(),
+         _buildRegularSection('HoTro', 'Hỗ trợ'),
+         _buildRegularSection('PartTime', 'Part time'),
+         _buildRegularSection('PartTimeSang', 'PT sáng'),
+         _buildRegularSection('PartTimeChieu', 'PT chiều'),
+         _buildRegularSection('NgoaiGioKhac', 'NG khác'),
+         _buildRegularSection('NgoaiGiox15', 'NG x1.5'),
+         _buildRegularSection('NgoaiGiox2', 'NG x2'),
+         _buildRegularSection('CongLe', 'Công lễ'),
+       ],
+     ),
+   );
+ }
+
+ @override
+ Widget build(BuildContext context) {
+   return Scaffold(
+     appBar: AppBar(
+       backgroundColor: Colors.purple,
+       title: Row(
+         children: [
+           Expanded(
+             flex: 3,
+             child: Container(
+               decoration: BoxDecoration(
+                 color: Colors.white.withOpacity(0.15),
+                 borderRadius: BorderRadius.circular(8),
+               ),
+               padding: EdgeInsets.symmetric(horizontal: 8),
+               child: DropdownButtonHideUnderline(
+                 child: DropdownSearch<String>(
+                   items: _departments,
+                   selectedItem: _selectedDepartment,
+                   onChanged: (value) {
+                     setState(() {
+                       _selectedDepartment = value;
+                       _loadAttendanceData();
+                     });
+                   },
+                   dropdownDecoratorProps: DropDownDecoratorProps(
+                     dropdownSearchDecoration: InputDecoration(
+                       hintText: "Chọn dự án",
+                       border: InputBorder.none,
+                       contentPadding: EdgeInsets.zero,
+                     ),
+                   ),
+                   popupProps: PopupProps.dialog(
+                     showSearchBox: true,
+                     searchFieldProps: TextFieldProps(
+                       decoration: InputDecoration(
+                         hintText: "Tìm kiếm dự án...",
+                         prefixIcon: Icon(Icons.search),
+                         border: OutlineInputBorder(),
+                       ),
+                     ),
+                     title: Container(
+                       height: 50,
+                       decoration: BoxDecoration(
+                         color: Theme.of(context).primaryColor,
+                         borderRadius: BorderRadius.only(
+                           topLeft: Radius.circular(8),
+                           topRight: Radius.circular(8),
+                         ),
+                       ),
                        child: Center(
                          child: Text(
-                           displayValue ?? '',
+                           'Chọn dự án',
                            style: TextStyle(
-                             color: (displayValue != null && displayValue.isNotEmpty) 
-                               ? Colors.blue 
-                               : null,
-                             fontWeight: (displayValue != null && displayValue.isNotEmpty) 
-                               ? FontWeight.bold 
-                               : null,
+                             fontSize: 18,
+                             fontWeight: FontWeight.bold,
+                             color: Colors.white,
                            ),
                          ),
                        ),
                      ),
-                   );
-                 }),
-               ],
-             ),
-             if (empId != employees.last)
-               TableRow(
-                 children: [
-                   TableCell(
-                     child: SizedBox(height: 4),
                    ),
-                   ...List.generate(13, (index) => 
-                     TableCell(
-                       child: SizedBox(height: 4),
-                     )
-                   ),
-                   ...days.map((_) => TableCell(
-                     child: SizedBox(height: 4),
-                   )),
-                 ],
+                 ),
                ),
-           ],
+             ),
+           ),
+           SizedBox(width: 16),
+           Expanded(
+             flex: 2,
+             child: DropdownButton<String>(
+               value: _selectedMonth,
+               items: _availableMonths.map((month) => DropdownMenuItem(
+                 value: month,
+                 child: Text(DateFormat('MM/yyyy').format(DateTime.parse('$month-01')))
+               )).toList(),
+               onChanged: (value) {
+                 setState(() {
+                   _selectedMonth = value;
+                   _loadAttendanceData();
+                 });
+               },
+               style: TextStyle(color: Colors.white),
+               dropdownColor: Theme.of(context).primaryColor,
+               isExpanded: true,
+             ),
+           ),
          ],
        ),
+       leading: IconButton(
+         icon: Icon(Icons.arrow_back, color: Colors.white),
+         onPressed: () => Navigator.of(context).pop(),
+       ),
      ),
-     Divider(thickness: 1, height: 32),
-   ],
- );
-}
-
-  Widget _buildCombinedView() {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildChuGioThuongSection(),
-          _buildRegularSection('HoTro', 'Hỗ trợ'),
-          _buildRegularSection('PartTime', 'Part time'),
-          _buildRegularSection('PartTimeSang', 'PT sáng'),
-          _buildRegularSection('PartTimeChieu', 'PT chiều'),
-          _buildRegularSection('NgoaiGioKhac', 'NG khác'),
-          _buildRegularSection('NgoaiGiox15', 'NG x1.5'),
-          _buildRegularSection('NgoaiGiox2', 'NG x2'),
-          _buildRegularSection('CongLe', 'Công lễ'),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-  backgroundColor: Colors.purple,
-  title: Row(
-    children: [
-      Expanded(
-        flex: 3, // Give more space to the project dropdown
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          padding: EdgeInsets.symmetric(horizontal: 8),
-          child: DropdownButtonHideUnderline(
-            child: DropdownSearch<String>(
-              items: _departments,
-              selectedItem: _selectedDepartment,
-              onChanged: (value) {
-                setState(() {
-                  _selectedDepartment = value;
-                  _loadAttendanceData();
-                });
-              },
-              dropdownDecoratorProps: DropDownDecoratorProps(
-                dropdownSearchDecoration: InputDecoration(
-                  hintText: "Chọn dự án",
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              popupProps: PopupProps.dialog(
-                showSearchBox: true,
-                searchFieldProps: TextFieldProps(
-                  decoration: InputDecoration(
-                    hintText: "Tìm kiếm dự án...",
-                    prefixIcon: Icon(Icons.search),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                title: Container(
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).primaryColor,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(8),
-                      topRight: Radius.circular(8),
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      'Chọn dự án',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-      SizedBox(width: 16),
-      Expanded(
-        flex: 2,
-        child: DropdownButton<String>(
-          value: _selectedMonth,
-          items: _availableMonths.map((month) => DropdownMenuItem(
-            value: month,
-            child: Text(DateFormat('MM/yyyy').format(DateTime.parse('$month-01')))
-          )).toList(),
-          onChanged: (value) {
-            setState(() {
-              _selectedMonth = value;
-              _loadAttendanceData();
-            });
-          },
-          style: TextStyle(color: Colors.white),
-          dropdownColor: Theme.of(context).primaryColor,
-          isExpanded: true,
-        ),
-      ),
-    ],
-  ),
-  leading: IconButton(
-    icon: Icon(Icons.arrow_back, color: Colors.white),
-    onPressed: () => Navigator.of(context).pop(),
-  ),
-),
-      body: Stack(
-        children: [
-          _isLoading 
-            ? const Center(child: CircularProgressIndicator()) 
-            : Column(
-              children: [
-                Padding(
-  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-  child: SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    child: Row(
-      children: [
-        ElevatedButton(
-          onPressed: _generateAutomaticLeave,
-          child: Text('Tạo Phép tự động'),
-        ),
-        SizedBox(width: 10),
-        ElevatedButton(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ProjectWorkerPC(
-                  username: widget.username,
-                ),
-              ),
-            );
-          },
-          child: Text('Tạo phụ cấp'),
-        ),
-        SizedBox(width: 10),
-        ElevatedButton(
-          onPressed: _exportPdf,
-          child: Text('Xuất PDF'),
-        ),
-        SizedBox(width: 10),
-        ElevatedButton(
-          onPressed: _exportExcel,
-          child: Text('Xuất Excel'),
-        ),
-      ],
-    ),
-  ),
-),
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text(
-                    'Chế độ xem dữ liệu - ${_selectedDepartment ?? ""}',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: _buildCombinedView(),
-                ),
-              ],
-            ),
-          if (_isLoading)
-            Container(
-              color: Colors.black.withOpacity(0.3),
-              child: Center(
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text('Đang xử lý...'),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
+     body: Stack(
+       children: [
+         _isLoading 
+           ? const Center(child: CircularProgressIndicator()) 
+           : Column(
+             children: [
+               Padding(
+                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                 child: SingleChildScrollView(
+                   scrollDirection: Axis.horizontal,
+                   child: Row(
+                     children: [
+                       ElevatedButton(
+                         onPressed: _generateAutomaticLeave,
+                         child: Text('Tạo Phép tự động'),
+                       ),
+                       SizedBox(width: 10),
+                       ElevatedButton(
+                         onPressed: () {
+                           Navigator.push(
+                             context,
+                             MaterialPageRoute(
+                               builder: (context) => ProjectWorkerPC(
+                                 username: widget.username,
+                               ),
+                             ),
+                           );
+                         },
+                         child: Text('Tạo phụ cấp'),
+                       ),
+                       SizedBox(width: 10),
+                       ElevatedButton(
+                         onPressed: _exportPdf,
+                         child: Text('Xuất PDF'),
+                       ),
+                       SizedBox(width: 10),
+                       ElevatedButton(
+                         onPressed: _exportExcel,
+                         child: Text('Xuất Excel'),
+                       ),
+                     ],
+                   ),
+                 ),
+               ),
+               Padding(
+                 padding: const EdgeInsets.all(16.0),
+                 child: Text(
+                   'Chế độ xem dữ liệu - ${_selectedDepartment ?? ""}',
+                   style: TextStyle(
+                     fontSize: 18,
+                     fontWeight: FontWeight.bold,
+                   ),
+                 ),
+               ),
+               Expanded(
+                 child: _buildCombinedView(),
+               ),
+             ],
+           ),
+         if (_isLoading)
+           Container(
+             color: Colors.black.withOpacity(0.3),
+             child: Center(
+               child: Card(
+                 child: Padding(
+                   padding: const EdgeInsets.all(20.0),
+                   child: Column(
+                     mainAxisSize: MainAxisSize.min,
+                     children: [
+                       CircularProgressIndicator(),
+                       SizedBox(height: 16),
+                       Text('Đang xử lý...'),
+                     ],
+                   ),
+                 ),
+               ),
+             ),
+           ),
+       ],
+     ),
+   );
+ }
 }

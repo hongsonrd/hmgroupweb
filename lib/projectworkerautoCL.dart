@@ -18,6 +18,7 @@ import 'package:sqflite/sqflite.dart';
 import 'http_client.dart';
 import 'package:file_picker/file_picker.dart';
 import 'export_helper_period.dart';
+import 'projectworkerautoCLexcel.dart';
 
 class ProjectWorkerAuto extends StatefulWidget {
   final String selectedBoPhan;
@@ -2584,7 +2585,24 @@ String _extractCongThuongChuBase(String? value) {
     ),
   );
 }
-
+Future<void> _exportComprehensiveExcel() async {
+  setState(() => _isLoading = true);
+  
+  try {
+    await AllProjectsExcelGenerator.generateComprehensiveExcelReport(
+      selectedMonth: _selectedMonth ?? '',
+      context: context,
+      periodStartDate: _periodStartDate,
+      periodEndDate: _periodEndDate,
+      isPeriodMode: _isPeriodMode,
+    );
+  } catch (e) {
+    print('Comprehensive Excel export error: $e');
+    _showError('Lỗi khi xuất Excel tổng hợp: $e');
+  }
+  
+  setState(() => _isLoading = false);
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -2704,6 +2722,15 @@ String _extractCongThuongChuBase(String? value) {
                           onPressed: _exportExcel,
                           child: Text('Xuất Excel'),
                         ),
+                        SizedBox(width: 10),
+ElevatedButton(
+  onPressed: _exportComprehensiveExcel,
+  child: Text('Xuất Excel 2'),
+  style: ElevatedButton.styleFrom(
+    backgroundColor: Colors.purple,
+    foregroundColor: Colors.white,
+  ),
+),
                          SizedBox(width: 10),
         ElevatedButton(
           onPressed: _exportExcelAllProjects,

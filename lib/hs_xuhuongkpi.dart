@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'db_helper.dart';
 import 'table_models.dart';
-
+import 'hs_xuhuongkpiorder.dart';
 class HSXuHuongKPIScreen extends StatefulWidget {
   @override
   _HSXuHuongKPIScreenState createState() => _HSXuHuongKPIScreenState();
@@ -1114,7 +1114,6 @@ Future<void> _loadCustomerKPI() async {
     ),
   );
 }
-
 Widget _buildTransactionDetailsTable() {
   return Card(
     child: Padding(
@@ -1144,6 +1143,7 @@ Widget _buildTransactionDetailsTable() {
                 DataColumn(label: Text('L3', style: TextStyle(fontWeight: FontWeight.bold))),
                 DataColumn(label: Text('L4', style: TextStyle(fontWeight: FontWeight.bold))),
                 DataColumn(label: Text('L5', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Chi tiết', style: TextStyle(fontWeight: FontWeight.bold))),
               ],
               rows: _transactionDetails.map((transaction) => DataRow(
                 cells: [
@@ -1173,6 +1173,29 @@ Widget _buildTransactionDetailsTable() {
                     color: transaction.isL5 ? Colors.green : Colors.grey,
                     size: 20,
                   )),
+                  DataCell(
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => OrderDetailsScreen(
+                              orderId: transaction.orderId,
+                              customerName: transaction.customerName,
+                            ),
+                          ),
+                        );
+                      },
+                      icon: Icon(Icons.visibility, size: 16),
+                      label: Text('Xem'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue[600],
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        textStyle: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ),
                 ],
               )).toList(),
             ),
@@ -1182,7 +1205,26 @@ Widget _buildTransactionDetailsTable() {
     ),
   );
 }
- 
+ Color _getTransactionStatusColor(String status) {
+  switch (status.toLowerCase()) {
+    case 'báo giá':
+      return Colors.orange;
+    case 'đã duyệt':
+    case 'duyệt':
+      return Colors.green;
+    case 'hoàn thành':
+      return Colors.blue;
+    case 'đã huỷ':
+      return Colors.red;
+    case 'chưa xong':
+      return Colors.purple;
+    case 'gửi':
+    case 'chờ duyệt':
+      return Colors.amber[700]!;
+    default:
+      return Colors.grey;
+  }
+}
  Widget _buildTableHeader(String text) {
    return Padding(
      padding: EdgeInsets.all(8),
