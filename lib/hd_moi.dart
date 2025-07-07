@@ -37,7 +37,8 @@ bool _isDataLoaded = false;
   final TextEditingController _diaChiController = TextEditingController();
   final TextEditingController _soHopDongController = TextEditingController();
   final TextEditingController _ghiChuHopDongController = TextEditingController();
-  
+  final TextEditingController _doanhThuGiamCNGiaController = TextEditingController();
+
   // Form controllers - Worker Info
   final TextEditingController _congNhanHopDongController = TextEditingController();
   final TextEditingController _congNhanHDTangController = TextEditingController();
@@ -236,6 +237,7 @@ String _formatToFirstDayOfMonth(String period) {
     _congNhanCaKhacController.dispose();
     _congNhanGhiChuBoTriNhanSuController.dispose();
     _fileHopDongController.dispose();
+    _doanhThuGiamCNGiaController.dispose();
     super.dispose();
   }
 Future<void> _fetchMaKinhDoanh() async {
@@ -357,7 +359,8 @@ Future<void> _fetchMaKinhDoanh() async {
       _congNhanCaHCController.text = contract.congNhanCaHC ?? '';
       _congNhanCaKhacController.text = contract.congNhanCaKhac ?? '';
       _congNhanGhiChuBoTriNhanSuController.text = contract.congNhanGhiChuBoTriNhanSu ?? '';
-      
+          _doanhThuGiamCNGiaController.text = contract.doanhThuGiamCNGia?.toString() ?? '';
+
       print('Contract data loaded successfully');
       print('tenHopDong loaded: ${_tenHopDongController.text}');
       _initializeUpdatedCosts();
@@ -460,50 +463,59 @@ Future<void> _selectEndDate() async {
   }
 }
   void _calculateDerivedValues() {
-    // Parse input values
-    double congNhanHopDong = double.tryParse(_congNhanHopDongController.text) ?? 0.0;
-    double congNhanHDTang = double.tryParse(_congNhanHDTangController.text) ?? 0.0;
-    double congNhanHDGiam = double.tryParse(_congNhanHDGiamController.text) ?? 0.0;
-    
-    int doanhThuCu = int.tryParse(_doanhThuCuController.text) ?? 0;
-    int comCu = int.tryParse(_comCuController.text) ?? 0;
-    int comCu10phantram = int.tryParse(_comCu10phantramController.text) ?? 0;
-    int comGiam = int.tryParse(_comGiamController.text) ?? 0;
-    int comTangKhongThue = int.tryParse(_comTangKhongThueController.text) ?? 0;
-    int comTangTinhThue = int.tryParse(_comTangTinhThueController.text) ?? 0;
-    int doanhThuTangCNGia = int.tryParse(_doanhThuTangCNGiaController.text) ?? 0;
-    int doanhThuXuatHoaDon = int.tryParse(_doanhThuXuatHoaDonController.text) ?? 0;
-    int giaNetCN = int.tryParse(_giaNetCNController.text) ?? 0;
-    
-    // Use updated cost values instead of original contract values
-    int chiPhiGiamSat = int.tryParse(_chiPhiGiamSatController.text) ?? 0;
-    int chiPhiVatLieu = _updatedChiPhiVatLieu;
-    int chiPhiCVDinhKy = _updatedChiPhiCVDinhKy;
-    int chiPhiLeTetTCa = _updatedChiPhiLeTetTCa;
-    int chiPhiPhuCap = _updatedChiPhiPhuCap;
-    int chiPhiNgoaiGiao = _updatedChiPhiNgoaiGiao;
-    int chiPhiMayMoc = _updatedChiPhiMayMoc;
-    int chiPhiLuong = _updatedChiPhiLuong;
-    
-    // Calculate derived values
-    _congNhanDuocCo = congNhanHopDong + congNhanHDTang - congNhanHDGiam;
-    _doanhThuGiamCNGia = (_netCN * congNhanHDGiam).round();
-    _doanhThuDangThucHien = doanhThuCu + comTangKhongThue + comTangTinhThue + doanhThuTangCNGia - _doanhThuGiamCNGia;
-    _doanhThuChenhLech = _doanhThuDangThucHien - doanhThuXuatHoaDon;
-    _comMoi = comCu - comGiam + comTangKhongThue + comTangTinhThue;
-    _phanTramThueMoi = (comTangTinhThue * 0.1).round() + comCu10phantram;
-    _comThucNhan = _comMoi - _phanTramThueMoi;
-    
-    _giaTriConLai = _doanhThuDangThucHien - _comMoi - chiPhiGiamSat - chiPhiVatLieu - 
-                   chiPhiCVDinhKy - chiPhiLeTetTCa - chiPhiPhuCap - chiPhiNgoaiGiao - 
-                   chiPhiMayMoc - chiPhiLuong;
-    
-    _netCN = _congNhanDuocCo > 0 ? (_giaTriConLai / _congNhanDuocCo).round() : 0;
-    _chenhLechGia = _netCN - giaNetCN;
-    _chenhLechTong = (_congNhanDuocCo * _chenhLechGia).round();
-    
-    setState(() {}); // Refresh UI with calculated values
-  }
+  // Parse input values
+  double congNhanHopDong = double.tryParse(_congNhanHopDongController.text) ?? 0.0;
+  double congNhanHDTang = double.tryParse(_congNhanHDTangController.text) ?? 0.0;
+  double congNhanHDGiam = double.tryParse(_congNhanHDGiamController.text) ?? 0.0;
+  
+  int doanhThuCu = int.tryParse(_doanhThuCuController.text) ?? 0;
+  int comCu = int.tryParse(_comCuController.text) ?? 0;
+  int comCu10phantram = int.tryParse(_comCu10phantramController.text) ?? 0;
+  int comGiam = int.tryParse(_comGiamController.text) ?? 0;
+  int comTangKhongThue = int.tryParse(_comTangKhongThueController.text) ?? 0;
+  int comTangTinhThue = int.tryParse(_comTangTinhThueController.text) ?? 0;
+  int doanhThuTangCNGia = int.tryParse(_doanhThuTangCNGiaController.text) ?? 0;
+  int doanhThuXuatHoaDon = int.tryParse(_doanhThuXuatHoaDonController.text) ?? 0;
+  int giaNetCN = int.tryParse(_giaNetCNController.text) ?? 0;
+  
+  // NEW: Parse doanhThuGiamCNGia as user input instead of calculating
+  int doanhThuGiamCNGia = int.tryParse(_doanhThuGiamCNGiaController.text) ?? 0;
+  
+  // Use updated cost values instead of original contract values
+  int chiPhiGiamSat = int.tryParse(_chiPhiGiamSatController.text) ?? 0;
+  int chiPhiVatLieu = _updatedChiPhiVatLieu;
+  int chiPhiCVDinhKy = _updatedChiPhiCVDinhKy;
+  int chiPhiLeTetTCa = _updatedChiPhiLeTetTCa;
+  int chiPhiPhuCap = _updatedChiPhiPhuCap;
+  int chiPhiNgoaiGiao = _updatedChiPhiNgoaiGiao;
+  int chiPhiMayMoc = _updatedChiPhiMayMoc;
+  int chiPhiLuong = _updatedChiPhiLuong;
+  
+  // Calculate derived values
+  _congNhanDuocCo = congNhanHopDong + congNhanHDTang - congNhanHDGiam;
+  
+  // REMOVED: _doanhThuGiamCNGia = (_netCN * congNhanHDGiam).round();
+  // Now it's user input: doanhThuGiamCNGia (parsed above)
+  
+  _doanhThuDangThucHien = doanhThuCu + comTangKhongThue + comTangTinhThue + doanhThuTangCNGia - doanhThuGiamCNGia;
+  
+  // CHANGED: Reverse the calculation
+  _doanhThuChenhLech = doanhThuXuatHoaDon - _doanhThuDangThucHien;
+  
+  _comMoi = comCu - comGiam + comTangKhongThue + comTangTinhThue;
+  _phanTramThueMoi = (comTangTinhThue * 0.1).round() + comCu10phantram;
+  _comThucNhan = _comMoi - _phanTramThueMoi;
+  
+  _giaTriConLai = _doanhThuDangThucHien - _comMoi - chiPhiGiamSat - chiPhiVatLieu - 
+                 chiPhiCVDinhKy - chiPhiLeTetTCa - chiPhiPhuCap - chiPhiNgoaiGiao - 
+                 chiPhiMayMoc - chiPhiLuong;
+  
+  _netCN = _congNhanDuocCo > 0 ? (_giaTriConLai / _congNhanDuocCo).round() : 0;
+  _chenhLechGia = _netCN - giaNetCN;
+  _chenhLechTong = (_congNhanDuocCo * _chenhLechGia).round();
+  
+  setState(() {}); // Refresh UI with calculated values
+}
 
   Future<void> _saveContract() async {
   if (!_formKey.currentState!.validate()) {
@@ -1309,6 +1321,19 @@ TextFormField(
              keyboardType: TextInputType.number,
              onChanged: (value) => _calculateDerivedValues(),
            ),
+                      SizedBox(height: 16),
+           TextFormField(
+  controller: _doanhThuGiamCNGiaController,
+  decoration: InputDecoration(
+    labelText: 'Doanh thu giảm CN & giá',
+    border: OutlineInputBorder(),
+    prefixIcon: Icon(Icons.trending_down),
+    suffixText: 'VND',
+  ),
+  enabled: _canEditThang,
+  keyboardType: TextInputType.number,
+  onChanged: (value) => _calculateDerivedValues(),
+),
            SizedBox(height: 16),
            
            TextFormField(
@@ -1320,8 +1345,9 @@ TextFormField(
              ),
              enabled: _canEditThang,
            ),
+
            SizedBox(height: 16),
-           
+
            // Calculated values display
            Container(
              padding: EdgeInsets.all(12),
@@ -1332,7 +1358,6 @@ TextFormField(
              ),
              child: Column(
                children: [
-                 _buildCalculatedRow('Doanh thu giảm CN & giá', _doanhThuGiamCNGia, 'VND'),
                  _buildCalculatedRow('Doanh thu đang thực hiện', _doanhThuDangThucHien, 'VND'),
                  _buildCalculatedRow('Doanh thu chênh lệch', _doanhThuChenhLech, 'VND'),
                  _buildCalculatedRow('Com mới', _comMoi, 'VND'),
