@@ -19,7 +19,7 @@ import '../projectmanagement4.dart';
 import '../hs_khachhang.dart';
 import '../hd_page.dart';
 import '../projecttimelinemay.dart';
-
+import '../projectcongnhan.dart';
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
   @override
@@ -82,6 +82,11 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
   'isDirectNavigation': true,
   'tab': 1, 
 },
+  {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo công nhân',
+    'link': 'congnhan_link',
+    'isDirectNavigation': true,
+    'tab': 1, 
+  },
   {'icon': 'assets/logokt.png', 'important': 'true','name': 'HM Kỹ thuật', 'link': 'https://www.appsheet.com/start/f2040b99-7558-4e2c-9e02-df100c83d8ce', 'tab': 0},
   {'icon': 'assets/zalologo.png', 'name': 'Zalo Hoàn Mỹ', 'link': 'https://zalo.me/2746464448500686217', 'tab': 0},
   {'icon': 'assets/fblogo.png','important': 'true', 'name': 'Facebook Hoàn Mỹ', 'link': 'https://www.facebook.com/Hoanmykleanco', 'tab': 0},
@@ -201,6 +206,18 @@ if (title == 'Hợp đồng của tôi') {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => MachineryUsageReport(username: 'x'),
+      ),
+    );
+    return;
+  }
+  if (title == 'Báo cáo công nhân') {
+    final userState = Provider.of<UserState>(context, listen: false);
+    final userData = userState.currentUser;
+    final username = userData?['username'] ?? '';
+    
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ProjectCongNhan(username: username),
       ),
     );
     return;
