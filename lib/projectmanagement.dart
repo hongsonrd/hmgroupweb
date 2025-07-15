@@ -24,6 +24,7 @@ import 'dart:math';
 
 import 'package:flutter/rendering.dart';
 import 'package:image/image.dart' as img;
+import 'projectmanagementcongnhan.dart';
 
 class ProjectManagement extends StatefulWidget {
   @override
@@ -873,13 +874,36 @@ Widget build(BuildContext context) {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-    Row(
+   Row(
   children: [
     Text(
       '✳️ Chọn lại hoặc  ',
       style: TextStyle(fontSize: 16),
     ),
-        SizedBox(height: 8),
+    TextButton(
+      style: ButtonStyle(
+        padding: MaterialStateProperty.all(EdgeInsets.zero),
+        minimumSize: MaterialStateProperty.all(Size(0, 0)),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProjectManagementCongNhan(),
+          ),
+        );
+      },
+      child: Text(
+        'QR Công nhân',
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          color: Colors.red,
+        ),
+      ),
+    ),
+    Text(' '),
     TextButton(
       style: ButtonStyle(
         padding: MaterialStateProperty.all(EdgeInsets.zero),

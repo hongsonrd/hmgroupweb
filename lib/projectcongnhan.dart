@@ -753,125 +753,147 @@ Future<void> _syncStaffBio() async {
 }
 
   Widget _buildFilters() {
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 3,
-            offset: Offset(0, 2),
+  return Container(
+    padding: EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      boxShadow: [
+        BoxShadow(
+          color: Colors.grey.withOpacity(0.1),
+          spreadRadius: 1,
+          blurRadius: 3,
+          offset: Offset(0, 2),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Bộ lọc',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[800],
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Bộ lọc',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[800],
+        ),
+        SizedBox(height: 16),
+        Row(
+          children: [
+            // Project dropdown with search
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Dự án',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey[700],
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: _selectedProject,
+                    hint: Text('Chọn dự án'),
+                    isExpanded: true,
+                    items: _projectOptions.map((project) {
+                      return DropdownMenuItem(
+                        value: project,
+                        child: Text(
+                          project,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedProject = value;
+                        _updateFilteredWorkers();
+                        _updateChartData();
+                      });
+                    },
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      suffixIcon: IconButton(
+                        icon: Icon(Icons.search),
+                        onPressed: () => _showProjectSearchDialog(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          SizedBox(height: 16),
-          Row(
-            children: [
-              // Project dropdown
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Dự án',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey[700],
-                      ),
+            SizedBox(width: 16),
+            // Date dropdown
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Ngày',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey[700],
                     ),
-                    SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      value: _selectedProject,
-                      hint: Text('Chọn dự án'),
-                      items: _projectOptions.map((project) {
-                        return DropdownMenuItem(
-                          value: project,
-                          child: Text(
-                            project,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedProject = value;
-                          _updateFilteredWorkers();
-                          _updateChartData();
-                        });
-                      },
-                      decoration: InputDecoration(
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                  ),
+                  SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: _selectedDate,
+                    hint: Text('Chọn ngày'),
+                    items: _dateOptions.map((date) {
+                      return DropdownMenuItem(
+                        value: date,
+                        child: Text(
+                          DateFormat('dd/MM/yyyy').format(DateTime.parse(date)),
                         ),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedDate = value;
+                        _updateFilteredWorkers();
+                      });
+                    },
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
                       ),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              SizedBox(width: 16),
-              // Date dropdown
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Ngày',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey[700],
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      value: _selectedDate,
-                      hint: Text('Chọn ngày'),
-                      items: _dateOptions.map((date) {
-                        return DropdownMenuItem(
-                          value: date,
-                          child: Text(
-                            DateFormat('dd/MM/yyyy').format(DateTime.parse(date)),
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedDate = value;
-                          _updateFilteredWorkers();
-                        });
-                      },
-                      decoration: InputDecoration(
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+void _showProjectSearchDialog() {
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return ProjectSearchDialog(
+        projects: _projectOptions,
+        selectedProject: _selectedProject,
+        onProjectSelected: (String project) {
+          setState(() {
+            _selectedProject = project;
+            _updateFilteredWorkers();
+            _updateChartData();
+          });
+        },
+      );
+    },
+  );
+}
   Widget _buildDateRangeSlider() {
     if (_maxDisplayDates <= 1) return SizedBox.shrink();
     
@@ -2012,4 +2034,198 @@ class FullImageDialog extends StatelessWidget {
      ),
    );
  }
+}
+// Project Search Dialog
+class ProjectSearchDialog extends StatefulWidget {
+  final List<String> projects;
+  final String? selectedProject;
+  final Function(String) onProjectSelected;
+
+  const ProjectSearchDialog({
+    Key? key,
+    required this.projects,
+    required this.selectedProject,
+    required this.onProjectSelected,
+  }) : super(key: key);
+
+  @override
+  _ProjectSearchDialogState createState() => _ProjectSearchDialogState();
+}
+
+class _ProjectSearchDialogState extends State<ProjectSearchDialog> {
+  late TextEditingController _searchController;
+  List<String> _filteredProjects = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+    _filteredProjects = widget.projects;
+    _searchController.addListener(_filterProjects);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _filterProjects() {
+    final query = _searchController.text.toLowerCase();
+    setState(() {
+      if (query.isEmpty) {
+        _filteredProjects = widget.projects;
+      } else {
+        _filteredProjects = widget.projects
+            .where((project) => project.toLowerCase().contains(query))
+            .toList();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width > 1200;
+    
+    return Dialog(
+      child: Container(
+        width: isDesktop ? 500 : MediaQuery.of(context).size.width * 0.9,
+        height: isDesktop ? 600 : MediaQuery.of(context).size.height * 0.7,
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.blue[600],
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.search, color: Colors.white),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Tìm kiếm dự án',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            // Search field
+            Container(
+              padding: EdgeInsets.all(16),
+              child: TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: 'Nhập tên dự án...',
+                  prefixIcon: Icon(Icons.search),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                          },
+                        )
+                      : null,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+            // Results count
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Text(
+                    'Tìm thấy ${_filteredProjects.length} dự án',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  if (widget.selectedProject != null) ...[
+                    Spacer(),
+                    TextButton(
+                      onPressed: () {
+                        widget.onProjectSelected('');
+                        Navigator.of(context).pop();
+                      },
+                      child: Text('Bỏ chọn'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Divider(height: 1),
+            // Projects list
+            Expanded(
+              child: _filteredProjects.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.search_off,
+                            size: 64,
+                            color: Colors.grey[400],
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'Không tìm thấy dự án nào',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: _filteredProjects.length,
+                      itemBuilder: (context, index) {
+                        final project = _filteredProjects[index];
+                        final isSelected = project == widget.selectedProject;
+                        
+                        return ListTile(
+                          title: Text(
+                            project,
+                            style: TextStyle(
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              color: isSelected ? Colors.blue[800] : Colors.black,
+                            ),
+                          ),
+                          trailing: isSelected
+                              ? Icon(Icons.check_circle, color: Colors.blue[600])
+                              : null,
+                          selected: isSelected,
+                          selectedTileColor: Colors.blue[50],
+                          onTap: () {
+                            widget.onProjectSelected(project);
+                            Navigator.of(context).pop();
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
