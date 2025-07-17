@@ -20,6 +20,8 @@ import '../hs_khachhang.dart';
 import '../hd_page.dart';
 import '../projecttimelinemay.dart';
 import '../projectcongnhan.dart';
+import '../projectgiamsat.dart';
+
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
   @override
@@ -84,6 +86,11 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
 },
   {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo công nhân',
     'link': 'congnhan_link',
+    'isDirectNavigation': true,
+    'tab': 1, 
+  },
+    {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo giám sát',
+    'link': 'giamsat_link',
     'isDirectNavigation': true,
     'tab': 1, 
   },
@@ -218,6 +225,18 @@ if (title == 'Hợp đồng của tôi') {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => ProjectCongNhan(username: username),
+      ),
+    );
+    return;
+  }
+  if (title == 'Báo cáo giám sát') {
+    final userState = Provider.of<UserState>(context, listen: false);
+    final userData = userState.currentUser;
+    final username = userData?['username'] ?? '';
+    
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ProjectGiamSat(username: username),
       ),
     );
     return;
