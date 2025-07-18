@@ -54,7 +54,44 @@ class _ProjectGiamSatState extends State<ProjectGiamSat> {
   // Chart display settings
   int _displayDateCount = 7; // Default to show 7 dates
   int _maxDisplayDates = 30; // Maximum dates available
+Future<void> _syncStaffListVP() async {
+  if (_isLoading) return;
 
+  setState(() {
+    _isLoading = true;
+    _syncStatus = 'Đang cập nhật danh sách nhân viên...';
+  });
+
+  try {
+    final response = await http.get(
+      Uri.parse('$baseUrl/stafflistvp'),
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> staffListData = json.decode(response.body);
+      
+      // Save to SharedPreferences as JSON string
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('stafflistvp_data', json.encode(staffListData));
+      await prefs.setBool('hasStaffListVPSynced', true);
+
+      // Refresh the workers list to show updated names
+      _updateFilteredWorkers();
+      
+      _showSuccess('Cập nhật danh sách nhân viên thành công - ${staffListData.length} bản ghi');
+    } else {
+      throw Exception('Server returned ${response.statusCode}');
+    }
+  } catch (e) {
+    print('Error syncing staff list VP: $e');
+    _showError('Không thể cập nhật danh sách nhân viên: ${e.toString()}');
+  } finally {
+    setState(() {
+      _isLoading = false;
+      _syncStatus = '';
+    });
+  }
+}
   @override
   void initState() {
     super.initState();
@@ -90,21 +127,30 @@ class _ProjectGiamSatState extends State<ProjectGiamSat> {
   }
 Future<Map<String, String>> _getStaffNameMap() async {
   try {
-    final db = await dbHelper.database;
-    final List<Map<String, dynamic>> staffbioResults = await db.query(DatabaseTables.staffbioTable);
+    final prefs = await SharedPreferences.getInstance();
     
-    final Map<String, String> nameMap = {};
-    for (final staff in staffbioResults) {
-      if (staff['MaNV'] != null && staff['Ho_ten'] != null) {
-        // Store both lowercase and uppercase versions for lookup
-        final maNV = staff['MaNV'].toString();
-        final hoTen = staff['Ho_ten'].toString();
-        nameMap[maNV.toLowerCase()] = hoTen;
-        nameMap[maNV.toUpperCase()] = hoTen;
-        nameMap[maNV] = hoTen; // Original case
+    // Get from locally saved stafflistvp data
+    final String? staffListVPJson = prefs.getString('stafflistvp_data');
+    
+    if (staffListVPJson != null && staffListVPJson.isNotEmpty) {
+      // Use stafflistvp data
+      final List<dynamic> staffListVPData = json.decode(staffListVPJson);
+      final Map<String, String> nameMap = {};
+      
+      for (final staff in staffListVPData) {
+        if (staff['Username'] != null && staff['Name'] != null) {
+          final username = staff['Username'].toString();
+          final name = staff['Name'].toString();
+          nameMap[username.toLowerCase()] = name;
+          nameMap[username.toUpperCase()] = name;
+          nameMap[username] = name; // Original case
+        }
       }
+      return nameMap;
+    } else {
+      // Return empty map if no stafflistvp data available
+      return {};
     }
-    return nameMap;
   } catch (e) {
     print('Error loading staff names: $e');
     return {};
@@ -471,62 +517,7 @@ Future<Map<String, String>> _getStaffNameMap() async {
     _unavailableWorkers = unavailable;
   });
 }
-Future<void> _syncStaffBio() async {
-  if (_isLoading) return;
 
-  setState(() {
-    _isLoading = true;
-    _syncStatus = 'Đang cập nhật hồ sơ nhân sự...';
-  });
-
-  try {
-    final response = await http.get(
-      Uri.parse('$baseUrl/staffbio'),
-    );
-
-    if (response.statusCode == 200) {
-      final dynamic decoded = json.decode(response.body);
-      
-      final List<dynamic> staffbioData = decoded is Map ? decoded['data'] : decoded;
-      
-      await dbHelper.clearTable(DatabaseTables.staffbioTable);
-      
-      final staffbioModels = staffbioData
-        .map((data) {
-          try {
-            print('Mapping staffbio data: $data');
-            return StaffbioModel.fromMap(data as Map<String, dynamic>);
-          } catch (e) {
-            print('Error mapping staffbio data: $e');
-            print('Problematic data: $data');
-            rethrow;
-          }
-        })
-        .toList();
-
-      await dbHelper.batchInsertStaffbio(staffbioModels);
-      
-      // Save sync status
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('hasStaffbioSynced', true);
-
-      // Refresh the workers list to show updated names
-      _updateFilteredWorkers();
-      
-      _showSuccess('Cập nhật hồ sơ nhân sự thành công');
-    } else {
-      throw Exception('Server returned ${response.statusCode}');
-    }
-  } catch (e) {
-    print('Error syncing staff bio: $e');
-    _showError('Không thể cập nhật hồ sơ nhân sự: ${e.toString()}');
-  } finally {
-    setState(() {
-      _isLoading = false;
-      _syncStatus = '';
-    });
-  }
-}
   void _updateChartData() {
     if (_selectedProject == null) {
       setState(() {
@@ -657,8 +648,7 @@ Future<void> _syncStaffBio() async {
       );
     }
   }
-
-  Widget _buildHeader() {
+Widget _buildHeader() {
   return Container(
     padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
     decoration: BoxDecoration(
@@ -692,14 +682,14 @@ Future<void> _syncStaffBio() async {
           ),
         ),
         Spacer(),
-        // Staff bio sync button
+        // Staff list VP sync button
         if (!_isLoading)
           ElevatedButton.icon(
-            onPressed: () => _syncStaffBio(),
-            icon: Icon(Icons.people, size: 18),
-            label: Text('Cập nhật nhân sự'),
+            onPressed: () => _syncStaffListVP(),
+            icon: Icon(Icons.badge, size: 18),
+            label: Text('Cập nhật DS nhân viên'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange[600],
+              backgroundColor: Colors.purple[600],
               foregroundColor: Colors.white,
               elevation: 2,
             ),
@@ -751,7 +741,6 @@ Future<void> _syncStaffBio() async {
     ),
   );
 }
-
   Widget _buildFilters() {
   return Container(
     padding: EdgeInsets.all(16),

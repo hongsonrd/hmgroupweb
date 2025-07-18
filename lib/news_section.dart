@@ -96,8 +96,8 @@ class _NewsSectionState extends State<NewsSection> with AutomaticKeepAliveClient
 
  PostTier _getPostTier(int? likeCount) {
    if (likeCount == null) return PostTier.normal;
-   if (likeCount >= 20) return PostTier.legendary;
-   if (likeCount >= 10) return PostTier.popular;
+   if (likeCount >= 22) return PostTier.legendary;
+   if (likeCount >= 11) return PostTier.popular;
    return PostTier.normal;
  }
 

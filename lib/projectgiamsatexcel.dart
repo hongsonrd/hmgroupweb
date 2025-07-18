@@ -5,6 +5,8 @@ import 'package:flutter/material.dart' hide Border;
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import 'package:url_launcher/url_launcher.dart';
 import 'table_models.dart';
 import 'db_helper.dart';
@@ -22,12 +24,10 @@ class ProjectCongNhanExcel {
    final excel = Excel.createExcel();
    
    excel.delete('Sheet1');
-   
-   await _createTongHopSheet(excel, correctedData, projectOptions, staffNameMap);
-   
+     await _createTheoChuDeSheet(excel, correctedData, staffNameMap);
+ 
    await _createChiTietSheet(excel, correctedData, staffNameMap);
    
-   await _createTheoChuDeSheet(excel, correctedData, staffNameMap);
    
    final fileName = 'DuAn_CongNhan_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
    await _saveAndHandleFile(excel, fileName, context);
@@ -52,8 +52,6 @@ class ProjectCongNhanExcel {
    
    excel.delete('Sheet1');
    
-   await _createTongHopSheet(excel, correctedData, projectOptions, staffNameMap);
-   
    await _createChiTietSheet(excel, correctedData, staffNameMap);
    
    await _createTheoChuDeSheet(excel, correctedData, staffNameMap);
@@ -63,25 +61,67 @@ class ProjectCongNhanExcel {
    await _saveAndHandleFile(excel, fileName, context);
  }
 
+ // Updated to use stafflistvp data like in the main file
  static Future<Map<String, String>> _getStaffNameMap() async {
    try {
-     final dbHelper = DBHelper();
-     final db = await dbHelper.database;
-     final List<Map<String, dynamic>> staffbioResults = await db.query(DatabaseTables.staffbioTable);
+     final prefs = await SharedPreferences.getInstance();
      
-     final Map<String, String> nameMap = {};
-     for (final staff in staffbioResults) {
-       if (staff['MaNV'] != null && staff['Ho_ten'] != null) {
-         final maNV = staff['MaNV'].toString();
-         final hoTen = staff['Ho_ten'].toString();
-         nameMap[maNV.toLowerCase()] = hoTen;
-         nameMap[maNV.toUpperCase()] = hoTen;
-         nameMap[maNV] = hoTen;
+     // First try to get from locally saved stafflistvp data
+     final String? staffListVPJson = prefs.getString('stafflistvp_data');
+     
+     if (staffListVPJson != null && staffListVPJson.isNotEmpty) {
+       // Use stafflistvp data
+       final List<dynamic> staffListVPData = json.decode(staffListVPJson);
+       final Map<String, String> nameMap = {};
+       
+       for (final staff in staffListVPData) {
+         if (staff['Username'] != null && staff['Name'] != null) {
+           final username = staff['Username'].toString();
+           final name = staff['Name'].toString();
+           nameMap[username.toLowerCase()] = name;
+           nameMap[username.toUpperCase()] = name;
+           nameMap[username] = name; // Original case
+         }
        }
+       return nameMap;
+     } else {
+       // Return empty map if no stafflistvp data available
+       return {};
      }
-     return nameMap;
    } catch (e) {
      print('Error loading staff names for Excel: $e');
+     return {};
+   }
+ }
+
+ // New method to get BP mapping for QLDV column
+ static Future<Map<String, String>> _getStaffBPMap() async {
+   try {
+     final prefs = await SharedPreferences.getInstance();
+     
+     // Get from locally saved stafflistvp data
+     final String? staffListVPJson = prefs.getString('stafflistvp_data');
+     
+     if (staffListVPJson != null && staffListVPJson.isNotEmpty) {
+       // Use stafflistvp data
+       final List<dynamic> staffListVPData = json.decode(staffListVPJson);
+       final Map<String, String> bpMap = {};
+       
+       for (final staff in staffListVPData) {
+         if (staff['Username'] != null && staff['BP'] != null) {
+           final username = staff['Username'].toString();
+           final bp = staff['BP'].toString();
+           bpMap[username.toLowerCase()] = bp;
+           bpMap[username.toUpperCase()] = bp;
+           bpMap[username] = bp; // Original case
+         }
+       }
+       return bpMap;
+     } else {
+       return {};
+     }
+   } catch (e) {
+     print('Error loading staff BP for Excel: $e');
      return {};
    }
  }
@@ -142,122 +182,124 @@ class ProjectCongNhanExcel {
  }
 
  static Future<void> _createTheoChuDeSheet(
-   Excel excel,
-   List<TaskHistoryModel> data,
-   Map<String, String> staffNameMap,
- ) async {
-   final theoChuDeSheet = excel['TheoChuDe'];
-   
-   final headers = [
-     'STT',
-     'Ngày',
-     'Mã nhân viên',
-     'Tên nhân viên',
-     'Dự án',
-     'Số hình ảnh',
-     'Nhân sự đủ',
-     'Nhân sự thiếu',
-     'Chất lượng đạt',
-     'Chất lượng vấn đề',
-     'Vật tư đủ',
-     'Vật tư vấn đề',
-     'Máy móc đủ',
-     'Máy móc vấn đề',
-     'Xe/giỏ đủ',
-     'Xe/giỏ vấn đề',
-     'Ý kiến KH đạt',
-     'Ý kiến KH vấn đề',
-     'Thiếu công/giờ',
-     'Khác',
-     'QLDV',
-     'Số báo cáo',
-     'Số khung giờ',
-     'Khung giờ',
-     'Đánh giá',
-   ];
-   
-   for (int i = 0; i < headers.length; i++) {
-     final cell = theoChuDeSheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
-     cell.value = headers[i];
-     cell.cellStyle = CellStyle(
-       bold: true,
-       backgroundColorHex: '#FF6B35',
-       fontColorHex: '#FFFFFF',
-     );
-   }
+  Excel excel,
+  List<TaskHistoryModel> data,
+  Map<String, String> staffNameMap,
+) async {
+  final theoChuDeSheet = excel['TheoChuDe'];
+  final staffBPMap = await _getStaffBPMap();
+  
+  final headers = [
+    'STT',
+    'Ngày',
+    'Mã nhân viên',
+    'Tên nhân viên',
+    'Dự án',
+    'Số hình ảnh',
+    'Nhân sự đủ',
+    'Nhân sự thiếu',
+    'Chất lượng đạt',
+    'Chất lượng vấn đề',
+    'Vật tư đủ',
+    'Vật tư vấn đề',
+    'Máy móc đủ',
+    'Máy móc vấn đề',
+    'Xe/giỏ đủ',
+    'Xe/giỏ vấn đề',
+    'Ý kiến KH đạt',
+    'Ý kiến KH vấn đề',
+    'Thiếu công/giờ',
+    'Khác',
+    'QLDV',
+    'Số báo cáo',
+    'Số khung giờ',
+    'Khung giờ',
+    'Đánh giá',
+  ];
+  
+  for (int i = 0; i < headers.length; i++) {
+    final cell = theoChuDeSheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+    cell.value = headers[i];
+    cell.cellStyle = CellStyle(
+      bold: true,
+      backgroundColorHex: '#FF6B35',
+      fontColorHex: '#FFFFFF',
+    );
+  }
 
-   final groupedData = <String, List<TaskHistoryModel>>{};
-   
-   for (final record in data) {
-     if (record.nguoiDung == null || record.nguoiDung!.trim().isEmpty) continue;
-     if (record.boPhan == null || _shouldFilterProject(record.boPhan!)) continue;
-     
-     final key = '${DateFormat('yyyy-MM-dd').format(record.ngay)}_${record.nguoiDung}_${record.boPhan}';
-     groupedData.putIfAbsent(key, () => []).add(record);
-   }
+  final groupedData = <String, List<TaskHistoryModel>>{};
+  
+  for (final record in data) {
+    if (record.nguoiDung == null || record.nguoiDung!.trim().isEmpty) continue;
+    if (record.boPhan == null || _shouldFilterProject(record.boPhan!)) continue;
+    
+    final key = '${DateFormat('yyyy-MM-dd').format(record.ngay)}_${record.nguoiDung}_${record.boPhan}';
+    groupedData.putIfAbsent(key, () => []).add(record);
+  }
 
-   final sortedKeys = groupedData.keys.toList()..sort();
-   
-   int rowIndex = 1;
-   int stt = 1;
-   
-   for (final key in sortedKeys) {
-     final records = groupedData[key]!;
-     final firstRecord = records.first;
-     
-     final capitalizedNguoiDung = (firstRecord.nguoiDung ?? '').toUpperCase();
-     final staffName = staffNameMap[capitalizedNguoiDung] ?? '❓❓❓';
-     
-     final summary = _calculateTheoChuDeSummary(records);
-     final grading = _calculateGrading(summary);
-     
-     final rowData = [
-       stt.toString(),
-       DateFormat('dd/MM/yyyy').format(firstRecord.ngay),
-       firstRecord.nguoiDung ?? '',
-       staffName,
-       firstRecord.boPhan ?? '',
-       summary.imageCount.toString(),
-       summary.nhanSuDu.toString(),
-       summary.nhanSuThieu.toString(),
-       summary.chatLuongDat.toString(),
-       summary.chatLuongVanDe.toString(),
-       summary.vatTuDu.toString(),
-       summary.vatTuVanDe.toString(),
-       summary.mayMocDu.toString(),
-       summary.mayMocVanDe.toString(),
-       summary.xeGioDu.toString(),
-       summary.xeGioVanDe.toString(),
-       summary.yKienKHDat.toString(),
-       summary.yKienKHVanDe.toString(),
-       summary.thieuCongGio.toStringAsFixed(1),
-       summary.khac.toString(),
-       summary.qldvString,
-       summary.soBaoCao.toString(),
-       summary.soKhungGio.toString(),
-       summary.khungGioString,
-       grading.toStringAsFixed(1),
-     ];
-     
-     for (int i = 0; i < rowData.length; i++) {
-       final cell = theoChuDeSheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowIndex));
-       cell.value = rowData[i];
-       
-       if (i == 24) {
-         if (grading >= 8.0) {
-           cell.cellStyle = CellStyle(backgroundColorHex: '#90EE90');
-         } else if (grading >= 6.0) {
-           cell.cellStyle = CellStyle(backgroundColorHex: '#FFD700');
-         } else {
-           cell.cellStyle = CellStyle(backgroundColorHex: '#FFB6C1');
-         }
-       }
-     }
-     
-     rowIndex++;
-     stt++;
-   }
- }
+  final sortedKeys = groupedData.keys.toList()..sort();
+  
+  int rowIndex = 1;
+  int stt = 1;
+  
+  for (final key in sortedKeys) {
+    final records = groupedData[key]!;
+    final firstRecord = records.first;
+    
+    final capitalizedNguoiDung = (firstRecord.nguoiDung ?? '').toUpperCase();
+    final staffName = staffNameMap[capitalizedNguoiDung] ?? '❓❓❓';
+    final staffBP = staffBPMap[capitalizedNguoiDung] ?? '';
+    
+    final summary = _calculateTheoChuDeSummary(records);
+    final grading = _calculateGrading(summary);
+    
+    final rowData = [
+      stt.toString(),
+      DateFormat('dd/MM/yyyy').format(firstRecord.ngay),
+      firstRecord.nguoiDung ?? '',
+      staffName,
+      firstRecord.boPhan ?? '',
+      summary.imageCount.toString(),
+      summary.nhanSuDu.toString(),
+      summary.nhanSuThieu.toString(),
+      summary.chatLuongDat.toString(),
+      summary.chatLuongVanDe.toString(),
+      summary.vatTuDu.toString(),
+      summary.vatTuVanDe.toString(),
+      summary.mayMocDu.toString(),
+      summary.mayMocVanDe.toString(),
+      summary.xeGioDu.toString(),
+      summary.xeGioVanDe.toString(),
+      summary.yKienKHDat.toString(),
+      summary.yKienKHVanDe.toString(),
+      summary.thieuCongGioWithUnit,  // Updated to include unit
+      summary.khac.toString(),
+      staffBP,
+      summary.soBaoCao.toString(),
+      summary.soKhungGio.toString(),
+      summary.khungGioString,
+      grading.toStringAsFixed(1),
+    ];
+    
+    for (int i = 0; i < rowData.length; i++) {
+      final cell = theoChuDeSheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowIndex));
+      cell.value = rowData[i];
+      
+      if (i == 24) {
+        if (grading >= 8.0) {
+          cell.cellStyle = CellStyle(backgroundColorHex: '#90EE90');
+        } else if (grading >= 6.0) {
+          cell.cellStyle = CellStyle(backgroundColorHex: '#FFD700');
+        } else {
+          cell.cellStyle = CellStyle(backgroundColorHex: '#FFB6C1');
+        }
+      }
+    }
+    
+    rowIndex++;
+    stt++;
+  }
+}
 
  static double _calculateGrading(TheoChuDeSummary summary) {
   double score = 0.0;
@@ -327,118 +369,131 @@ class ProjectCongNhanExcel {
   score -= (summary.thieuCongGio * 0.5); // 0.5 points per missing hour
   score -= (summary.khac * 0.2); // 0.2 points per unclassified issue
   
-  // Bonus for QLDV documentation
-  if (summary.qldvList.isNotEmpty) {
-    score += 0.2;
-  }
-  
   return score.clamp(0.0, 10.0);
 }
 
  static TheoChuDeSummary _calculateTheoChuDeSummary(List<TaskHistoryModel> records) {
-   final summary = TheoChuDeSummary();
-   final uniqueChiTiet2 = <String>{};
-   final uniqueHours = <String>{};
-   
-   for (final record in records) {
-     if (record.hinhAnh?.isNotEmpty == true) {
-       summary.imageCount++;
-     }
-     
-     summary.soBaoCao++;
-     
-     if (record.chiTiet2?.isNotEmpty == true) {
-       uniqueChiTiet2.add(record.chiTiet2!.trim());
-     }
-     
-     if (record.gio?.isNotEmpty == true) {
-       try {
-         final timeParts = record.gio!.split(':');
-         if (timeParts.isNotEmpty) {
-           final hour = timeParts[0].trim();
-           if (hour.isNotEmpty) {
-             uniqueHours.add(hour);
-           }
-         }
-       } catch (e) {
-       }
-     }
-     
-     final phanLoai = record.phanLoai?.trim() ?? '';
-     final ketQua = record.ketQua?.trim() ?? '';
-     final chiTiet = record.chiTiet?.trim() ?? '';
-     
-     if (phanLoai == 'Nhân sự') {
-       if (chiTiet.toLowerCase().contains('thiếu')) {
-         summary.nhanSuThieu++;
-         summary.thieuCongGio += _extractThieuNumber(chiTiet);
-       } else {
-         summary.nhanSuDu++;
-       }
-     } else if (phanLoai.toLowerCase().contains('chất lượng')) {
-       if (ketQua == '✔️') {
-         summary.chatLuongDat++;
-       } else {
-         summary.chatLuongVanDe++;
-       }
-     } else if (phanLoai == 'Vật tư') {
-       if (ketQua == '✔️') {
-         summary.vatTuDu++;
-       } else {
-         summary.vatTuVanDe++;
-       }
-     } else if (phanLoai == 'Máy móc') {
-       if (ketQua == '✔️') {
-         summary.mayMocDu++;
-       } else {
-         summary.mayMocVanDe++;
-       }
-     } else if (phanLoai.toLowerCase().contains('giỏ')) {
-       if (ketQua == '✔️') {
-         summary.xeGioDu++;
-       } else {
-         summary.xeGioVanDe++;
-       }
-     } else if (phanLoai.toLowerCase().contains('ý kiến')) {
-       if (ketQua == '✔️') {
-         summary.yKienKHDat++;
-       } else {
-         summary.yKienKHVanDe++;
-       }
-     } else if (phanLoai.isNotEmpty) {
-       summary.khac++;
-     }
-   }
-   
-   summary.qldvList = uniqueChiTiet2.toList()..sort();
-   summary.khungGio = uniqueHours.toList()..sort();
-   summary.soKhungGio = uniqueHours.length;
-   
-   return summary;
- }
+  final summary = TheoChuDeSummary();
+  final uniqueHours = <String>{};
+  final units = <String>{}; // Collect units
+  
+  for (final record in records) {
+    if (record.hinhAnh?.isNotEmpty == true) {
+      summary.imageCount++;
+    }
+    
+    summary.soBaoCao++;
+    
+    if (record.gio?.isNotEmpty == true) {
+      try {
+        final timeParts = record.gio!.split(':');
+        if (timeParts.isNotEmpty) {
+          final hour = timeParts[0].trim();
+          if (hour.isNotEmpty) {
+            uniqueHours.add(hour);
+          }
+        }
+      } catch (e) {
+      }
+    }
+    
+    final phanLoai = record.phanLoai?.trim() ?? '';
+    final ketQua = record.ketQua?.trim() ?? '';
+    final chiTiet = record.chiTiet?.trim() ?? '';
+    
+    if (phanLoai == 'Nhân sự') {
+      if (chiTiet.toLowerCase().contains('thiếu')) {
+        summary.nhanSuThieu++;
+        final result = _extractThieuNumberAndUnit(chiTiet);
+        summary.thieuCongGio += result['number'] as double;
+        if ((result['unit'] as String).isNotEmpty) {
+          units.add(result['unit'] as String);
+        }
+      } else {
+        summary.nhanSuDu++;
+      }
+    } else if (phanLoai.toLowerCase().contains('chất lượng')) {
+      if (ketQua == '✔️') {
+        summary.chatLuongDat++;
+      } else {
+        summary.chatLuongVanDe++;
+      }
+    } else if (phanLoai == 'Vật tư') {
+      if (ketQua == '✔️') {
+        summary.vatTuDu++;
+      } else {
+        summary.vatTuVanDe++;
+      }
+    } else if (phanLoai == 'Máy móc') {
+      if (ketQua == '✔️') {
+        summary.mayMocDu++;
+      } else {
+        summary.mayMocVanDe++;
+      }
+    } else if (phanLoai.toLowerCase().contains('giỏ')) {
+      if (ketQua == '✔️') {
+        summary.xeGioDu++;
+      } else {
+        summary.xeGioVanDe++;
+      }
+    } else if (phanLoai.toLowerCase().contains('ý kiến')) {
+      if (ketQua == '✔️') {
+        summary.yKienKHDat++;
+      } else {
+        summary.yKienKHVanDe++;
+      }
+    } else if (phanLoai.isNotEmpty) {
+      summary.khac++;
+    }
+  }
+  
+  summary.khungGio = uniqueHours.toList()..sort();
+  summary.soKhungGio = uniqueHours.length;
+  
+  // Set the most common unit or default to empty
+  if (units.isNotEmpty) {
+    final unitCounts = <String, int>{};
+    for (final unit in units) {
+      unitCounts[unit] = (unitCounts[unit] ?? 0) + 1;
+    }
+    summary.thieuCongUnit = unitCounts.entries
+        .reduce((a, b) => a.value > b.value ? a : b)
+        .key;
+  }
+  
+  return summary;
+}
 
- static double _extractThieuNumber(String text) {
-   try {
-     final lowerText = text.toLowerCase();
-     final thieuIndex = lowerText.indexOf('thiếu');
-     
-     if (thieuIndex == -1) return 0.0;
-     
-     final afterThieu = text.substring(thieuIndex + 5).trim();
-     
-     final numberRegex = RegExp(r'(\d+[,.]?\d*)');
-     final match = numberRegex.firstMatch(afterThieu);
-     
-     if (match != null) {
-       final numberStr = match.group(1)!.replaceAll(',', '.');
-       return double.tryParse(numberStr) ?? 0.0;
-     }
-     
-     return 0.0;
-   } catch (e) {
-     return 0.0;
-   }
- }
+ static Map<String, dynamic> _extractThieuNumberAndUnit(String text) {
+  try {
+    final lowerText = text.toLowerCase();
+    final thieuIndex = lowerText.indexOf('thiếu');
+    
+    if (thieuIndex == -1) return {'number': 0.0, 'unit': ''};
+    
+    final afterThieu = text.substring(thieuIndex + 5).trim();
+    
+    // Updated regex to capture number and following text
+    final numberAndUnitRegex = RegExp(r'(\d+[,.]?\d*)\s*([a-zA-ZÀ-ỹ/]+)?');
+    final match = numberAndUnitRegex.firstMatch(afterThieu);
+    
+    if (match != null) {
+      final numberStr = match.group(1)!.replaceAll(',', '.');
+      final number = double.tryParse(numberStr) ?? 0.0;
+      final unit = match.group(2)?.trim() ?? '';
+      
+      return {'number': number, 'unit': unit};
+    }
+    
+    return {'number': 0.0, 'unit': ''};
+  } catch (e) {
+    return {'number': 0.0, 'unit': ''};
+  }
+}
+static double _extractThieuNumber(String text) {
+  final result = _extractThieuNumberAndUnit(text);
+  return result['number'] as double;
+}
 
  static Future<void> _saveAndHandleFile(Excel excel, String fileName, BuildContext context) async {
    try {
@@ -572,171 +627,81 @@ class ProjectCongNhanExcel {
    );
  }
 
- static Future<void> _createTongHopSheet(
-   Excel excel, 
-   List<TaskHistoryModel> data, 
-   List<String> projectOptions,
-   Map<String, String> staffNameMap,
- ) async {
-   final tongHopSheet = excel['TongHop'];
-   
-   final headers = [
-     'STT',
-     'Mã công nhân',
-     'Tên công nhân', 
-     'Dự án',
-     'Số ngày làm việc',
-     'Tổng báo cáo',
-     'Báo cáo có hình ảnh',
-     'Số chủ đề khác nhau',
-     'Số giờ làm việc khác nhau',
-     'Ngày đầu tiên',
-     'Ngày cuối cùng',
-   ];
-   
-   for (int i = 0; i < headers.length; i++) {
-     final cell = tongHopSheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
-     cell.value = headers[i];
-     cell.cellStyle = CellStyle(
-       bold: true,
-       backgroundColorHex: '#4472C4',
-       fontColorHex: '#FFFFFF',
-     );
-   }
-
-   final workerProjectMap = <String, Map<String, WorkerProjectSummary>>{};
-   
-   for (final record in data) {
-     if (record.nguoiDung == null || record.nguoiDung!.trim().isEmpty) continue;
-     if (record.boPhan == null || _shouldFilterProject(record.boPhan!)) continue;
-     
-     final workerName = record.nguoiDung!;
-     final projectName = record.boPhan!;
-     
-     workerProjectMap.putIfAbsent(workerName, () => {});
-     workerProjectMap[workerName]!.putIfAbsent(projectName, () => WorkerProjectSummary(
-       workerName: workerName,
-       projectName: projectName,
-     ));
-     
-     final summary = workerProjectMap[workerName]![projectName]!;
-     summary.addRecord(record);
-   }
-
-   int rowIndex = 1;
-   int stt = 1;
-   
-   final sortedWorkerNames = workerProjectMap.keys.toList()..sort();
-   
-   for (final workerName in sortedWorkerNames) {
-     final sortedProjectNames = workerProjectMap[workerName]!.keys.toList()..sort();
-     
-     for (final projectName in sortedProjectNames) {
-       final summary = workerProjectMap[workerName]![projectName]!;
-       
-       final capitalizedWorkerName = workerName.toUpperCase();
-       final staffName = staffNameMap[capitalizedWorkerName] ?? '❓❓❓';
-       
-       final rowData = [
-         stt.toString(),
-         summary.workerName,
-         staffName,
-         summary.projectName,
-         summary.workDays.toString(),
-         summary.totalReports.toString(),
-         summary.reportsWithImages.toString(),
-         summary.uniqueTopics.toString(),
-         summary.uniqueHours.toString(),
-         DateFormat('dd/MM/yyyy').format(summary.firstDate!),
-         DateFormat('dd/MM/yyyy').format(summary.lastDate!),
-       ];
-       
-       for (int i = 0; i < rowData.length; i++) {
-         final cell = tongHopSheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowIndex));
-         cell.value = rowData[i];
-       }
-       
-       rowIndex++;
-       stt++;
-     }
-   }
- }
-
  static Future<void> _createChiTietSheet(
-   Excel excel, 
-   List<TaskHistoryModel> data,
-   Map<String, String> staffNameMap,
- ) async {
-   final chiTietSheet = excel['ChiTiet'];
-   
-   final headers = [
-     'STT',
-     'Ngày',
-     'Giờ',
-     'Mã người dùng',
-     'Tên người dùng',
-     'Dự án',
-     'Kết quả',
-     'Chi tiết',
-     'Chi tiết 2',
-     'Vị trí',
-     'Phân loại',
-     'Giải pháp',
-     'Có hình ảnh',
-   ];
-   
-   for (int i = 0; i < headers.length; i++) {
-     final cell = chiTietSheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
-     cell.value = headers[i];
-     cell.cellStyle = CellStyle(
-       bold: true,
-       backgroundColorHex: '#70AD47',
-       fontColorHex: '#FFFFFF',
-     );
-   }
+  Excel excel, 
+  List<TaskHistoryModel> data,
+  Map<String, String> staffNameMap,
+) async {
+  final chiTietSheet = excel['ChiTiet'];
+  
+  final headers = [
+    'STT',
+    'Ngày',
+    'Giờ',
+    'Mã người dùng',
+    'Tên người dùng',
+    'Dự án',
+    'Kết quả',
+    'Phân loại',        // Moved before Chi tiết
+    'Chi tiết',
+    'Ghi chú',          // Changed from 'Chi tiết 2'
+    'Vị trí',
+    'Giải pháp',
+    'Hình ảnh',         // Changed from 'Có hình ảnh'
+  ];
+  
+  for (int i = 0; i < headers.length; i++) {
+    final cell = chiTietSheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+    cell.value = headers[i];
+    cell.cellStyle = CellStyle(
+      bold: true,
+      backgroundColorHex: '#70AD47',
+      fontColorHex: '#FFFFFF',
+    );
+  }
 
-   final sortedData = List<TaskHistoryModel>.from(data);
-   sortedData.sort((a, b) {
-     final dateCompare = a.ngay.compareTo(b.ngay);
-     if (dateCompare != 0) return dateCompare;
-     return (a.gio ?? '').compareTo(b.gio ?? '');
-   });
+  final sortedData = List<TaskHistoryModel>.from(data);
+  sortedData.sort((a, b) {
+    final dateCompare = a.ngay.compareTo(b.ngay);
+    if (dateCompare != 0) return dateCompare;
+    return (a.gio ?? '').compareTo(b.gio ?? '');
+  });
 
-   int excelRowIndex = 1;
-   for (int i = 0; i < sortedData.length; i++) {
-     final record = sortedData[i];
-     
-     if (record.boPhan == null || _shouldFilterProject(record.boPhan!)) {
-       continue;
-     }
-     
-     final capitalizedNguoiDung = (record.nguoiDung ?? '').toUpperCase();
-     final staffName = staffNameMap[capitalizedNguoiDung] ?? '❓❓❓';
-     
-     final rowData = [
-       excelRowIndex.toString(),
-       DateFormat('dd/MM/yyyy').format(record.ngay),
-       record.gio ?? '',
-       record.nguoiDung ?? '',
-       staffName,
-       record.boPhan ?? '',
-       _formatKetQua(record.ketQua),
-       record.chiTiet ?? '',
-       record.chiTiet2 ?? '',
-       record.viTri ?? '',
-       record.phanLoai ?? '',
-       record.giaiPhap ?? '',
-       (record.hinhAnh?.isNotEmpty == true) ? 'Có' : 'Không',
-     ];
-     
-     for (int j = 0; j < rowData.length; j++) {
-       final cell = chiTietSheet.cell(CellIndex.indexByColumnRow(columnIndex: j, rowIndex: excelRowIndex));
-       cell.value = rowData[j];
-     }
-     
-     excelRowIndex++;
-   }
- }
+  int excelRowIndex = 1;
+  for (int i = 0; i < sortedData.length; i++) {
+    final record = sortedData[i];
+    
+    if (record.boPhan == null || _shouldFilterProject(record.boPhan!)) {
+      continue;
+    }
+    
+    final capitalizedNguoiDung = (record.nguoiDung ?? '').toUpperCase();
+    final staffName = staffNameMap[capitalizedNguoiDung] ?? '❓❓❓';
+    
+    final rowData = [
+      excelRowIndex.toString(),
+      DateFormat('dd/MM/yyyy').format(record.ngay),
+      record.gio ?? '',
+      record.nguoiDung ?? '',
+      staffName,
+      record.boPhan ?? '',
+      _formatKetQua(record.ketQua),
+      record.phanLoai ?? '',      // Moved to position 7
+      record.chiTiet ?? '',       // Now position 8
+      record.chiTiet2 ?? '',      // Now position 9 (Ghi chú)
+      record.viTri ?? '',
+      record.giaiPhap ?? '',
+      record.hinhAnh ?? '',       // Show actual URL instead of Có/Không
+    ];
+    
+    for (int j = 0; j < rowData.length; j++) {
+      final cell = chiTietSheet.cell(CellIndex.indexByColumnRow(columnIndex: j, rowIndex: excelRowIndex));
+      cell.value = rowData[j];
+    }
+    
+    excelRowIndex++;
+  }
+}
 
  static String _formatKetQua(String? ketQua) {
    if (ketQua == null) return '';
@@ -788,79 +753,28 @@ class ProjectCongNhanExcel {
 }
 
 class TheoChuDeSummary {
- int imageCount = 0;
- int nhanSuDu = 0;
- int nhanSuThieu = 0;
- int chatLuongDat = 0;
- int chatLuongVanDe = 0;
- int vatTuDu = 0;
- int vatTuVanDe = 0;
- int mayMocDu = 0;
- int mayMocVanDe = 0;
- int xeGioDu = 0;
- int xeGioVanDe = 0;
- int yKienKHDat = 0;
- int yKienKHVanDe = 0;
- double thieuCongGio = 0.0;
- int khac = 0;
- List<String> qldvList = [];
- int soBaoCao = 0;
- int soKhungGio = 0;
- List<String> khungGio = [];
- 
- String get qldvString => qldvList.join(', ');
- String get khungGioString => khungGio.join(', ');
-}
-
-class WorkerProjectSummary {
- final String workerName;
- final String projectName;
- int totalReports = 0;
- int reportsWithImages = 0;
- final Set<String> topics = <String>{};
- final Set<String> hours = <String>{};
- final Set<String> dates = <String>{};
- DateTime? firstDate;
- DateTime? lastDate;
-
- WorkerProjectSummary({
-   required this.workerName,
-   required this.projectName,
- });
-
- void addRecord(TaskHistoryModel record) {
-   totalReports++;
-   if (record.hinhAnh?.isNotEmpty == true) {
-     reportsWithImages++;
-   }
-   
-   if (record.phanLoai?.isNotEmpty == true) {
-     topics.add(record.phanLoai!);
-   }
-   
-   if (record.gio?.isNotEmpty == true) {
-     try {
-       final timeParts = record.gio!.split(':');
-       if (timeParts.isNotEmpty) {
-         hours.add(timeParts[0]);
-       }
-     } catch (e) {
-     }
-   }
-   
-   final dateStr = DateFormat('yyyy-MM-dd').format(record.ngay);
-   dates.add(dateStr);
-   
-   if (firstDate == null || record.ngay.isBefore(firstDate!)) {
-     firstDate = record.ngay;
-   }
-   
-   if (lastDate == null || record.ngay.isAfter(lastDate!)) {
-     lastDate = record.ngay;
-   }
- }
-
- int get workDays => dates.length;
- int get uniqueTopics => topics.length;
- int get uniqueHours => hours.length;
+  int imageCount = 0;
+  int nhanSuDu = 0;
+  int nhanSuThieu = 0;
+  int chatLuongDat = 0;
+  int chatLuongVanDe = 0;
+  int vatTuDu = 0;
+  int vatTuVanDe = 0;
+  int mayMocDu = 0;
+  int mayMocVanDe = 0;
+  int xeGioDu = 0;
+  int xeGioVanDe = 0;
+  int yKienKHDat = 0;
+  int yKienKHVanDe = 0;
+  double thieuCongGio = 0.0;
+  String thieuCongUnit = ''; // New field for unit
+  int khac = 0;
+  int soBaoCao = 0;
+  int soKhungGio = 0;
+  List<String> khungGio = [];
+  
+  String get khungGioString => khungGio.join(', ');
+  String get thieuCongGioWithUnit => thieuCongGio > 0 
+      ? '${thieuCongGio.toStringAsFixed(1)} $thieuCongUnit'.trim()
+      : '0';
 }

@@ -350,46 +350,47 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
       
       // Add data rows
       for (int i = 0; i < _filteredProjectsData.length; i++) {
-        var project = _filteredProjectsData[i];
-        var percentage = (project.imagesSubmitted / project.targetImages * 100).clamp(0.0, 100.0);
-        
-        List<dynamic> rowData = [
-          i + 1,
-          project.projectName,
-          project.totalReports,
-          project.imagesSubmitted,
-          project.targetImages,
-          double.parse(percentage.toStringAsFixed(1)),
-          percentage >= 100 ? 'Hoàn thành' : 'Đang thực hiện'
-        ];
-        
-        for (int j = 0; j < rowData.length; j++) {
-          var cell = sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: j, rowIndex: i + 1));
-          cell.value = rowData[j];
-          
-          // Color coding based on percentage
-          if (j == 6) { // Status column
-            xl.CellStyle? cellStyle;
-            if (percentage >= 100) {
-              cellStyle = xl.CellStyle(
-                backgroundColorHex: '#C6EFCE',
-                fontColorHex: '#006100',
-              );
-            } else if (percentage >= 70) {
-              cellStyle = xl.CellStyle(
-                backgroundColorHex: '#FFEB9C',
-                fontColorHex: '#9C5700',
-              );
-            } else {
-              cellStyle = xl.CellStyle(
-                backgroundColorHex: '#FFC7CE',
-                fontColorHex: '#9C0006',
-              );
-            }
-            cell.cellStyle = cellStyle;
-          }
-        }
+  var project = _filteredProjectsData[i];
+  var percentage = project.targetImages == 0 ? 100.0 : 
+                  (project.imagesSubmitted / project.targetImages * 100).clamp(0.0, 100.0);
+  
+  List<dynamic> rowData = [
+    i + 1,
+    project.projectName,
+    project.totalReports,
+    project.imagesSubmitted,
+    project.targetImages == 0 ? 'N/A' : project.targetImages,
+    project.targetImages == 0 ? 'N/A' : double.parse(percentage.toStringAsFixed(1)),
+    project.targetImages == 0 ? 'N/A' : (percentage >= 100 ? 'Hoàn thành' : 'Đang thực hiện')
+  ];
+  
+  for (int j = 0; j < rowData.length; j++) {
+    var cell = sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: j, rowIndex: i + 1));
+    cell.value = rowData[j];
+    
+    // Color coding based on percentage
+    if (j == 6 && project.targetImages > 0) { // Status column, only for projects with targets
+      xl.CellStyle? cellStyle;
+      if (percentage >= 100) {
+        cellStyle = xl.CellStyle(
+          backgroundColorHex: '#C6EFCE',
+          fontColorHex: '#006100',
+        );
+      } else if (percentage >= 70) {
+        cellStyle = xl.CellStyle(
+          backgroundColorHex: '#FFEB9C',
+          fontColorHex: '#9C5700',
+        );
+      } else {
+        cellStyle = xl.CellStyle(
+          backgroundColorHex: '#FFC7CE',
+          fontColorHex: '#9C0006',
+        );
       }
+      cell.cellStyle = cellStyle;
+    }
+  }
+}
       
       // Add summary row
       int summaryRow = _filteredProjectsData.length + 2;
@@ -586,6 +587,82 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
     
     return false;
   }
+Future<Map<String, List<int>>> _getHourlyReports() async {
+  try {
+    final db = await dbHelper.database;
+    final startOfDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    final endOfDay = startOfDay.add(Duration(days: 1));
+
+    String whereClause = 'WHERE Ngay >= ? AND Ngay < ?';
+    List<String> queryParams = [startOfDay.toIso8601String(), endOfDay.toIso8601String()];
+    
+    if (_selectedChiTiet2 != null && _selectedChiTiet2 != 'Tất cả') {
+      whereClause += ' AND ChiTiet2 = ?';
+      queryParams.add(_selectedChiTiet2!);
+    }
+
+    final List<Map<String, dynamic>> results = await db.rawQuery('''
+      SELECT 
+        BoPhan as project_name,
+        Gio as hour_value
+      FROM ${DatabaseTables.taskHistoryTable}
+      $whereClause
+      AND BoPhan IS NOT NULL AND BoPhan != ''
+      AND Gio IS NOT NULL AND Gio != ''
+      ORDER BY BoPhan, hour_value
+    ''', queryParams);
+
+    Map<String, List<int>> projectHours = {};
+    
+    for (var item in results) {
+      final projectName = item['project_name'] as String;
+      final hourValue = item['hour_value'];
+      
+      if (hourValue != null && !_shouldFilterProject(projectName)) {
+        int? hour;
+        
+        // Try to parse hour from different formats
+        if (hourValue is int) {
+          hour = hourValue;
+        } else if (hourValue is String) {
+          // Handle formats like "9", "09", "9:00", "09:30", etc.
+          final hourStr = hourValue.trim();
+          if (hourStr.contains(':')) {
+            // Extract hour part from "HH:MM" format
+            final parts = hourStr.split(':');
+            if (parts.isNotEmpty) {
+              hour = int.tryParse(parts[0]);
+            }
+          } else {
+            // Direct hour value
+            hour = int.tryParse(hourStr);
+          }
+        }
+        
+        if (hour != null && hour >= 0 && hour <= 23) {
+          if (!projectHours.containsKey(projectName)) {
+            projectHours[projectName] = [];
+          }
+          if (!projectHours[projectName]!.contains(hour)) {
+            projectHours[projectName]!.add(hour);
+          }
+        }
+      }
+    }
+    
+    // Sort hours for each project
+    projectHours.forEach((key, value) {
+      value.sort();
+    });
+    
+    return projectHours;
+  } catch (e) {
+    print('Error loading hourly reports: $e');
+    return {};
+  }
+}
+
+Map<String, List<int>> _projectHourlyReports = {};
 
   Future<void> _loadProjectsData() async {
   if (_isLoading) return;
@@ -607,7 +684,38 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
       queryParams.add(_selectedChiTiet2!);
     }
 
+    // Load hourly reports data
+    final hourlyReports = await _getHourlyReports();
+
+    // First, get project data with user information
     final List<Map<String, dynamic>> results = await db.rawQuery('''
+      SELECT 
+        BoPhan as project_name,
+        COUNT(*) as total_reports,
+        COUNT(CASE WHEN HinhAnh IS NOT NULL AND HinhAnh != '' THEN 1 END) as images_submitted,
+        NguoiDung as main_user,
+        COUNT(*) as user_reports
+      FROM ${DatabaseTables.taskHistoryTable}
+      $whereClause
+      GROUP BY BoPhan, NguoiDung
+      HAVING BoPhan IS NOT NULL AND BoPhan != ''
+      ORDER BY BoPhan, user_reports DESC
+    ''', queryParams);
+
+    // Find the main user (most reports) for each project
+    Map<String, String> projectMainUsers = {};
+    
+    for (var item in results) {
+      final projectName = item['project_name'] as String;
+      final userName = item['main_user'] as String;
+      
+      if (!projectMainUsers.containsKey(projectName)) {
+        projectMainUsers[projectName] = userName;
+      }
+    }
+
+    // Now get aggregated project data
+    final List<Map<String, dynamic>> aggregatedResults = await db.rawQuery('''
       SELECT 
         BoPhan as project_name,
         COUNT(*) as total_reports,
@@ -619,11 +727,36 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
       ORDER BY BoPhan
     ''', queryParams);
 
-    final allProjectsData = results
+    // Count how many projects each user is the main reporter for
+    Map<String, int> userProjectCounts = {};
+    for (var entry in projectMainUsers.entries) {
+      final user = entry.value;
+      userProjectCounts[user] = (userProjectCounts[user] ?? 0) + 1;
+    }
+
+    // Identify users who are main reporters for multiple projects
+    Set<String> multiProjectUsers = userProjectCounts.entries
+        .where((entry) => entry.value > 1)
+        .map((entry) => entry.key)
+        .toSet();
+
+    final allProjectsData = aggregatedResults
         .where((item) => !_shouldFilterProject(item['project_name'] as String))
         .map((item) {
           final projectName = item['project_name'] as String;
-          final targetImages = projectName.startsWith('Bệnh viện') ? 10 : 15;
+          final mainUser = projectMainUsers[projectName] ?? '';
+          
+          // Apply requirement rules in order of priority
+          int targetImages;
+          if (projectName.toLowerCase().contains('nhà máy')) {
+            targetImages = 0; // Nhà máy projects have 0 requirement
+          } else if (projectName.toLowerCase().contains('bệnh viện')) {
+            targetImages = 10; // Bệnh viện projects have 10 requirement
+          } else if (multiProjectUsers.contains(mainUser)) {
+            targetImages = 8; // Projects where main user reports on multiple projects
+          } else {
+            targetImages = 15; // Default requirement
+          }
           
           return ProjectProgress(
             projectName: projectName,
@@ -634,8 +767,9 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
         })
         .toList()
         ..sort((a, b) {
-          final percentageA = (a.imagesSubmitted / a.targetImages * 100);
-          final percentageB = (b.imagesSubmitted / b.targetImages * 100);
+          // Handle projects with 0 target (always show as 100%)
+          final percentageA = a.targetImages == 0 ? 100.0 : (a.imagesSubmitted / a.targetImages * 100);
+          final percentageB = b.targetImages == 0 ? 100.0 : (b.imagesSubmitted / b.targetImages * 100);
           return percentageA.compareTo(percentageB);
         });
 
@@ -647,6 +781,7 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
     setState(() {
       _projectsData = allProjectsData; // Keep all projects for Excel export
       _filteredProjectsData = displayProjectsData; // Only show non-zero projects in UI
+      _projectHourlyReports = hourlyReports; // Store hourly reports data
       _lastUpdate = DateTime.now();
     });
   } catch (e) {
@@ -658,7 +793,42 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
     });
   }
 }
-
+Widget _buildHourlyCircles(String projectName) {
+  final hours = _projectHourlyReports[projectName] ?? [];
+  
+  if (hours.isEmpty) {
+    return SizedBox.shrink();
+  }
+  
+  return Container(
+    padding: EdgeInsets.symmetric(vertical: 2),
+    child: Wrap(
+      spacing: 4,
+      runSpacing: 2,
+      children: hours.map((hour) {
+        return Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.blue.shade600,
+            border: Border.all(color: Colors.white, width: 1),
+          ),
+          child: Center(
+            child: Text(
+              '$hour',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    ),
+  );
+}
   void _onChiTiet2FilterChanged(String? value) {
     _resetInactivityTimer();
     setState(() {
@@ -680,12 +850,13 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
   }
 
   Color _getProgressColor(double percentage) {
-    if (percentage >= 90) return Colors.tealAccent[400]!;
-    if (percentage >= 70) return Colors.blue[600]!;
-    if (percentage >= 50) return Colors.yellow[600]!;
-    if (percentage >= 30) return Colors.deepOrange[600]!;
-    return Colors.red[600]!;
-  }
+  if (percentage >= 100) return Color(0xFF2E7D32); // Dark green - completed
+  if (percentage >= 90) return Color(0xFF388E3C);  // Green - nearly done
+  if (percentage >= 70) return Color(0xFF1976D2);  // Blue - good progress
+  if (percentage >= 50) return Color(0xFFFF8F00);  // Orange - moderate progress
+  if (percentage >= 30) return Color(0xFFE65100);  // Dark orange - low progress
+  return Color(0xFFD32F2F);                        // Red - very low progress
+}
 
   int _getCrossAxisCount(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -708,123 +879,120 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
   }
 
   Widget _buildProjectCard(ProjectProgress project) {
-    final percentage = (project.imagesSubmitted / project.targetImages * 100).clamp(0.0, 100.0);
-    final progressColor = _getProgressColor(percentage);
+  final percentage = project.targetImages == 0 ? 100.0 : 
+                    (project.imagesSubmitted / project.targetImages * 100).clamp(0.0, 100.0);
+  final progressColor = _getProgressColor(percentage);
 
-    return Container(
-      height: 120,
-      margin: EdgeInsets.zero,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: progressColor,
-          width: 3,
-        ),
+  return Container(
+    height: 120,
+    margin: EdgeInsets.zero,
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(
+        color: progressColor,
+        width: 3,
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(5),
-        child: Stack(
-          children: [
-            Container(
-              width: double.infinity,
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.1),
+          blurRadius: 4,
+          offset: Offset(0, 2),
+        ),
+      ],
+    ),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(5),
+      child: Stack(
+        children: [
+          Container(
+            width: double.infinity,
+            height: double.infinity,
+            color: Colors.white,
+          ),
+          FractionallySizedBox(
+            alignment: Alignment.centerLeft,
+            widthFactor: percentage / 100,
+            child: Container(
               height: double.infinity,
-              color: Colors.white,
-            ),
-            FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: percentage / 100,
-              child: Container(
-                height: double.infinity,
-                decoration: BoxDecoration(
-                  color: progressColor,
-                ),
+              decoration: BoxDecoration(
+                color: progressColor.withOpacity(0.2),
               ),
             ),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    flex: 3, 
-                    child: Center(
-                      child: Text(
-                        project.projectName,
-                        style: TextStyle(
-                          fontSize: 20, 
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          height: 1.2, 
-                          shadows: [
-                            Shadow(offset: Offset(-1.5, -1.5), color: progressColor),
-                            Shadow(offset: Offset(1.5, -1.5), color: progressColor),
-                            Shadow(offset: Offset(1.5, 1.5), color: progressColor),
-                            Shadow(offset: Offset(-1.5, 1.5), color: progressColor),
-                            Shadow(offset: Offset(-1.5, 0), color: progressColor),
-                            Shadow(offset: Offset(1.5, 0), color: progressColor),
-                            Shadow(offset: Offset(0, -1.5), color: progressColor),
-                            Shadow(offset: Offset(0, 1.5), color: progressColor),
-                          ],
-                        ),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
+          ),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  flex: 2, 
+                  child: Center(
+                    child: Text(
+                      project.projectName,
+                      style: TextStyle(
+                        fontSize: 16, 
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                        height: 1.1, 
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
                     ),
                   ),
-                  Container(
-                    padding: EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '${project.imagesSubmitted}/${project.targetImages}',
+                ),
+                // Hourly circles section
+                Container(
+                  height: 28,
+                  child: _buildHourlyCircles(project.projectName),
+                ),
+                Container(
+                  padding: EdgeInsets.symmetric(vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          project.targetImages == 0 ? 'N/A' : '${project.imagesSubmitted}/${project.targetImages}',
                           style: TextStyle(
-                            fontSize: 16, 
+                            fontSize: 14, 
                             fontWeight: FontWeight.w600,
-                            color: Colors.black,
-                            shadows: [
-                              Shadow(offset: Offset(-1.5, -1.5), color: progressColor),
-                              Shadow(offset: Offset(1.5, -1.5), color: progressColor),
-                              Shadow(offset: Offset(1.5, 1.5), color: progressColor),
-                              Shadow(offset: Offset(-1.5, 1.5), color: progressColor),
-                              Shadow(offset: Offset(-1.5, 0), color: progressColor),
-                              Shadow(offset: Offset(1.5, 0), color: progressColor),
-                              Shadow(offset: Offset(0, -1.5), color: progressColor),
-                              Shadow(offset: Offset(0, 1.5), color: progressColor),
-                            ],
+                            color: Colors.black87,
                           ),
                         ),
-                        Text(
-                          '${percentage.toStringAsFixed(0)}%',
+                      ),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: progressColor,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          project.targetImages == 0 ? 'N/A' : '${percentage.toStringAsFixed(0)}%',
                           style: TextStyle(
-                            fontSize: 16, 
-                            fontWeight: FontWeight.w600,
+                            fontSize: 12, 
+                            fontWeight: FontWeight.bold,
                             color: Colors.white,
-                            shadows: [
-                              Shadow(offset: Offset(-1.5, -1.5), color: progressColor),
-                              Shadow(offset: Offset(1.5, -1.5), color: progressColor),
-                              Shadow(offset: Offset(1.5, 1.5), color: progressColor),
-                              Shadow(offset: Offset(-1.5, 1.5), color: progressColor),
-                              Shadow(offset: Offset(-1.5, 0), color: progressColor),
-                              Shadow(offset: Offset(1.5, 0), color: progressColor),
-                              Shadow(offset: Offset(0, -1.5), color: progressColor),
-                              Shadow(offset: Offset(0, 1.5), color: progressColor),
-                            ],
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildFilterDropdown() {
     return Container(
