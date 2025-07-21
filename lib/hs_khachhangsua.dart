@@ -63,7 +63,7 @@ class _AddKhachHangScreenState extends State<AddKhachHangScreen>
     'hm.thuytrang', 'hm.nguyenvy', 'hm.baoha', 'hm.trantien', 
     'hm.myha', 'hm.phiminh', 'hm.thanhhao', 'hm.luongtrang', 
     'hm.damlinh', 'hm.thanhthao', 'hm.damchinh', 'hm.quocchien', 
-    'hm.thuyvan', 'hotel.danang', 'hotel.nhatrang', 'hm.doanly'
+    'hm.thuyvan', 'hotel.danang', 'hotel.nhatrang', 'hm.tranthu'
   ];
   
   // Predefined subject names for Dịch vụ type

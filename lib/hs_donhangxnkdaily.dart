@@ -52,11 +52,11 @@ class _HSDonHangXNKDailyScreenState extends State<HSDonHangXNKDailyScreen> {
   Set<String> _processingApprovals = {};
 
   final List<String> adminUsers = [
-    'hm.tason', 'hm.manhha', 'hm.luukinh', 'hm.doanly', 'hm.damlinh',
+    'hm.tason', 'hm.manhha', 'hm.luukinh', 'hm.tranthu', 'hm.damlinh',
     'hm.quocchien', 'hm.damchinh', 'hotel.danang', 'hotel.nhatrang'
   ];
   final Map<String, List<String>> locationAdminMap = {
-    'HN': ['hm.tason', 'hm.manhha', 'hm.doanly', 'hm.luukinh'],
+    'HN': ['hm.tason', 'hm.manhha', 'hm.tranthu', 'hm.luukinh'],
     'SG': ['hm.damlinh', 'hm.damchinh'],
     'DN': ['hotel.danang'],
     'NT': ['hotel.nhatrang']
@@ -65,11 +65,11 @@ class _HSDonHangXNKDailyScreenState extends State<HSDonHangXNKDailyScreen> {
   final List<String> approveableStatuses = ['xnk đặt hàng'];
 
   final List<String> specialUsers = [
-    'hm.tason', 'hm.luukinh', 'hm.trangiang', 'hm.damlinh', 'hm.doanly', 'hm.luukinh',
+    'hm.tason', 'hm.luukinh', 'hm.trangiang', 'hm.damlinh', 'hm.tranthu', 'hm.luukinh',
     'hm.manhha','hotel.nhatrang', 'hotel.danang', 'hm.damchinh', 'hm.quocchien'
   ];
   final List<String> defaultStatusOrderUsers = [
-    'hm.tason', 'hm.luukinh', 'hm.trangiang', 'hm.damlinh', 'hm.doanly',
+    'hm.tason', 'hm.luukinh', 'hm.trangiang', 'hm.damlinh', 'hm.tranthu',
     'hm.manhha', 'hotel.nhatrang', 'hotel.danang'
   ];
   final List<String> altStatusOrderUsers = [

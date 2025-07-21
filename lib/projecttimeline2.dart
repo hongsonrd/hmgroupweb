@@ -28,7 +28,7 @@ class _ImageSlideshowState extends State<ImageSlideshow> {
   // Slideshow configuration
   Timer? _slideTimer;
   Timer? _syncTimer;
-  final Duration _slideDuration = Duration(seconds: 5); // 5 seconds per image
+  final Duration _slideDuration = Duration(seconds: 8); // 8 seconds per image
   final Duration _syncInterval = Duration(minutes: 30); // Sync every 30 minutes
   
   // Animation

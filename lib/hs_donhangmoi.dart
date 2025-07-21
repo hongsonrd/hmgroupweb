@@ -384,7 +384,7 @@ void _showRecipientContactSelectionDialog() {
 } else if (username.contains('hm.thuyvan')) { userPrefix = '1312';
 } else if (username.contains('hotel.danang')) { userPrefix = '13181';
 } else if (username.contains('hotel.nhatrang')) { userPrefix = '1312';
-} else if (username.contains('hm.doanly')) { userPrefix = 'Kho';
+} else if (username.contains('hm.tranthu')) { userPrefix = 'Kho';
     } else {
       userPrefix = '9999';
     }
@@ -424,7 +424,7 @@ void _showRecipientContactSelectionDialog() {
 } else if (username.contains('hm.thuyvan')) { return 'NT';
 } else if (username.contains('hotel.danang')) { return 'DN';
 } else if (username.contains('hotel.nhatrang')) { return 'NT';
-} else if (username.contains('hm.doanly')) { return 'HN';
+} else if (username.contains('hm.tranthu')) { return 'HN';
     } else {
       return 'HN'; // Default value
     }

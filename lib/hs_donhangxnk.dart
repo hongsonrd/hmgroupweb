@@ -81,7 +81,7 @@ final List<String> _baoGiaOptions = [
   'hm.thuyvan',
   'hotel.danang',
   'hotel.nhatrang',
-  'hm.doanly',
+  'hm.tranthu',
   'hm.trangiang', 'hm.tason', 'hm.manhha', 'hongson@officity.vn', ''
 ];
 
@@ -341,7 +341,7 @@ Future<void> _loadExistingOrderForEdit() async {
       userPrefix = '13181';
     } else if (username.contains('hotel.nhatrang')) {
       userPrefix = '1312';
-    } else if (username.contains('hm.doanly')) {
+    } else if (username.contains('hm.tranthu')) {
       userPrefix = 'Kho';
     } else {
       userPrefix = '9999';
@@ -402,7 +402,7 @@ Future<void> _loadExistingOrderForEdit() async {
       return 'DN';
     } else if (username.contains('hotel.nhatrang')) {
       return 'NT';
-    } else if (username.contains('hm.doanly')) {
+    } else if (username.contains('hm.tranthu')) {
       return 'HN';
     } else {
       return 'HN'; // Default value
