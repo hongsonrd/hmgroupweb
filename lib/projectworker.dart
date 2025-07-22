@@ -13,12 +13,12 @@ import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:io' ;
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:excel/excel.dart';
+import 'package:excel/excel.dart' hide Border;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'http_client.dart';
-
+import 'package:table_sticky_headers/table_sticky_headers.dart';
 class ProjectWorker extends StatefulWidget {
  final String selectedBoPhan;
  const ProjectWorker({Key? key, required this.selectedBoPhan}) : super(key: key);
@@ -1533,433 +1533,702 @@ String _extractCongThuongChuBase(String? value) {
   }
   return value;
 }
-Widget _buildCombinedTable() {
- final days = _getDaysInMonth();
- final employees = _getUniqueEmployees();
- 
- return SingleChildScrollView(
-   scrollDirection: Axis.horizontal,
-   child: SingleChildScrollView(
-     child: Table(
-       border: TableBorder.all(color: Colors.grey.shade300),
-       columnWidths: {
-         0: FixedColumnWidth(100),
-         for (int i = 0; i < days.length; i++) 
-           i + 1: FixedColumnWidth(70),
-       },
-       children: [
-         TableRow(
-           decoration: BoxDecoration(
-             color: Colors.grey.shade200,
-           ),
-           children: [
-             TableCell(
-               child: Padding(
-                 padding: const EdgeInsets.all(8.0),
-                 child: Row(
-                   children: [
-                     Text('Mã NV', style: TextStyle(fontWeight: FontWeight.bold)),
-                     SizedBox(width: 4),
-                     InkWell(
-                       onTap: () {
-                         showDialog(
-                           context: context,
-                           builder: (context) => AlertDialog(
-                             title: Text('Đánh dấu nhân viên'),
-                             content: Text('Nhấn vào tên nhân viên để chọn màu đánh dấu.'),
-                             actions: [
-                               TextButton(
-                                 onPressed: () => Navigator.pop(context),
-                                 child: Text('Đóng'),
-                               ),
-                             ],
-                           ),
-                         );
-                       },
-                       child: Icon(Icons.color_lens, size: 16),
-                     ),
-                   ],
-                 ),
-               ),
-             ),
-             for (var day in days)
-               TableCell(
-                 child: Padding(
-                   padding: const EdgeInsets.all(8.0),
-                   child: Text(day.toString(), style: TextStyle(fontWeight: FontWeight.bold)),
-                 ),
-               ),
-           ],
-         ),
-         
-         for (var empId in employees) ...[
-           TableRow(
-             decoration: BoxDecoration(
-               color: _staffColors[empId],
-             ),
-             children: [
-               TableCell(
-                 verticalAlignment: TableCellVerticalAlignment.middle,
-                 child: Padding(
-                   padding: const EdgeInsets.all(8.0),
-                   child: InkWell(
-                     onTap: () {
-                       setState(() {
-                         _staffToColor = empId;
-                         _showColorDialog = true;
-                       });
-                     },
-                     child: Column(
-                       crossAxisAlignment: CrossAxisAlignment.start,
-                       mainAxisSize: MainAxisSize.min,
-                       children: [
-                         Text(empId, style: TextStyle(color: Colors.black)),
-                         Text(
-                           _staffNames[empId] ?? '',
-                           style: TextStyle(
-                             fontSize: 12,
-                             color: Colors.black,
-                             fontWeight: FontWeight.bold,
-                           ),
-                         ),
-                         Text('Công chữ', style: TextStyle(fontSize: 10)),
-                       ],
-                     ),
-                   ),
-                 ),
-               ),
-               for (var day in days)
-                 TableCell(
-                   child: Padding(
-                     padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                     child: Column(
-                       crossAxisAlignment: CrossAxisAlignment.start,
-                       children: [
-                         DropdownButton<String>(
-                           value: _congThuongChoices.contains(_extractCongThuongChuBase(_getAttendanceForDay(empId, day, 'CongThuongChu'))) 
-                             ? _extractCongThuongChuBase(_getAttendanceForDay(empId, day, 'CongThuongChu')) 
-                             : _congThuongChoices.first,
-                           items: _congThuongChoices.map((choice) =>
-                             DropdownMenuItem(
-                               value: choice, 
-                               child: Text(
-                                 choice,
-                                 style: TextStyle(
-                                   color: (choice != 'Ro') ? Colors.blue : null,
-                                   fontWeight: (choice != 'Ro') ? FontWeight.bold : null,
-                                 ),
-                               ),
-                             )
-                           ).toList(),
-                           onChanged: _canEditDay(day) 
-                             ? (value) {
-                                 final currentValue = _getAttendanceForDay(empId, day, 'CongThuongChu') ?? 'Ro';
-                                 if (currentValue.endsWith('+P')) {
-                                   _updateAttendance(empId, day, 'CongThuongChu', value! + '+P');
-                                 } else if (currentValue.endsWith('+P/2')) {
-                                   _updateAttendance(empId, day, 'CongThuongChu', value! + '+P/2');
-                                 } else {
-                                   _updateAttendance(empId, day, 'CongThuongChu', value);
-                                 }
-                               }
-                             : null,
-                           isExpanded: true,
-                           isDense: true,
-                           style: TextStyle(
-                             color: (_getAttendanceForDay(empId, day, 'CongThuongChu') != 'Ro') 
-                                 ? Colors.blue 
-                                 : null,
-                             fontWeight: (_getAttendanceForDay(empId, day, 'CongThuongChu') != 'Ro')
-                                 ? FontWeight.bold
-                                 : null,
-                           ),
-                         ),
-                         if ((_getAttendanceForDay(empId, day, 'CongThuongChu') ?? 'Ro').endsWith('+P') || 
-                             (_getAttendanceForDay(empId, day, 'CongThuongChu') ?? 'Ro').endsWith('+P/2'))
-                           Padding(
-                             padding: const EdgeInsets.only(top: 2.0),
-                             child: Text(
-                               _getAttendanceForDay(empId, day, 'CongThuongChu') ?? 'Ro',
-                               style: TextStyle(
-                                 fontSize: 10,
-                                 color: Colors.purple,
-                                 fontWeight: FontWeight.bold,
-                               ),
-                             ),
-                           ),
-                       ],
-                     ),
-                   ),
-                 ),
-             ],
-           ),
-           
-           TableRow(
-             decoration: BoxDecoration(
-               color: _staffColors[empId] != null 
-                   ? _staffColors[empId]!.withOpacity(0.7)
-                   : Colors.grey.shade100,
-             ),
-             children: [
-               TableCell(
-                 child: Padding(
-                   padding: const EdgeInsets.all(8.0),
-                   child: Text('NG thường', 
-                     style: TextStyle(fontSize: 10, color: Colors.grey.shade700)),
-                 ),
-               ),
-               for (var day in days)
-                 TableCell(
-                   child: Padding(
-                     padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                     child: SizedBox(
-                       height: 40,
-                       child: TextFormField(
-                        key: ValueKey('$empId-$day-NgoaiGioThuong-$_selectedDepartment'),
-                         initialValue: _getAttendanceForDay(empId, day, 'NgoaiGioThuong'),
-                         keyboardType: TextInputType.numberWithOptions(decimal: true),
-                         textAlign: TextAlign.right,
-                         enabled: _canEditDay(day),
-                         style: TextStyle(
-                           color: (_getAttendanceForDay(empId, day, 'NgoaiGioThuong') != '0') 
-                               ? Colors.blue 
-                               : Colors.grey.shade800,
-                           fontWeight: (_getAttendanceForDay(empId, day, 'NgoaiGioThuong') != '0')
-                               ? FontWeight.bold
-                               : FontWeight.normal,
-                         ),
-                         onChanged: (value) {
-                           if (value.isEmpty) {
-                             _updateAttendance(empId, day, 'NgoaiGioThuong', '0');
-                             return;
-                           }
-                           value = value.replaceAll(RegExp(r'[^\d.]'), '');
-                           _updateAttendance(empId, day, 'NgoaiGioThuong', value);
-                         },
-                         decoration: InputDecoration(
-                           isDense: true,
-                           contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                           border: OutlineInputBorder(),
-                           filled: true,
-                           fillColor: (_getAttendanceForDay(empId, day, 'NgoaiGioThuong') != '0')
-                               ? Colors.blue.withOpacity(0.1)
-                               : Colors.white.withOpacity(0.7),
-                         ),
-                       ),
-                     ),
-                   ),
-                 ),
-             ],
-           ),
-           
-           // Add Part Time row here
-           TableRow(
-             decoration: BoxDecoration(
-               color: _staffColors[empId] != null 
-                   ? _staffColors[empId]!.withOpacity(0.85)
-                   : Colors.grey.shade50,
-             ),
-             children: [
-               TableCell(
-                 child: Padding(
-                   padding: const EdgeInsets.all(8.0),
-                   child: Text('Part time', 
-                     style: TextStyle(fontSize: 10, color: Colors.grey.shade700)),
-                 ),
-               ),
-               for (var day in days)
-                 TableCell(
-                   child: Padding(
-                     padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                     child: SizedBox(
-                       height: 40,
-                       child: TextFormField(
-                        key: ValueKey('$empId-$day-PartTime-$_selectedDepartment'),
-                         initialValue: _getAttendanceForDay(empId, day, 'PartTime'),
-                         keyboardType: TextInputType.number,
-                         textAlign: TextAlign.right,
-                         enabled: _canEditDay(day),
-                         style: TextStyle(
-                           color: (_getAttendanceForDay(empId, day, 'PartTime') != '0') 
-                               ? Colors.green 
-                               : Colors.grey.shade800,
-                           fontWeight: (_getAttendanceForDay(empId, day, 'PartTime') != '0')
-                               ? FontWeight.bold
-                               : FontWeight.normal,
-                         ),
-                         onChanged: (value) {
-                           if (value.isEmpty) {
-                             _updateAttendance(empId, day, 'PartTime', '0');
-                             return;
-                           }
-                           value = value.replaceAll(RegExp(r'[^\d]'), '');
-                           _updateAttendance(empId, day, 'PartTime', value);
-                         },
-                         decoration: InputDecoration(
-                           isDense: true,
-                           contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                           border: OutlineInputBorder(),
-                           filled: true,
-                           fillColor: (_getAttendanceForDay(empId, day, 'PartTime') != '0')
-                               ? Colors.green.withOpacity(0.1)
-                               : Colors.white.withOpacity(0.7),
-                         ),
-                       ),
-                     ),
-                   ),
-                 ),
-             ],
-           ),
-           
-           if (empId != employees.last)
-             TableRow(
-               children: [
-                 for (int i = 0; i <= days.length; i++)
-                   TableCell(
-                     child: Container(
-                       height: 4,
-                       color: Colors.grey.shade200,
-                     ),
-                   ),
-               ],
-             ),
-         ],
-       ],
-     ),
-   ),
- );
-}
-  Widget _buildAttendanceTable(String columnType) {
- if (columnType == "CongThuongChu") {
-   return _buildCombinedTable();
- }
- 
- final days = _getDaysInMonth();
- final employees = _getUniqueEmployees();
- 
- return SingleChildScrollView(
-   scrollDirection: Axis.horizontal,
-   child: SingleChildScrollView(
-     child: DataTable(
-       columns: [
-         DataColumn(label: Row(
-           children: [
-             Text('Mã NV'),
-             SizedBox(width: 4),
-             InkWell(
-               onTap: () {
-                 showDialog(
-                   context: context,
-                   builder: (context) => AlertDialog(
-                     title: Text('Đánh dấu nhân viên'),
-                     content: Text('Nhấn vào tên nhân viên để chọn màu đánh dấu.'),
-                     actions: [
-                       TextButton(
-                         onPressed: () => Navigator.pop(context),
-                         child: Text('Đóng'),
-                       ),
-                     ],
-                   ),
-                 );
-               },
-               child: Icon(Icons.color_lens, size: 16),
-             ),
-           ],
-         )),
-         ...days.map((day) => DataColumn(label: Text(day.toString()))),
-       ],
-       rows: employees.map((empId) {
-         final bgColor = _staffColors[empId];
-         
-         return DataRow(
-           color: bgColor != null ? 
-             MaterialStateProperty.all(bgColor) : 
-             null,
-           cells: [
-             DataCell(
-  InkWell(
-    onTap: () {
-      setState(() {
-        _staffToColor = empId;
-        _showColorDialog = true;
-      });
-    },
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(empId, style: TextStyle(color: Colors.black)),
-        Text(
-          _staffNames[empId] ?? '',
+Widget _buildStickyTable(String columnType) {
+  final days = _getDaysInMonth();
+  final employees = _getUniqueEmployees();
+  
+  if (columnType == "CongThuongChu") {
+    // For the combined table, we need 3 rows per employee
+    return StickyHeadersTable(
+      columnsLength: days.length + 1, // +1 for the row name column
+      rowsLength: employees.length * 3, // 3 rows per employee
+      columnsTitleBuilder: (i) {
+        if (i == 0) {
+          // First column is for row names
+          return Container(
+            height: 40,
+            width: 80,
+            color: Colors.purple.shade100,
+            alignment: Alignment.center,
+            child: Text(
+              'Loại',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            ),
+          );
+        } else {
+          // Day columns
+          return Container(
+            height: 40,
+            color: Colors.grey.shade200,
+            alignment: Alignment.center,
+            child: Text(
+              days[i - 1].toString(),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+          );
+        }
+      },
+      rowsTitleBuilder: (i) {
+        final employeeIndex = i ~/ 3; // Which employee (0, 1, 2...)
+        final rowType = i % 3; // Which row (0=Công chữ, 1=NG thường, 2=Part time)
+        final empId = employees[employeeIndex];
+        
+        Color backgroundColor;
+        
+        switch (rowType) {
+          case 0:
+            backgroundColor = _staffColors[empId] ?? Colors.grey.shade100;
+            break;
+          case 1:
+            backgroundColor = (_staffColors[empId] ?? Colors.grey.shade100).withOpacity(0.8);
+            break;
+          case 2:
+            backgroundColor = (_staffColors[empId] ?? Colors.grey.shade100).withOpacity(0.6);
+            break;
+          default:
+            backgroundColor = Colors.grey.shade100;
+        }
+        
+        if (rowType == 0) {
+          // Only show staff info on the first row of each employee
+          return Container(
+            width: 290,
+            color: backgroundColor,
+            padding: EdgeInsets.all(4),
+            child: InkWell(
+              onTap: () {
+                setState(() {
+                  _staffToColor = empId;
+                  _showColorDialog = true;
+                });
+              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Employee ID
+                  Text(
+                    empId,
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 9,
+                    ),
+                  ),
+                  // Employee name
+                  Text(
+                    _staffNames[empId] ?? '',
+                    style: TextStyle(
+                      fontSize: 8,
+                      color: Colors.black,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          );
+        } else {
+          // Empty container for 2nd and 3rd rows with same background color
+          return Container(
+            width: 290,
+            color: backgroundColor,
+            child: InkWell(
+              onTap: () {
+                setState(() {
+                  _staffToColor = empId;
+                  _showColorDialog = true;
+                });
+              },
+              child: Container(), // Empty but still clickable for color selection
+            ),
+          );
+        }
+      },
+      contentCellBuilder: (i, j) {
+        final employeeIndex = j ~/ 3;
+        final rowType = j % 3;
+        final empId = employees[employeeIndex];
+        
+        if (i == 0) {
+          // First column - Row name column
+          String rowLabel;
+          Color textColor;
+          
+          switch (rowType) {
+            case 0:
+              rowLabel = 'Công chữ';
+              textColor = Colors.blue;
+              break;
+            case 1:
+              rowLabel = 'NG thường';
+              textColor = Colors.orange;
+              break;
+            case 2:
+              rowLabel = 'Part time';
+              textColor = Colors.green;
+              break;
+            default:
+              rowLabel = '';
+              textColor = Colors.black;
+          }
+          
+          return Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade300),
+              color: Colors.grey.shade50,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              rowLabel,
+              style: TextStyle(
+                fontSize: 11,
+                color: textColor,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          );
+        } else {
+          // Data columns
+          final day = days[i - 1];
+          return _buildSeparateRowCell(empId, day, rowType);
+        }
+      },
+      legendCell: Container(
+        color: Colors.purple,
+        alignment: Alignment.center,
+        child: Text(
+          'Nhân viên',
           style: TextStyle(
-            fontSize: 12,
-            color: Colors.black,
+            color: Colors.white,
             fontWeight: FontWeight.bold,
+            fontSize: 12,
+          ),
+        ),
+      ),
+      cellDimensions: CellDimensions.uniform(
+        width: 65,
+        height: 55,
+      ),
+    );
+  } else {
+    return StickyHeadersTable(
+      columnsLength: days.length,
+      rowsLength: employees.length,
+      columnsTitleBuilder: (i) => Container(
+        height: 40,
+        color: Colors.grey.shade200,
+        alignment: Alignment.center,
+        child: Text(
+          days[i].toString(),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        ),
+      ),
+      rowsTitleBuilder: (i) => Container(
+        width: 290,
+        color: _staffColors[employees[i]] ?? Colors.grey.shade100,
+        padding: EdgeInsets.all(4),
+        child: InkWell(
+          onTap: () {
+            setState(() {
+              _staffToColor = employees[i];
+              _showColorDialog = true;
+            });
+          },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                employees[i],
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 9,
+                ),
+              ),
+              Text(
+                _staffNames[employees[i]] ?? '',
+                style: TextStyle(
+                  fontSize: 8,
+                  color: Colors.black,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
+      contentCellBuilder: (i, j) => _buildSingleCell(employees[j], days[i], columnType),
+      legendCell: Container(
+        color: Colors.purple,
+        alignment: Alignment.center,
+        child: Text(
+          'Nhân viên',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+          ),
+        ),
+      ),
+      cellDimensions: CellDimensions.uniform(
+        width: 45,
+        height: 60,
+      ),
+    );
+  }
+}
+Widget _buildSeparateRowCell(String empId, int day, int rowType) {
+  final canEdit = _canEditDay(day);
+  
+  switch (rowType) {
+    case 0: // Công chữ
+      return Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          color: _staffColors[empId]?.withOpacity(0.1) ?? Colors.white,
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(2),
+          child: DropdownButton<String>(
+            value: _congThuongChoices.contains(_extractCongThuongChuBase(_getAttendanceForDay(empId, day, 'CongThuongChu'))) 
+              ? _extractCongThuongChuBase(_getAttendanceForDay(empId, day, 'CongThuongChu')) 
+              : _congThuongChoices.first,
+            items: _congThuongChoices.map((choice) =>
+              DropdownMenuItem(
+                value: choice, 
+                child: Text(
+                  choice,
+                  style: TextStyle(
+                    color: (choice != 'Ro') ? Colors.blue : null,
+                    fontWeight: (choice != 'Ro') ? FontWeight.bold : null,
+                    fontSize: 11, // Increased font size
+                  ),
+                ),
+              )
+            ).toList(),
+            onChanged: canEdit 
+              ? (value) {
+                  final currentValue = _getAttendanceForDay(empId, day, 'CongThuongChu') ?? 'Ro';
+                  if (currentValue.endsWith('+P')) {
+                    _updateAttendance(empId, day, 'CongThuongChu', value! + '+P');
+                  } else if (currentValue.endsWith('+P/2')) {
+                    _updateAttendance(empId, day, 'CongThuongChu', value! + '+P/2');
+                  } else {
+                    _updateAttendance(empId, day, 'CongThuongChu', value);
+                  }
+                }
+              : null,
+            isExpanded: true,
+            isDense: true,
+            underline: Container(),
+            style: TextStyle(fontSize: 11),
+          ),
+        ),
+      );
+      
+    case 1: // NG thường
+      return Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          color: _staffColors[empId]?.withOpacity(0.1) ?? Colors.white,
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(2),
+          child: TextFormField(
+            key: ValueKey('$empId-$day-NgoaiGioThuong-$_selectedDepartment'),
+            initialValue: _getAttendanceForDay(empId, day, 'NgoaiGioThuong'),
+            keyboardType: TextInputType.numberWithOptions(decimal: true),
+            textAlign: TextAlign.center,
+            enabled: canEdit,
+            style: TextStyle(
+              color: (_getAttendanceForDay(empId, day, 'NgoaiGioThuong') != '0') 
+                  ? Colors.blue 
+                  : Colors.grey.shade800,
+              fontWeight: (_getAttendanceForDay(empId, day, 'NgoaiGioThuong') != '0')
+                  ? FontWeight.bold
+                  : FontWeight.normal,
+              fontSize: 12, // Increased font size
+            ),
+            onChanged: (value) {
+              if (value.isEmpty) {
+                _updateAttendance(empId, day, 'NgoaiGioThuong', '0');
+                return;
+              }
+              value = value.replaceAll(RegExp(r'[^\d.]'), '');
+              _updateAttendance(empId, day, 'NgoaiGioThuong', value);
+            },
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+              border: InputBorder.none,
+            ),
+          ),
+        ),
+      );
+      
+    case 2: // Part Time
+      return Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          color: _staffColors[empId]?.withOpacity(0.1) ?? Colors.white,
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(2),
+          child: TextFormField(
+            key: ValueKey('$empId-$day-PartTime-$_selectedDepartment'),
+            initialValue: _getAttendanceForDay(empId, day, 'PartTime'),
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            enabled: canEdit,
+            style: TextStyle(
+              color: (_getAttendanceForDay(empId, day, 'PartTime') != '0') 
+                  ? Colors.green 
+                  : Colors.grey.shade800,
+              fontWeight: (_getAttendanceForDay(empId, day, 'PartTime') != '0')
+                  ? FontWeight.bold
+                  : FontWeight.normal,
+              fontSize: 12, // Increased font size
+            ),
+            onChanged: (value) {
+              if (value.isEmpty) {
+                _updateAttendance(empId, day, 'PartTime', '0');
+                return;
+              }
+              value = value.replaceAll(RegExp(r'[^\d]'), '');
+              _updateAttendance(empId, day, 'PartTime', value);
+            },
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+              border: InputBorder.none,
+            ),
+          ),
+        ),
+      );
+      
+    default:
+      return Container();
+  }
+}
+Widget _buildIndividualCell(String empId, int day, int rowType) {
+  final canEdit = _canEditDay(day);
+  
+  switch (rowType) {
+    case 0: // Công chữ
+      return Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          color: _staffColors[empId]?.withOpacity(0.1) ?? Colors.white,
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(1),
+          child: DropdownButton<String>(
+            value: _congThuongChoices.contains(_extractCongThuongChuBase(_getAttendanceForDay(empId, day, 'CongThuongChu'))) 
+              ? _extractCongThuongChuBase(_getAttendanceForDay(empId, day, 'CongThuongChu')) 
+              : _congThuongChoices.first,
+            items: _congThuongChoices.map((choice) =>
+              DropdownMenuItem(
+                value: choice, 
+                child: Text(
+                  choice,
+                  style: TextStyle(
+                    color: (choice != 'Ro') ? Colors.blue : null,
+                    fontWeight: (choice != 'Ro') ? FontWeight.bold : null,
+                    fontSize: 8,
+                  ),
+                ),
+              )
+            ).toList(),
+            onChanged: canEdit 
+              ? (value) {
+                  final currentValue = _getAttendanceForDay(empId, day, 'CongThuongChu') ?? 'Ro';
+                  if (currentValue.endsWith('+P')) {
+                    _updateAttendance(empId, day, 'CongThuongChu', value! + '+P');
+                  } else if (currentValue.endsWith('+P/2')) {
+                    _updateAttendance(empId, day, 'CongThuongChu', value! + '+P/2');
+                  } else {
+                    _updateAttendance(empId, day, 'CongThuongChu', value);
+                  }
+                }
+              : null,
+            isExpanded: true,
+            isDense: true,
+            underline: Container(),
+            style: TextStyle(fontSize: 8),
+          ),
+        ),
+      );
+      
+    case 1: // NG thường
+      return Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          color: _staffColors[empId]?.withOpacity(0.1) ?? Colors.white,
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(1),
+          child: TextFormField(
+            key: ValueKey('$empId-$day-NgoaiGioThuong-$_selectedDepartment'),
+            initialValue: _getAttendanceForDay(empId, day, 'NgoaiGioThuong'),
+            keyboardType: TextInputType.numberWithOptions(decimal: true),
+            textAlign: TextAlign.center,
+            enabled: canEdit,
+            style: TextStyle(
+              color: (_getAttendanceForDay(empId, day, 'NgoaiGioThuong') != '0') 
+                  ? Colors.blue 
+                  : Colors.grey.shade800,
+              fontWeight: (_getAttendanceForDay(empId, day, 'NgoaiGioThuong') != '0')
+                  ? FontWeight.bold
+                  : FontWeight.normal,
+              fontSize: 9,
+            ),
+            onChanged: (value) {
+              if (value.isEmpty) {
+                _updateAttendance(empId, day, 'NgoaiGioThuong', '0');
+                return;
+              }
+              value = value.replaceAll(RegExp(r'[^\d.]'), '');
+              _updateAttendance(empId, day, 'NgoaiGioThuong', value);
+            },
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
+              border: InputBorder.none,
+            ),
+          ),
+        ),
+      );
+      
+    case 2: // Part Time
+      return Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          color: _staffColors[empId]?.withOpacity(0.1) ?? Colors.white,
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(1),
+          child: TextFormField(
+            key: ValueKey('$empId-$day-PartTime-$_selectedDepartment'),
+            initialValue: _getAttendanceForDay(empId, day, 'PartTime'),
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            enabled: canEdit,
+            style: TextStyle(
+              color: (_getAttendanceForDay(empId, day, 'PartTime') != '0') 
+                  ? Colors.green 
+                  : Colors.grey.shade800,
+              fontWeight: (_getAttendanceForDay(empId, day, 'PartTime') != '0')
+                  ? FontWeight.bold
+                  : FontWeight.normal,
+              fontSize: 9,
+            ),
+            onChanged: (value) {
+              if (value.isEmpty) {
+                _updateAttendance(empId, day, 'PartTime', '0');
+                return;
+              }
+              value = value.replaceAll(RegExp(r'[^\d]'), '');
+              _updateAttendance(empId, day, 'PartTime', value);
+            },
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
+              border: InputBorder.none,
+            ),
+          ),
+        ),
+      );
+      
+    default:
+      return Container();
+  }
+}
+Widget _buildCombinedCell(String empId, int day) {
+  final canEdit = _canEditDay(day);
+  
+  return Container(
+    decoration: BoxDecoration(
+      border: Border.all(color: Colors.grey.shade300),
+      color: _staffColors[empId]?.withOpacity(0.1) ?? Colors.white,
+    ),
+    child: Column(
+      children: [
+        // Công chữ dropdown
+        Expanded(
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: 1),
+            child: DropdownButton<String>(
+              value: _congThuongChoices.contains(_extractCongThuongChuBase(_getAttendanceForDay(empId, day, 'CongThuongChu'))) 
+                ? _extractCongThuongChuBase(_getAttendanceForDay(empId, day, 'CongThuongChu')) 
+                : _congThuongChoices.first,
+              items: _congThuongChoices.map((choice) =>
+                DropdownMenuItem(
+                  value: choice, 
+                  child: Text(
+                    choice,
+                    style: TextStyle(
+                      color: (choice != 'Ro') ? Colors.blue : null,
+                      fontWeight: (choice != 'Ro') ? FontWeight.bold : null,
+                      fontSize: 8, // Smaller font for narrow column
+                    ),
+                  ),
+                )
+              ).toList(),
+              onChanged: canEdit 
+                ? (value) {
+                    final currentValue = _getAttendanceForDay(empId, day, 'CongThuongChu') ?? 'Ro';
+                    if (currentValue.endsWith('+P')) {
+                      _updateAttendance(empId, day, 'CongThuongChu', value! + '+P');
+                    } else if (currentValue.endsWith('+P/2')) {
+                      _updateAttendance(empId, day, 'CongThuongChu', value! + '+P/2');
+                    } else {
+                      _updateAttendance(empId, day, 'CongThuongChu', value);
+                    }
+                  }
+                : null,
+              isExpanded: true,
+              isDense: true,
+              underline: Container(),
+              style: TextStyle(fontSize: 8),
+            ),
+          ),
+        ),
+        
+        Divider(height: 1, color: Colors.grey),
+        
+        // NG thường field
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 1),
+            child: TextFormField(
+              key: ValueKey('$empId-$day-NgoaiGioThuong-$_selectedDepartment'),
+              initialValue: _getAttendanceForDay(empId, day, 'NgoaiGioThuong'),
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              textAlign: TextAlign.center,
+              enabled: canEdit,
+              style: TextStyle(
+                color: (_getAttendanceForDay(empId, day, 'NgoaiGioThuong') != '0') 
+                    ? Colors.blue 
+                    : Colors.grey.shade800,
+                fontWeight: (_getAttendanceForDay(empId, day, 'NgoaiGioThuong') != '0')
+                    ? FontWeight.bold
+                    : FontWeight.normal,
+                fontSize: 9, // Smaller font
+              ),
+              onChanged: (value) {
+                if (value.isEmpty) {
+                  _updateAttendance(empId, day, 'NgoaiGioThuong', '0');
+                  return;
+                }
+                value = value.replaceAll(RegExp(r'[^\d.]'), '');
+                _updateAttendance(empId, day, 'NgoaiGioThuong', value);
+              },
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+                border: InputBorder.none,
+                hintText: 'NG',
+                hintStyle: TextStyle(fontSize: 7),
+              ),
+            ),
+          ),
+        ),
+        
+        Divider(height: 1, color: Colors.grey),
+        
+        // Part Time field
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 1),
+            child: TextFormField(
+              key: ValueKey('$empId-$day-PartTime-$_selectedDepartment'),
+              initialValue: _getAttendanceForDay(empId, day, 'PartTime'),
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              enabled: canEdit,
+              style: TextStyle(
+                color: (_getAttendanceForDay(empId, day, 'PartTime') != '0') 
+                    ? Colors.green 
+                    : Colors.grey.shade800,
+                fontWeight: (_getAttendanceForDay(empId, day, 'PartTime') != '0')
+                    ? FontWeight.bold
+                    : FontWeight.normal,
+                fontSize: 9, // Smaller font
+              ),
+              onChanged: (value) {
+                if (value.isEmpty) {
+                  _updateAttendance(empId, day, 'PartTime', '0');
+                  return;
+                }
+                value = value.replaceAll(RegExp(r'[^\d]'), '');
+                _updateAttendance(empId, day, 'PartTime', value);
+              },
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+                border: InputBorder.none,
+                hintText: 'PT',
+                hintStyle: TextStyle(fontSize: 7),
+              ),
+            ),
           ),
         ),
       ],
     ),
-  ),
-),
-             ...days.map((day) {
-               final attendance = _getAttendanceForDay(empId, day, columnType);
-               final defaultValue = columnType == 'CongThuongChu' ? 'Ro' : '0';
-               final value = attendance ?? defaultValue;
-               final canEdit = _canEditDay(day);
-               
-               return DataCell(
-                 columnType == 'CongThuongChu'
-                   ? DropdownButton<String>(
-                       value: _congThuongChoices.contains(_extractCongThuongChuBase(attendance ?? 'Ro')) 
-    ? _extractCongThuongChuBase(attendance ?? 'Ro') 
-    : _congThuongChoices.first,
-                       items: _congThuongChoices.map((choice) =>
-                         DropdownMenuItem(value: choice, child: Text(choice))
-                       ).toList(),
-                       onChanged: canEdit ? (newValue) {
-    if ((attendance ?? 'Ro').endsWith('+P')) {
-      _updateAttendance(empId, day, columnType, newValue! + '+P');
-    } else if ((attendance ?? 'Ro').endsWith('+P/2')) {
-      _updateAttendance(empId, day, columnType, newValue! + '+P/2');
-    } else {
-      _updateAttendance(empId, day, columnType, newValue);
-    }
-} : null,
-                     )
-                   : SizedBox(
-                       width: 60,
-                       child: TextFormField(
-                         initialValue: attendance,
-                         keyboardType: columnType == 'HoTro' || 
-                                    columnType == 'PartTime' || 
-                                    columnType == 'PartTimeSang' || 
-                                    columnType == 'PartTimeChieu' 
-                           ? TextInputType.number 
-                           : TextInputType.numberWithOptions(decimal: true),
-                         textAlign: TextAlign.right,
-                         enabled: canEdit,
-                         onChanged: (value) {
-                           if (value.isEmpty) {
-                             _updateAttendance(empId, day, columnType, '0');
-                             return;
-                           }
-                           value = value.replaceAll(RegExp(r'[^\d.]'), '');
-                           _updateAttendance(empId, day, columnType, value);
-                         },
-                         decoration: InputDecoration(
-                           isDense: true,
-                           contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                         ),
-                       ),
-                     ),
-               );
-             }),
-           ],
-         );
-       }).toList(),
-     ),
-   ),
- );
+  );
+}
+Widget _buildSingleCell(String empId, int day, String columnType) {
+  final attendance = _getAttendanceForDay(empId, day, columnType);
+  final canEdit = _canEditDay(day);
+  
+  return Container(
+    decoration: BoxDecoration(
+      border: Border.all(color: Colors.grey.shade300),
+      color: _staffColors[empId]?.withOpacity(0.1) ?? Colors.white,
+    ),
+    child: Padding(
+      padding: EdgeInsets.all(2),
+      child: TextFormField(
+        initialValue: attendance,
+        keyboardType: columnType == 'HoTro' || 
+                   columnType == 'PartTime' || 
+                   columnType == 'PartTimeSang' || 
+                   columnType == 'PartTimeChieu' 
+          ? TextInputType.number 
+          : TextInputType.numberWithOptions(decimal: true),
+        textAlign: TextAlign.center,
+        enabled: canEdit,
+        style: TextStyle(
+          color: (attendance != '0') ? Colors.blue : Colors.grey.shade800,
+          fontWeight: (attendance != '0') ? FontWeight.bold : FontWeight.normal,
+          fontSize: 12, // Increased font size
+        ),
+        onChanged: (value) {
+          if (value.isEmpty) {
+            _updateAttendance(empId, day, columnType, '0');
+            return;
+          }
+          value = value.replaceAll(RegExp(r'[^\d.]'), '');
+          _updateAttendance(empId, day, columnType, value);
+        },
+        decoration: InputDecoration(
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+        ),
+      ),
+    ),
+  );
+}
+  Widget _buildAttendanceTable(String columnType) {
+  return Container(
+    width: double.infinity, // Full width
+    height: double.infinity, // Full height
+    child: _buildStickyTable(columnType),
+  );
 }
 void _updatePhanLoaiForMonth(String empId, String phanLoaiValue) {
   debugLog('Starting PhanLoai update for employee $empId with value $phanLoaiValue');

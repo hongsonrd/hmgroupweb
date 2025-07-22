@@ -1006,41 +1006,44 @@ Widget build(BuildContext context) {
                       Tab(text: 'Công lễ'),
                     ],
                   ),
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        ElevatedButton(
-                          onPressed: _copyFromYesterday,
-                          child: Text('💚Như hôm qua'),
-                        ),
-                        Row(
-                          children: [
-                            if (_modifiedRecords.isNotEmpty || _newRecords.isNotEmpty)
-                              Text(
-                                'Có ${_modifiedRecords.length + _newRecords.length} thay đổi chưa lưu',
-                                style: TextStyle(color: Colors.red),
-                              ),
-                            SizedBox(width: 8),
-                            ElevatedButton(
-                              onPressed: (_modifiedRecords.isNotEmpty || _newRecords.isNotEmpty) 
-                                ? _saveChanges 
-                                : null,
-                              child: Text('❤️Lưu thay đổi'),
-                            ),
-                            SizedBox(width: 8),
-                            ElevatedButton(
-                              onPressed: (_modifiedRecords.isNotEmpty || _newRecords.isNotEmpty) 
-                                ? _saveChanges 
-                                : null,
-                              child: Text('Mọi thắc mắc vui lòng liên hệ NV hỗ trợ'),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+                        Padding(
+  padding: const EdgeInsets.all(8.0),
+  child: SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: Row(
+      children: [
+        // Move save button to first position
+        ElevatedButton(
+          onPressed: (_modifiedRecords.isNotEmpty || _newRecords.isNotEmpty) 
+            ? _saveChanges 
+            : null,
+          child: Text('❤️Lưu thay đổi'),
+        ),
+        SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: _copyFromYesterday,
+          child: Text('💚Như hôm qua'),
+        ),
+        SizedBox(width: 8),
+        if (_modifiedRecords.isNotEmpty || _newRecords.isNotEmpty)
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+            child: Text(
+              'Có ${_modifiedRecords.length + _newRecords.length} thay đổi chưa lưu',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: (_modifiedRecords.isNotEmpty || _newRecords.isNotEmpty) 
+            ? _saveChanges 
+            : null,
+          child: Text('Mọi thắc mắc vui lòng liên hệ NV hỗ trợ'),
+        ),
+      ],
+    ),
+  ),
+),
                   Expanded(
                     child: TabBarView(
                       children: [

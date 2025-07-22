@@ -21,6 +21,7 @@ import '../hd_page.dart';
 import '../projecttimelinemay.dart';
 import '../projectcongnhan.dart';
 import '../projectgiamsat.dart';
+import 'daily_report_screen.dart';
 
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
@@ -198,49 +199,67 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
       );
       return;
     }
-if (title == 'Hợp đồng của tôi') {
-    final userState = Provider.of<UserState>(context, listen: false);
-    final userData = userState.currentUser;
-    
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => HDPage(),
-      ),
-    );
-    return;
-  }
-  if (title == 'Báo cáo máy móc') {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => MachineryUsageReport(username: 'x'),
-      ),
-    );
-    return;
-  }
-  if (title == 'Báo cáo công nhân') {
-    final userState = Provider.of<UserState>(context, listen: false);
-    final userData = userState.currentUser;
-    final username = userData?['username'] ?? '';
-    
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => ProjectCongNhan(username: username),
-      ),
-    );
-    return;
-  }
-  if (title == 'Báo cáo giám sát') {
-    final userState = Provider.of<UserState>(context, listen: false);
-    final userData = userState.currentUser;
-    final username = userData?['username'] ?? '';
-    
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => ProjectGiamSat(username: username),
-      ),
-    );
-    return;
-  }
+
+    if (title == 'Hợp đồng của tôi') {
+      final userState = Provider.of<UserState>(context, listen: false);
+      final userData = userState.currentUser;
+      
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => HDPage(),
+        ),
+      );
+      return;
+    }
+
+    // Special case for Báo cáo hàng ngày - navigate to DailyReportScreen
+    if (title == 'Báo cáo hàng ngày') {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => DailyReportScreen(
+            reportUrl: url,
+            reportTitle: title,
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (title == 'Báo cáo máy móc') {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => MachineryUsageReport(username: 'x'),
+        ),
+      );
+      return;
+    }
+
+    if (title == 'Báo cáo công nhân') {
+      final userState = Provider.of<UserState>(context, listen: false);
+      final userData = userState.currentUser;
+      final username = userData?['username'] ?? '';
+      
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => ProjectCongNhan(username: username),
+        ),
+      );
+      return;
+    }
+
+    if (title == 'Báo cáo giám sát') {
+      final userState = Provider.of<UserState>(context, listen: false);
+      final userData = userState.currentUser;
+      final username = userData?['username'] ?? '';
+      
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => ProjectGiamSat(username: username),
+        ),
+      );
+      return;
+    }
+
     // External URL handling with desktop_webview_window
     final Uri uri = Uri.parse(url);
     
@@ -342,6 +361,7 @@ if (title == 'Hợp đồng của tôi') {
       ),
     );
   }
+
   Widget _buildVideoSection() {
   return Container(
     width: double.infinity,
@@ -788,80 +808,80 @@ if (title == 'Hợp đồng của tôi') {
           child: Container(
             // This container extends the gradient background
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [videoOverlayBottom, videoOverlayBottom],
-              ),
-            ),
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                // Tab 1 content - wrap in Container with white background
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.9),
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(16),
-                      topRight: Radius.circular(16),
-                    ),
-                  ),
-                  child: isLoggedIn
-                    ? ListView.separated(
-                        padding: EdgeInsets.zero,
-                        itemCount: _getFilteredGridItems(currentUsername: username, tabIndex: 0).length,
-                        itemBuilder: (context, index) {
-                          final itemData = _getFilteredGridItems(currentUsername: username, tabIndex: 0)[index];
-                          return _buildListItem(itemData, index, username);
-                        },
-                        separatorBuilder: (context, index) {
-                          return Divider(height: 1, color: Colors.grey[300], indent: 16, endIndent: 16);
-                        },
-                      )
-                    : Center(
-                        child: Text(
-                          'Bạn cần đăng nhập lại để xem các chức năng',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.black87),
-                        ),
-                      ),
-                ),
-                
-                // Tab 2 content - wrap in Container with white background
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.9),
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(16),
-                      topRight: Radius.circular(16),
-                    ),
-                  ),
-                  child: isLoggedIn
-                    ? ListView.separated(
-                        padding: EdgeInsets.zero,
-                        itemCount: _getFilteredGridItems(currentUsername: username, tabIndex: 1).length,
-                        itemBuilder: (context, index) {
-                          final itemData = _getFilteredGridItems(currentUsername: username, tabIndex: 1)[index];
-                          return _buildListItem(itemData, index, username);
-                        },
-                        separatorBuilder: (context, index) {
-                          return Divider(height: 1, color: Colors.grey[300], indent: 16, endIndent: 16);
-                        },
-                      )
-                    : Center(
-                        child: Text(
-                          'Bạn cần đăng nhập lại để xem các chức năng',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.black87),
-                        ),
-                      ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
+             gradient: LinearGradient(
+               begin: Alignment.topCenter,
+               end: Alignment.bottomCenter,
+               colors: [videoOverlayBottom, videoOverlayBottom],
+             ),
+           ),
+           child: TabBarView(
+             controller: _tabController,
+             children: [
+               // Tab 1 content - wrap in Container with white background
+               Container(
+                 decoration: BoxDecoration(
+                   color: Colors.white.withOpacity(0.9),
+                   borderRadius: BorderRadius.only(
+                     topLeft: Radius.circular(16),
+                     topRight: Radius.circular(16),
+                   ),
+                 ),
+                 child: isLoggedIn
+                   ? ListView.separated(
+                       padding: EdgeInsets.zero,
+                       itemCount: _getFilteredGridItems(currentUsername: username, tabIndex: 0).length,
+                       itemBuilder: (context, index) {
+                         final itemData = _getFilteredGridItems(currentUsername: username, tabIndex: 0)[index];
+                         return _buildListItem(itemData, index, username);
+                       },
+                       separatorBuilder: (context, index) {
+                         return Divider(height: 1, color: Colors.grey[300], indent: 16, endIndent: 16);
+                       },
+                     )
+                   : Center(
+                       child: Text(
+                         'Bạn cần đăng nhập lại để xem các chức năng',
+                         textAlign: TextAlign.center,
+                         style: TextStyle(color: Colors.black87),
+                       ),
+                     ),
+               ),
+               
+               // Tab 2 content - wrap in Container with white background
+               Container(
+                 decoration: BoxDecoration(
+                   color: Colors.white.withOpacity(0.9),
+                   borderRadius: BorderRadius.only(
+                     topLeft: Radius.circular(16),
+                     topRight: Radius.circular(16),
+                   ),
+                 ),
+                 child: isLoggedIn
+                   ? ListView.separated(
+                       padding: EdgeInsets.zero,
+                       itemCount: _getFilteredGridItems(currentUsername: username, tabIndex: 1).length,
+                       itemBuilder: (context, index) {
+                         final itemData = _getFilteredGridItems(currentUsername: username, tabIndex: 1)[index];
+                         return _buildListItem(itemData, index, username);
+                       },
+                       separatorBuilder: (context, index) {
+                         return Divider(height: 1, color: Colors.grey[300], indent: 16, endIndent: 16);
+                       },
+                     )
+                   : Center(
+                       child: Text(
+                         'Bạn cần đăng nhập lại để xem các chức năng',
+                         textAlign: TextAlign.center,
+                         style: TextStyle(color: Colors.black87),
+                       ),
+                     ),
+               ),
+             ],
+           ),
+         ),
+       ),
+     ],
+   ),
+ );
 }
-}
+} 

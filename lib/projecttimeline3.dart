@@ -484,76 +484,78 @@ class _ProjectProgressDashboardState extends State<ProjectProgressDashboard> {
   }
 
  void _startAutoScroll() {
-    if (!mounted || _filteredProjectsData.isEmpty) return;
+  if (!mounted || _filteredProjectsData.isEmpty) return;
 
-    setState(() {
-      _isAutoScrolling = true;
-    });
+  setState(() {
+    _isAutoScrolling = true;
+  });
 
-    _autoScrollTimer = Timer.periodic(Duration(milliseconds: 50), (timer) {
-      if (!mounted || !_scrollController.hasClients) {
-        timer.cancel();
-        return;
-      }
+  _autoScrollTimer = Timer.periodic(Duration(milliseconds: 50), (timer) {
+    if (!mounted || !_scrollController.hasClients) {
+      timer.cancel();
+      return;
+    }
 
-      final maxScrollExtent = _scrollController.position.maxScrollExtent;
-      final currentOffset = _scrollController.offset;
+    final maxScrollExtent = _scrollController.position.maxScrollExtent;
+    final currentOffset = _scrollController.offset;
 
-      if (maxScrollExtent <= 0) {
-        timer.cancel();
-        setState(() {
-          _isAutoScrolling = false;
-        });
-        _startInactivityTimer();
-        return;
-      }
+    if (maxScrollExtent <= 0) {
+      timer.cancel();
+      setState(() {
+        _isAutoScrolling = false;
+      });
+      _startInactivityTimer();
+      return;
+    }
 
-      if (currentOffset < maxScrollExtent) {
-        _scrollController.animateTo(
-          currentOffset + 2.0,
-          duration: Duration(milliseconds: 50),
-          curve: Curves.linear,
-        );
-      } else {
-        // This block runs when the scroll reaches the bottom
-        timer.cancel();
-        _scrollController.animateTo(
-          0.0,
-          duration: Duration(seconds: 2),
-          curve: Curves.easeInOut,
-        ).then((_) {
-          // This block executes after scrolling back to the top
-          if (mounted) {
-            bool dateWasReset = false;
-            // Ensure there are available dates to check against
-            if (_availableDates.isNotEmpty) {
-              final latestDate = _availableDates.first;
-              final selected = _selectedDate;
+    if (currentOffset < maxScrollExtent) {
+      _scrollController.animateTo(
+        currentOffset + 2.0,
+        duration: Duration(milliseconds: 50),
+        curve: Curves.linear,
+      );
+    } else {
+      // Scroll completed - refresh data here
+      timer.cancel();
+      _scrollController.animateTo(
+        0.0,
+        duration: Duration(seconds: 2),
+        curve: Curves.easeInOut,
+      ).then((_) async {
+        if (mounted) {
+          // Refresh data after scroll completion
+          print('Scroll completed - refreshing data');
+          await _loadProjectsData();
+          
+          bool dateWasReset = false;
+          // Ensure there are available dates to check against
+          if (_availableDates.isNotEmpty) {
+            final latestDate = _availableDates.first;
+            final selected = _selectedDate;
 
-              // Compare year, month, and day to see if the selected date is the latest one
-              if (latestDate.year != selected.year ||
-                  latestDate.month != selected.month ||
-                  latestDate.day != selected.day) {
-                
-                dateWasReset = true;
-                // If not, call _onDateChanged to reset it to the latest date.
-                // This function will also handle data reloading and timer resets.
-                _onDateChanged(latestDate);
-              }
-            }
-
-            // If the date was not reset, proceed with the normal flow
-            if (!dateWasReset) {
-              setState(() {
-                _isAutoScrolling = false;
-              });
-              _startInactivityTimer(); 
+            // Compare year, month, and day to see if the selected date is the latest one
+            if (latestDate.year != selected.year ||
+                latestDate.month != selected.month ||
+                latestDate.day != selected.day) {
+              
+              dateWasReset = true;
+              // If not, call _onDateChanged to reset it to the latest date.
+              _onDateChanged(latestDate);
             }
           }
-        });
-      }
-    });
-  }
+
+          // If the date was not reset, proceed with the normal flow
+          if (!dateWasReset) {
+            setState(() {
+              _isAutoScrolling = false;
+            });
+            _startInactivityTimer(); 
+          }
+        }
+      });
+    }
+  });
+}
 
   void _stopAutoScroll() {
     _autoScrollTimer?.cancel();

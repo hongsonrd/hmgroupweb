@@ -10,44 +10,54 @@ import 'package:http/http.dart' as http;
 import 'db_helper.dart';
 import 'table_models.dart';
 
+class ReportConfig {
+  final String audience;
+  final Map<String, double> categoryRatings;
+  final String improvementSuggestions;
+
+  ReportConfig({
+    required this.audience,
+    required this.categoryRatings,
+    required this.improvementSuggestions,
+  });
+}
+
 class ProjectTimeline3FileGenerator {
   static Future<String?> generateReport({
     required String projectName,
     required DateTime selectedMonth,
     required String username,
     required List<dynamic> imageCountData,
+    ReportConfig? reportConfig,
+    Map<int, List<Map<String, dynamic>>>? selectedWeeklyImages,
   }) async {
     try {
-      // Load Vietnamese font and logo
       final fontData = await rootBundle.load('assets/fonts/RobotoCondensed-Regular.ttf');
       final ttf = pw.Font.ttf(fontData);
       
       final logoData = await rootBundle.load('assets/logo.png');
       final logoImage = pw.MemoryImage(logoData.buffer.asUint8List());
 
-      // Get detailed data for analysis
       final detailedData = await _getDetailedReportData(projectName, selectedMonth);
       
-      // Create PDF document
       final pdf = pw.Document();
 
-      // Format data for report
       final monthYear = DateFormat('MM/yyyy').format(selectedMonth);
       final reportDate = DateFormat('dd/MM/yyyy').format(DateTime.now());
+      final day = DateFormat('dd').format(DateTime.now());
+      final month = DateFormat('MM').format(DateTime.now());
+      final year = DateFormat('yyyy').format(DateTime.now());
       
-      // Calculate statistics
       final weeklyData = _groupDataByWeek(detailedData);
       final topicData = _analyzeTopics(detailedData);
-      final weeklyImages = await _getWeeklyImages(detailedData);
 
-      // Add pages to PDF
       pdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
           margin: pw.EdgeInsets.all(32),
           build: (pw.Context context) {
             return [
-              // Header with logo and company info
+              // Header with logo and updated title (removed report date)
               pw.Container(
                 padding: pw.EdgeInsets.only(bottom: 20),
                 decoration: pw.BoxDecoration(
@@ -58,30 +68,18 @@ class ProjectTimeline3FileGenerator {
                 child: pw.Row(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    // Logo
                     pw.Container(
                       width: 80,
                       height: 80,
                       child: pw.Image(logoImage, fit: pw.BoxFit.contain),
                     ),
                     pw.SizedBox(width: 20),
-                    // Company info and title
                     pw.Expanded(
                       child: pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
                           pw.Text(
-                            'CÔNG TY TNHH HOÀN MỸ',
-                            style: pw.TextStyle(
-                              font: ttf,
-                              fontSize: 16,
-                              fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.blue900,
-                            ),
-                          ),
-                          pw.SizedBox(height: 10),
-                          pw.Text(
-                            'BÁO CÁO DỊCH VỤ THÁNG $monthYear',
+                            'BÁO CÁO DỊCH VỤ VỆ SINH THÁNG $monthYear',
                             style: pw.TextStyle(
                               font: ttf,
                               fontSize: 24,
@@ -91,8 +89,13 @@ class ProjectTimeline3FileGenerator {
                           ),
                           pw.SizedBox(height: 8),
                           pw.Text(
-                            'Ngày báo cáo: $reportDate',
-                            style: pw.TextStyle(font: ttf, fontSize: 14),
+                            'của CÔNG TY TNHH HOÀN MỸ',
+                            style: pw.TextStyle(
+                              font: ttf,
+                              fontSize: 18,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.blue900,
+                            ),
                           ),
                         ],
                       ),
@@ -103,9 +106,9 @@ class ProjectTimeline3FileGenerator {
 
               pw.SizedBox(height: 20),
 
-              // Combined greeting and project name
+              // Updated greeting
               pw.Text(
-                'Kính gửi Ban lãnh đạo công ty, Ban quản lý dự án. Dự án: $projectName',
+                'Kính gửi ${reportConfig?.audience ?? 'Ban lãnh đạo'}. Dự án: $projectName',
                 style: pw.TextStyle(
                   font: ttf,
                   fontSize: 14,
@@ -115,49 +118,50 @@ class ProjectTimeline3FileGenerator {
 
               pw.SizedBox(height: 20),
 
-              // Explanatory text
-              pw.Container(
-                padding: pw.EdgeInsets.all(16),
-                decoration: pw.BoxDecoration(
-                  color: PdfColors.blue50,
-                  borderRadius: pw.BorderRadius.circular(8),
-                  border: pw.Border.all(color: PdfColors.blue200),
-                ),
+              // Updated introduction text (no longer in container/box)
+              pw.Text(
+                'Công ty TNHH Hoàn Mỹ trân trọng cảm ơn Quý Khách hàng đã hợp tác với Công ty chúng tôi trong thời gian qua.',
+                style: pw.TextStyle(font: ttf, fontSize: 12),
+              ),
+              pw.SizedBox(height: 12),
+              
+              pw.Text(
+                'Nhằm nâng cao Chất lượng dịch vụ, Công ty chúng tôi xin gửi tới Quý Khách hàng Báo cáo Dịch vụ vệ sinh Tháng $monthYear bao gồm:',
+                style: pw.TextStyle(font: ttf, fontSize: 12),
+              ),
+              pw.SizedBox(height: 16),
+              
+              pw.Text(
+                '1. CƠ SỞ ĐÁNH GIÁ DỊCH VỤ VỆ SINH:',
+                style: pw.TextStyle(font: ttf, fontSize: 12, fontWeight: pw.FontWeight.bold),
+              ),
+              pw.SizedBox(height: 8),
+              
+              pw.Padding(
+                padding: pw.EdgeInsets.only(left: 20),
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text(
-                      'Báo cáo này bao gồm các phần chính sau:',
-                      style: pw.TextStyle(
-                        font: ttf,
-                        fontSize: 14,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                    pw.SizedBox(height: 8),
-                    pw.Text(
-                      '• Tổng quan tiến độ theo tuần: Biểu đồ cột thể hiện số lượng báo cáo và hình ảnh mỗi tuần',
-                      style: pw.TextStyle(font: ttf, fontSize: 12),
-                    ),
+                    pw.Text('- Công việc Giám sát thường xuyên và đột xuất', style: pw.TextStyle(font: ttf, fontSize: 11)),
                     pw.SizedBox(height: 4),
-                    pw.Text(
-                      '• Phân tích theo chủ đề: Biểu đồ thanh ngang thể hiện phân bố công việc và hiệu quả thực hiện',
-                      style: pw.TextStyle(font: ttf, fontSize: 12),
-                    ),
+                    pw.Text('- Khối lượng công việc thực hiện', style: pw.TextStyle(font: ttf, fontSize: 11)),
                     pw.SizedBox(height: 4),
-                    pw.Text(
-                      '• Hình ảnh minh họa: Các hình ảnh thực tế từ hiện trường được tổ chức theo tuần',
-                      style: pw.TextStyle(font: ttf, fontSize: 12),
-                    ),
+                    pw.Text('- Tần suất công việc thực hiện', style: pw.TextStyle(font: ttf, fontSize: 11)),
                   ],
                 ),
+              ),
+              pw.SizedBox(height: 16),
+              
+              pw.Text(
+                '2. KẾT QUẢ ĐÁNH GIÁ',
+                style: pw.TextStyle(font: ttf, fontSize: 12, fontWeight: pw.FontWeight.bold),
               ),
 
               pw.SizedBox(height: 25),
 
-              // Weekly progress chart
+              // A. Weekly progress chart
               pw.Text(
-                'TỔNG QUAN TIẾN ĐỘ THEO TUẦN',
+                'A. TỔNG QUAN TIẾN ĐỘ THEO TUẦN',
                 style: pw.TextStyle(
                   font: ttf,
                   fontSize: 16,
@@ -171,10 +175,10 @@ class ProjectTimeline3FileGenerator {
 
               pw.SizedBox(height: 25),
 
-              // Topics analysis with horizontal bar charts
+              // B. Topic distribution (only PHÂN BỐ THEO CHỦ ĐỀ)
               if (topicData.isNotEmpty) ...[
                 pw.Text(
-                  'PHÂN TÍCH THEO CHỦ ĐỀ BÁO CÁO',
+                  'B. PHÂN BỐ THEO CHỦ ĐỀ',
                   style: pw.TextStyle(
                     font: ttf,
                     fontSize: 16,
@@ -184,18 +188,31 @@ class ProjectTimeline3FileGenerator {
                 ),
                 pw.SizedBox(height: 15),
                 
-                // Topic count and effectiveness horizontal bar charts
                 _buildTopicCountBarChart(ttf, topicData),
 
-pw.SizedBox(height: 25),
+                pw.SizedBox(height: 25),
 
-_buildEffectivenessBarChart(ttf, topicData),
-                
-                pw.SizedBox(height: 30),
-                
-                // Summary statistics table to fill space
+                // C. Overall effectiveness
                 pw.Text(
-                  'TỔNG KẾT THỐNG KÊ',
+                  'C. HIỆU QUẢ TỔNG THỂ',
+                  style: pw.TextStyle(
+                    font: ttf,
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.blue900,
+                  ),
+                ),
+                pw.SizedBox(height: 15),
+
+                _buildEffectivenessBarChart(ttf, topicData),
+                
+                pw.SizedBox(height: 25),
+              ],
+
+              // D. Category Ratings as Table
+              if (reportConfig != null && reportConfig.categoryRatings.isNotEmpty) ...[
+                pw.Text(
+                  'D. KẾT QUẢ ĐÁNH GIÁ',
                   style: pw.TextStyle(
                     font: ttf,
                     fontSize: 16,
@@ -205,128 +222,148 @@ _buildEffectivenessBarChart(ttf, topicData),
                 ),
                 pw.SizedBox(height: 15),
                 
-                pw.Table(
-                  border: pw.TableBorder.all(color: PdfColors.grey400),
-                  children: [
-                    pw.TableRow(
-                      decoration: pw.BoxDecoration(color: PdfColors.blue100),
-                      children: [
-                        pw.Padding(
-                          padding: pw.EdgeInsets.all(12),
-                          child: pw.Text('Chỉ tiêu', style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold)),
-                        ),
-                        pw.Padding(
-                          padding: pw.EdgeInsets.all(12),
-                          child: pw.Text('Giá trị', style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold)),
-                        ),
-                      ],
-                    ),
-                    pw.TableRow(
-                      children: [
-                        pw.Padding(
-                          padding: pw.EdgeInsets.all(12),
-                          child: pw.Text('Tổng số tuần có hoạt động', style: pw.TextStyle(font: ttf)),
-                        ),
-                        pw.Padding(
-                          padding: pw.EdgeInsets.all(12),
-                          child: pw.Text('${weeklyData.length} tuần', style: pw.TextStyle(font: ttf)),
-                        ),
-                      ],
-                    ),
-                    pw.TableRow(
-                      children: [
-                        pw.Padding(
-                          padding: pw.EdgeInsets.all(12),
-                          child: pw.Text('Tổng số báo cáo trong tháng', style: pw.TextStyle(font: ttf)),
-                        ),
-                        pw.Padding(
-                          padding: pw.EdgeInsets.all(12),
-child: pw.Text('${weeklyData.fold<int>(0, (sum, week) => sum + week.totalReports)} báo cáo', style: pw.TextStyle(font: ttf)),
-                        ),
-                      ],
-                    ),
-                    pw.TableRow(
-                      children: [
-                        pw.Padding(
-                          padding: pw.EdgeInsets.all(12),
-                          child: pw.Text('Tổng số hình ảnh minh họa', style: pw.TextStyle(font: ttf)),
-                        ),
-                        pw.Padding(
-                          padding: pw.EdgeInsets.all(12),
-child: pw.Text('${weeklyData.fold<int>(0, (sum, week) => sum + week.imageCount)} hình ảnh', style: pw.TextStyle(font: ttf)),
-                        ),
-                      ],
-                    ),
-                    pw.TableRow(
-                      children: [
-                        pw.Padding(
-                          padding: pw.EdgeInsets.all(12),
-                          child: pw.Text('Số chủ đề công việc đã thực hiện', style: pw.TextStyle(font: ttf)),
-                        ),
-                        pw.Padding(
-                          padding: pw.EdgeInsets.all(12),
-                          child: pw.Text('${topicData.length} chủ đề', style: pw.TextStyle(font: ttf)),
-                        ),
-                      ],
-                    ),
-                  ],
+                _buildCategoryRatingsTable(ttf, reportConfig.categoryRatings),
+                
+                pw.SizedBox(height: 25),
+              ],
+
+              // E. Improvement suggestions
+              if (reportConfig != null && reportConfig.improvementSuggestions.isNotEmpty) ...[
+                pw.Text(
+                  'E. Tồn tại và Đề xuất Giải pháp cải tiến Dịch vụ từ Công ty TNHH Hoàn Mỹ (nếu có)',
+                  style: pw.TextStyle(
+                    font: ttf,
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.blue900,
+                  ),
+                ),
+                pw.SizedBox(height: 15),
+                
+                pw.Container(
+                  padding: pw.EdgeInsets.all(16),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.orange50,
+                    borderRadius: pw.BorderRadius.circular(8),
+                    border: pw.Border.all(color: PdfColors.orange200),
+                  ),
+                  child: pw.Text(
+                    reportConfig.improvementSuggestions,
+                    style: pw.TextStyle(font: ttf, fontSize: 12),
+                  ),
                 ),
                 
                 pw.SizedBox(height: 25),
               ],
+
+              // F. Response section
+              pw.Text(
+                'F. Theo Ông (Bà) Hoàn Mỹ cần làm gì để cải tiến dịch vụ:',
+                style: pw.TextStyle(
+                  font: ttf,
+                  fontSize: 16,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.blue900,
+                ),
+              ),
+              pw.SizedBox(height: 15),
+              
+              pw.Container(
+                height: 100,
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey400),
+                  borderRadius: pw.BorderRadius.circular(8),
+                ),
+                child: pw.Container(), // Empty space for response
+              ),
+              
+              pw.SizedBox(height: 40),
+
+              // Footer information
+              pw.Text(
+                'Báo cáo này được trích xuất từ Dữ liệu của Công ty TNHH Hoàn Mỹ ngày $day tháng $month năm $year và là tài liệu đặc quyền của Công ty TNHH Hoàn Mỹ',
+                style: pw.TextStyle(
+                  font: ttf,
+                  fontSize: 10,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              
+              pw.SizedBox(height: 15),
+              
+              pw.Text(
+                'THÔNG BÁO: Báo cáo này chỉ dành riêng cho người nhận được nêu tên. Báo cáo có thể chứa thông tin mật và/hoặc thông tin đặc quyền. Nếu bạn không phải là một trong những người nhận Báo cáo, vui lòng thông báo ngay cho người gửi và hủy email này; bạn không được sao chép, phân phối hoặc thực hiện bất kỳ hành động nào dựa trên email này. Mặc dù chúng tôi đã nỗ lực hết sức để bảo vệ email đến và email đi, Công ty TNHH Hoàn Mỹ không thể đảm bảo rằng các tệp đính kèm không có vi-rút hoặc tương thích với hệ thống của bạn và không chịu bất kỳ trách nhiệm pháp lý nào liên quan đến vi-rút hoặc sự cố máy tính gặp phải.',
+                style: pw.TextStyle(font: ttf, fontSize: 8, fontStyle: pw.FontStyle.italic),
+              ),
+              
+              pw.SizedBox(height: 20),
+              
+              pw.Align(
+                alignment: pw.Alignment.centerRight,
+                child: pw.Text(
+                  'CÔNG TY TNHH HOÀN MỸ',
+                  style: pw.TextStyle(
+                    font: ttf,
+                    fontSize: 14,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ),
             ];
           },
         ),
       );
 
-      // Add weekly images pages
-      for (int weekIndex = 0; weekIndex < weeklyImages.length; weekIndex++) {
-        final weekData = weeklyImages[weekIndex];
-        if (weekData['images'].isNotEmpty) {
-          final downloadedImages = await _downloadWeeklyImages(weekData['images'], weekIndex + 1);
+      // Add weekly images pages with selected images
+      if (selectedWeeklyImages != null) {
+        for (var entry in selectedWeeklyImages.entries) {
+          final weekNumber = entry.key;
+          final selectedImages = entry.value;
           
-          pdf.addPage(
-            pw.MultiPage(
-              pageFormat: PdfPageFormat.a4,
-              margin: pw.EdgeInsets.all(32),
-              build: (pw.Context context) {
-                return [
-                  // Week header
-                  pw.Container(
-                    padding: pw.EdgeInsets.only(bottom: 15),
-                    decoration: pw.BoxDecoration(
-                      border: pw.Border(
-                        bottom: pw.BorderSide(color: PdfColors.blue, width: 1),
+          if (selectedImages.isNotEmpty) {
+            final downloadedImages = await _downloadWeeklyImages(selectedImages, weekNumber);
+            
+            pdf.addPage(
+              pw.MultiPage(
+                pageFormat: PdfPageFormat.a4,
+                margin: pw.EdgeInsets.all(32),
+                build: (pw.Context context) {
+                  return [
+                    pw.Container(
+                      padding: pw.EdgeInsets.only(bottom: 15),
+                      decoration: pw.BoxDecoration(
+                        border: pw.Border(
+                          bottom: pw.BorderSide(color: PdfColors.blue, width: 1),
+                        ),
+                      ),
+                      child: pw.Row(
+                        children: [
+                          pw.Text(
+                            'HÌNH ẢNH MINH HỌA CÔNG VIỆC - TUẦN $weekNumber',
+                            style: pw.TextStyle(
+                              font: ttf,
+                              fontSize: 16,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.blue900,
+                            ),
+                          ),
+                          pw.Spacer(),
+                          pw.Text(
+                            '(${selectedImages.length} hình ảnh được chọn)',
+                            style: pw.TextStyle(font: ttf, fontSize: 12, color: PdfColors.grey700),
+                          ),
+                        ],
                       ),
                     ),
-                    child: pw.Row(
-                      children: [
-                        pw.Text(
-                          'HÌNH ẢNH MINH HỌA CÔNG VIỆC - TUẦN ${weekData['weekNumber']}',
-                          style: pw.TextStyle(
-                            font: ttf,
-                            fontSize: 16,
-                            fontWeight: pw.FontWeight.bold,
-                            color: PdfColors.blue900,
-                          ),
-                        ),
-                        pw.Spacer(),
-                        pw.Text(
-                          '(${DateFormat('dd/MM').format(weekData['startDate'])} - ${DateFormat('dd/MM').format(weekData['endDate'])})',
-                          style: pw.TextStyle(font: ttf, fontSize: 12, color: PdfColors.grey700),
-                        ),
-                      ],
-                    ),
-                  ),
-                  
-                  pw.SizedBox(height: 20),
-                  
-                  // Images grid
-                  ..._buildWeeklyImagesGrid(ttf, downloadedImages),
-                ];
-              },
-            ),
-          );
+                    
+                    pw.SizedBox(height: 20),
+                    
+                    ..._buildWeeklyImagesGrid(ttf, downloadedImages),
+                  ];
+                },
+              ),
+            );
+          }
         }
       }
 
@@ -340,7 +377,7 @@ child: pw.Text('${weeklyData.fold<int>(0, (sum, week) => sum + week.imageCount)}
 
       final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
       final sanitizedProjectName = projectName.replaceAll(RegExp(r'[^\w\s-]'), '');
-      final fileName = 'BaoCao_${sanitizedProjectName}_${monthYear.replaceAll('/', '-')}_$timestamp.pdf';
+      final fileName = 'BaoCao_VeSinh_${sanitizedProjectName}_${monthYear.replaceAll('/', '-')}_$timestamp.pdf';
       final filePath = '${reportFolder.path}/$fileName';
 
       final file = File(filePath);
@@ -353,6 +390,170 @@ child: pw.Text('${weeklyData.fold<int>(0, (sum, week) => sum + week.imageCount)}
     }
   }
 
+  // New method to build category ratings as a table
+  static pw.Widget _buildCategoryRatingsTable(pw.Font ttf, Map<String, double> categoryRatings) {
+    // Group categories
+    List<String> giaiPhapCategories = [];
+    double machineRating = 0.0;
+    double employeeRating = 0.0;
+    
+    categoryRatings.forEach((key, value) {
+      if (key == 'Máy móc, trang thiết bị, dụng cụ làm việc') {
+        machineRating = value;
+      } else if (key == 'Tác phong làm việc của nhân viên') {
+        employeeRating = value;
+      } else {
+        giaiPhapCategories.add(key);
+      }
+    });
+
+    final averageRating = _calculateAverageRating(categoryRatings);
+
+    return pw.Table(
+      border: pw.TableBorder.all(color: PdfColors.grey400),
+      columnWidths: {
+        0: pw.FlexColumnWidth(3),
+        1: pw.FlexColumnWidth(2),
+        2: pw.FlexColumnWidth(2),
+      },
+      children: [
+        // Header
+        pw.TableRow(
+          decoration: pw.BoxDecoration(color: PdfColors.blue100),
+          children: [
+            pw.Padding(
+              padding: pw.EdgeInsets.all(12),
+              child: pw.Text('Danh mục đánh giá', style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold)),
+            ),
+            pw.Padding(
+              padding: pw.EdgeInsets.all(12),
+              child: pw.Text('Điểm đánh giá (%)', style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold)),
+            ),
+            pw.Padding(
+              padding: pw.EdgeInsets.all(12),
+              child: pw.Text('Ghi chú', style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold)),
+            ),
+          ],
+        ),
+        
+        // Group 1: GiaiPhap categories
+        if (giaiPhapCategories.isNotEmpty) ...[
+          pw.TableRow(
+            decoration: pw.BoxDecoration(color: PdfColors.grey100),
+            children: [
+              pw.Padding(
+                padding: pw.EdgeInsets.all(12),
+                child: pw.Text('Nhóm 1: Các khu vực thực hiện', style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold)),
+              ),
+              pw.Padding(padding: pw.EdgeInsets.all(12), child: pw.Container()),
+              pw.Padding(padding: pw.EdgeInsets.all(12), child: pw.Container()),
+            ],
+          ),
+          ...giaiPhapCategories.map((category) => pw.TableRow(
+            children: [
+              pw.Padding(
+                padding: pw.EdgeInsets.all(12),
+                child: pw.Text('  • $category', style: pw.TextStyle(font: ttf, fontSize: 11)),
+              ),
+              pw.Padding(
+                padding: pw.EdgeInsets.all(12),
+                child: pw.Text('${categoryRatings[category]!.toStringAsFixed(1)}% - ${_getRatingLabel(categoryRatings[category]!)}', 
+                style: pw.TextStyle(font: ttf, fontSize: 11)),
+              ),
+              pw.Padding(padding: pw.EdgeInsets.all(12), child: pw.Container()),
+            ],
+          )),
+        ],
+        
+        // Group 2: Machine and equipment
+        pw.TableRow(
+          decoration: pw.BoxDecoration(color: PdfColors.grey100),
+          children: [
+            pw.Padding(
+              padding: pw.EdgeInsets.all(12),
+              child: pw.Text('Nhóm 2: Trang thiết bị', style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold)),
+            ),
+            pw.Padding(padding: pw.EdgeInsets.all(12), child: pw.Container()),
+            pw.Padding(padding: pw.EdgeInsets.all(12), child: pw.Container()),
+          ],
+        ),
+        pw.TableRow(
+          children: [
+            pw.Padding(
+              padding: pw.EdgeInsets.all(12),
+              child: pw.Text('  • Máy móc, trang thiết bị, dụng cụ làm việc', style: pw.TextStyle(font: ttf, fontSize: 11)),
+            ),
+            pw.Padding(
+              padding: pw.EdgeInsets.all(12),
+              child: pw.Text('${machineRating.toStringAsFixed(1)}% - ${_getRatingLabel(machineRating)}', 
+              style: pw.TextStyle(font: ttf, fontSize: 11)),
+            ),
+            pw.Padding(padding: pw.EdgeInsets.all(12), child: pw.Container()),
+          ],
+        ),
+        
+        // Group 3: Employee performance
+        pw.TableRow(
+          decoration: pw.BoxDecoration(color: PdfColors.grey100),
+          children: [
+            pw.Padding(
+              padding: pw.EdgeInsets.all(12),
+              child: pw.Text('Nhóm 3: Nhân viên', style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold)),
+            ),
+            pw.Padding(padding: pw.EdgeInsets.all(12), child: pw.Container()),
+            pw.Padding(padding: pw.EdgeInsets.all(12), child: pw.Container()),
+          ],
+        ),
+        pw.TableRow(
+          children: [
+            pw.Padding(
+              padding: pw.EdgeInsets.all(12),
+              child: pw.Text('  • Tác phong làm việc của nhân viên', style: pw.TextStyle(font: ttf, fontSize: 11)),
+            ),
+            pw.Padding(
+              padding: pw.EdgeInsets.all(12),
+              child: pw.Text('${employeeRating.toStringAsFixed(1)}% - ${_getRatingLabel(employeeRating)}', 
+              style: pw.TextStyle(font: ttf, fontSize: 11)),
+            ),
+            pw.Padding(padding: pw.EdgeInsets.all(12), child: pw.Container()),
+          ],
+        ),
+        
+        // Final average
+        pw.TableRow(
+          decoration: pw.BoxDecoration(color: PdfColors.blue50),
+          children: [
+            pw.Padding(
+              padding: pw.EdgeInsets.all(12),
+              child: pw.Text('ĐÁNH GIÁ TRUNG BÌNH TỔNG THỂ', style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold)),
+            ),
+            pw.Padding(
+              padding: pw.EdgeInsets.all(12),
+              child: pw.Text('${averageRating.toStringAsFixed(1)}% - ${_getRatingLabel(averageRating)}', 
+              style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold, color: PdfColors.blue700)),
+            ),
+            pw.Padding(padding: pw.EdgeInsets.all(12), child: pw.Container()),
+          ],
+        ),
+      ],
+    );
+  }
+
+  static double _calculateAverageRating(Map<String, double> categoryRatings) {
+    if (categoryRatings.isEmpty) return 0.0;
+    final total = categoryRatings.values.fold<double>(0.0, (sum, rating) => sum + rating);
+    return total / categoryRatings.length;
+  }
+
+  static String _getRatingLabel(double rating) {
+    if (rating >= 80) return 'Xuất sắc';
+    if (rating >= 70) return 'Tốt';
+    if (rating >= 60) return 'Khá';
+    if (rating >= 50) return 'Trung bình';
+    return 'Cần cải thiện';
+  }
+
+  // Rest of the existing methods remain the same...
   static Future<List<Map<String, dynamic>>> _getDetailedReportData(String projectName, DateTime selectedMonth) async {
     try {
       final dbHelper = DBHelper();
@@ -422,7 +623,7 @@ child: pw.Text('${weeklyData.fold<int>(0, (sum, week) => sum + week.imageCount)}
         } else if (result.contains('❌')) {
           weekData.badResults++;
         } else {
-          weekData.goodResults++; // Default to good if no emoji
+          weekData.goodResults++;
         }
       } catch (e) {
         print('Error processing item for week grouping: $e');
@@ -459,157 +660,17 @@ child: pw.Text('${weeklyData.fold<int>(0, (sum, week) => sum + week.imageCount)}
       } else if (result.contains('❌')) {
         topicData.badCount++;
       } else {
-        topicData.goodCount++; // Default to good
+        topicData.goodCount++;
       }
     }
     
     return topics;
   }
 
-  static Future<List<Map<String, dynamic>>> _getWeeklyImages(List<Map<String, dynamic>> data) async {
-    Map<int, Map<String, dynamic>> weeklyImages = {};
-    
-    for (var item in data) {
-      if (item['HinhAnh'] != null && item['HinhAnh'].toString().isNotEmpty) {
-        try {
-          final date = DateTime.parse(item['Ngay']);
-          final weekNumber = _getWeekNumber(date);
-          
-          if (!weeklyImages.containsKey(weekNumber)) {
-            weeklyImages[weekNumber] = {
-              'weekNumber': weekNumber,
-              'startDate': _getStartOfWeek(date),
-              'endDate': _getEndOfWeek(date),
-              'images': <Map<String, dynamic>>[],
-            };
-          }
-          
-          weeklyImages[weekNumber]!['images'].add({
-            'url': item['HinhAnh'],
-            'area': item['GiaiPhap'] ?? '',
-            'detail': item['ChiTiet'] ?? '',
-            'detail2': item['ChiTiet2'] ?? '',
-            'date': date,
-            'location': item['ViTri'] ?? '',
-            'topic': item['PhanLoai'] ?? '',
-          });
-        } catch (e) {
-          print('Error processing image for week grouping: $e');
-        }
-      }
-    }
-    
-    // Improved image selection for diversity
-    for (var weekData in weeklyImages.values) {
-      final images = weekData['images'] as List<Map<String, dynamic>>;
-      weekData['images'] = _selectDiverseImages(images, 10);
-    }
-    
-    return weeklyImages.values.toList()..sort((a, b) => a['weekNumber'].compareTo(b['weekNumber']));
-  }
-
-  // Improved image selection for diversity
-  static List<Map<String, dynamic>> _selectDiverseImages(List<Map<String, dynamic>> allImages, int maxCount) {
-    if (allImages.length <= maxCount) return allImages;
-    
-    // Group images by date
-    Map<String, List<Map<String, dynamic>>> imagesByDate = {};
-    for (var image in allImages) {
-      final dateKey = DateFormat('yyyy-MM-dd').format(image['date']);
-      if (!imagesByDate.containsKey(dateKey)) {
-        imagesByDate[dateKey] = [];
-      }
-      imagesByDate[dateKey]!.add(image);
-    }
-    
-    // Group by area/topic for further diversity
-    Map<String, List<Map<String, dynamic>>> imagesByArea = {};
-    for (var image in allImages) {
-      final areaKey = image['area'].toString().isEmpty ? image['topic'].toString() : image['area'].toString();
-      if (!imagesByArea.containsKey(areaKey)) {
-        imagesByArea[areaKey] = [];
-      }
-      imagesByArea[areaKey]!.add(image);
-    }
-    
-    List<Map<String, dynamic>> selectedImages = [];
-    Set<String> usedDates = {};
-    Set<String> usedAreas = {};
-    
-    // Sort dates to ensure chronological distribution
-    final sortedDates = imagesByDate.keys.toList()..sort();
-    final sortedAreas = imagesByArea.keys.toList();
-    
-    // First pass: Select one image from each date, prioritizing different areas
-    for (String dateKey in sortedDates) {
-      if (selectedImages.length >= maxCount) break;
-      
-      final dateImages = imagesByDate[dateKey]!;
-      // Sort by area diversity
-      dateImages.sort((a, b) {
-        final aArea = a['area'].toString().isEmpty ? a['topic'].toString() : a['area'].toString();
-        final bArea = b['area'].toString().isEmpty ? b['topic'].toString() : b['area'].toString();
-        
-        // Prioritize unused areas
-        if (!usedAreas.contains(aArea) && usedAreas.contains(bArea)) return -1;
-        if (usedAreas.contains(aArea) && !usedAreas.contains(bArea)) return 1;
-        
-        // Then by detail length (more detailed descriptions preferred)
-        return b['detail'].toString().length.compareTo(a['detail'].toString().length);
-      });
-      
-      final selectedImage = dateImages.first;
-      selectedImages.add(selectedImage);
-      usedDates.add(dateKey);
-      
-      final area = selectedImage['area'].toString().isEmpty ? selectedImage['topic'].toString() : selectedImage['area'].toString();
-      usedAreas.add(area);
-    }
-    
-    // Second pass: Fill remaining slots with diverse images from different areas
-    for (String areaKey in sortedAreas) {
-      if (selectedImages.length >= maxCount) break;
-      
-      final areaImages = imagesByArea[areaKey]!;
-      for (var image in areaImages) {
-        if (selectedImages.length >= maxCount) break;
-        
-        final dateKey = DateFormat('yyyy-MM-dd').format(image['date']);
-        
-        // Skip if we already have too many from this date
-        final imagesFromThisDate = selectedImages.where((img) => 
-          DateFormat('yyyy-MM-dd').format(img['date']) == dateKey).length;
-        
-        if (imagesFromThisDate < 2 && !selectedImages.contains(image)) {
-          selectedImages.add(image);
-        }
-      }
-    }
-    
-    // Third pass: Fill any remaining slots with quality images
-    if (selectedImages.length < maxCount) {
-      final remainingImages = allImages.where((img) => !selectedImages.contains(img)).toList();
-      remainingImages.sort((a, b) {
-        // Sort by detail quality and date diversity
-        return b['detail'].toString().length.compareTo(a['detail'].toString().length);
-      });
-      
-      for (var image in remainingImages) {
-        if (selectedImages.length >= maxCount) break;
-        selectedImages.add(image);
-      }
-    }
-    
-    // Final sort by date for chronological order
-    selectedImages.sort((a, b) => (a['date'] as DateTime).compareTo(b['date'] as DateTime));
-    
-    return selectedImages.take(maxCount).toList();
-  }
-
   static Future<List<Map<String, dynamic>>> _downloadWeeklyImages(List<Map<String, dynamic>> imageList, int weekNumber) async {
     List<Map<String, dynamic>> downloadedImages = [];
     
-    for (int i = 0; i < imageList.length && i < 10; i++) {
+    for (int i = 0; i < imageList.length; i++) {
       final imageData = imageList[i];
       try {
         final response = await http.get(Uri.parse(imageData['url'])).timeout(Duration(seconds: 10));
@@ -625,7 +686,6 @@ child: pw.Text('${weeklyData.fold<int>(0, (sum, week) => sum + week.imageCount)}
         }
       } catch (e) {
         print('Error downloading image for week $weekNumber: $e');
-        // Add placeholder for failed downloads
         downloadedImages.add({
           'imageBytes': null,
           'area': imageData['area'],
@@ -642,140 +702,119 @@ child: pw.Text('${weeklyData.fold<int>(0, (sum, week) => sum + week.imageCount)}
 
   static pw.Widget _buildWeeklyChart(pw.Font ttf, List<WeeklyData> weeklyData) {
   if (weeklyData.isEmpty) return pw.Container();
-  
+
   final maxReports = weeklyData.map((w) => w.totalReports).reduce(max).toDouble();
   final maxImages = weeklyData.map((w) => w.imageCount).reduce(max).toDouble();
   final maxValue = max(maxReports, maxImages);
-  
+
   return pw.Container(
     height: 300,
     child: pw.Column(
       children: [
-        // Chart area
-        pw.Expanded(
-          child: pw.Container(
-            padding: pw.EdgeInsets.all(20),
-            decoration: pw.BoxDecoration(
-              border: pw.Border.all(color: PdfColors.grey400),
-              borderRadius: pw.BorderRadius.circular(8),
-            ),
-            child: pw.Column(
-              children: [
-                // Chart with gridlines and bars
-                pw.Container(
-                  height: 220,
-                  child: pw.Stack(
-                    children: [
-                      // Horizontal gridlines WITHOUT numbers
-                      pw.Positioned.fill(
-                        child: pw.Column(
-                          children: List.generate(5, (index) {
-                            return pw.Expanded(
-                              child: pw.Container(
-                                decoration: pw.BoxDecoration(
-                                  border: pw.Border(
-                                    top: pw.BorderSide(
-                                      color: index == 4 ? PdfColors.grey600 : PdfColors.grey300,
-                                      width: index == 4 ? 1 : 0.5,
-                                    ),
+        pw.Container(
+          height: 200,
+          padding: pw.EdgeInsets.all(20),
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.grey400),
+            borderRadius: pw.BorderRadius.circular(8),
+          ),
+          child: pw.Stack(
+            children: [
+              // Grid lines
+              pw.Column(
+                children: List.generate(5, (index) {
+                  return pw.Expanded(
+                    child: pw.Container(
+                      decoration: pw.BoxDecoration(
+                        border: pw.Border(
+                          top: pw.BorderSide(
+                            color: index == 4 ? PdfColors.grey600 : PdfColors.grey300,
+                            width: index == 4 ? 1 : 0.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+
+              // Bars
+              pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: weeklyData.map((week) {
+                  final chartHeight = 180.0;
+                  final reportsHeight = maxValue > 0 ? (week.totalReports / maxValue) * chartHeight : 0.0;
+                  final imagesHeight = maxValue > 0 ? (week.imageCount / maxValue) * chartHeight : 0.0;
+
+                  return pw.Expanded(
+                    child: pw.Container(
+                      margin: pw.EdgeInsets.symmetric(horizontal: 4),
+                      child: pw.Column(
+                        mainAxisAlignment: pw.MainAxisAlignment.end,
+                        children: [
+                          pw.Container(
+                            height: 30,
+                            child: pw.Column(
+                              mainAxisAlignment: pw.MainAxisAlignment.end,
+                              children: [
+                                if (week.totalReports > 0)
+                                  pw.Text(
+                                    '${week.totalReports}',
+                                    style: pw.TextStyle(font: ttf, fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.blue700),
                                   ),
-                                ),
-                                // No text/numbers here - just empty gridlines
+                                if (week.imageCount > 0)
+                                  pw.Text(
+                                    '${week.imageCount}',
+                                    style: pw.TextStyle(font: ttf, fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.green700),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          pw.SizedBox(height: 5),
+                          pw.Row(
+                            mainAxisAlignment: pw.MainAxisAlignment.center,
+                            crossAxisAlignment: pw.CrossAxisAlignment.end,
+                            children: [
+                              pw.Container(
+                                width: 20,
+                                height: reportsHeight,
+                                color: PdfColors.blue500,
                               ),
-                            );
-                          }),
-                        ),
-                      ),
-                      
-                      // Chart bars
-                      pw.Positioned.fill(
-                        child: pw.Row(
-                          crossAxisAlignment: pw.CrossAxisAlignment.end,
-                          children: weeklyData.map((week) {
-                            final chartHeight = 180.0;
-                            final reportsHeight = maxValue > 0 ? (week.totalReports / maxValue) * chartHeight : 0.0;
-                            final imagesHeight = maxValue > 0 ? (week.imageCount / maxValue) * chartHeight : 0.0;
-                            
-                            return pw.Expanded(
-                              child: pw.Container(
-                                margin: pw.EdgeInsets.symmetric(horizontal: 8),
-                                child: pw.Column(
-                                  mainAxisAlignment: pw.MainAxisAlignment.end,
-                                  children: [
-                                    // Numbers on top of bars
-                                    pw.Container(
-                                      height: 30,
-                                      child: pw.Column(
-                                        mainAxisAlignment: pw.MainAxisAlignment.end,
-                                        children: [
-                                          if (week.totalReports > 0)
-                                            pw.Text(
-                                              '${week.totalReports}',
-                                              style: pw.TextStyle(font: ttf, fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.blue700),
-                                            ),
-                                          if (week.imageCount > 0)
-                                            pw.Text(
-                                              '${week.imageCount}',
-                                              style: pw.TextStyle(font: ttf, fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.green700),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                    
-                                    pw.SizedBox(height: 5),
-                                    
-                                    // Bars
-                                    pw.Row(
-                                      mainAxisAlignment: pw.MainAxisAlignment.center,
-                                      crossAxisAlignment: pw.CrossAxisAlignment.end,
-                                      children: [
-                                        // Reports bar
-                                        pw.Container(
-                                          width: 25,
-                                          height: reportsHeight,
-                                          color: PdfColors.blue500,
-                                        ),
-                                        pw.SizedBox(width: 6),
-                                        // Images bar
-                                        pw.Container(
-                                          width: 25,
-                                          height: imagesHeight,
-                                          color: PdfColors.green500,
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
+                              pw.SizedBox(width: 4),
+                              pw.Container(
+                                width: 20,
+                                height: imagesHeight,
+                                color: PdfColors.green500,
                               ),
-                            );
-                          }).toList(),
-                        ),
+                            ],
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-                
-                pw.SizedBox(height: 10),
-                
-                // Week labels
-                pw.Row(
-                  children: weeklyData.map((week) {
-                    return pw.Expanded(
-                      child: pw.Text(
-                        'Tuần ${week.weekNumber}',
-                        textAlign: pw.TextAlign.center,
-                        style: pw.TextStyle(font: ttf, fontSize: 10),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
           ),
         ),
-        
+
         pw.SizedBox(height: 10),
-        
+
+        // Week labels
+        pw.Row(
+          children: weeklyData.map((week) {
+            return pw.Expanded(
+              child: pw.Text(
+                'Tuần ${week.weekNumber}',
+                textAlign: pw.TextAlign.center,
+                style: pw.TextStyle(font: ttf, fontSize: 10),
+              ),
+            );
+          }).toList(),
+        ),
+
+        pw.SizedBox(height: 10),
+
         // Legend
         pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.center,
@@ -795,277 +834,254 @@ child: pw.Text('${weeklyData.fold<int>(0, (sum, week) => sum + week.imageCount)}
 }
 
  static pw.Widget _buildTopicCountBarChart(pw.Font ttf, Map<String, TopicData> topicData) {
-  final sortedTopics = topicData.values.toList()..sort((a, b) => b.totalCount.compareTo(a.totalCount));
-final totalCount = sortedTopics.fold<int>(0, (sum, topic) => sum + topic.totalCount);
-  
-  if (totalCount == 0) return pw.Container();
-  
-  // Group small percentages into "Khác"
-  List<TopicData> displayTopics = [];
-  int otherCount = 0;
-  
-  for (var topic in sortedTopics) {
-    final percentage = (topic.totalCount / totalCount) * 100;
-    if (percentage >= 2.0 && displayTopics.length < 6) {
-      displayTopics.add(topic);
-    } else {
-      otherCount += topic.totalCount;
-    }
-  }
-  
-  // Add "Khác" if there are small percentages
-  if (otherCount > 0) {
-    displayTopics.add(TopicData(name: 'Khác', totalCount: otherCount));
-  }
-  
-  final colors = [
-    PdfColors.blue500, PdfColors.green500, PdfColors.orange500, 
-    PdfColors.purple500, PdfColors.red500, PdfColors.teal500,
-    PdfColors.amber500, PdfColors.grey500
-  ];
-  
-  return pw.Column(
-    crossAxisAlignment: pw.CrossAxisAlignment.start,
-    children: [
-      pw.Text(
-        'PHÂN BỐ THEO CHỦ ĐỀ',
-        style: pw.TextStyle(font: ttf, fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900),
-      ),
-      pw.SizedBox(height: 15),
-      
-      // Horizontal stacked bar - square ends
-      pw.Container(
-        height: 40,
-        width: double.infinity,
-        decoration: pw.BoxDecoration(
-          border: pw.Border.all(color: PdfColors.grey400),
-        ),
-        child: pw.Row(
-          children: displayTopics.asMap().entries.map((entry) {
-            final index = entry.key;
-            final topic = entry.value;
-            final widthPercentage = topic.totalCount / totalCount;
-            
-            return pw.Expanded(
-              flex: (widthPercentage * 1000).round(),
-              child: pw.Container(
-                color: colors[index % colors.length],
-                child: pw.Center(
-                  child: pw.Text(
-                    '${(widthPercentage * 100).toStringAsFixed(0)}%',
-                    style: pw.TextStyle(
-                      font: ttf, 
-                      fontSize: 10, 
-                      color: PdfColors.white,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
-      
-      pw.SizedBox(height: 15),
-      
-      // Legend in grid layout
-      pw.Wrap(
-        spacing: 15,
-        runSpacing: 8,
-        children: displayTopics.asMap().entries.map((entry) {
-          final index = entry.key;
-          final topic = entry.value;
-          final percentage = (topic.totalCount / totalCount * 100).toStringAsFixed(1);
-          
-          return pw.Container(
-            width: 160,
-            child: pw.Row(
-              children: [
-                pw.Container(
-                  width: 12,
-                  height: 8,
-                  color: colors[index % colors.length],
-                ),
-                pw.SizedBox(width: 8),
-                pw.Expanded(
-                  child: pw.Text(
-                    '${topic.name}: $percentage%',
-                    style: pw.TextStyle(font: ttf, fontSize: 10),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }).toList(),
-      ),
-      
-      // Total count
-      pw.SizedBox(height: 15),
-      pw.Container(
-        padding: pw.EdgeInsets.all(12),
-        decoration: pw.BoxDecoration(
-          color: PdfColors.blue50,
-        ),
-        child: pw.Text(
-          'Tổng cộng: $totalCount báo cáo',
-          style: pw.TextStyle(
-            font: ttf, 
-            fontSize: 12, 
-            fontWeight: pw.FontWeight.bold,
-            color: PdfColors.blue700,
-          ),
-        ),
-      ),
-    ],
-  );
-}
+   final sortedTopics = topicData.values.toList()..sort((a, b) => b.totalCount.compareTo(a.totalCount));
+   final totalCount = sortedTopics.fold<int>(0, (sum, topic) => sum + topic.totalCount);
+   
+   if (totalCount == 0) return pw.Container();
+   
+   List<TopicData> displayTopics = [];
+   int otherCount = 0;
+   
+   for (var topic in sortedTopics) {
+     final percentage = (topic.totalCount / totalCount) * 100;
+     if (percentage >= 2.0 && displayTopics.length < 6) {
+       displayTopics.add(topic);
+     } else {
+       otherCount += topic.totalCount;
+     }
+   }
+   
+   if (otherCount > 0) {
+     displayTopics.add(TopicData(name: 'Khác', totalCount: otherCount));
+   }
+   
+   final colors = [
+     PdfColors.blue500, PdfColors.green500, PdfColors.orange500, 
+     PdfColors.purple500, PdfColors.red500, PdfColors.teal500,
+     PdfColors.amber500, PdfColors.grey500
+   ];
+   
+   return pw.Column(
+     crossAxisAlignment: pw.CrossAxisAlignment.start,
+     children: [
+       pw.Container(
+         height: 40,
+         width: double.infinity,
+         decoration: pw.BoxDecoration(
+           border: pw.Border.all(color: PdfColors.grey400),
+         ),
+         child: pw.Row(
+           children: displayTopics.asMap().entries.map((entry) {
+             final index = entry.key;
+             final topic = entry.value;
+             final widthPercentage = topic.totalCount / totalCount;
+             
+             return pw.Expanded(
+               flex: (widthPercentage * 1000).round(),
+               child: pw.Container(
+                 color: colors[index % colors.length],
+                 child: pw.Center(
+                   child: pw.Text(
+                     '${(widthPercentage * 100).toStringAsFixed(0)}%',
+                     style: pw.TextStyle(
+                       font: ttf, 
+                       fontSize: 10, 
+                       color: PdfColors.white,
+                       fontWeight: pw.FontWeight.bold,
+                     ),
+                   ),
+                 ),
+               ),
+             );
+           }).toList(),
+         ),
+       ),
+       
+       pw.SizedBox(height: 15),
+       
+       pw.Wrap(
+         spacing: 15,
+         runSpacing: 8,
+         children: displayTopics.asMap().entries.map((entry) {
+           final index = entry.key;
+           final topic = entry.value;
+           final percentage = (topic.totalCount / totalCount * 100).toStringAsFixed(1);
+           
+           return pw.Container(
+             width: 160,
+             child: pw.Row(
+               children: [
+                 pw.Container(
+                   width: 12,
+                   height: 8,
+                   color: colors[index % colors.length],
+                 ),
+                 pw.SizedBox(width: 8),
+                 pw.Expanded(
+                   child: pw.Text(
+                     '${topic.name}: $percentage%',
+                     style: pw.TextStyle(font: ttf, fontSize: 10),
+                   ),
+                 ),
+               ],
+             ),
+           );
+         }).toList(),
+       ),
+       
+       pw.SizedBox(height: 15),
+       pw.Container(
+         padding: pw.EdgeInsets.all(12),
+         decoration: pw.BoxDecoration(
+           color: PdfColors.blue50,
+         ),
+         child: pw.Text(
+           'Tổng cộng: $totalCount báo cáo',
+           style: pw.TextStyle(
+             font: ttf, 
+             fontSize: 12, 
+             fontWeight: pw.FontWeight.bold,
+             color: PdfColors.blue700,
+           ),
+         ),
+       ),
+     ],
+   );
+ }
 
  static pw.Widget _buildEffectivenessBarChart(pw.Font ttf, Map<String, TopicData> topicData) {
-final totalGood = topicData.values.fold<int>(0, (sum, topic) => sum + topic.goodCount);
-final totalWarning = topicData.values.fold<int>(0, (sum, topic) => sum + topic.warningCount);
-final totalBad = topicData.values.fold<int>(0, (sum, topic) => sum + topic.badCount);
-  final total = totalGood + totalWarning + totalBad;
-  
-  if (total == 0) return pw.Container();
-  
-  return pw.Column(
-    crossAxisAlignment: pw.CrossAxisAlignment.start,
-    children: [
-      pw.Text(
-        'HIỆU QUẢ TỔNG THỂ',
-        style: pw.TextStyle(font: ttf, fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900),
-      ),
-      pw.SizedBox(height: 15),
-      
-      // Horizontal stacked bar - square ends
-      pw.Container(
-        height: 40,
-        width: double.infinity,
-        decoration: pw.BoxDecoration(
-          border: pw.Border.all(color: PdfColors.grey400),
-        ),
-        child: pw.Row(
-          children: [
-            // Good results
-            if (totalGood > 0)
-              pw.Expanded(
-                flex: totalGood,
-                child: pw.Container(
-                  color: PdfColors.green500,
-                  child: pw.Center(
-                    child: pw.Text(
-                      '${(totalGood / total * 100).toStringAsFixed(0)}%',
-                      style: pw.TextStyle(
-                        font: ttf, 
-                        fontSize: 12, 
-                        color: PdfColors.white,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            // Warning results
-            if (totalWarning > 0)
-              pw.Expanded(
-                flex: totalWarning,
-                child: pw.Container(
-                  color: PdfColors.orange500,
-                  child: pw.Center(
-                    child: pw.Text(
-                      '${(totalWarning / total * 100).toStringAsFixed(0)}%',
-                      style: pw.TextStyle(
-                        font: ttf, 
-                        fontSize: 12, 
-                        color: PdfColors.white,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            // Bad results
-            if (totalBad > 0)
-              pw.Expanded(
-                flex: totalBad,
-                child: pw.Container(
-                  color: PdfColors.red500,
-                  child: pw.Center(
-                    child: pw.Text(
-                      '${(totalBad / total * 100).toStringAsFixed(0)}%',
-                      style: pw.TextStyle(
-                        font: ttf, 
-                        fontSize: 12, 
-                        color: PdfColors.white,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-      
-      pw.SizedBox(height: 15),
-      
-      // Legend
-      pw.Row(
-        children: [
-          if (totalGood > 0) ...[
-            pw.Container(width: 12, height: 8, color: PdfColors.green500),
-            pw.SizedBox(width: 8),
-            pw.Text(
-              'Tốt: ${(totalGood / total * 100).toStringAsFixed(1)}% ($totalGood)',
-              style: pw.TextStyle(font: ttf, fontSize: 10),
-            ),
-            pw.SizedBox(width: 20),
-          ],
-          if (totalWarning > 0) ...[
-            pw.Container(width: 12, height: 8, color: PdfColors.orange500),
-            pw.SizedBox(width: 8),
-            pw.Text(
-              'Cảnh báo: ${(totalWarning / total * 100).toStringAsFixed(1)}% ($totalWarning)',
-              style: pw.TextStyle(font: ttf, fontSize: 10),
-            ),
-            pw.SizedBox(width: 20),
-          ],
-          if (totalBad > 0) ...[
-            pw.Container(width: 12, height: 8, color: PdfColors.red500),
-            pw.SizedBox(width: 8),
-            pw.Text(
-              'Xấu: ${(totalBad / total * 100).toStringAsFixed(1)}% ($totalBad)',
-              style: pw.TextStyle(font: ttf, fontSize: 10),
-            ),
-          ],
-        ],
-      ),
-      
-      // Total count
-      pw.SizedBox(height: 15),
-      pw.Container(
-        padding: pw.EdgeInsets.all(12),
-        decoration: pw.BoxDecoration(
-          color: PdfColors.green50,
-        ),
-        child: pw.Text(
-          'Tổng cộng: $total kết quả',
-          style: pw.TextStyle(
-            font: ttf, 
-            fontSize: 12, 
-            fontWeight: pw.FontWeight.bold,
-            color: PdfColors.green700,
-          ),
-        ),
-      ),
-    ],
-  );
-}
+   final totalGood = topicData.values.fold<int>(0, (sum, topic) => sum + topic.goodCount);
+   final totalWarning = topicData.values.fold<int>(0, (sum, topic) => sum + topic.warningCount);
+   final totalBad = topicData.values.fold<int>(0, (sum, topic) => sum + topic.badCount);
+   final total = totalGood + totalWarning + totalBad;
+   
+   if (total == 0) return pw.Container();
+   
+   return pw.Column(
+     crossAxisAlignment: pw.CrossAxisAlignment.start,
+     children: [
+       pw.Container(
+         height: 40,
+         width: double.infinity,
+         decoration: pw.BoxDecoration(
+           border: pw.Border.all(color: PdfColors.grey400),
+         ),
+         child: pw.Row(
+           children: [
+             if (totalGood > 0)
+               pw.Expanded(
+                 flex: totalGood,
+                 child: pw.Container(
+                   color: PdfColors.green500,
+                   child: pw.Center(
+                     child: pw.Text(
+                       '${(totalGood / total * 100).toStringAsFixed(0)}%',
+                       style: pw.TextStyle(
+                         font: ttf, 
+                         fontSize: 12, 
+                         color: PdfColors.white,
+                         fontWeight: pw.FontWeight.bold,
+                       ),
+                     ),
+                   ),
+                 ),
+               ),
+             if (totalWarning > 0)
+               pw.Expanded(
+                 flex: totalWarning,
+                 child: pw.Container(
+                   color: PdfColors.orange500,
+                   child: pw.Center(
+                     child: pw.Text(
+                       '${(totalWarning / total * 100).toStringAsFixed(0)}%',
+                       style: pw.TextStyle(
+                         font: ttf, 
+                         fontSize: 12, 
+                         color: PdfColors.white,
+                         fontWeight: pw.FontWeight.bold,
+                       ),
+                     ),
+                   ),
+                 ),
+               ),
+             if (totalBad > 0)
+               pw.Expanded(
+                 flex: totalBad,
+                 child: pw.Container(
+                   color: PdfColors.red500,
+                   child: pw.Center(
+                     child: pw.Text(
+                       '${(totalBad / total * 100).toStringAsFixed(0)}%',
+                       style: pw.TextStyle(
+                         font: ttf, 
+                         fontSize: 12, 
+                         color: PdfColors.white,
+                         fontWeight: pw.FontWeight.bold,
+                       ),
+                     ),
+                   ),
+                 ),
+               ),
+           ],
+         ),
+       ),
+       
+       pw.SizedBox(height: 15),
+       
+       pw.Row(
+         children: [
+           if (totalGood > 0) ...[
+             pw.Container(width: 12, height: 8, color: PdfColors.green500),
+             pw.SizedBox(width: 8),
+             pw.Text(
+               'Tốt: ${(totalGood / total * 100).toStringAsFixed(1)}% ($totalGood)',
+               style: pw.TextStyle(font: ttf, fontSize: 10),
+             ),
+             pw.SizedBox(width: 20),
+           ],
+           if (totalWarning > 0) ...[
+             pw.Container(width: 12, height: 8, color: PdfColors.orange500),
+             pw.SizedBox(width: 8),
+             pw.Text(
+               'Cảnh báo: ${(totalWarning / total * 100).toStringAsFixed(1)}% ($totalWarning)',
+               style: pw.TextStyle(font: ttf, fontSize: 10),
+             ),
+             pw.SizedBox(width: 20),
+           ],
+           if (totalBad > 0) ...[
+             pw.Container(width: 12, height: 8, color: PdfColors.red500),
+             pw.SizedBox(width: 8),
+             pw.Text(
+               'Xấu: ${(totalBad / total * 100).toStringAsFixed(1)}% ($totalBad)',
+               style: pw.TextStyle(font: ttf, fontSize: 10),
+             ),
+           ],
+         ],
+       ),
+       
+       pw.SizedBox(height: 15),
+       pw.Container(
+         padding: pw.EdgeInsets.all(12),
+         decoration: pw.BoxDecoration(
+           color: PdfColors.green50,
+         ),
+         child: pw.Text(
+           'Tổng cộng: $total kết quả',
+           style: pw.TextStyle(
+             font: ttf, 
+             fontSize: 12, 
+             fontWeight: pw.FontWeight.bold,
+             color: PdfColors.green700,
+           ),
+         ),
+       ),
+     ],
+   );
+ }
+
  static List<pw.Widget> _buildWeeklyImagesGrid(pw.Font ttf, List<Map<String, dynamic>> images) {
    List<pw.Widget> widgets = [];
    
-   // Group images in rows of 2
    for (int i = 0; i < images.length; i += 2) {
      List<pw.Widget> rowImages = [];
      
@@ -1082,17 +1098,28 @@ final totalBad = topicData.values.fold<int>(0, (sum, topic) => sum + topic.badCo
              child: pw.Column(
                crossAxisAlignment: pw.CrossAxisAlignment.start,
                children: [
-                 // Image
                  pw.Container(
                    height: 150,
                    width: double.infinity,
                    child: imageData['imageBytes'] != null
-                       ? pw.Image(
-                           pw.MemoryImage(imageData['imageBytes']),
-                           fit: pw.BoxFit.cover,
+                       ? pw.ClipRRect(
+                           //borderRadius: pw.BorderRadius.only(
+                           //  topLeft: pw.Radius.circular(8),
+                           //  topRight: pw.Radius.circular(8),
+                           //),
+                           child: pw.Image(
+                             pw.MemoryImage(imageData['imageBytes']),
+                             fit: pw.BoxFit.cover,
+                           ),
                          )
                        : pw.Container(
-                           color: PdfColors.grey200,
+                           decoration: pw.BoxDecoration(
+                             color: PdfColors.grey200,
+                             //borderRadius: pw.BorderRadius.only(
+                             //  topLeft: pw.Radius.circular(8),
+                            //   topRight: pw.Radius.circular(8),
+                            // ),
+                           ),
                            child: pw.Center(
                              child: pw.Text(
                                'Không thể tải hình ảnh',
@@ -1103,7 +1130,6 @@ final totalBad = topicData.values.fold<int>(0, (sum, topic) => sum + topic.badCo
                          ),
                  ),
                  
-                 // Image info
                  pw.Padding(
                    padding: pw.EdgeInsets.all(8),
                    child: pw.Column(
@@ -1137,7 +1163,6 @@ final totalBad = topicData.values.fold<int>(0, (sum, topic) => sum + topic.badCo
        );
      }
      
-     // Add empty space if odd number of images
      if (rowImages.length == 1) {
        rowImages.add(pw.Expanded(child: pw.Container()));
      }
@@ -1157,7 +1182,6 @@ final totalBad = topicData.values.fold<int>(0, (sum, topic) => sum + topic.badCo
    return widgets;
  }
 
- // Helper methods for week calculations
  static int _getWeekNumber(DateTime date) {
    final startOfYear = DateTime(date.year, 1, 1);
    final dayOfYear = date.difference(startOfYear).inDays + 1;
@@ -1189,7 +1213,6 @@ final totalBad = topicData.values.fold<int>(0, (sum, topic) => sum + topic.badCo
  }
 }
 
-// Data classes
 class WeeklyData {
  final int weekNumber;
  final DateTime startDate;

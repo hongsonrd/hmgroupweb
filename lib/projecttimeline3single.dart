@@ -1048,6 +1048,49 @@ Future<void> _generateReport() async {
     return;
   }
 
+  // Show configuration dialog first
+  final ReportConfig? config = await _showReportConfigDialog();
+  if (config == null) {
+    return; // User cancelled
+  }
+
+  // Get weekly images for selection
+  final detailedData = await _getDetailedReportDataForImageSelection();
+  final weeklyImagesData = await _getWeeklyImagesForSelection(detailedData);
+  
+  // Show image selection dialogs for each week
+  Map<int, List<Map<String, dynamic>>> selectedWeeklyImages = {};
+  
+  for (var weekData in weeklyImagesData) {
+    final weekNumber = weekData['weekNumber'] as int;
+    final availableImages = weekData['images'] as List<Map<String, dynamic>>;
+    
+    if (availableImages.isNotEmpty) {
+      // Show up to 20 images but pre-select best 10
+      final displayImages = availableImages.take(20).toList();
+      final preSelected = availableImages.take(10).toList();
+      
+      final selectedImages = await showDialog<List<Map<String, dynamic>>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => WeeklyImageSelectionDialog(
+          weekNumber: weekNumber,
+          startDate: weekData['startDate'],
+          endDate: weekData['endDate'],
+          availableImages: displayImages,
+          preSelectedImages: preSelected,
+        ),
+      );
+      
+      if (selectedImages != null) {
+        selectedWeeklyImages[weekNumber] = selectedImages;
+      } else {
+        // User cancelled image selection
+        return;
+      }
+    }
+  }
+
   setState(() {
     _isGeneratingReport = true;
   });
@@ -1058,6 +1101,8 @@ Future<void> _generateReport() async {
       selectedMonth: _selectedMonth,
       username: widget.username,
       imageCountData: _imageCountData,
+      reportConfig: config,
+      selectedWeeklyImages: selectedWeeklyImages, // Pass selected images
     );
 
     if (filePath != null) {
@@ -1072,6 +1117,133 @@ Future<void> _generateReport() async {
     setState(() {
       _isGeneratingReport = false;
     });
+  }
+}
+
+// Add helper methods
+Future<List<Map<String, dynamic>>> _getDetailedReportDataForImageSelection() async {
+  try {
+    final db = await dbHelper.database;
+    
+    DateTime startOfMonth = DateTime(_selectedMonth.year, _selectedMonth.month, 1);
+    DateTime endOfMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1);
+    
+    final results = await db.rawQuery('''
+      SELECT 
+        Ngay,
+        Gio,
+        PhanLoai,
+        KetQua,
+        ChiTiet,
+        ChiTiet2,
+        HinhAnh,
+        GiaiPhap,
+        ViTri
+      FROM ${DatabaseTables.taskHistoryTable}
+      WHERE BoPhan = ?
+      AND Ngay >= ? AND Ngay < ?
+      ORDER BY Ngay ASC, Gio ASC
+    ''', [_selectedProject, startOfMonth.toIso8601String(), endOfMonth.toIso8601String()]);
+
+    return results;
+  } catch (e) {
+    print('Error getting detailed data: $e');
+    return [];
+  }
+}
+
+Future<List<Map<String, dynamic>>> _getWeeklyImagesForSelection(List<Map<String, dynamic>> data) async {
+  Map<int, Map<String, dynamic>> weeklyImages = {};
+  
+  for (var item in data) {
+    if (item['HinhAnh'] != null && item['HinhAnh'].toString().isNotEmpty) {
+      try {
+        final date = DateTime.parse(item['Ngay']);
+        final weekNumber = _getWeekNumber(date);
+        
+        if (!weeklyImages.containsKey(weekNumber)) {
+          weeklyImages[weekNumber] = {
+            'weekNumber': weekNumber,
+            'startDate': _getStartOfWeek(date),
+            'endDate': _getEndOfWeek(date),
+            'images': <Map<String, dynamic>>[],
+          };
+        }
+        
+        weeklyImages[weekNumber]!['images'].add({
+          'url': item['HinhAnh'],
+          'area': item['GiaiPhap'] ?? '',
+          'detail': item['ChiTiet'] ?? '',
+          'detail2': item['ChiTiet2'] ?? '',
+          'date': date,
+          'location': item['ViTri'] ?? '',
+          'topic': item['PhanLoai'] ?? '',
+        });
+      } catch (e) {
+        print('Error processing image for week grouping: $e');
+      }
+    }
+  }
+  
+  return weeklyImages.values.toList()..sort((a, b) => a['weekNumber'].compareTo(b['weekNumber']));
+}
+
+// Helper methods for week calculations
+int _getWeekNumber(DateTime date) {
+  final startOfYear = DateTime(date.year, 1, 1);
+  final dayOfYear = date.difference(startOfYear).inDays + 1;
+  return ((dayOfYear - 1) / 7).floor() + 1;
+}
+
+DateTime _getStartOfWeek(DateTime date) {
+  final daysFromMonday = date.weekday - 1;
+  return date.subtract(Duration(days: daysFromMonday));
+}
+
+DateTime _getEndOfWeek(DateTime date) {
+  final daysToSunday = 7 - date.weekday;
+  return date.add(Duration(days: daysToSunday));
+}
+
+Future<ReportConfig?> _showReportConfigDialog() async {
+  // First, get unique GiaiPhap values from database
+  List<String> giaiPhapCategories = await _getUniqueGiaiPhapValues();
+  
+  return showDialog<ReportConfig>(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext context) {
+      return ReportConfigDialog(
+        projectName: _selectedProject!,
+        giaiPhapCategories: giaiPhapCategories,
+      );
+    },
+  );
+}
+
+Future<List<String>> _getUniqueGiaiPhapValues() async {
+  if (_selectedProject == null) return [];
+  
+  try {
+    final db = await dbHelper.database;
+    
+    DateTime startOfMonth = DateTime(_selectedMonth.year, _selectedMonth.month, 1);
+    DateTime endOfMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1);
+    
+    final List<Map<String, dynamic>> results = await db.rawQuery('''
+      SELECT DISTINCT GiaiPhap
+      FROM ${DatabaseTables.taskHistoryTable}
+      WHERE BoPhan = ?
+      AND Ngay >= ? AND Ngay < ?
+      AND GiaiPhap IS NOT NULL AND GiaiPhap != ''
+      AND HinhAnh IS NOT NULL AND HinhAnh != ''
+      ORDER BY GiaiPhap ASC
+    ''', [_selectedProject, startOfMonth.toIso8601String(), endOfMonth.toIso8601String()]);
+
+    return results.map((item) => item['GiaiPhap'] as String).toList();
+  } catch (e) {
+    print('Error loading GiaiPhap values: $e');
+    return [];
   }
 }
 
@@ -2225,4 +2397,745 @@ class DayImage {
     required this.detail2,
     required this.duration,
   });
+}
+
+class CategoryRating {
+  final String name;
+  double rating;
+
+  CategoryRating({
+    required this.name,
+    this.rating = 0.0,
+  });
+}
+class ReportConfigDialog extends StatefulWidget {
+  final String projectName;
+  final List<String> giaiPhapCategories;
+
+  const ReportConfigDialog({
+    Key? key,
+    required this.projectName,
+    required this.giaiPhapCategories,
+  }) : super(key: key);
+
+  @override
+  _ReportConfigDialogState createState() => _ReportConfigDialogState();
+}
+
+class _ReportConfigDialogState extends State<ReportConfigDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _improvementController = TextEditingController();
+  final _customAudienceController = TextEditingController();
+  
+  String _selectedAudience = 'Ban quản lý';
+  bool _isCustomAudience = false;
+  
+  List<CategoryRating> _categoryRatings = [];
+  
+  final List<String> _predefinedAudiences = [
+    'Ban quản lý',
+    'Phòng TCHC',
+    'Ban quản trị',
+    'Phòng quản trị',
+    'Ban lãnh đạo',
+    'Quý công ty',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeCategoryRatings();
+  }
+
+  @override
+  void dispose() {
+    _improvementController.dispose();
+    _customAudienceController.dispose();
+    super.dispose();
+  }
+
+  void _initializeCategoryRatings() {
+    _categoryRatings = [
+      // Add GiaiPhap categories from database
+      ...widget.giaiPhapCategories.map((category) => CategoryRating(name: category)),
+      // Add fixed categories
+      CategoryRating(name: 'Máy móc, trang thiết bị, dụng cụ làm việc'),
+      CategoryRating(name: 'Tác phong làm việc của nhân viên'),
+    ];
+  }
+
+  void _updateRating(int index, double value) {
+    setState(() {
+      _categoryRatings[index].rating = value;
+    });
+  }
+
+  void _submitConfiguration() {
+    if (_formKey.currentState!.validate()) {
+      final audience = _isCustomAudience 
+          ? _customAudienceController.text.trim()
+          : _selectedAudience;
+      
+      final categoryRatings = <String, double>{};
+      for (final category in _categoryRatings) {
+        categoryRatings[category.name] = category.rating;
+      }
+      
+      final config = ReportConfig(
+        audience: audience,
+        categoryRatings: categoryRatings,
+        improvementSuggestions: _improvementController.text.trim(),
+      );
+      
+      Navigator.of(context).pop(config);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.9,
+        height: MediaQuery.of(context).size.height * 0.85,
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Color.fromARGB(255, 79, 255, 214),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.settings, color: Colors.black87, size: 24),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Cấu hình báo cáo',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        Text(
+                          widget.projectName,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.black54,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close, color: Colors.black87),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+
+            // Content
+            Expanded(
+              child: Form(
+                key: _formKey,
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Audience Selection
+                      _buildSectionTitle('Đối tượng báo cáo', Icons.people),
+                      SizedBox(height: 12),
+                      Container(
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey[300]!),
+                        ),
+                        child: Column(
+                          children: [
+                            // Predefined audiences
+                            ..._predefinedAudiences.map((audience) => 
+                              RadioListTile<String>(
+                                title: Text(audience),
+                                value: audience,
+                                groupValue: _isCustomAudience ? null : _selectedAudience,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _selectedAudience = value!;
+                                    _isCustomAudience = false;
+                                  });
+                                },
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            ),
+                            
+                            // Custom audience option
+                            RadioListTile<bool>(
+                              title: Text('Khác (tự nhập)'),
+                              value: true,
+                              groupValue: _isCustomAudience,
+                              onChanged: (value) {
+                                setState(() {
+                                  _isCustomAudience = value!;
+                                });
+                              },
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                            
+                            if (_isCustomAudience) ...[
+                              SizedBox(height: 8),
+                              TextFormField(
+                                controller: _customAudienceController,
+                                decoration: InputDecoration(
+                                  hintText: 'Nhập tên đối tượng báo cáo...',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
+                                ),
+                                validator: (value) {
+                                  if (_isCustomAudience && (value == null || value.trim().isEmpty)) {
+                                    return 'Vui lòng nhập tên đối tượng báo cáo';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+
+                      SizedBox(height: 24),
+
+                      // Category Ratings
+                      _buildSectionTitle('Đánh giá theo danh mục', Icons.assessment),
+                      SizedBox(height: 12),
+                      
+                      if (_categoryRatings.isEmpty)
+                        Container(
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.orange[50],
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.orange[300]!),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.info, color: Colors.orange[600]),
+                              SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Không tìm thấy danh mục phân loại hình ảnh cho dự án này.',
+                                  style: TextStyle(color: Colors.orange[700]),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        Container(
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[50],
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey[300]!),
+                          ),
+                          child: Column(
+                            children: _categoryRatings.asMap().entries.map((entry) {
+                              final index = entry.key;
+                              final category = entry.value;
+                              final isFixed = index >= widget.giaiPhapCategories.length;
+                              
+                              return Container(
+                                margin: EdgeInsets.only(bottom: 16),
+                                padding: EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.grey[200]!),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        if (isFixed)
+                                          Icon(Icons.star, size: 16, color: Colors.amber[600])
+                                        else
+                                          Icon(Icons.category, size: 16, color: Colors.blue[600]),
+                                        SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            category.name,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: _getRatingColor(category.rating).withOpacity(0.1),
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(color: _getRatingColor(category.rating)),
+                                          ),
+                                          child: Text(
+                                            '${category.rating.toInt()}%',
+                                            style: TextStyle(
+                                              color: _getRatingColor(category.rating),
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: 12),
+                                    SliderTheme(
+                                      data: SliderTheme.of(context).copyWith(
+                                        trackHeight: 6,
+                                        thumbShape: RoundSliderThumbShape(enabledThumbRadius: 10),
+                                        overlayShape: RoundSliderOverlayShape(overlayRadius: 20),
+                                      ),
+                                      child: Slider(
+                                        value: category.rating,
+                                        min: 0,
+                                        max: 100,
+                                        divisions: 100,
+                                        activeColor: _getRatingColor(category.rating),
+                                        inactiveColor: Colors.grey[300],
+                                        onChanged: (value) => _updateRating(index, value),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+
+                      SizedBox(height: 24),
+
+                      // Improvement Suggestions
+                      _buildSectionTitle('Tồn tại & đề xuất cải tiến', Icons.lightbulb),
+                      SizedBox(height: 12),
+                      Container(
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey[300]!),
+                        ),
+                        child: TextFormField(
+                          controller: _improvementController,
+                          maxLines: 6,
+                          decoration: InputDecoration(
+                            hintText: 'Nhập các vấn đề tồn tại và đề xuất cải tiến...',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            contentPadding: EdgeInsets.all(12),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Vui lòng nhập nội dung tồn tại & đề xuất cải tiến';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Footer buttons
+            Container(
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
+                border: Border(top: BorderSide(color: Colors.grey[300]!)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text(
+                        'Hủy',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 16),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton.icon(
+                      onPressed: _submitConfiguration,
+                      icon: Icon(Icons.picture_as_pdf, color: Colors.white),
+                      label: Text(
+                        'Tạo báo cáo',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green[600],
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: Colors.blue[600]),
+        SizedBox(width: 8),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Color _getRatingColor(double rating) {
+    if (rating >= 80) return Colors.green[600]!;
+    if (rating >= 60) return Colors.blue[600]!;
+    if (rating >= 40) return Colors.orange[600]!;
+    if (rating >= 20) return Colors.deepOrange[600]!;
+    return Colors.red[600]!;
+  }
+}
+class WeeklyImageSelectionDialog extends StatefulWidget {
+  final int weekNumber;
+  final DateTime startDate;
+  final DateTime endDate;
+  final List<Map<String, dynamic>> availableImages;
+  final List<Map<String, dynamic>> preSelectedImages;
+
+  const WeeklyImageSelectionDialog({
+    Key? key,
+    required this.weekNumber,
+    required this.startDate,
+    required this.endDate,
+    required this.availableImages,
+    required this.preSelectedImages,
+  }) : super(key: key);
+
+  @override
+  _WeeklyImageSelectionDialogState createState() => _WeeklyImageSelectionDialogState();
+}
+
+class _WeeklyImageSelectionDialogState extends State<WeeklyImageSelectionDialog> {
+  Set<String> selectedImageUrls = {};
+  final int maxSelection = 10;
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-select images that were already chosen
+    selectedImageUrls = widget.preSelectedImages.map((img) => img['url'] as String).toSet();
+  }
+
+  void _toggleImageSelection(String imageUrl) {
+    setState(() {
+      if (selectedImageUrls.contains(imageUrl)) {
+        selectedImageUrls.remove(imageUrl);
+      } else if (selectedImageUrls.length < maxSelection) {
+        selectedImageUrls.add(imageUrl);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Chỉ có thể chọn tối đa $maxSelection hình ảnh cho mỗi tuần'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    });
+  }
+
+  List<Map<String, dynamic>> _getSelectedImages() {
+    return widget.availableImages
+        .where((img) => selectedImageUrls.contains(img['url']))
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.9,
+        height: MediaQuery.of(context).size.height * 0.85,
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Color.fromARGB(255, 79, 255, 214),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.photo_library, color: Colors.black87, size: 24),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Chọn hình ảnh - Tuần ${widget.weekNumber}',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        Text(
+                          '${DateFormat('dd/MM').format(widget.startDate)} - ${DateFormat('dd/MM').format(widget.endDate)}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.black54,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close, color: Colors.black87),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+
+            // Selection info
+            Container(
+              padding: EdgeInsets.all(16),
+              color: Colors.blue[50],
+              child: Row(
+                children: [
+                  Icon(Icons.info, color: Colors.blue[600]),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Đã chọn ${selectedImageUrls.length}/$maxSelection hình ảnh. Nhấn vào hình để chọn/bỏ chọn.',
+                      style: TextStyle(color: Colors.blue[700]),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Image grid
+            Expanded(
+              child: widget.availableImages.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.image_not_supported, size: 64, color: Colors.grey[400]),
+                          SizedBox(height: 16),
+                          Text(
+                            'Không có hình ảnh nào cho tuần này',
+                            style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                          ),
+                        ],
+                      ),
+                    )
+                  : GridView.builder(
+                      padding: EdgeInsets.all(16),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 5,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: 0.8,
+                      ),
+                      itemCount: widget.availableImages.length,
+                      itemBuilder: (context, index) {
+                        final image = widget.availableImages[index];
+                        final imageUrl = image['url'] as String;
+                        final isSelected = selectedImageUrls.contains(imageUrl);
+
+                        return GestureDetector(
+                          onTap: () => _toggleImageSelection(imageUrl),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected ? Colors.green : Colors.grey[300]!,
+                                width: isSelected ? 3 : 1,
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                // Image
+                                Expanded(
+                                  flex: 5,
+                                  child: Container(
+                                    width: double.infinity,
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.only(
+                                        topLeft: Radius.circular(11),
+                                        topRight: Radius.circular(11),
+                                      ),
+                                      child: CachedNetworkImage(
+                                        imageUrl: imageUrl,
+                                        fit: BoxFit.cover,
+                                        placeholder: (context, url) => Container(
+                                          color: Colors.grey[200],
+                                          child: Center(
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          ),
+                                        ),
+                                        errorWidget: (context, url, error) => Container(
+                                          color: Colors.grey[200],
+                                          child: Center(
+                                            child: Icon(Icons.broken_image, color: Colors.grey[400]),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                
+                                // Info and selection indicator
+                                Container(
+                                  padding: EdgeInsets.all(8),
+                                  child: Column(
+                                    children: [
+                                      if (image['area'].toString().isNotEmpty)
+                                        Text(
+                                          image['area'],
+                                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      SizedBox(height: 4),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
+                                            color: isSelected ? Colors.green : Colors.grey,
+                                            size: 20,
+                                          ),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            isSelected ? 'Đã chọn' : 'Chọn',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: isSelected ? Colors.green : Colors.grey,
+                                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+
+            // Footer
+            Container(
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
+                border: Border(top: BorderSide(color: Colors.grey[300]!)),
+              ),
+              child: Row(
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text('Hủy', style: TextStyle(fontSize: 16)),
+                  ),
+                  Spacer(),
+                  Text(
+                    '${selectedImageUrls.length}/$maxSelection đã chọn',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[700],
+                    ),
+                  ),
+                  SizedBox(width: 16),
+                  ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(_getSelectedImages()),
+                    child: Text(
+                      'Xác nhận',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green[600],
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
