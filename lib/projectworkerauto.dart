@@ -6,7 +6,7 @@ import 'user_credentials.dart';
 import 'db_helper.dart';
 import 'table_models.dart';
 import 'package:intl/intl.dart';
-import 'package:excel/excel.dart';
+import 'package:excel/excel.dart' hide Border;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
@@ -15,6 +15,7 @@ import 'projectworkerphep.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'projectworkerpc.dart';
 import 'http_client.dart';
+import 'package:table_sticky_headers/table_sticky_headers.dart';
 
 class ProjectWorkerAuto extends StatefulWidget {
   final String selectedBoPhan;
@@ -653,667 +654,272 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
  }
 
  Widget _buildRegularSection(String columnType, String sectionTitle) {
-   final days = _getDaysInMonth();
-   final employees = _getEmployeesWithValueInColumn(columnType);
-   
-   if (employees.isEmpty) {
-     return SizedBox.shrink();
-   }
-   
-   String days1Key, days2Key, days3Key, days4Key, totalKey;
-   bool showPermissionColumns = false;
-   bool isNgoaiGioThuongRow = false;
-   bool showLeColumn = false;
-   
-   switch (columnType) {
-     case 'NgoaiGioThuong':
-       days1Key = 'ng_days1';
-       days2Key = 'ng_days2';
-       days3Key = 'ng_days3';
-       days4Key = 'ng_days4';
-       totalKey = 'ng_total';
-       isNgoaiGioThuongRow = true;
-       break;
-     case 'HoTro':
-       days1Key = 'hotro_days1';
-       days2Key = 'hotro_days2';
-       days3Key = 'hotro_days3';
-       days4Key = 'hotro_days4';
-       totalKey = 'hotro_total';
-       break;
-     case 'PartTime':
-       days1Key = 'pt_days1';
-       days2Key = 'pt_days2';
-       days3Key = 'pt_days3';
-       days4Key = 'pt_days4';
-       totalKey = 'pt_total';
-       break;
-     case 'PartTimeSang':
-       days1Key = 'pts_days1';
-       days2Key = 'pts_days2';
-       days3Key = 'pts_days3';
-       days4Key = 'pts_days4';
-       totalKey = 'pts_total';
-       break;
-     case 'PartTimeChieu':
-       days1Key = 'ptc_days1';
-       days2Key = 'ptc_days2';
-       days3Key = 'ptc_days3';
-       days4Key = 'ptc_days4';
-       totalKey = 'ptc_total';
-       break;
-     case 'NgoaiGioKhac':
-       days1Key = 'ngk_days1';
-       days2Key = 'ngk_days2';
-       days3Key = 'ngk_days3';
-       days4Key = 'ngk_days4';
-       totalKey = 'ngk_total';
-       break;
-     case 'NgoaiGiox15':
-       days1Key = 'ng15_days1';
-       days2Key = 'ng15_days2';
-       days3Key = 'ng15_days3';
-       days4Key = 'ng15_days4';
-       totalKey = 'ng15_total';
-       break;
-     case 'NgoaiGiox2':
-       days1Key = 'ng2_days1';
-       days2Key = 'ng2_days2';
-       days3Key = 'ng2_days3';
-       days4Key = 'ng2_days4';
-       totalKey = 'ng2_total';
-       break;
-     case 'CongLe':
-       days1Key = 'congle_days1';
-       days2Key = 'congle_days2';
-       days3Key = 'congle_days3';
-       days4Key = 'congle_days4';
-       totalKey = 'congle_total';
-       break;
-     case 'CongThuongChu':
-       days1Key = 'tuan1';
-       days2Key = 'tuan2';
-       days3Key = 'tuan3';
-       days4Key = 'tuan4';
-       totalKey = 'cong';
-       showPermissionColumns = true;
-       showLeColumn = true;
-       break;
-     default:
-       days1Key = 'tuan1';
-       days2Key = 'tuan2';
-       days3Key = 'tuan3';
-       days4Key = 'tuan4';
-       totalKey = 'cong';
-   }
-   
-   final ScrollController horizontalController = ScrollController();
-   
-   return Column(
-     crossAxisAlignment: CrossAxisAlignment.start,
-     children: [
-       Padding(
-         padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-         child: Text(
-           sectionTitle,
-           style: TextStyle(
-             fontSize: 18,
-             fontWeight: FontWeight.bold,
-             color: Colors.purple,
-           ),
-         ),
-       ),
-       
-       Padding(
-         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-         child: Row(
-           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-           children: [
-             ElevatedButton.icon(
-               onPressed: () {
-                 horizontalController.animateTo(
-                   0,
-                   duration: Duration(milliseconds: 300),
-                   curve: Curves.easeOut,
-                 );
-               },
-               icon: Icon(Icons.first_page),
-               label: Text('Đầu bảng'),
-               style: ElevatedButton.styleFrom(
-                 backgroundColor: Colors.blue,
-                 foregroundColor: Colors.white,
-               ),
-             ),
-             Row(
-               children: [
-                 ElevatedButton.icon(
-                   onPressed: () {
-                     double newOffset = (horizontalController.offset - 300);
-                     if (newOffset < 0) newOffset = 0;
-                     horizontalController.animateTo(
-                       newOffset,
-                       duration: Duration(milliseconds: 300),
-                       curve: Curves.easeOut,
-                     );
-                   },
-                   icon: Icon(Icons.arrow_back),
-                   label: Text('Trái'),
-                   style: ElevatedButton.styleFrom(
-                     backgroundColor: Colors.grey.shade700,
-                     foregroundColor: Colors.white,
-                   ),
-                 ),
-                 SizedBox(width: 8),
-                 ElevatedButton.icon(
-                   onPressed: () {
-                     double newOffset = (horizontalController.offset + 300);
-                     if (horizontalController.hasClients) {
-                       double maxScroll = horizontalController.position.maxScrollExtent;
-                       if (newOffset > maxScroll) newOffset = maxScroll;
-                       horizontalController.animateTo(
-                         newOffset,
-                         duration: Duration(milliseconds: 300),
-                         curve: Curves.easeOut,
-                       );
-                     }
-                   },
-                   icon: Icon(Icons.arrow_forward),
-                   label: Text('Phải'),
-                   style: ElevatedButton.styleFrom(
-                     backgroundColor: Colors.grey.shade700,
-                     foregroundColor: Colors.white,
-                   ),
-                 ),
-               ],
-             ),
-             ElevatedButton.icon(
-               onPressed: () {
-                 if (horizontalController.hasClients) {
-                   horizontalController.animateTo(
-                     horizontalController.position.maxScrollExtent,
-                     duration: Duration(milliseconds: 300),
-                     curve: Curves.easeOut,
-                   );
-                 }
-               },
-               icon: Icon(Icons.last_page),
-               label: Text('Cuối bảng'),
-               style: ElevatedButton.styleFrom(
-                 backgroundColor: Colors.blue,
-                 foregroundColor: Colors.white,
-               ),
-             ),
-           ],
-         ),
-       ),
-       
-       SingleChildScrollView(
-         controller: horizontalController,
-         scrollDirection: Axis.horizontal,
-         child: Table(
-           border: TableBorder(
-             horizontalInside: BorderSide(color: Colors.grey.shade300),
-             verticalInside: BorderSide(color: Colors.grey.shade300),
-             bottom: BorderSide(color: Colors.grey.shade300),
-             right: BorderSide(color: Colors.grey.shade300),
-             left: BorderSide(color: Colors.grey.shade300),
-             top: BorderSide(color: Colors.grey.shade300),
-           ),
-           columnWidths: {
-             0: FixedColumnWidth(120),
-             1: FixedColumnWidth(60),
-             2: FixedColumnWidth(60),
-             3: FixedColumnWidth(60),
-             4: FixedColumnWidth(60),
-             5: FixedColumnWidth(60),
-             6: FixedColumnWidth(60),
-             7: FixedColumnWidth(60),
-             8: FixedColumnWidth(60),
-             9: FixedColumnWidth(60),
-             10: FixedColumnWidth(60),
-             11: FixedColumnWidth(60),
-             12: FixedColumnWidth(60),
-             13: FixedColumnWidth(60),
-             14: FixedColumnWidth(60),
-             15: FixedColumnWidth(60),
-             16: FixedColumnWidth(60),
-             17: FixedColumnWidth(60),
-             for (int i = 0; i < days.length; i++)
-               i + 18: FixedColumnWidth(60),
-           },
-           defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-           children: [
-             TableRow(
-               decoration: BoxDecoration(color: Colors.grey.shade200),
-               children: [
-                 TableCell(child: Padding(padding: const EdgeInsets.all(8.0), child: Text(''))),
-                 TableCell(
-                   verticalAlignment: TableCellVerticalAlignment.fill,
-                   child: Container(
-                     color: Colors.blue.shade100,
-                     child: Center(child: Text('Tuần 1', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(child: Container(color: Colors.blue.shade100, child: Text(''))),
-                 TableCell(child: Container(color: Colors.blue.shade100, child: Text(''))),
-                 TableCell(
-                   verticalAlignment: TableCellVerticalAlignment.fill,
-                   child: Container(
-                     color: Colors.green.shade100,
-                     child: Center(child: Text('Tuần 2', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(child: Container(color: Colors.green.shade100, child: Text(''))),
-                 TableCell(child: Container(color: Colors.green.shade100, child: Text(''))),
-                 TableCell(
-                   verticalAlignment: TableCellVerticalAlignment.fill,
-                   child: Container(
-                     color: Colors.yellow.shade100,
-                     child: Center(child: Text('Tuần 3', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(child: Container(color: Colors.yellow.shade100, child: Text(''))),
-                 TableCell(child: Container(color: Colors.yellow.shade100, child: Text(''))),
-                 TableCell(
-                   verticalAlignment: TableCellVerticalAlignment.fill,
-                   child: Container(
-                     color: Colors.red.shade100,
-                     child: Center(child: Text('Tuần 4', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(child: Container(color: Colors.red.shade100, child: Text(''))),
-                 TableCell(child: Container(color: Colors.red.shade100, child: Text(''))),
-                 TableCell(
-                   verticalAlignment: TableCellVerticalAlignment.fill,
-                   child: Container(
-                     color: Colors.orange.shade100,
-                     child: Center(child: Text('Tổng tháng', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
-                 TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
-                 TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
-                 TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
-                 ...days.map((_) => TableCell(child: Text(''))),
-               ],
-             ),
-             TableRow(
-               decoration: BoxDecoration(color: Colors.grey.shade200),
-               children: [
-                 TableCell(
-                   child: Padding(
-                     padding: const EdgeInsets.all(8.0),
-                     child: Text('Mã NV', style: TextStyle(fontWeight: FontWeight.bold)),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.blue.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('Tuần 1', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.blue.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('P1', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.blue.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('HT1', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.green.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('Tuần 2', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.green.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('P2', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.green.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('HT2', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.yellow.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('Tuần 3', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.yellow.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('P3', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.yellow.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('HT3', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.red.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('Tuần 4', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.red.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('P4', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.red.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('HT4', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.orange.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('Công', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.orange.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('Phép', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.orange.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('Lễ', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.orange.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('HV', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.orange.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('Đêm', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 ...days.map((day) => TableCell(
-                   child: Column(
-                     children: [
-                       Padding(
-                         padding: const EdgeInsets.all(4.0),
-                         child: Text(
-                           _formatNumberValue(_calculateDailyTotal(day)),
-                           style: TextStyle(
-                             fontWeight: FontWeight.bold,
-                             color: Colors.red,
-                             fontSize: 12,
-                           ),
-                         ),
-                       ),
-                       Padding(
-                         padding: const EdgeInsets.all(4.0),
-                         child: Text(
-                           day.toString(), 
-                           style: TextStyle(fontWeight: FontWeight.bold)
-                         ),
-                       ),
-                     ],
-                   ),
-                 )),
-               ],
-             ),
-             for (var empId in employees) ...[
-               TableRow(
-                 decoration: BoxDecoration(
-                   color: _staffColors[empId] ?? Colors.transparent,
-                 ),
-                 children: [
-                   TableCell(
-                     child: Padding(
-                       padding: const EdgeInsets.all(8.0),
-                       child: Column(
-                         crossAxisAlignment: CrossAxisAlignment.start,
-                         children: [
-                           Text(empId, style: TextStyle(fontWeight: FontWeight.bold)),
-                           Text(
-                             _staffNames[empId] ?? '',
-                             style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                           ),
-                           if (columnType == 'CongThuongChu')
-                             Text(
-                               'Công chữ',
-                               style: TextStyle(
-                                 fontSize: 10,
-                                 color: Colors.grey[700],
-                                 fontStyle: FontStyle.italic,
-                               ),
-                             ),
-                           if (columnType == 'NgoaiGioThuong')
-                             Text(
-                               'NG thường',
-                               style: TextStyle(
-                                 fontSize: 10,
-                                 color: Colors.grey[700],
-                                 fontStyle: FontStyle.italic,
-                               ),
-                             ),
-                         ],
-                       ),
-                     ),
-                   ),
-                   ...(() {
-                     final summary = _calculateSummary(empId);
-                     return [
-                       TableCell(
-                         child: Container(
-                           color: Colors.blue.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(summary[days1Key] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.blue.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(
-                             showPermissionColumns ? (summary['p1'] ?? '') : '',
-                             style: TextStyle(fontWeight: FontWeight.bold)
-                           )),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.blue.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(summary['ht1'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.green.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(summary[days2Key] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.green.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(
-                             showPermissionColumns ? (summary['p2'] ?? '') : '',
-                             style: TextStyle(fontWeight: FontWeight.bold)
-                           )),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.green.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(summary['ht2'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.yellow.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(summary[days3Key] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.yellow.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(
-                             showPermissionColumns ? (summary['p3'] ?? '') : '',
-                             style: TextStyle(fontWeight: FontWeight.bold)
-                           )),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.yellow.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(summary['ht3'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.red.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(summary[days4Key] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.red.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(
-                             showPermissionColumns ? (summary['p4'] ?? '') : '',
-                             style: TextStyle(fontWeight: FontWeight.bold)
-                           )),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.red.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(summary['ht4'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.orange.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(summary[totalKey] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.orange.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(
-                             showPermissionColumns ? (summary['phep'] ?? '') : '',
-                             style: TextStyle(fontWeight: FontWeight.bold)
-                           )),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.orange.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(
-                             showLeColumn ? (summary['le'] ?? '') : '',
-                             style: TextStyle(fontWeight: FontWeight.bold)
-                           )),),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.orange.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(
-                             showPermissionColumns ? (summary['hv'] ?? '') : '',
-                             style: TextStyle(fontWeight: FontWeight.bold)
-                           )),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.orange.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(
-                             showPermissionColumns ? (summary['dem'] ?? '') : '',
-                             style: TextStyle(fontWeight: FontWeight.bold)
-                           )),
-                         ),
-                       ),
-                     ];
-                   })(),
-                   ...days.map((day) {
-                     final value = _getAttendanceForDay(empId, day, columnType);
-                     final displayValue = (value == '0' || value == 'Ro') ? '' : value;
-                     return TableCell(
-                       child: Padding(
-                         padding: const EdgeInsets.all(8.0),
-                         child: Center(
-                           child: Text(
-                             displayValue ?? '',
-                             style: TextStyle(
-                               color: (displayValue != null && displayValue.isNotEmpty) ? Colors.blue : null,
-                               fontWeight: (displayValue != null && displayValue.isNotEmpty) ? FontWeight.bold : null,
-                             ),
-                           ),
-                         ),
-                       ),
-                     );
-                   }),
-                 ],
-               ),
-               if (empId != employees.last)
-                 TableRow(
-                   children: [
-                     TableCell(child: SizedBox(height: 4)),
-                     ...List.generate(17, (index) => TableCell(child: SizedBox(height: 4))),
-                     ...days.map((_) => TableCell(child: SizedBox(height: 4))),
-                   ],
-                 ),
-             ],
-           ],
-         ),
-       ),
-       Divider(thickness: 1, height: 32),
-     ],
-   );
- }
-
+  final days = _getDaysInMonth();
+  final employees = _getEmployeesWithValueInColumn(columnType);
+  
+  if (employees.isEmpty) {
+    return SizedBox.shrink();
+  }
+  
+  // Determine summary keys based on column type
+  String days1Key, days2Key, days3Key, days4Key, totalKey;
+  bool showPermissionColumns = false;
+  bool showLeColumn = false;
+  
+  switch (columnType) {
+    case 'NgoaiGioThuong':
+      days1Key = 'ng_days1';
+      days2Key = 'ng_days2';
+      days3Key = 'ng_days3';
+      days4Key = 'ng_days4';
+      totalKey = 'ng_total';
+      break;
+    case 'HoTro':
+      days1Key = 'hotro_days1';
+      days2Key = 'hotro_days2';
+      days3Key = 'hotro_days3';
+      days4Key = 'hotro_days4';
+      totalKey = 'hotro_total';
+      break;
+    case 'PartTime':
+      days1Key = 'pt_days1';
+      days2Key = 'pt_days2';
+      days3Key = 'pt_days3';
+      days4Key = 'pt_days4';
+      totalKey = 'pt_total';
+      break;
+    case 'PartTimeSang':
+      days1Key = 'pts_days1';
+      days2Key = 'pts_days2';
+      days3Key = 'pts_days3';
+      days4Key = 'pts_days4';
+      totalKey = 'pts_total';
+      break;
+    case 'PartTimeChieu':
+      days1Key = 'ptc_days1';
+      days2Key = 'ptc_days2';
+      days3Key = 'ptc_days3';
+      days4Key = 'ptc_days4';
+      totalKey = 'ptc_total';
+      break;
+    case 'NgoaiGioKhac':
+      days1Key = 'ngk_days1';
+      days2Key = 'ngk_days2';
+      days3Key = 'ngk_days3';
+      days4Key = 'ngk_days4';
+      totalKey = 'ngk_total';
+      break;
+    case 'NgoaiGiox15':
+      days1Key = 'ng15_days1';
+      days2Key = 'ng15_days2';
+      days3Key = 'ng15_days3';
+      days4Key = 'ng15_days4';
+      totalKey = 'ng15_total';
+      break;
+    case 'NgoaiGiox2':
+      days1Key = 'ng2_days1';
+      days2Key = 'ng2_days2';
+      days3Key = 'ng2_days3';
+      days4Key = 'ng2_days4';
+      totalKey = 'ng2_total';
+      break;
+    case 'CongLe':
+      days1Key = 'congle_days1';
+      days2Key = 'congle_days2';
+      days3Key = 'congle_days3';
+      days4Key = 'congle_days4';
+      totalKey = 'congle_total';
+      break;
+    default:
+      days1Key = 'tuan1';
+      days2Key = 'tuan2';
+      days3Key = 'tuan3';
+      days4Key = 'tuan4';
+      totalKey = 'cong';
+  }
+  
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        child: Text(
+          sectionTitle,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.purple,
+          ),
+        ),
+      ),
+      
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+        child: Text(
+          'Sử dụng cử chỉ vuốt để di chuyển bảng',
+          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+        ),
+      ),
+      
+      Container(
+        height: 400,
+        child: StickyHeadersTable(
+          columnsLength: days.length + 17, // +17 for summary columns
+          rowsLength: employees.length,
+          
+          // Column headers
+          columnsTitleBuilder: (i) {
+            if (i >= 0 && i <= 16) {
+              // Summary columns
+              final summaryHeaders = [
+                'Tuần 1', 'P1', 'HT1', 'Tuần 2', 'P2', 'HT2', 'Tuần 3', 'P3', 'HT3',
+                'Tuần 4', 'P4', 'HT4', 'Công', 'Phép', 'Lễ', 'HV', 'Đêm'
+              ];
+              
+              Color bgColor;
+              if (i < 3) bgColor = Colors.blue.shade100;
+              else if (i < 6) bgColor = Colors.green.shade100;
+              else if (i < 9) bgColor = Colors.yellow.shade100;
+              else if (i < 12) bgColor = Colors.red.shade100;
+              else bgColor = Colors.orange.shade100;
+              
+              return Container(
+                height: 60,
+                width: 60,
+                color: bgColor,
+                alignment: Alignment.center,
+                child: Text(
+                  summaryHeaders[i],
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+                ),
+              );
+            } else {
+              // Day columns
+              final dayIndex = i - 17;
+              return Container(
+                height: 60,
+                color: Colors.grey.shade200,
+                alignment: Alignment.center,
+                child: Text(
+                  days[dayIndex].toString(),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+              );
+            }
+          },
+          
+          // Row headers (employee info) - Much wider
+          rowsTitleBuilder: (i) {
+            final empId = employees[i];
+            return Container(
+              width: 200, // Much wider for staff names
+              color: _staffColors[empId] ?? Colors.grey.shade100,
+              padding: EdgeInsets.all(8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    empId,
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                  Text(
+                    _staffNames[empId] ?? '',
+                    style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                    maxLines: 3, // Allow more lines for long names
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            );
+          },
+          
+          // Content cells
+          contentCellBuilder: (i, j) {
+            final empId = employees[j];
+            
+            if (i >= 0 && i <= 16) {
+              // Summary columns
+              final summary = _calculateSummary(empId);
+              final summaryKeys = [
+                days1Key, 'p1', 'ht1', days2Key, 'p2', 'ht2', days3Key, 'p3', 'ht3',
+                days4Key, 'p4', 'ht4', totalKey, 'phep', 'le', 'hv', 'dem'
+              ];
+              
+              String value = summary[summaryKeys[i]] ?? '';
+              
+              Color bgColor;
+              if (i < 3) bgColor = Colors.blue.shade50;
+              else if (i < 6) bgColor = Colors.green.shade50;
+              else if (i < 9) bgColor = Colors.yellow.shade50;
+              else if (i < 12) bgColor = Colors.red.shade50;
+              else bgColor = Colors.orange.shade50;
+              
+              return Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  color: bgColor,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              );
+            } else {
+              // Data columns
+              final dayIndex = i - 17;
+              final day = days[dayIndex];
+              final value = _getAttendanceForDay(empId, day, columnType) ?? '0';
+              final displayValue = (value == '0') ? '' : value;
+              
+              return Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  color: _staffColors[empId]?.withOpacity(0.1) ?? Colors.white,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  displayValue,
+                  style: TextStyle(
+                    color: displayValue.isNotEmpty ? Colors.blue : Colors.grey,
+                    fontWeight: displayValue.isNotEmpty ? FontWeight.bold : FontWeight.normal,
+                    fontSize: 11,
+                  ),
+                ),
+              );
+            }
+          },
+          
+          // Legend cell
+          legendCell: Container(
+            color: Colors.purple,
+            alignment: Alignment.center,
+            child: Text(
+              'Nhân viên',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          
+          // Cell dimensions
+          cellDimensions: CellDimensions.uniform(
+            width: 50,
+            height: 50,
+          ),
+        ),
+      ),
+      
+      Divider(thickness: 1, height: 32),
+    ],
+  );
+}
  String _formatNumberValue(double value) {
    if (value == value.toInt()) {
      return value.toInt().toString();
@@ -1341,798 +947,291 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
  }
 
  Widget _buildChuGioThuongSection() {
-   final days = _getDaysInMonth();
-   final employees = _getEmployeesWithValueInColumn('CongThuongChu');
-   
-   if (employees.isEmpty) {
-     return SizedBox.shrink();
-   }
-   
-   final ScrollController horizontalController = ScrollController();
-   
-   return Column(
-     crossAxisAlignment: CrossAxisAlignment.start,
-     children: [
-       Padding(
-         padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-         child: Text(
-           'Chữ & Giờ thường',
-           style: TextStyle(
-             fontSize: 18,
-             fontWeight: FontWeight.bold,
-             color: Colors.purple,
-           ),
-         ),
-       ),
-       
-       Padding(
-         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-         child: Row(
-           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-           children: [
-             ElevatedButton.icon(
-               onPressed: () {
-                 horizontalController.animateTo(
-                   0,
-                   duration: Duration(milliseconds: 300),
-                   curve: Curves.easeOut,
-                 );
-               },
-               icon: Icon(Icons.first_page),
-               label: Text('Đầu bảng'),
-               style: ElevatedButton.styleFrom(
-                 backgroundColor: Colors.blue,
-                 foregroundColor: Colors.white,
-               ),
-             ),
-             Row(
-               children: [
-                 ElevatedButton.icon(
-                   onPressed: () {
-                     double newOffset = (horizontalController.offset - 300);
-                     if (newOffset < 0) newOffset = 0;
-                     horizontalController.animateTo(
-                       newOffset,
-                       duration: Duration(milliseconds: 300),
-                       curve: Curves.easeOut,
-                     );
-                   },
-                   icon: Icon(Icons.arrow_back),
-                   label: Text('Trái'),
-                   style: ElevatedButton.styleFrom(
-                     backgroundColor: Colors.grey.shade700,
-                     foregroundColor: Colors.white,
-                   ),
-                 ),
-                 SizedBox(width: 8),
-                 ElevatedButton.icon(
-                   onPressed: () {
-                     double newOffset = (horizontalController.offset + 300);
-                     if (horizontalController.hasClients) {
-                       double maxScroll = horizontalController.position.maxScrollExtent;
-                       if (newOffset > maxScroll) newOffset = maxScroll;
-                       horizontalController.animateTo(
-                         newOffset,
-                         duration: Duration(milliseconds: 300),
-                         curve: Curves.easeOut,
-                       );
-                     }
-                   },
-                   icon: Icon(Icons.arrow_forward),
-                   label: Text('Phải'),
-                   style: ElevatedButton.styleFrom(
-                     backgroundColor: Colors.grey.shade700,
-                     foregroundColor: Colors.white,
-                   ),
-                 ),
-               ],
-             ),
-             ElevatedButton.icon(
-               onPressed: () {
-                 if (horizontalController.hasClients) {
-                   horizontalController.animateTo(
-                     horizontalController.position.maxScrollExtent,
-                     duration: Duration(milliseconds: 300),
-                     curve: Curves.easeOut,
-                   );
-                 }
-               },
-               icon: Icon(Icons.last_page),
-               label: Text('Cuối bảng'),
-               style: ElevatedButton.styleFrom(
-                 backgroundColor: Colors.blue,
-                 foregroundColor: Colors.white,
-               ),
-             ),
-           ],
-         ),
-       ),
-       
-       SingleChildScrollView(
-         controller: horizontalController, 
-         scrollDirection: Axis.horizontal,
-         child: Table(
-           border: TableBorder(
-             horizontalInside: BorderSide(color: Colors.grey.shade300),
-             verticalInside: BorderSide(color: Colors.grey.shade300),
-             bottom: BorderSide(color: Colors.grey.shade300),
-             right: BorderSide(color: Colors.grey.shade300),
-             left: BorderSide(color: Colors.grey.shade300),
-             top: BorderSide(color: Colors.grey.shade300),
-           ),
-           columnWidths: {
-             0: FixedColumnWidth(120),
-             1: FixedColumnWidth(60),
-             2: FixedColumnWidth(60),
-             3: FixedColumnWidth(60),
-             4: FixedColumnWidth(60),
-             5: FixedColumnWidth(60),
-             6: FixedColumnWidth(60),
-             7: FixedColumnWidth(60),
-             8: FixedColumnWidth(60),
-             9: FixedColumnWidth(60),
-             10: FixedColumnWidth(60),
-             11: FixedColumnWidth(60),
-             12: FixedColumnWidth(60),
-             13: FixedColumnWidth(60),
-             14: FixedColumnWidth(60),
-             15: FixedColumnWidth(60),
-             16: FixedColumnWidth(60),
-             17: FixedColumnWidth(60),
-             for (int i = 0; i < days.length; i++)
-               i + 18: FixedColumnWidth(60),
-           },
-           defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-           children: [
-             TableRow(
-               decoration: BoxDecoration(color: Colors.grey.shade200),
-               children: [
-                 TableCell(child: Padding(padding: const EdgeInsets.all(8.0), child: Text(''))),
-                 TableCell(
-                   verticalAlignment: TableCellVerticalAlignment.fill,
-                   child: Container(
-                     color: Colors.blue.shade100,
-                     child: Center(child: Text('Tuần 1', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(child: Container(color: Colors.blue.shade100, child: Text(''))),
-                 TableCell(child: Container(color: Colors.blue.shade100, child: Text(''))),
-                 TableCell(
-                   verticalAlignment: TableCellVerticalAlignment.fill,
-                   child: Container(
-                     color: Colors.green.shade100,
-                     child: Center(child: Text('Tuần 2', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(child: Container(color: Colors.green.shade100, child: Text(''))),
-                 TableCell(child: Container(color: Colors.green.shade100, child: Text(''))),
-                 TableCell(
-                   verticalAlignment: TableCellVerticalAlignment.fill,
-                   child: Container(
-                     color: Colors.yellow.shade100,
-                     child: Center(child: Text('Tuần 3', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(child: Container(color: Colors.yellow.shade100, child: Text(''))),
-                 TableCell(child: Container(color: Colors.yellow.shade100, child: Text(''))),
-                 TableCell(
-                   verticalAlignment: TableCellVerticalAlignment.fill,
-                   child: Container(
-                     color: Colors.red.shade100,
-                     child: Center(child: Text('Tuần 4', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(child: Container(color: Colors.red.shade100, child: Text(''))),
-                 TableCell(child: Container(color: Colors.red.shade100, child: Text(''))),
-                 TableCell(
-                   verticalAlignment: TableCellVerticalAlignment.fill,
-                   child: Container(
-                     color: Colors.orange.shade100,
-                     child: Center(child: Text('Tổng tháng', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
-                 TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
-                 TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
-                 TableCell(child: Container(color: Colors.orange.shade100, child: Text(''))),
-                 ...days.map((_) => TableCell(child: Text(''))),
-               ],
-             ),
-             TableRow(
-               decoration: BoxDecoration(color: Colors.grey.shade200),
-               children: [
-                 TableCell(
-                   child: Padding(
-                     padding: const EdgeInsets.all(8.0),
-                     child: Text('Mã NV', style: TextStyle(fontWeight: FontWeight.bold)),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.blue.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('Tuần 1', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.blue.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('P1', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.blue.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('HT1', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.green.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('Tuần 2', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.green.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('P2', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.green.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('HT2', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.yellow.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('Tuần 3', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.yellow.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('P3', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.yellow.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('HT3', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.red.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('Tuần 4', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.red.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('P4', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.red.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('HT4', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.orange.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('Công', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.orange.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('Phép', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.orange.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('Lễ', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.orange.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('HV', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 TableCell(
-                   child: Container(
-                     color: Colors.orange.shade100,
-                     padding: EdgeInsets.all(8.0),
-                     child: Center(child: Text('Đêm', style: TextStyle(fontWeight: FontWeight.bold))),
-                   ),
-                 ),
-                 ...days.map((day) => TableCell(
-                   child: Column(
-                     children: [
-                       Padding(
-                         padding: const EdgeInsets.all(4.0),
-                         child: Text(
-                           _formatNumberValue(_calculateDailyTotal(day)),
-                           style: TextStyle(
-                             fontWeight: FontWeight.bold,
-                             color: Colors.red,
-                             fontSize: 12,
-                           ),
-                         ),
-                       ),
-                       Padding(
-                         padding: const EdgeInsets.all(4.0),
-                         child: Text(
-                           day.toString(), 
-                           style: TextStyle(fontWeight: FontWeight.bold)
-                         ),
-                       ),
-                     ],
-                   ),
-                 )),
-               ],
-             ),
-             for (var empId in employees) ...[
-               TableRow(
-                 decoration: BoxDecoration(
-                   color: _staffColors[empId] ?? Colors.transparent,
-                 ),
-                 children: [
-                   TableCell(
-                     child: Padding(
-                       padding: const EdgeInsets.all(8.0),
-                       child: Column(
-                         crossAxisAlignment: CrossAxisAlignment.start,
-                         children: [
-                           Text(empId, style: TextStyle(fontWeight: FontWeight.bold)),
-                           Text(
-                             _staffNames[empId] ?? '',
-                             style: TextStyle(
-                               fontSize: 12,
-                               color: Colors.grey[600],
-                             ),
-                           ),
-                           Text(
-                             'Công chữ',
-                             style: TextStyle(
-                               fontSize: 10,
-                               color: Colors.grey[700],
-                               fontStyle: FontStyle.italic,
-                             ),
-                           ),
-                         ],
-                       ),
-                     ),
-                   ),
-                   ...(() {
-                     final summary = _calculateSummary(empId);
-                     return [
-                       TableCell(
-                         child: Container(
-                           color: Colors.blue.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(
-                             child: Text(
-                               summary['tuan1'] ?? '',
-                               style: TextStyle(fontWeight: FontWeight.bold),
-                             ),
-                           ),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.blue.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(
-                             child: Text(
-                               summary['p1'] ?? '',
-                               style: TextStyle(fontWeight: FontWeight.bold),
-                             ),
-                           ),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.blue.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(
-                             child: Text(
-                               summary['ht1'] ?? '',
-                               style: TextStyle(fontWeight: FontWeight.bold),
-                             ),
-                           ),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.green.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(
-                             child: Text(
-                               summary['tuan2'] ?? '',
-                               style: TextStyle(fontWeight: FontWeight.bold),
-                             ),
-                           ),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.green.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(
-                             child: Text(
-                               summary['p2'] ?? '',
-                               style: TextStyle(fontWeight: FontWeight.bold),
-                             ),
-                           ),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.green.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(
-                             child: Text(
-                               summary['ht2'] ?? '',
-                               style: TextStyle(fontWeight: FontWeight.bold),
-                             ),
-                           ),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.yellow.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(
-                             child: Text(
-                               summary['tuan3'] ?? '',
-                               style: TextStyle(fontWeight: FontWeight.bold),
-                             ),
-                           ),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.yellow.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(
-                             child: Text(
-                               summary['p3'] ?? '',
-                               style: TextStyle(fontWeight: FontWeight.bold),
-                             ),
-                           ),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.yellow.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(
-                             child: Text(
-                               summary['ht3'] ?? '',
-                               style: TextStyle(fontWeight: FontWeight.bold),
-                             ),
-                           ),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.red.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(
-                             child: Text(
-                               summary['tuan4'] ?? '',
-                               style: TextStyle(fontWeight: FontWeight.bold),
-                             ),
-                           ),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.red.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(
-                             child: Text(
-                               summary['p4'] ?? '',
-                               style: TextStyle(fontWeight: FontWeight.bold),
-                             ),
-                           ),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.red.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(
-                             child: Text(
-                               summary['ht4'] ?? '',
-                               style: TextStyle(fontWeight: FontWeight.bold),
-                             ),
-                           ),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.orange.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(
-                             child: Text(
-                               summary['cong'] ?? '',
-                               style: TextStyle(fontWeight: FontWeight.bold),
-                             ),
-                           ),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.orange.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(
-                             child: Text(
-                               summary['phep'] ?? '',
-                               style: TextStyle(fontWeight: FontWeight.bold),
-                             ),
-                           ),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.orange.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(
-                             child: Text(
-                               summary['le'] ?? '',
-                               style: TextStyle(fontWeight: FontWeight.bold),
-                             ),
-                           ),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.orange.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(
-                             child: Text(
-                               summary['hv'] ?? '',
-                               style: TextStyle(fontWeight: FontWeight.bold),
-                             ),
-                           ),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.orange.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(
-                             child: Text(
-                               summary['dem'] ?? '',
-                               style: TextStyle(fontWeight: FontWeight.bold),
-                             ),
-                           ),
-                         ),
-                       ),
-                     ];
-                   })(),
-                   ...days.map((day) {
-                     final value = _getAttendanceForDay(empId, day, 'CongThuongChu');
-                     final displayValue = (value == 'Ro') ? '' : value;
-                     
-                     return TableCell(
-                       child: Padding(
-                         padding: const EdgeInsets.all(8.0),
-                         child: Center(
-                           child: Text(
-                             displayValue ?? '',
-                             style: TextStyle(
-                               color: (displayValue != null && displayValue.isNotEmpty) 
-                                 ? Colors.blue 
-                                 : null,
-                               fontWeight: (displayValue != null && displayValue.isNotEmpty) 
-                                 ? FontWeight.bold 
-                                 : null,
-                             ),
-                           ),
-                         ),
-                       ),
-                     );
-                   }),
-                 ],
-               ),
-               TableRow(
-                 decoration: BoxDecoration(
-                   color: _staffColors[empId] != null 
-                     ? _staffColors[empId]!.withOpacity(0.7) 
-                     : Colors.grey.shade50,
-                 ),
-                 children: [
-                   TableCell(
-                     child: Padding(
-                       padding: const EdgeInsets.all(8.0),
-                       child: Text(
-                         'NG thường',
-                         style: TextStyle(
-                           fontSize: 10,
-                           color: Colors.grey[700],
-                           fontStyle: FontStyle.italic,
-                         ),
-                       ),
-                     ),
-                   ),
-                   ...(() {
-                     final summary = _calculateSummary(empId);
-                     
-                     return [
-                       TableCell(
-                         child: Container(
-                           color: Colors.blue.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(summary['ng_days1'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.blue.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Text(''),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.blue.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Text(''),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.green.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(summary['ng_days2'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.green.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Text(''),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.green.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Text(''),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.yellow.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(summary['ng_days3'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.yellow.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Text(''),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.yellow.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Text(''),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.red.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(summary['ng_days4'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.red.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Text(''),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.red.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Text(''),
-                         ),
-                       ),
-                       TableCell(
-                         child: Container(
-                           color: Colors.orange.shade50,
-                           padding: EdgeInsets.all(8.0),
-                           child: Center(child: Text(summary['ng_total'] ?? '', style: TextStyle(fontWeight: FontWeight.bold))),
-                         ),
-                       ),
-                       ...List.generate(4, (index) => 
-                         TableCell(
-                           child: Container(
-                             color: Colors.orange.shade50,
-                             padding: EdgeInsets.all(8.0),
-                             child: Text(''),
-                           ),
-                         )
-                       ),
-                     ];
-                   })(),
-                   ...days.map((day) {
-                     final value = _getAttendanceForDay(empId, day, 'NgoaiGioThuong');
-                     final displayValue = (value == '0') ? '' : value;
-                     
-                     return TableCell(
-                       child: Padding(
-                         padding: const EdgeInsets.all(8.0),
-                         child: Center(
-                           child: Text(
-                             displayValue ?? '',
-                             style: TextStyle(
-                               color: (displayValue != null && displayValue.isNotEmpty) 
-                                 ? Colors.blue 
-                                 : null,
-                               fontWeight: (displayValue != null && displayValue.isNotEmpty) 
-                                 ? FontWeight.bold 
-                                 : null,
-                             ),
-                           ),
-                         ),
-                       ),
-                     );
-                   }),
-                 ],
-               ),
-               if (empId != employees.last)
-                 TableRow(
-                   children: [
-                     TableCell(
-                       child: SizedBox(height: 4),
-                     ),
-                     ...List.generate(17, (index) => 
-                       TableCell(
-                         child: SizedBox(height: 4),
-                       )
-                     ),
-                     ...days.map((_) => TableCell(
-                       child: SizedBox(height: 4),)),
-                   ],
-                 ),
-             ],
-           ],
-         ),
-       ),
-       Divider(thickness: 1, height: 32),
-     ],
-   );
- }
-
+  final days = _getDaysInMonth();
+  final employees = _getEmployeesWithValueInColumn('CongThuongChu');
+  
+  if (employees.isEmpty) {
+    return SizedBox.shrink();
+  }
+  
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        child: Text(
+          'Chữ & Giờ thường',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.purple,
+          ),
+        ),
+      ),
+      
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+        child: Text(
+          'Sử dụng cử chỉ vuốt để di chuyển bảng',
+          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+        ),
+      ),
+      
+      Container(
+        height: 600,
+        child: StickyHeadersTable(
+          columnsLength: days.length + 18, // +1 for row type + 17 for summary columns
+          rowsLength: employees.length * 2, // 2 rows per employee
+          
+          // Column headers
+          columnsTitleBuilder: (i) {
+            if (i == 0) {
+              // Row type column
+              return Container(
+                height: 80,
+                width: 100,
+                color: Colors.purple.shade100,
+                alignment: Alignment.center,
+                child: Text(
+                  'Loại',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+              );
+            } else if (i >= 1 && i <= 17) {
+              // Summary columns
+              final summaryHeaders = [
+                'Tuần 1', 'P1', 'HT1', 'Tuần 2', 'P2', 'HT2', 'Tuần 3', 'P3', 'HT3',
+                'Tuần 4', 'P4', 'HT4', 'Công', 'Phép', 'Lễ', 'HV', 'Đêm'
+              ];
+              final headerIndex = i - 1;
+              
+              Color bgColor;
+              if (headerIndex < 3) bgColor = Colors.blue.shade100;
+              else if (headerIndex < 6) bgColor = Colors.green.shade100;
+              else if (headerIndex < 9) bgColor = Colors.yellow.shade100;
+              else if (headerIndex < 12) bgColor = Colors.red.shade100;
+              else bgColor = Colors.orange.shade100;
+              
+              return Container(
+                height: 80,
+                width: 60,
+                color: bgColor,
+                alignment: Alignment.center,
+                child: Text(
+                  summaryHeaders[headerIndex],
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+                ),
+              );
+            } else {
+              // Day columns
+              final dayIndex = i - 18;
+              return Container(
+                height: 80,
+                color: Colors.grey.shade200,
+                alignment: Alignment.center,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      _formatNumberValue(_calculateDailyTotal(days[dayIndex])),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red,
+                        fontSize: 12,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      days[dayIndex].toString(),
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                  ],
+                ),
+              );
+            }
+          },
+          
+          // Row headers (employee info only) - Much wider
+          rowsTitleBuilder: (i) {
+            final employeeIndex = i ~/ 2;
+            final rowType = i % 2;
+            final empId = employees[employeeIndex];
+            
+            if (rowType == 0) {
+              // First row - Employee info
+              return Container(
+                width: 200, // Much wider for staff names
+                color: _staffColors[empId] ?? Colors.grey.shade100,
+                padding: EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      empId,
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                    Text(
+                      _staffNames[empId] ?? '',
+                      style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                      maxLines: 3, // Allow more lines for long names
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              );
+            } else {
+              // Second row - Empty but with same background
+              return Container(
+                width: 200, // Much wider
+                color: (_staffColors[empId] ?? Colors.grey.shade100).withOpacity(0.7),
+                padding: EdgeInsets.all(8),
+              );
+            }
+          },
+          
+          // Content cells
+          contentCellBuilder: (i, j) {
+            final employeeIndex = j ~/ 2;
+            final rowType = j % 2;
+            final empId = employees[employeeIndex];
+            
+            if (i == 0) {
+              // First column - Row type labels
+              String rowLabel;
+              Color textColor;
+              
+              if (rowType == 0) {
+                rowLabel = 'Công chữ';
+                textColor = Colors.blue;
+              } else {
+                rowLabel = 'NG thường';
+                textColor = Colors.orange;
+              }
+              
+              return Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  color: Colors.grey.shade50,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  rowLabel,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: textColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              );
+            } else if (i >= 1 && i <= 17) {
+              // Summary columns
+              final summary = _calculateSummary(empId);
+              final summaryKeys = [
+                'tuan1', 'p1', 'ht1', 'tuan2', 'p2', 'ht2', 'tuan3', 'p3', 'ht3',
+                'tuan4', 'p4', 'ht4', 'cong', 'phep', 'le', 'hv', 'dem'
+              ];
+              final summaryNGKeys = [
+                'ng_days1', '', '', 'ng_days2', '', '', 'ng_days3', '', '',
+                'ng_days4', '', '', 'ng_total', '', '', '', ''
+              ];
+              
+              final keyIndex = i - 1;
+              String value = '';
+              
+              if (rowType == 0) {
+                // Công chữ row
+                value = summary[summaryKeys[keyIndex]] ?? '';
+              } else {
+                // NG thường row
+                value = summary[summaryNGKeys[keyIndex]] ?? '';
+              }
+              
+              Color bgColor;
+              if (keyIndex < 3) bgColor = Colors.blue.shade50;
+              else if (keyIndex < 6) bgColor = Colors.green.shade50;
+              else if (keyIndex < 9) bgColor = Colors.yellow.shade50;
+              else if (keyIndex < 12) bgColor = Colors.red.shade50;
+              else bgColor = Colors.orange.shade50;
+              
+              return Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  color: bgColor,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              );
+            } else {
+              // Data columns
+              final dayIndex = i - 18;
+              final day = days[dayIndex];
+              
+              String value;
+              Color textColor = Colors.black;
+              
+              if (rowType == 0) {
+                // Công chữ row
+                value = _getAttendanceForDay(empId, day, 'CongThuongChu') ?? 'Ro';
+                value = (value == 'Ro') ? '' : value;
+                textColor = Colors.blue;
+              } else {
+                // NG thường row
+                value = _getAttendanceForDay(empId, day, 'NgoaiGioThuong') ?? '0';
+                value = (value == '0') ? '' : value;
+                textColor = Colors.orange;
+              }
+              
+              return Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  color: _staffColors[empId]?.withOpacity(0.1) ?? Colors.white,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    color: value.isNotEmpty ? textColor : Colors.grey,
+                    fontWeight: value.isNotEmpty ? FontWeight.bold : FontWeight.normal,
+                    fontSize: 11,
+                  ),
+                ),
+              );
+            }
+          },
+          
+          // Legend cell
+          legendCell: Container(
+            color: Colors.purple,
+            alignment: Alignment.center,
+            child: Text(
+              'Nhân viên',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          
+          // Cell dimensions
+          cellDimensions: CellDimensions.uniform(
+            width: 50,
+            height: 40,
+          ),
+        ),
+      ),
+      
+      Divider(thickness: 1, height: 32),
+    ],
+  );
+}
  Widget _buildCombinedView() {
    return SingleChildScrollView(
      child: Column(
