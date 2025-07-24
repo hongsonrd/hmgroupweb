@@ -11,7 +11,9 @@ import 'db_helper.dart';
 import 'table_models.dart';
 import 'package:intl/intl.dart';
 import 'projecttimeline3file.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:math';
+import 'projecttimeline3report.dart';
 class ProjectTimeline3Single extends StatefulWidget {
   final String username;
 
@@ -27,7 +29,11 @@ class _ProjectTimeline3SingleState extends State<ProjectTimeline3Single> {
   bool _isDownloading = false;
   final dbHelper = DBHelper();
   final String baseUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app';
-  
+    Map<String, ReportConfig> _savedConfigs = {};
+  final String _configKey = 'report_configs';
+    Map<String, Map<String, double>> _dailyRatings = {};
+      final String _ratingsKey = 'daily_ratings';
+
   // Monthly period selection
   DateTime _selectedMonth = DateTime.now();
   List<DateTime> _availableMonths = [];
@@ -47,6 +53,7 @@ class _ProjectTimeline3SingleState extends State<ProjectTimeline3Single> {
     super.initState();
     _initializeData();
     _projectSearchController.addListener(_filterProjects);
+    _loadSavedConfigs();
   }
 
   @override
@@ -54,7 +61,84 @@ class _ProjectTimeline3SingleState extends State<ProjectTimeline3Single> {
     _projectSearchController.dispose();
     super.dispose();
   }
-
+Future<void> _loadSavedConfigs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Load configurations
+      final configsJson = prefs.getString(_configKey);
+      if (configsJson != null) {
+        final Map<String, dynamic> configsMap = json.decode(configsJson);
+        _savedConfigs = configsMap.map((key, value) => MapEntry(
+          key,
+          ReportConfig.fromJson(value),
+        ));
+      }
+      
+      // Load daily ratings
+      final ratingsJson = prefs.getString(_ratingsKey);
+      if (ratingsJson != null) {
+        final Map<String, dynamic> ratingsMap = json.decode(ratingsJson);
+        _dailyRatings = ratingsMap.map((key, value) => MapEntry(
+          key,
+          Map<String, double>.from(value),
+        ));
+      }
+    } catch (e) {
+      print('Error loading saved configs: $e');
+    }
+  }
+  Future<void> _saveConfig(ReportConfig config) async {
+    if (_selectedProject == null) return;
+    
+    try {
+      _savedConfigs[_selectedProject!] = config;
+      final prefs = await SharedPreferences.getInstance();
+      final configsJson = json.encode(_savedConfigs.map((key, value) => MapEntry(key, value.toJson())));
+      await prefs.setString(_configKey, configsJson);
+    } catch (e) {
+      print('Error saving config: $e');
+    }
+  }
+   Future<void> _saveDailyRatings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final ratingsJson = json.encode(_dailyRatings);
+      await prefs.setString(_ratingsKey, ratingsJson);
+    } catch (e) {
+      print('Error saving daily ratings: $e');
+    }
+  }
+   Map<String, double> _getDailyRatings(List<String> categoryNames) {
+    if (_selectedProject == null) return {};
+    
+    final today = DateTime.now();
+    final dateKey = '${today.year}-${today.month}-${today.day}';
+    final projectDateKey = '${_selectedProject!}_$dateKey';
+    
+    // Check if we already have ratings for today
+    if (_dailyRatings.containsKey(projectDateKey)) {
+      return _dailyRatings[projectDateKey]!;
+    }
+    
+    // Generate new daily ratings
+    final projectDateSeed = projectDateKey.hashCode;
+    final random = Random(projectDateSeed);
+    
+    Map<String, double> todayRatings = {};
+    for (String categoryName in categoryNames) {
+      final baseRating = 75.0;
+      final range = 25.0;
+      final dailyRating = baseRating + (random.nextDouble() * range);
+      todayRatings[categoryName] = double.parse(dailyRating.toStringAsFixed(1));
+    }
+    
+    // Save the generated ratings
+    _dailyRatings[projectDateKey] = todayRatings;
+    _saveDailyRatings();
+    
+    return todayRatings;
+  }
   // Download image functionality
   Future<void> _downloadImage(String imageUrl, String title) async {
     if (imageUrl.isEmpty) {
@@ -1205,21 +1289,48 @@ DateTime _getEndOfWeek(DateTime date) {
   return date.add(Duration(days: daysToSunday));
 }
 
-Future<ReportConfig?> _showReportConfigDialog() async {
-  // First, get unique GiaiPhap values from database
-  List<String> giaiPhapCategories = await _getUniqueGiaiPhapValues();
-  
-  return showDialog<ReportConfig>(
-    context: context,
-    barrierDismissible: false,
-    builder: (BuildContext context) {
-      return ReportConfigDialog(
-        projectName: _selectedProject!,
-        giaiPhapCategories: giaiPhapCategories,
-      );
-    },
-  );
-}
+  Future<ReportConfig?> _showReportConfigDialog() async {
+    // First, get unique GiaiPhap values from database
+    List<String> giaiPhapCategories = await _getUniqueGiaiPhapValues();
+    
+    // Create all category names (GiaiPhap + fixed categories)
+    List<String> allCategoryNames = [
+      ...giaiPhapCategories,
+      'Máy móc, trang thiết bị, dụng cụ làm việc',
+      'Tác phong làm việc của nhân viên',
+    ];
+    
+    // Get daily ratings for all categories
+    Map<String, double> dailyRatings = _getDailyRatings(allCategoryNames);
+    
+    // Get saved config for this project (without ratings)
+    ReportConfig? savedConfig = _savedConfigs[_selectedProject];
+    
+    return showDialog<ReportConfig>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return ReportConfigDialog(
+          projectName: _selectedProject!,
+          giaiPhapCategories: giaiPhapCategories,
+          savedConfig: savedConfig, 
+          dailyRatings: dailyRatings, 
+          onConfigSave: _saveConfig, 
+          onRatingsUpdate: _updateDailyRatings, 
+        );
+      },
+    );
+  }
+void _updateDailyRatings(Map<String, double> newRatings) {
+    if (_selectedProject == null) return;
+    
+    final today = DateTime.now();
+    final dateKey = '${today.year}-${today.month}-${today.day}';
+    final projectDateKey = '${_selectedProject!}_$dateKey';
+    
+    _dailyRatings[projectDateKey] = newRatings;
+    _saveDailyRatings();
+  }
 
 Future<List<String>> _getUniqueGiaiPhapValues() async {
   if (_selectedProject == null) return [];
@@ -1246,93 +1357,110 @@ Future<List<String>> _getUniqueGiaiPhapValues() async {
     return [];
   }
 }
-
 Future<void> _showReportSuccessDialog(String filePath) async {
   final fileName = filePath.split('/').last;
   final folderPath = filePath.substring(0, filePath.lastIndexOf('/'));
   
   return showDialog(
     context: context,
+    barrierDismissible: false,
     builder: (BuildContext context) {
-      return AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.picture_as_pdf, color: Colors.green),
-            SizedBox(width: 8),
-            Text('Tạo báo cáo thành công'),
+      return WillPopScope(
+        onWillPop: () async => false,
+        child: AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.picture_as_pdf, color: Colors.green),
+              SizedBox(width: 8),
+              Text('Tạo báo cáo thành công'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Báo cáo PDF đã được tạo:'),
+              SizedBox(height: 8),
+              Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: SelectableText(
+                  fileName,
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              SizedBox(height: 8),
+              Text('Dự án: $_selectedProject'),
+              Text('Tháng: ${_selectedMonth.month.toString().padLeft(2, '0')}-${_selectedMonth.year}'),
+              SizedBox(height: 8),
+              Text('Đường dẫn thư mục:'),
+              SizedBox(height: 4),
+              Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: SelectableText(
+                  folderPath,
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Đóng'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                await ProjectTimeline3FileGenerator.openFile(filePath);
+              },
+              icon: Icon(Icons.open_in_new, size: 16),
+              label: Text('Mở báo cáo'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                await _openFolder(folderPath);
+              },
+              icon: Icon(Icons.folder_open, size: 16),
+              label: Text('Mở thư mục'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                // Import the new file
+                await ProjectTimeline3ReportSender.sendReportToCompany(
+                  context: context,
+                  username: widget.username,
+                  projectName: _selectedProject!,
+                  filePath: filePath,
+                );
+              },
+              icon: Icon(Icons.cloud_upload, size: 16),
+              label: Text('Gửi về công ty'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+              ),
+            ),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Báo cáo PDF đã được tạo:'),
-            SizedBox(height: 8),
-            Container(
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: SelectableText(
-                fileName,
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-            SizedBox(height: 8),
-            Text('Dự án: $_selectedProject'),
-            Text('Tháng: ${_selectedMonth.month.toString().padLeft(2, '0')}-${_selectedMonth.year}'),
-            SizedBox(height: 8),
-            Text('Đường dẫn thư mục:'),
-            SizedBox(height: 4),
-            Container(
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: SelectableText(
-                folderPath,
-                style: TextStyle(fontSize: 12),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text('Đóng'),
-          ),
-          ElevatedButton.icon(
-            onPressed: () async {
-              Navigator.of(context).pop();
-              await ProjectTimeline3FileGenerator.openFile(filePath);
-            },
-            icon: Icon(Icons.open_in_new, size: 16),
-            label: Text('Mở báo cáo'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-            ),
-          ),
-          ElevatedButton.icon(
-            onPressed: () async {
-              Navigator.of(context).pop();
-              await _openFolder(folderPath);
-            },
-            icon: Icon(Icons.folder_open, size: 16),
-            label: Text('Mở thư mục'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-            ),
-          ),
-        ],
       );
     },
   );
 }
-
   Widget _buildSyncAndReportButtons() {
   return Row(
     children: [
@@ -2411,17 +2539,24 @@ class CategoryRating {
 class ReportConfigDialog extends StatefulWidget {
   final String projectName;
   final List<String> giaiPhapCategories;
+  final ReportConfig? savedConfig;
+  final Map<String, double> dailyRatings; 
+  final Function(ReportConfig) onConfigSave;
+  final Function(Map<String, double>) onRatingsUpdate;
 
   const ReportConfigDialog({
     Key? key,
     required this.projectName,
     required this.giaiPhapCategories,
+    this.savedConfig,
+    required this.dailyRatings,
+    required this.onConfigSave,
+    required this.onRatingsUpdate, 
   }) : super(key: key);
 
   @override
   _ReportConfigDialogState createState() => _ReportConfigDialogState();
 }
-
 class _ReportConfigDialogState extends State<ReportConfigDialog> {
   final _formKey = GlobalKey<FormState>();
   final _improvementController = TextEditingController();
@@ -2445,6 +2580,7 @@ class _ReportConfigDialogState extends State<ReportConfigDialog> {
   void initState() {
     super.initState();
     _initializeCategoryRatings();
+    _loadSavedConfig();
   }
 
   @override
@@ -2453,7 +2589,32 @@ class _ReportConfigDialogState extends State<ReportConfigDialog> {
     _customAudienceController.dispose();
     super.dispose();
   }
-
+void _loadSavedConfig() {
+    // Load daily ratings (always apply these first)
+    for (int i = 0; i < _categoryRatings.length; i++) {
+      final category = _categoryRatings[i];
+      if (widget.dailyRatings.containsKey(category.name)) {
+        _categoryRatings[i].rating = widget.dailyRatings[category.name]!;
+      }
+    }
+    
+    // Load saved config if exists (for audience and improvement suggestions only)
+    if (widget.savedConfig != null) {
+      final config = widget.savedConfig!;
+      
+      // Load audience
+      if (_predefinedAudiences.contains(config.audience)) {
+        _selectedAudience = config.audience;
+        _isCustomAudience = false;
+      } else {
+        _isCustomAudience = true;
+        _customAudienceController.text = config.audience;
+      }
+      
+      // Load improvement suggestions
+      _improvementController.text = config.improvementSuggestions;
+    }
+  }
   void _initializeCategoryRatings() {
     _categoryRatings = [
       // Add GiaiPhap categories from database
@@ -2463,14 +2624,19 @@ class _ReportConfigDialogState extends State<ReportConfigDialog> {
       CategoryRating(name: 'Tác phong làm việc của nhân viên'),
     ];
   }
-
-  void _updateRating(int index, double value) {
+void _updateRating(int index, double value) {
     setState(() {
       _categoryRatings[index].rating = value;
     });
+    
+    // Update daily ratings when user changes them
+    final updatedRatings = <String, double>{};
+    for (final category in _categoryRatings) {
+      updatedRatings[category.name] = category.rating;
+    }
+    widget.onRatingsUpdate(updatedRatings);
   }
-
-  void _submitConfiguration() {
+void _submitConfiguration() {
     if (_formKey.currentState!.validate()) {
       final audience = _isCustomAudience 
           ? _customAudienceController.text.trim()
@@ -2487,10 +2653,12 @@ class _ReportConfigDialogState extends State<ReportConfigDialog> {
         improvementSuggestions: _improvementController.text.trim(),
       );
       
+      // Save the configuration
+      widget.onConfigSave(config);
+      
       Navigator.of(context).pop(config);
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Dialog(

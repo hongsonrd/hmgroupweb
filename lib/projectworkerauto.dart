@@ -910,8 +910,8 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
           
           // Cell dimensions
           cellDimensions: CellDimensions.uniform(
-            width: 50,
-            height: 50,
+            width: 85,
+            height: 40,
           ),
         ),
       ),
@@ -1222,7 +1222,7 @@ class _ProjectWorkerAutoState extends State<ProjectWorkerAuto> {
           
           // Cell dimensions
           cellDimensions: CellDimensions.uniform(
-            width: 50,
+            width: 85,
             height: 40,
           ),
         ),

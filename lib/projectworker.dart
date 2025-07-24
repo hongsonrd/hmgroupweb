@@ -1708,8 +1708,8 @@ Widget _buildStickyTable(String columnType) {
         ),
       ),
       cellDimensions: CellDimensions.uniform(
-        width: 65,
-        height: 55,
+        width: 85,
+        height: 40,
       ),
     );
   } else {
@@ -1745,13 +1745,13 @@ Widget _buildStickyTable(String columnType) {
                 style: TextStyle(
                   color: Colors.black,
                   fontWeight: FontWeight.bold,
-                  fontSize: 9,
+                  fontSize: 10,
                 ),
               ),
               Text(
                 _staffNames[employees[i]] ?? '',
                 style: TextStyle(
-                  fontSize: 8,
+                  fontSize: 9,
                   color: Colors.black,
                 ),
                 maxLines: 2,
@@ -1775,8 +1775,8 @@ Widget _buildStickyTable(String columnType) {
         ),
       ),
       cellDimensions: CellDimensions.uniform(
-        width: 45,
-        height: 60,
+        width: 85,
+        height: 40,
       ),
     );
   }
