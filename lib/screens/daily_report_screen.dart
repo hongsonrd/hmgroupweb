@@ -9,6 +9,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'dart:math' as Math;
+import 'package:path/path.dart' as path;
 
 class DailyReportScreen extends StatefulWidget {
 final String reportUrl;
@@ -82,6 +83,11 @@ Widget build(BuildContext context) {
             javaScriptEnabled: true,
             domStorageEnabled: true,
             databaseEnabled: true,
+            clearCache: false,
+    cacheEnabled: true,
+    userAgent: Platform.isWindows 
+        ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        : null,
           ),
           onWebViewCreated: (controller) {
             webViewController = controller;
@@ -664,23 +670,34 @@ void _updateProgressDialog(int sectionNumber) {
 }
 
 Future<void> _savePdf(pw.Document pdf) async {
-  final directory = await getApplicationDocumentsDirectory();
-  final reportFolder = Directory('${directory.path}/BaoCao_HTML');
-  
-  if (!await reportFolder.exists()) {
-    await reportFolder.create(recursive: true);
+  try {
+    final directory = await getApplicationDocumentsDirectory();
+    final reportFolder = Directory(path.join(directory.path, 'BaoCao_HTML'));
+    
+    if (!await reportFolder.exists()) {
+      await reportFolder.create(recursive: true);
+    }
+
+    final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    final sanitizedTitle = widget.reportTitle
+        .replaceAll(RegExp(r'[<>:"/\\|?*]'), '')
+        .replaceAll(RegExp(r'\s+'), '_')
+        .trim();
+    
+    final fileName = 'BaoCao_${sanitizedTitle}_$timestamp.pdf';
+    final filePath = path.join(reportFolder.path, fileName);
+
+    final file = File(filePath);
+    final pdfBytes = await pdf.save();
+    await file.writeAsBytes(pdfBytes);
+
+    Navigator.pop(context);
+    _showSuccessDialog(filePath, fileName, reportFolder.path);
+  } catch (e) {
+    Navigator.pop(context);
+    _showErrorDialog('Lỗi khi lưu PDF: $e');
+    print('Save PDF Error: $e');
   }
-
-  final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-  final sanitizedTitle = widget.reportTitle.replaceAll(RegExp(r'[^\w\s-]'), '');
-  final fileName = 'BaoCao_${sanitizedTitle}_$timestamp.pdf';
-  final filePath = '${reportFolder.path}/$fileName';
-
-  final file = File(filePath);
-  await file.writeAsBytes(await pdf.save());
-
-  Navigator.pop(context);
-  _showSuccessDialog(filePath, fileName, reportFolder.path);
 }
 
 void _showSuccessDialog(String filePath, String fileName, String folderPath) {
@@ -794,7 +811,8 @@ void _showErrorDialog(String message) {
 Future<void> _openFile(String filePath) async {
   try {
     if (Platform.isWindows) {
-      await Process.run('start', ['', filePath], runInShell: true);
+      // Use rundll32 for better compatibility
+      await Process.run('rundll32', ['url.dll,FileProtocolHandler', filePath]);
     } else if (Platform.isMacOS) {
       await Process.run('open', [filePath]);
     } else if (Platform.isLinux) {
@@ -809,7 +827,7 @@ Future<void> _openFile(String filePath) async {
 Future<void> _openFolder(String folderPath) async {
   try {
     if (Platform.isWindows) {
-      await Process.run('explorer', [folderPath], runInShell: true);
+      await Process.run('explorer', ['/select,', folderPath]);
     } else if (Platform.isMacOS) {
       await Process.run('open', [folderPath]);
     } else if (Platform.isLinux) {

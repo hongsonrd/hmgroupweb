@@ -15,11 +15,12 @@ class ReportConfig {
   final String audience;
   final Map<String, double> categoryRatings;
   final String improvementSuggestions;
-
+  final String? customProjectName;
   ReportConfig({
     required this.audience,
     required this.categoryRatings,
     required this.improvementSuggestions,
+    this.customProjectName,
   });
 
   // Add JSON serialization methods
@@ -28,6 +29,7 @@ class ReportConfig {
       'audience': audience,
       'categoryRatings': categoryRatings,
       'improvementSuggestions': improvementSuggestions,
+      'customProjectName': customProjectName,
     };
   }
 
@@ -36,6 +38,7 @@ class ReportConfig {
       audience: json['audience'] ?? 'Ban quản lý',
       categoryRatings: Map<String, double>.from(json['categoryRatings'] ?? {}),
       improvementSuggestions: json['improvementSuggestions'] ?? '',
+      customProjectName: json['customProjectName'], 
     );
   }
 }

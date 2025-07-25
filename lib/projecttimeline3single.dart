@@ -1180,8 +1180,11 @@ Future<void> _generateReport() async {
   });
 
   try {
+    final reportProjectName = config.customProjectName?.isNotEmpty == true 
+        ? config.customProjectName! 
+        : _selectedProject!;
     final filePath = await ProjectTimeline3FileGenerator.generateReport(
-      projectName: _selectedProject!,
+      projectName: reportProjectName,
       selectedMonth: _selectedMonth,
       username: widget.username,
       imageCountData: _imageCountData,
@@ -2561,10 +2564,10 @@ class _ReportConfigDialogState extends State<ReportConfigDialog> {
   final _formKey = GlobalKey<FormState>();
   final _improvementController = TextEditingController();
   final _customAudienceController = TextEditingController();
-  
+  final _projectNameController = TextEditingController();
   String _selectedAudience = 'Ban quản lý';
   bool _isCustomAudience = false;
-  
+  bool _isCustomProjectName = false; 
   List<CategoryRating> _categoryRatings = [];
   
   final List<String> _predefinedAudiences = [
@@ -2579,6 +2582,7 @@ class _ReportConfigDialogState extends State<ReportConfigDialog> {
   @override
   void initState() {
     super.initState();
+    _projectNameController.text = widget.projectName;
     _initializeCategoryRatings();
     _loadSavedConfig();
   }
@@ -2587,34 +2591,41 @@ class _ReportConfigDialogState extends State<ReportConfigDialog> {
   void dispose() {
     _improvementController.dispose();
     _customAudienceController.dispose();
+      _projectNameController.dispose();
     super.dispose();
   }
 void _loadSavedConfig() {
-    // Load daily ratings (always apply these first)
-    for (int i = 0; i < _categoryRatings.length; i++) {
-      final category = _categoryRatings[i];
-      if (widget.dailyRatings.containsKey(category.name)) {
-        _categoryRatings[i].rating = widget.dailyRatings[category.name]!;
-      }
-    }
-    
-    // Load saved config if exists (for audience and improvement suggestions only)
-    if (widget.savedConfig != null) {
-      final config = widget.savedConfig!;
-      
-      // Load audience
-      if (_predefinedAudiences.contains(config.audience)) {
-        _selectedAudience = config.audience;
-        _isCustomAudience = false;
-      } else {
-        _isCustomAudience = true;
-        _customAudienceController.text = config.audience;
-      }
-      
-      // Load improvement suggestions
-      _improvementController.text = config.improvementSuggestions;
+  // Load daily ratings (always apply these first)
+  for (int i = 0; i < _categoryRatings.length; i++) {
+    final category = _categoryRatings[i];
+    if (widget.dailyRatings.containsKey(category.name)) {
+      _categoryRatings[i].rating = widget.dailyRatings[category.name]!;
     }
   }
+  
+  // Load saved config if exists (for audience and improvement suggestions only)
+  if (widget.savedConfig != null) {
+    final config = widget.savedConfig!;
+    
+    // Load custom project name
+    if (config.customProjectName != null && config.customProjectName!.isNotEmpty) {
+      _isCustomProjectName = true;
+      _projectNameController.text = config.customProjectName!;
+    }
+    
+    // Load audience
+    if (_predefinedAudiences.contains(config.audience)) {
+      _selectedAudience = config.audience;
+      _isCustomAudience = false;
+    } else {
+      _isCustomAudience = true;
+      _customAudienceController.text = config.audience;
+    }
+    
+    // Load improvement suggestions
+    _improvementController.text = config.improvementSuggestions;
+  }
+}
   void _initializeCategoryRatings() {
     _categoryRatings = [
       // Add GiaiPhap categories from database
@@ -2637,28 +2648,31 @@ void _updateRating(int index, double value) {
     widget.onRatingsUpdate(updatedRatings);
   }
 void _submitConfiguration() {
-    if (_formKey.currentState!.validate()) {
-      final audience = _isCustomAudience 
-          ? _customAudienceController.text.trim()
-          : _selectedAudience;
-      
-      final categoryRatings = <String, double>{};
-      for (final category in _categoryRatings) {
-        categoryRatings[category.name] = category.rating;
-      }
-      
-      final config = ReportConfig(
-        audience: audience,
-        categoryRatings: categoryRatings,
-        improvementSuggestions: _improvementController.text.trim(),
-      );
-      
-      // Save the configuration
-      widget.onConfigSave(config);
-      
-      Navigator.of(context).pop(config);
+  if (_formKey.currentState!.validate()) {
+    final audience = _isCustomAudience 
+        ? _customAudienceController.text.trim()
+        : _selectedAudience;
+    
+    final customProjectName = _isCustomProjectName 
+        ? _projectNameController.text.trim()
+        : null;
+    
+    final categoryRatings = <String, double>{};
+    for (final category in _categoryRatings) {
+      categoryRatings[category.name] = category.rating;
     }
+    
+    final config = ReportConfig(
+      audience: audience,
+      categoryRatings: categoryRatings,
+      improvementSuggestions: _improvementController.text.trim(),
+      customProjectName: customProjectName,
+    );
+    
+    widget.onConfigSave(config);
+    Navigator.of(context).pop(config);
   }
+}
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -2686,6 +2700,72 @@ void _submitConfiguration() {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        _buildSectionTitle('Tên dự án trong báo cáo', Icons.business),
+                      SizedBox(height: 12),
+                      Container(
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey[300]!),
+                        ),
+                        child: Column(
+                          children: [
+                            RadioListTile<bool>(
+                              title: Text('Sử dụng tên dự án hiện tại'),
+                              subtitle: Text(widget.projectName, style: TextStyle(color: Colors.grey[600])),
+                              value: false,
+                              groupValue: _isCustomProjectName,
+                              onChanged: (value) {
+                                setState(() {
+                                  _isCustomProjectName = false;
+                                  _projectNameController.text = widget.projectName;
+                                });
+                              },
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                            
+                            RadioListTile<bool>(
+                              title: Text('Tùy chỉnh tên dự án'),
+                              value: true,
+                              groupValue: _isCustomProjectName,
+                              onChanged: (value) {
+                                setState(() {
+                                  _isCustomProjectName = value!;
+                                });
+                              },
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                            
+                            if (_isCustomProjectName) ...[
+                              SizedBox(height: 8),
+                              TextFormField(
+                                controller: _projectNameController,
+                                decoration: InputDecoration(
+                                  hintText: 'Nhập tên dự án cho báo cáo...',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
+                                ),
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'Vui lòng nhập tên dự án';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+
+                      SizedBox(height: 24),
                         Text(
                           'Cấu hình báo cáo',
                           style: TextStyle(
