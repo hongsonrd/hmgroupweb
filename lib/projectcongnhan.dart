@@ -14,6 +14,7 @@ import 'db_helper.dart';
 import 'table_models.dart';
 import 'projectcongnhanexcel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'projectcongnhanllv.dart';
 
 class ProjectCongNhan extends StatefulWidget {
   final String username;
@@ -31,7 +32,10 @@ class _ProjectCongNhanState extends State<ProjectCongNhan> {
   final dbHelper = DBHelper();
   final baseUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app';
   String _syncStatus = '';
-  
+  List<TaskScheduleModel> _taskSchedules = [];
+bool _hasTaskSchedulesSynced = false;
+List<QRLookupModel> _qrLookups = [];
+
   // Sync configuration
   Timer? _syncTimer;
   final Duration _syncInterval = Duration(minutes: 30); 
@@ -68,13 +72,46 @@ class _ProjectCongNhanState extends State<ProjectCongNhan> {
   }
 
   Future<void> _initializeData() async {
-    await _checkAndSync();
-    await _loadAllData();
-    _processBoPhanCorrection(); // Process BoPhan correction
-    _updateFilterOptions();
-    _autoSelectFilters(); // Auto-select after loading data
-    _startSyncTimer();
+  await _checkAndSync();
+  await _loadAllData();
+  _processBoPhanCorrection();
+  _updateFilterOptions();
+  _autoSelectFilters();
+  _startSyncTimer();
+  
+  // Check task schedules sync status
+  _hasTaskSchedulesSynced = await TaskScheduleManager.hasEverSynced();
+  if (_hasTaskSchedulesSynced) {
+    _taskSchedules = await TaskScheduleManager.getTaskSchedules();
+    _qrLookups = await TaskScheduleManager.getQRLookups();
   }
+  setState(() {});
+}
+Future<void> _syncTaskSchedules() async {
+  if (_isLoading) return;
+
+  setState(() {
+    _isLoading = true;
+    _syncStatus = 'Đang đồng bộ lịch làm việc...';
+  });
+
+  try {
+    await TaskScheduleManager.syncTaskSchedules(baseUrl);
+    _taskSchedules = await TaskScheduleManager.getTaskSchedules();
+    _qrLookups = await TaskScheduleManager.getQRLookups();
+    _hasTaskSchedulesSynced = true;
+    
+    _showSuccess('Đồng bộ lịch làm việc thành công - ${_taskSchedules.length} nhiệm vụ, ${_qrLookups.length} ánh xạ');
+  } catch (e) {
+    print('Error syncing task schedules: $e');
+    _showError('Không thể đồng bộ lịch làm việc: ${e.toString()}');
+  } finally {
+    setState(() {
+      _isLoading = false;
+      _syncStatus = '';
+    });
+  }
+}
 
   void _startSyncTimer() {
     _syncTimer?.cancel();
@@ -591,34 +628,77 @@ Future<void> _syncStaffBio() async {
       _chartDates = displayDates; // This ensures unique dates for x-axis labels
     });
   }
+void _showWorkerDetails(WorkerSummary worker) {
+  if (!worker.isAvailable) return;
 
-  void _showWorkerDetails(WorkerSummary worker) {
-    if (!worker.isAvailable) return;
+  // Get all records for this worker on selected date (using processed data)
+  final workerRecords = _processedData.where((record) => 
+    record.boPhan == _selectedProject &&
+    DateFormat('yyyy-MM-dd').format(record.ngay) == _selectedDate &&
+    record.nguoiDung == worker.name
+  ).toList();
 
-    // Get all records for this worker on selected date (using processed data)
-    final workerRecords = _processedData.where((record) => 
-      record.boPhan == _selectedProject &&
-      DateFormat('yyyy-MM-dd').format(record.ngay) == _selectedDate &&
-      record.nguoiDung == worker.name
-    ).toList();
+  // Sort by time (chronological order)
+  workerRecords.sort((a, b) {
+    final timeA = a.gio ?? '';
+    final timeB = b.gio ?? '';
+    return timeA.compareTo(timeB);
+  });
 
-    // Sort by time (chronological order)
-    workerRecords.sort((a, b) {
-      final timeA = a.gio ?? '';
-      final timeB = b.gio ?? '';
-      return timeA.compareTo(timeB);
-    });
-
-    showDialog(
-      context: context,
-      builder: (context) => WorkerDetailsDialog(
-        worker: worker,
-        records: workerRecords,
-        selectedDate: _selectedDate!,
-      ),
-    );
+  showDialog(
+    context: context,
+    builder: (context) => WorkerDetailsDialog(
+      worker: worker,
+      records: workerRecords,
+      selectedDate: _selectedDate!,
+      taskSchedules: _taskSchedules,
+      selectedProject: _selectedProject!,
+      qrLookups: _qrLookups, 
+    ),
+  );
+}
+Widget _buildTaskScheduleInfo() {
+  if (_selectedProject == null || _taskSchedules.isEmpty || _selectedDate == null) {
+    return SizedBox.shrink();
   }
 
+  final selectedDateTime = DateTime.parse(_selectedDate!);
+  final dayTasks = TaskScheduleManager.getTasksForProjectAndDate(
+    _taskSchedules,
+    _selectedProject!,
+    selectedDateTime,
+    _qrLookups, // Add missing QR lookups parameter
+  );
+
+  if (dayTasks.isEmpty) return SizedBox.shrink();
+
+  // Group tasks by position using QR lookup
+  final tasksByPosition = <String, List<TaskScheduleModel>>{};
+  for (final task in dayTasks) {
+    final userMapping = TaskScheduleManager.getUserProjectAndPosition(task.username, _qrLookups);
+    final positionName = userMapping['positionName'];
+    if (positionName?.isNotEmpty == true) {
+      tasksByPosition.putIfAbsent(positionName!, () => []).add(task);
+    }
+  }
+
+  return Container(
+    margin: EdgeInsets.all(16),
+    padding: EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(8),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.grey.withOpacity(0.1),
+          spreadRadius: 1,
+          blurRadius: 3,
+          offset: Offset(0, 2),
+        ),
+      ],
+    ),
+  );
+}
   Future<void> _showFullImage(String imageUrl) async {
     showDialog(
       context: context,
@@ -692,12 +772,27 @@ Future<void> _syncStaffBio() async {
           ),
         ),
         Spacer(),
+        // Task schedule sync button (only show if never synced)
+        //if (!_hasTaskSchedulesSynced && !_isLoading)
+        if (!_isLoading)
+          ElevatedButton.icon(
+            onPressed: () => _syncTaskSchedules(),
+            icon: Icon(Icons.schedule, size: 18),
+            label: Text('Đồng bộ LLV'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.purple[600],
+              foregroundColor: Colors.white,
+              elevation: 2,
+            ),
+          ),
+        if (!_hasTaskSchedulesSynced && !_isLoading)
+          SizedBox(width: 12),
         // Staff bio sync button
         if (!_isLoading)
           ElevatedButton.icon(
             onPressed: () => _syncStaffBio(),
             icon: Icon(Icons.people, size: 18),
-            label: Text('Cập nhật nhân sự'),
+            label: Text('Đồng bộ tên CN'),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.orange[600],
               foregroundColor: Colors.white,
@@ -1287,27 +1382,32 @@ Future<void> _exportMonth() async {
        children: [
          // Header
          Container(
-           padding: EdgeInsets.all(16),
-           decoration: BoxDecoration(
-             color: Colors.blue[50],
-             borderRadius: BorderRadius.only(
-               topLeft: Radius.circular(8),
-               topRight: Radius.circular(8),
-             ),
-           ),
-           child: Row(
-             children: [
-               Icon(Icons.people, color: Colors.blue[600]),
-               SizedBox(width: 8),
-               Text(
-                 'Danh sách công nhân (${_filteredWorkers.length} có mặt, ${_unavailableWorkers.length} vắng)',
-                 style: TextStyle(
-                   fontSize: isDesktop ? 18 : 16,
-                   fontWeight: FontWeight.bold,
-                   color: Colors.blue[800],
-                 ),
-               ),
-             SizedBox(height: 12),
+  padding: EdgeInsets.all(16),
+  decoration: BoxDecoration(
+    color: Colors.blue[50],
+    borderRadius: BorderRadius.only(
+      topLeft: Radius.circular(8),
+      topRight: Radius.circular(8),
+    ),
+  ),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          Icon(Icons.people, color: Colors.blue[600]),
+          SizedBox(width: 8),
+          Text(
+            'Danh sách công nhân (${_filteredWorkers.length} có mặt, ${_unavailableWorkers.length} vắng)',
+            style: TextStyle(
+              fontSize: isDesktop ? 18 : 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.blue[800],
+            ),
+          ),
+        ],
+      ),
+      SizedBox(height: 12),
       Row(
         children: [
           ElevatedButton.icon(
@@ -1326,6 +1426,19 @@ Future<void> _exportMonth() async {
             label: Text('Xuất tháng'),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.orange[600],
+              foregroundColor: Colors.white,
+            ),
+          ),
+          SizedBox(width: 12),
+          // Add the new View Schedule button
+          ElevatedButton.icon(
+            onPressed: (_isLoading || _selectedProject == null || _taskSchedules.isEmpty) 
+                ? null 
+                : () => _showProjectScheduleDialog(),
+            icon: Icon(Icons.schedule, size: 18),
+            label: Text('Xem lịch làm việc'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.purple[600],
               foregroundColor: Colors.white,
             ),
           ),
@@ -1611,7 +1724,31 @@ Future<void> _exportMonth() async {
      ),
    );
  }
+void _showProjectScheduleDialog() {
+  if (_selectedProject == null || _selectedDate == null) {
+    _showError('Vui lòng chọn dự án và ngày');
+    return;
+  }
 
+  final selectedDateTime = DateTime.parse(_selectedDate!);
+  final dayTasks = TaskScheduleManager.getTasksForProjectAndDate(
+    _taskSchedules,
+    _selectedProject!,
+    selectedDateTime,
+    _qrLookups, 
+  );
+
+  showDialog(
+    context: context,
+    builder: (context) => ProjectScheduleDialog(
+      projectName: _selectedProject!,
+      selectedDate: _selectedDate!,
+      dayTasks: dayTasks,
+      allTasks: _taskSchedules,
+      qrLookups: _qrLookups, 
+    ),
+  );
+}
  Widget _buildLegendItem(String title, String description, Color bgColor, Color textColor) {
    return Row(
      mainAxisSize: MainAxisSize.min,
@@ -1678,6 +1815,7 @@ Future<void> _exportMonth() async {
              child: Column(
                children: [
                  _buildChart(),
+                 _buildTaskScheduleInfo(), 
                  _buildWorkersTable(),
                ],
              ),
@@ -1714,256 +1852,400 @@ class WorkerSummary {
  });
 }
 
-// Worker Details Dialog
+// Update the WorkerDetailsDialog class
 class WorkerDetailsDialog extends StatelessWidget {
- final WorkerSummary worker;
- final List<TaskHistoryModel> records;
- final String selectedDate;
+  final WorkerSummary worker;
+  final List<TaskHistoryModel> records;
+  final String selectedDate;
+  final List<TaskScheduleModel> taskSchedules;
+  final String selectedProject;
 
- const WorkerDetailsDialog({
-   Key? key,
-   required this.worker,
-   required this.records,
-   required this.selectedDate,
- }) : super(key: key);
+  const WorkerDetailsDialog({
+  Key? key,
+  required this.worker,
+  required this.records,
+  required this.selectedDate,
+  this.taskSchedules = const [],
+  this.selectedProject = '',
+  this.qrLookups = const [], 
+}) : super(key: key);
 
- String _formatKetQua(String? ketQua) {
-   if (ketQua == null) return '';
-   switch (ketQua) {
-     case '✔️':
-       return '✔️ Đạt';
-     case '❌':
-       return '❌ Không làm';
-     case '⚠️':
-       return '⚠️ Chưa tốt';
-     default:
-       return ketQua;
-   }
- }
+final List<QRLookupModel> qrLookups;
 
- Color _getStatusColor(String? ketQua) {
-   if (ketQua == null) return Colors.grey;
-   switch (ketQua) {
-     case '✔️':
-       return Colors.green;
-     case '❌':
-       return Colors.red;
-     case '⚠️':
-       return Colors.orange;
-     default:
-       return Colors.grey;
-   }
- }
+  String _formatKetQua(String? ketQua) {
+    if (ketQua == null) return '';
+    switch (ketQua) {
+      case '✔️':
+        return '✔️ Đạt';
+      case '❌':
+        return '❌ Không làm';
+      case '⚠️':
+        return '⚠️ Chưa tốt';
+      default:
+        return ketQua;
+    }
+  }
 
- @override
- Widget build(BuildContext context) {
-   final isDesktop = MediaQuery.of(context).size.width > 1200;
-   
-   return Dialog(
-     child: Container(
-       width: isDesktop ? 800 : MediaQuery.of(context).size.width * 0.9,
-       height: isDesktop ? 600 : MediaQuery.of(context).size.height * 0.8,
-       child: Column(
-         children: [
-           // Header
-           Container(
-             padding: EdgeInsets.all(16),
-             decoration: BoxDecoration(
-               color: Colors.blue[600],
-               borderRadius: BorderRadius.only(
-                 topLeft: Radius.circular(4),
-                 topRight: Radius.circular(4),
-               ),
-             ),
-             child: Row(
-               children: [
-                 Icon(Icons.person, color: Colors.white),
-                 SizedBox(width: 8),
-                 Expanded(
-                   child: Column(
-                     crossAxisAlignment: CrossAxisAlignment.start,
-                     children: [
-                       Text(
-                         '${worker.displayName} (${worker.name})',
-                         style: TextStyle(
-                           color: Colors.white,
-                           fontSize: 18,
-                           fontWeight: FontWeight.bold,
-                         ),
-                       ),
-                       Text(
-                         DateFormat('dd/MM/yyyy').format(DateTime.parse(selectedDate)),
-                         style: TextStyle(
-                           color: Colors.white70,
-                           fontSize: 14,
-                         ),
-                       ),
-                     ],
-                   ),
-                 ),
-                 IconButton(
-                   icon: Icon(Icons.close, color: Colors.white),
-                   onPressed: () => Navigator.of(context).pop(),
-                 ),
-               ],
-             ),
-           ),
-           // Records list
-           Expanded(
-             child: ListView.builder(
-               padding: EdgeInsets.all(16),
-               itemCount: records.length,
-               itemBuilder: (context, index) {
-                 final record = records[index];
-                 return Card(
-                   margin: EdgeInsets.only(bottom: 12),
-                   child: Padding(
-                     padding: EdgeInsets.all(12),
-                     child: Column(
-                       crossAxisAlignment: CrossAxisAlignment.start,
-                       children: [
-                         // Time and status row
-                         Row(
-                           children: [
-                             Container(
-                               padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                               decoration: BoxDecoration(
-                                 color: _getStatusColor(record.ketQua).withOpacity(0.1),
-                                 borderRadius: BorderRadius.circular(12),
-                                 border: Border.all(color: _getStatusColor(record.ketQua)),
-                               ),
-                               child: Text(
-                                 _formatKetQua(record.ketQua),
-                                 style: TextStyle(
-                                   color: _getStatusColor(record.ketQua),
-                                   fontWeight: FontWeight.bold,
-                                   fontSize: 12,
-                                 ),
-                               ),
-                             ),
-                             Spacer(),
-                             Text(
-                               record.gio ?? '',
-                               style: TextStyle(
-                                 fontSize: 14,
-                                 fontWeight: FontWeight.w500,
-                               ),
-                             ),
-                           ],
-                         ),
-                         SizedBox(height: 8),
-                         // Report description
-                         if (record.chiTiet?.isNotEmpty == true)
-                           Text(
-                             record.chiTiet!,
-                             style: TextStyle(fontSize: 14),
-                           ),
-                         // Schedule detail
-                         if (record.chiTiet2?.isNotEmpty == true) ...[
-                           SizedBox(height: 4),
-                           Text(
-                             'Lịch trình: ${record.chiTiet2}',
-                             style: TextStyle(
-                               fontSize: 12,
-                               color: Colors.grey[600],
-                               fontStyle: FontStyle.italic,
-                             ),
-                           ),
-                         ],
-                         // Position
-                         if (record.viTri?.isNotEmpty == true) ...[
-                           SizedBox(height: 4),
-                           Row(
-                             children: [
-                               Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
-                               SizedBox(width: 4),
-                               Text(
-                                 record.viTri!,
-                                 style: TextStyle(
-                                   fontSize: 12,
-                                   color: Colors.grey[600],
-                                 ),
-                               ),
-                             ],
-                           ),
-                         ],
-                         // Area type
-                         if (record.giaiPhap?.isNotEmpty == true) ...[
-                           SizedBox(height: 4),
-                           Text(
-                             'Khu vực: ${record.giaiPhap}',
-                             style: TextStyle(
-                               fontSize: 12,
-                               color: Colors.grey[600],
-                             ),
-                           ),
-                         ],
-                         // Category
-                         if (record.phanLoai?.isNotEmpty == true) ...[
-                           SizedBox(height: 8),
-                           Container(
-                             padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                             decoration: BoxDecoration(
-                               color: Colors.orange[100],
-                               borderRadius: BorderRadius.circular(8),
-                             ),
-                             child: Text(
-                               record.phanLoai!,
-                               style: TextStyle(
-                                 fontSize: 11,
-                                 color: Colors.orange[800],
-                                 fontWeight: FontWeight.w500,
-                               ),
-                             ),
-                           ),
-                         ],
-                         // Image
-                         if (record.hinhAnh?.isNotEmpty == true) ...[
-                           SizedBox(height: 8),
-                           GestureDetector(
-                             onTap: () => _showFullImage(context, record.hinhAnh!),
-                             child: ClipRRect(
-                               borderRadius: BorderRadius.circular(8),
-                               child: CachedNetworkImage(
-                                 imageUrl: record.hinhAnh!,
-                                 height: 100,
-                                 width: 100,
-                                 fit: BoxFit.cover,
-                                 placeholder: (context, url) => Container(
-                                   height: 100,
-                                   width: 100,
-                                   color: Colors.grey[200],
-                                   child: Icon(Icons.image, color: Colors.grey[400]),
-                                 ),
-                                 errorWidget: (context, url, error) => Container(
-                                   height: 100,
-                                   width: 100,
-                                   color: Colors.grey[200],
-                                   child: Icon(Icons.broken_image, color: Colors.grey[400]),
-                                 ),
-                               ),
-                             ),
-                           ),
-                         ],
-                       ],
-                     ),
-                   ),
-                 );
-               },
-             ),
-           ),
-         ],
-       ),
-     ),
-   );
- }
+  Color _getStatusColor(String? ketQua) {
+    if (ketQua == null) return Colors.grey;
+    switch (ketQua) {
+      case '✔️':
+        return Colors.green;
+      case '❌':
+        return Colors.red;
+      case '⚠️':
+        return Colors.orange;
+      default:
+        return Colors.grey;
+    }
+  }
 
- void _showFullImage(BuildContext context, String imageUrl) {
-   showDialog(
-     context: context,
-     builder: (context) => FullImageDialog(imageUrl: imageUrl),
-   );
- }
+  String _getTimeDifferenceText(String reportTime, String scheduleInfo) {
+    try {
+      // Parse schedule info (format: START-END-TASK)
+      final parts = scheduleInfo.split('-');
+      if (parts.length >= 2) {
+        final scheduleTime = parts[0];
+        final timeDiff = TaskScheduleManager.calculateTimeDifference(reportTime, scheduleTime);
+        
+        if (timeDiff == 0) {
+          return '⏰ Đúng giờ';
+        } else if (timeDiff > 0) {
+          return '⏰ Muộn ${timeDiff} phút';
+        } else {
+          return '⏰ Sớm ${(-timeDiff)} phút';
+        }
+      }
+      return '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  Color _getTimeDifferenceColor(String reportTime, String scheduleInfo) {
+    try {
+      final parts = scheduleInfo.split('-');
+      if (parts.length >= 2) {
+        final scheduleTime = parts[0];
+        final timeDiff = TaskScheduleManager.calculateTimeDifference(reportTime, scheduleTime);
+        
+        if (timeDiff == 0) return Colors.green;
+        if (timeDiff > 0) return Colors.red;
+        return Colors.blue;
+      }
+      return Colors.grey;
+    } catch (e) {
+      return Colors.grey;
+    }
+  }
+
+  String _getWorkerPosition() {
+  final positions = <String, int>{};
+  
+  for (final record in records) {
+    if (record.viTri != null && record.viTri!.trim().isNotEmpty) {
+      positions[record.viTri!] = (positions[record.viTri!] ?? 0) + 1;
+    }
+  }
+  
+  if (positions.isEmpty) return worker.name; // Fallback to worker name
+  
+  // Return the most frequent position
+  return positions.entries
+      .reduce((a, b) => a.value > b.value ? a : b)
+      .key;
+}
+void _showTaskCompletionAnalysis(BuildContext context) {
+  if (taskSchedules.isEmpty || selectedProject.isEmpty || qrLookups.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Không có dữ liệu lịch làm việc hoặc ánh xạ'),
+        backgroundColor: Colors.orange,
+      ),
+    );
+    return;
+  }
+
+  final selectedDateTime = DateTime.parse(selectedDate);
+  final dayTasks = TaskScheduleManager.getTasksForProjectAndDate(
+    taskSchedules,
+    selectedProject,
+    selectedDateTime,
+    qrLookups, // Pass QR lookups
+  );
+
+  // Use the worker's actual position from reports
+  final workerPosition = _getWorkerPosition();
+
+  final analysis = TaskScheduleManager.analyzeTaskCompletion(
+    dayTasks,
+    records,
+    workerPosition,
+    qrLookups, // Pass QR lookups
+  );
+
+  showDialog(
+    context: context,
+    builder: (context) => TaskCompletionDialog(
+      worker: worker,
+      selectedDate: selectedDate,
+      analysis: analysis,
+      dayTasks: dayTasks,
+      records: records,
+      workerPosition: workerPosition,
+      qrLookups: qrLookups,
+    ),
+  );
+}
+  @override
+  Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width > 1200;
+    
+    return Dialog(
+      child: Container(
+        width: isDesktop ? 800 : MediaQuery.of(context).size.width * 0.9,
+        height: isDesktop ? 600 : MediaQuery.of(context).size.height * 0.8,
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.blue[600],
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.person, color: Colors.white),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${worker.displayName} (${worker.name})',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          '${DateFormat('dd/MM/yyyy').format(DateTime.parse(selectedDate))} | Vị trí: ${_getWorkerPosition()}',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Task completion analysis button with text
+                  if (taskSchedules.isNotEmpty)
+                    ElevatedButton.icon(
+                      icon: Icon(Icons.assessment, size: 18),
+                      label: Text('Đánh giá hoàn thành'),
+                      onPressed: () => _showTaskCompletionAnalysis(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple[600],
+                        foregroundColor: Colors.white,
+                        elevation: 2,
+                      ),
+                    ),
+                  SizedBox(width: 8),
+                  IconButton(
+                    icon: Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            // Records list
+            Expanded(
+              child: ListView.builder(
+                padding: EdgeInsets.all(16),
+                itemCount: records.length,
+                itemBuilder: (context, index) {
+                  final record = records[index];
+                  return Card(
+                    margin: EdgeInsets.only(bottom: 12),
+                    child: Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Time and status row
+                          Row(
+                            children: [
+                              Container(
+                                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: _getStatusColor(record.ketQua).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: _getStatusColor(record.ketQua)),
+                                ),
+                                child: Text(
+                                  _formatKetQua(record.ketQua),
+                                  style: TextStyle(
+                                    color: _getStatusColor(record.ketQua),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                              Spacer(),
+                              Text(
+                                record.gio ?? '',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 8),
+                          // Report description
+                          if (record.chiTiet?.isNotEmpty == true)
+                            Text(
+                              record.chiTiet!,
+                              style: TextStyle(fontSize: 14),
+                            ),
+                          // Schedule detail with time difference
+                          if (record.chiTiet2?.isNotEmpty == true) ...[
+                            SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Lịch trình: ${record.chiTiet2}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ),
+                                if (record.gio != null)
+                                  Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: _getTimeDifferenceColor(record.gio!, record.chiTiet2!).withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: _getTimeDifferenceColor(record.gio!, record.chiTiet2!),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      _getTimeDifferenceText(record.gio!, record.chiTiet2!),
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: _getTimeDifferenceColor(record.gio!, record.chiTiet2!),
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                          // Position
+                          if (record.viTri?.isNotEmpty == true) ...[
+                            SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
+                                SizedBox(width: 4),
+                                Text(
+                                  record.viTri!,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          // Area type
+                          if (record.giaiPhap?.isNotEmpty == true) ...[
+                            SizedBox(height: 4),
+                            Text(
+                              'Khu vực: ${record.giaiPhap}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                          // Category
+                          if (record.phanLoai?.isNotEmpty == true) ...[
+                            SizedBox(height: 8),
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.orange[100],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                record.phanLoai!,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.orange[800],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                          // Image
+                          if (record.hinhAnh?.isNotEmpty == true) ...[
+                            SizedBox(height: 8),
+                            GestureDetector(
+                              onTap: () => _showFullImage(context, record.hinhAnh!),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: CachedNetworkImage(
+                                  imageUrl: record.hinhAnh!,
+                                  height: 100,
+                                  width: 100,
+                                  fit: BoxFit.cover,
+                                  placeholder: (context, url) => Container(
+                                    height: 100,
+                                    width: 100,
+                                    color: Colors.grey[200],
+                                    child: Icon(Icons.image, color: Colors.grey[400]),
+                                  ),
+                                  errorWidget: (context, url, error) => Container(
+                                    height: 100,
+                                    width: 100,
+                                    color: Colors.grey[200],
+                                    child: Icon(Icons.broken_image, color: Colors.grey[400]),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showFullImage(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (context) => FullImageDialog(imageUrl: imageUrl),
+    );
+  }
 }
 
 // Full Image Dialog
@@ -2227,5 +2509,827 @@ class _ProjectSearchDialogState extends State<ProjectSearchDialog> {
         ),
       ),
     );
+  }
+}
+class TaskCompletionDialog extends StatelessWidget {
+  final WorkerSummary worker;
+  final String selectedDate;
+  final Map<String, dynamic> analysis;
+  final List<TaskScheduleModel> dayTasks;
+  final List<TaskHistoryModel> records;
+  final String workerPosition;
+  final List<QRLookupModel> qrLookups; 
+
+  const TaskCompletionDialog({
+    Key? key,
+    required this.worker,
+    required this.selectedDate,
+    required this.analysis,
+    required this.dayTasks,
+    required this.records,
+    required this.workerPosition,
+    required this.qrLookups, 
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width > 1200;
+    final positionTasks = analysis['positionTasks'] as List<TaskScheduleModel>;
+    final completedTaskIds = analysis['completedTaskIds'] as List<String>;
+    final missedTaskIds = analysis['missedTaskIds'] as List<String>;
+    final completionRate = analysis['completionRate'] as double;
+    
+    return Dialog(
+      child: Container(
+        width: isDesktop ? 700 : MediaQuery.of(context).size.width * 0.9,
+        height: isDesktop ? 600 : MediaQuery.of(context).size.height * 0.8,
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.purple[600],
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.assessment, color: Colors.white),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Đánh giá hoàn thành - ${worker.displayName}',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          'Vị trí: $workerPosition | ${DateFormat('dd/MM/yyyy').format(DateTime.parse(selectedDate))}',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            // Completion summary
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildSummaryCard(
+                      'Tổng nhiệm vụ',
+                      analysis['totalTasks'].toString(),
+                      Colors.blue,
+                      Icons.assignment,
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: _buildSummaryCard(
+                      'Đã hoàn thành',
+                      analysis['completedTasks'].toString(),
+                      Colors.green,
+                      Icons.check_circle,
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: _buildSummaryCard(
+                      'Tỷ lệ hoàn thành',
+                      '${completionRate.toStringAsFixed(1)}%',
+                      completionRate >= 80 ? Colors.green : completionRate >= 60 ? Colors.orange : Colors.red,
+                      Icons.pie_chart,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Tasks list
+            Expanded(
+              child: positionTasks.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.assignment_outlined,
+                            size: 64,
+                            color: Colors.grey[400],
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'Không có nhiệm vụ nào cho vị trí "$workerPosition"',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey[600],
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: EdgeInsets.all(16),
+                      itemCount: positionTasks.length,
+                      itemBuilder: (context, index) {
+                        final task = positionTasks[index];
+                        final isCompleted = completedTaskIds.contains(task.taskId);
+                        final isMissed = missedTaskIds.contains(task.taskId);
+                        
+                        // Find corresponding report for this task
+                        TaskHistoryModel? correspondingReport;
+                        for (final report in records) {
+                          if (report.chiTiet2 != null && report.chiTiet2!.contains(task.task)) {
+                            correspondingReport = report;
+                            break;
+                          }
+                        }
+                        
+                        return Card(
+                          margin: EdgeInsets.only(bottom: 12),
+                          child: Padding(
+                            padding: EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Task header
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: isCompleted ? Colors.green[100] : Colors.red[100],
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: isCompleted ? Colors.green : Colors.red,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            isCompleted ? Icons.check_circle : Icons.cancel,
+                                            size: 14,
+                                            color: isCompleted ? Colors.green[800] : Colors.red[800],
+                                          ),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            isCompleted ? 'Hoàn thành' : 'Chưa làm',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: isCompleted ? Colors.green[800] : Colors.red[800],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Spacer(),
+                                    Text(
+                                      '${TaskScheduleManager.formatScheduleTime(task.start)} - ${TaskScheduleManager.formatScheduleTime(task.end)}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 8),
+                                // Task description
+                                Text(
+                                  task.task,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                SizedBox(height: 4),
+                                // Position info
+                                Text(
+                                  'Vị trí: ${task.vitri}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                // Report details if completed
+                                if (isCompleted && correspondingReport != null) ...[
+                                  SizedBox(height: 8),
+                                  Container(
+                                    padding: EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue[50],
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.blue[200]!),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Icon(Icons.report, size: 14, color: Colors.blue[600]),
+                                            SizedBox(width: 4),
+                                            Text(
+                                              'Báo cáo: ${correspondingReport.gio ?? ''}',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.blue[800],
+                                              ),
+                                            ),
+                                            Spacer(),
+                                            if (correspondingReport.gio != null)
+                                              Container(
+                                                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: _getTimeDifferenceColor(correspondingReport.gio!, task.start).withOpacity(0.1),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(
+                                                    color: _getTimeDifferenceColor(correspondingReport.gio!, task.start),
+                                                    width: 1,
+                                                  ),
+                                                ),
+                                                child: Text(
+                                                  _getTimeDifferenceText(correspondingReport.gio!, task.start),
+                                                  style: TextStyle(
+                                                    fontSize: 9,
+                                                    color: _getTimeDifferenceColor(correspondingReport.gio!, task.start),
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                        if (correspondingReport.chiTiet?.isNotEmpty == true) ...[
+                                          SizedBox(height: 4),
+                                          Text(
+                                            correspondingReport.chiTiet!,
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.grey[700],
+                                            ),
+                                          ),
+                                        ],
+                                        if (correspondingReport.ketQua?.isNotEmpty == true) ...[
+                                          SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              Text(
+                                                'Kết quả: ',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.grey[600],
+                                                ),
+                                              ),
+                                              Text(
+                                                _formatKetQua(correspondingReport.ketQua),
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: _getStatusColor(correspondingReport.ketQua),
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Add the missing helper methods:
+  Widget _buildSummaryCard(String title, String value, Color color, IconData icon) {
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 24),
+          SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.grey[600],
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatKetQua(String? ketQua) {
+    if (ketQua == null) return '';
+    switch (ketQua) {
+      case '✔️':
+        return '✔️ Đạt';
+      case '❌':
+        return '❌ Không làm';
+      case '⚠️':
+        return '⚠️ Chưa tốt';
+      default:
+        return ketQua;
+    }
+  }
+
+  Color _getStatusColor(String? ketQua) {
+    if (ketQua == null) return Colors.grey;
+    switch (ketQua) {
+      case '✔️':
+        return Colors.green;
+      case '❌':
+        return Colors.red;
+      case '⚠️':
+        return Colors.orange;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _getTimeDifferenceText(String reportTime, String scheduleTime) {
+    try {
+      final timeDiff = TaskScheduleManager.calculateTimeDifference(reportTime, scheduleTime);
+      
+      if (timeDiff == 0) {
+        return '⏰ Đúng giờ';
+      } else if (timeDiff > 0) {
+        return '⏰ Muộn ${timeDiff} phút';
+      } else {
+        return '⏰ Sớm ${(-timeDiff)} phút';
+      }
+    } catch (e) {
+      return '';
+    }
+  }
+
+  Color _getTimeDifferenceColor(String reportTime, String scheduleTime) {
+    try {
+      final timeDiff = TaskScheduleManager.calculateTimeDifference(reportTime, scheduleTime);
+      
+      if (timeDiff == 0) return Colors.green;
+      if (timeDiff > 0) return Colors.red;
+      return Colors.blue;
+    } catch (e) {
+      return Colors.grey;
+    }
+  }
+}
+class ProjectScheduleDialog extends StatefulWidget {
+  final String projectName;
+  final String selectedDate;
+  final List<TaskScheduleModel> dayTasks;
+  final List<TaskScheduleModel> allTasks;
+
+  const ProjectScheduleDialog({
+    Key? key,
+    required this.projectName,
+    required this.selectedDate,
+    required this.dayTasks,
+    required this.allTasks,
+    required this.qrLookups,
+  }) : super(key: key);
+final List<QRLookupModel> qrLookups;
+  @override
+  _ProjectScheduleDialogState createState() => _ProjectScheduleDialogState();
+}
+class _ProjectScheduleDialogState extends State<ProjectScheduleDialog> {
+  bool _showAllDays = false;
+  Map<String, List<TaskScheduleModel>> _tasksByPosition = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _updateTasksByPosition();
+  }
+
+  void _updateTasksByPosition() {
+    final tasksToShow = _showAllDays 
+        ? widget.allTasks.where((task) { // Use widget.allTasks
+            final userMapping = TaskScheduleManager.getUserProjectAndPosition(task.username, widget.qrLookups); // Use widget.qrLookups
+            return userMapping['projectName'] == widget.projectName; // Use widget.projectName
+          }).toList()
+        : widget.dayTasks; // Use widget.dayTasks
+
+    _tasksByPosition.clear();
+    for (final task in tasksToShow) {
+      final userMapping = TaskScheduleManager.getUserProjectAndPosition(task.username, widget.qrLookups); // Use widget.qrLookups
+      final positionName = userMapping['positionName'];
+      if (positionName?.isNotEmpty == true) { // Add null check
+        _tasksByPosition.putIfAbsent(positionName!, () => []).add(task); // Add null assertion
+      }
+    }
+    
+    // Sort tasks within each position by start time
+    for (final tasks in _tasksByPosition.values) {
+      tasks.sort((a, b) => a.start.compareTo(b.start));
+    }
+  }
+
+  String _formatWeekdays(String weekdays) {
+    if (weekdays.trim().isEmpty) return 'Tất cả các ngày';
+    
+    final days = weekdays.split(',').map((d) => d.trim()).toList();
+    final dayNames = <String>[];
+    
+    for (final day in days) {
+      switch (day) {
+        case '0':
+          dayNames.add('CN');
+          break;
+        case '1':
+          dayNames.add('T2');
+          break;
+        case '2':
+          dayNames.add('T3');
+          break;
+        case '3':
+          dayNames.add('T4');
+          break;
+        case '4':
+          dayNames.add('T5');
+          break;
+        case '5':
+          dayNames.add('T6');
+          break;
+        case '6':
+          dayNames.add('T7');
+          break;
+      }
+    }
+    return dayNames.join(', ');
+  }
+
+  Color _getPositionColor(int index) {
+    final colors = [
+      Colors.blue,
+      Colors.green,
+      Colors.orange,
+      Colors.purple,
+      Colors.red,
+      Colors.teal,
+      Colors.indigo,
+      Colors.pink,
+    ];
+    return colors[index % colors.length];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width > 1200;
+    final positions = _tasksByPosition.keys.toList()..sort();
+    
+    return Dialog(
+      child: Container(
+        width: isDesktop ? 1000 : MediaQuery.of(context).size.width * 0.95,
+        height: isDesktop ? 700 : MediaQuery.of(context).size.height * 0.9,
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.purple[600],
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.schedule, color: Colors.white),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Lịch làm việc - ${widget.projectName}',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          _showAllDays 
+                              ? 'Tất cả các ngày (${_tasksByPosition.values.fold(0, (sum, tasks) => sum + tasks.length)} nhiệm vụ)'
+                              : 'Ngày ${DateFormat('dd/MM/yyyy').format(DateTime.parse(widget.selectedDate))} (${widget.dayTasks.length} nhiệm vụ)',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Toggle button
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _showAllDays = !_showAllDays;
+                        _updateTasksByPosition();
+                      });
+                    },
+                    icon: Icon(_showAllDays ? Icons.today : Icons.calendar_month, size: 16),
+                    label: Text(_showAllDays ? 'Chỉ hôm nay' : 'Tất cả ngày'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.purple[600],
+                      elevation: 2,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  IconButton(
+                    icon: Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            // Summary stats
+            if (positions.isNotEmpty)
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildSummaryCard(
+                        'Vị trí',
+                        positions.length.toString(),
+                        Colors.blue,
+                        Icons.location_on,
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: _buildSummaryCard(
+                        'Tổng nhiệm vụ',
+                        _tasksByPosition.values.fold(0, (sum, tasks) => sum + tasks.length).toString(),
+                        Colors.green,
+                        Icons.assignment,
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: _buildSummaryCard(
+                        'Giờ làm việc',
+                        _getWorkingHoursRange(),
+                        Colors.orange,
+                        Icons.access_time,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            // Positions and tasks list
+            Expanded(
+              child: positions.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.schedule_outlined,
+                            size: 64,
+                            color: Colors.grey[400],
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            _showAllDays 
+                                ? 'Không có lịch làm việc nào cho dự án này'
+                                : 'Không có lịch làm việc nào cho ngày đã chọn',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey[600],
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: EdgeInsets.all(16),
+                      itemCount: positions.length,
+                      itemBuilder: (context, index) {
+                        final position = positions[index];
+                        final tasks = _tasksByPosition[position]!;
+                        final positionColor = _getPositionColor(index);
+                        
+                        return Card(
+                          margin: EdgeInsets.only(bottom: 16),
+                          child: ExpansionTile(
+                            initiallyExpanded: positions.length <= 3,
+                            leading: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: positionColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: positionColor),
+                              ),
+                              child: Icon(Icons.person, color: positionColor),
+                            ),
+                            title: Text(
+                              position,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: positionColor,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '${tasks.length} nhiệm vụ',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12,
+                              ),
+                            ),
+                            children: tasks.map((task) => Container(
+                              margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                              padding: EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: positionColor.withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: positionColor.withOpacity(0.2)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Time and task header
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: positionColor.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: positionColor),
+                                        ),
+                                        child: Text(
+                                          '${TaskScheduleManager.formatScheduleTime(task.start)} - ${TaskScheduleManager.formatScheduleTime(task.end)}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                            color: positionColor,
+                                          ),
+                                        ),
+                                      ),
+                                      Spacer(),
+                                      if (_showAllDays)
+                                        Container(
+                                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey[200],
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            _formatWeekdays(task.weekday),
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  SizedBox(height: 8),
+                                  // Task description
+                                  Text(
+                                    task.task,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  // Task ID
+                                  Text(
+                                    'ID: ${task.taskId}',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey[500],
+                                      fontFamily: 'monospace',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )).toList(),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryCard(String title, String value, Color color, IconData icon) {
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 20),
+          SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 10,
+              color: Colors.grey[600],
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getWorkingHoursRange() {
+    if (_tasksByPosition.isEmpty) return '-';
+    
+    String? earliestStart;
+    String? latestEnd;
+    
+    for (final tasks in _tasksByPosition.values) {
+      for (final task in tasks) {
+        if (earliestStart == null || task.start.compareTo(earliestStart) < 0) {
+          earliestStart = task.start;
+        }
+        if (latestEnd == null || task.end.compareTo(latestEnd) > 0) {
+          latestEnd = task.end;
+        }
+      }
+    }
+    
+    if (earliestStart != null && latestEnd != null) {
+      return '${TaskScheduleManager.formatScheduleTime(earliestStart)} - ${TaskScheduleManager.formatScheduleTime(latestEnd)}';
+    }
+    
+    return '-';
   }
 }

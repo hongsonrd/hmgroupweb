@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chào Mừng Đến Với Hoàn Mỹ</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), 
+                        url('https://static.wixstatic.com/media/9cf7b1_873876a3194648ff8dd5e14be1897ffa~mv2.jpeg/v1/fill/w_1138,h_760,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1%20button%2011.jpeg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: white;
+        }
+        
+        .container {
+            background: rgba(255,255,255,0.95);
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+            width: 100%;
+            max-width: 900px;
+            min-height: 600px;
+            color: #333;
+        }
+        
+        .access-form {
+            padding: 40px;
+            text-align: center;
+        }
+        
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #4CAF50, #2196F3);
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+        
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            font-family: inherit;
+        }
+        
+        input[type="text"]:focus, textarea:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.2);
+        }
+        
+        #password {
+            text-align: center;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            font-size: 18px;
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+            font-size: 14px;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #4CAF50, #2196F3);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin: 10px 5px;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-feedback {
+            background: linear-gradient(135deg, #FF9800, #F57C00);
+            box-shadow: 0 4px 15px rgba(255, 152, 0, 0.3);
+        }
+        
+        .btn-feedback:hover {
+            box-shadow: 0 6px 20px rgba(255, 152, 0, 0.4);
+        }
+        
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #c62828;
+            font-weight: 500;
+        }
+        
+        .success-message {
+            background: #e8f5e8;
+            color: #2e7d32;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #4caf50;
+            font-weight: 500;
+        }
+        
+        .pdf-viewer {
+            display: none;
+            height: 100vh;
+            position: relative;
+        }
+        
+        .pdf-header {
+            background: #333;
+            color: white;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .pdf-info {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        .pdf-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 3px;
+        }
+        
+        .pdf-subtitle {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+        
+        .pdf-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .control-btn {
+            border: none;
+            padding: 6px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+        
+        .download { background: #2196F3; color: white; }
+        .back { background: #f44336; color: white; }
+        
+        .control-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        /* Compact Feedback Section */
+        .feedback-section {
+            background: linear-gradient(135deg, #FF6B6B, #FF8E53);
+            color: white;
+            padding: 12px 15px;
+            margin: 10px 15px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 3px 10px rgba(255, 107, 107, 0.2);
+            border-left: 4px solid rgba(255, 255, 255, 0.3);
+            user-select: none; /* Prevent text selection */
+        }
+        
+        .feedback-section h4 {
+            font-size: 14px;
+            margin-bottom: 5px;
+            font-weight: 600;
+            user-select: none; /* Prevent text selection */
+        }
+        
+        .feedback-section p {
+            font-size: 12px;
+            margin-bottom: 10px;
+            opacity: 0.9;
+            user-select: none; /* Prevent text selection */
+        }
+        
+        .feedback-btn-compact {
+            background: rgba(255, 255, 255, 0.9) !important;
+            color: #FF6B6B !important;
+            border: none !important;
+            padding: 8px 16px !important;
+            border-radius: 15px !important;
+            font-size: 12px !important;
+            font-weight: 600 !important;
+            cursor: pointer !important;
+            transition: all 0.2s !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+            display: inline-block !important;
+            pointer-events: auto !important;
+            z-index: 100 !important;
+            position: relative !important;
+        }
+        
+        
+        .feedback-btn-compact:hover {
+            transform: translateY(-1px) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+            background: white !important;
+        }
+        .feedback-btn-compact:active {
+            transform: translateY(0) !important;
+        }
+        .pdf-content {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin: 15px;
+            /* Changed to relative for loader positioning */
+            position: relative; 
+        }
+        
+        .pdf-embed {
+            width: 100%;
+            height: 600px;
+            border: none;
+            border-radius: 8px;
+        }
+        
+        /* --- NEW: PDF Loader Styles --- */
+        .pdf-loader {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 600px; /* Match embed height */
+            color: #333;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+        }
+        
+        .pdf-loader .spinner {
+            width: 40px;
+            height: 40px;
+            border-width: 4px;
+            border-top-color: #2196F3;
+            margin-bottom: 20px;
+        }
+        .pdf-loader p {
+            font-weight: 500;
+            font-size: 16px;
+            color: #555;
+        }
+        /* --- END NEW --- */
+
+
+        .loading {
+            display: none;
+            color: #2196F3;
+            margin: 15px 0;
+            font-weight: 500;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #2196F3;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        
+        /* Feedback Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            backdrop-filter: blur(5px);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            position: relative;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            position: absolute;
+            right: 15px;
+            top: 15px;
+        }
+        
+        .close:hover {
+            color: #000;
+        }
+        
+        .modal h2 {
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .container {
+                margin: 0;
+                min-height: auto;
+                max-width: 100%;
+            }
+            
+            .access-form {
+                padding: 20px 15px;
+            }
+            
+            h1 {
+                font-size: 22px;
+            }
+            
+            .pdf-viewer {
+                height: 100vh;
+            }
+            
+            .pdf-header {
+                padding: 8px 15px;
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .pdf-info {
+                text-align: center;
+            }
+            
+            .pdf-title {
+                font-size: 14px;
+            }
+            
+            .pdf-subtitle {
+                font-size: 11px;
+            }
+            
+            .pdf-controls {
+                justify-content: center;
+            }
+            
+            .control-btn {
+                padding: 5px 10px;
+                font-size: 11px;
+            }
+            
+            .pdf-embed, .pdf-loader { /* --- MODIFIED --- */
+                height: 400px;
+            }
+            
+            .feedback-section {
+                margin: 8px 10px;
+                padding: 10px 12px;
+            }
+            
+            .feedback-section h4 {
+                font-size: 13px;
+            }
+            
+            .feedback-section p {
+                font-size: 11px;
+            }
+            
+            .feedback-btn-compact {
+                font-size: 11px;
+                padding: 6px 12px;
+            }
+            
+            .modal-content {
+                margin: 10% auto;
+                padding: 20px;
+                width: 95%;
+            }
+            
+            .logo {
+                width: 60px;
+                height: 60px;
+                font-size: 24px;
+            }
+        }
+        
+        /* Desktop Large Screen */
+        @media (min-width: 1024px) {
+            .container {
+                max-width: 1000px;
+            }
+            
+            .pdf-embed, .pdf-loader { /* --- MODIFIED --- */
+                height: 700px;
+            }
+            
+            .pdf-header {
+                padding: 15px 25px;
+            }
+            
+            .pdf-title {
+                font-size: 18px;
+            }
+            
+            .control-btn {
+                padding: 8px 15px;
+                font-size: 13px;
+            }
+        }
+        
+        /* Optimize for iframe embedding */
+        html, body {
+            height: 100%;
+            overflow-x: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="accessForm" class="access-form">
+            <div class="logo">📋</div>
+            <h1>Chào Mừng Đến Với Hoàn Mỹ</h1>
+            <p class="subtitle">Nhập mã truy cập NVKD đã gửi để xem báo cáo</p>
+            
+            <form id="passwordForm" onsubmit="return false;">
+                <div class="form-group">
+                    <label for="password">Mã Truy Cập:</label>
+                    <input 
+                        type="text" 
+                        id="password" 
+                        name="password" 
+                        maxlength="7" 
+                        placeholder="XXXXXXX"
+                        required
+                        autocomplete="off"
+                    >
+                </div>
+                
+                <div class="loading" id="loading">
+                    <span class="spinner"></span>
+                    Đang xác thực mã truy cập...
+                </div>
+                
+                <div id="errorMessage" class="error-message" style="display: none;"></div>
+                <div id="successMessage" class="success-message" style="display: none;"></div>
+                
+                <button type="button" class="btn" id="submitBtn" onclick="accessReport()">
+                    Truy Cập Báo Cáo
+                </button>
+            </form>
+        </div>
+        
+        <div id="pdfViewer" class="pdf-viewer">
+            <div class="pdf-header">
+                <div class="pdf-info">
+                    <div class="pdf-title" id="pdfTitle">Báo Cáo Dự Án</div>
+                    <div class="pdf-subtitle">(Vui lòng đợi trong giây lát khi báo cáo đang tải) Lượt truy cập: <span id="accessCount" style="color: #4CAF50; font-weight: 600;">1</span></div>
+                </div>
+                <div class="pdf-controls">
+                    <button class="control-btn download" onclick="downloadPDF()">⬇️ Tải Về</button>
+                    <button class="control-btn back" onclick="goBack()">← Quay Lại</button>
+                </div>
+            </div>
+            
+            <div class="pdf-content">
+                <div id="pdfLoadingIndicator" class="pdf-loader">
+                    <span class="spinner"></span>
+                    <p>Đang chuẩn bị báo cáo...</p>
+                </div>
+                <embed id="pdfEmbed" class="pdf-embed" type="application/pdf" src="" style="display: none;">
+            </div>
+            <div class="feedback-section">
+                <button class="feedback-btn-compact" onclick="showFeedbackModal()" type="button">Gửi Phản Hồi</button>
+                <h4>💬 Chia Sẻ Ý Kiến</h4>
+                <p>Hãy cho chúng tôi biết suy nghĩ của bạn về báo cáo này</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="feedbackModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeFeedbackModal()">&times;</span>
+            <h2>📝 Gửi Phản Hồi</h2>
+            
+            <form id="feedbackForm" onsubmit="return false;">
+                <div class="form-group">
+                    <label for="responderName">Tên của bạn:</label>
+                    <input 
+                        type="text" 
+                        id="responderName" 
+                        name="responderName" 
+                        placeholder="Nhập tên của bạn"
+                        required
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="responderComment">Nhận xét / Phản hồi:</label>
+                    <textarea 
+                        id="responderComment" 
+                        name="responderComment" 
+                        placeholder="Nhập nhận xét hoặc phản hồi của bạn về báo cáo..."
+                        rows="5"
+                        required
+                    ></textarea>
+                </div>
+                
+                <div class="loading" id="feedbackLoading">
+                    <span class="spinner"></span>
+                    Đang gửi phản hồi...
+                </div>
+                
+                <div id="feedbackError" class="error-message" style="display: none;"></div>
+                <div id="feedbackSuccess" class="success-message" style="display: none;"></div>
+                
+                <div style="text-align: center; margin-top: 20px;">
+                    <button type="button" class="btn btn-feedback" id="submitFeedbackBtn" onclick="submitFeedback()">
+                        📤 Gửi Phản Hồi
+                    </button>
+                    <button type="button" class="btn" onclick="closeFeedbackModal()" style="background: #666;">
+                        ❌ Hủy
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let currentPdfUrl = '';
+        let currentFilename = '';
+        let currentPassword = '';
+        
+        // Your Cloud Run API server URL - CHANGE THIS!
+        const API_SERVER_URL = 'https://hmbeacon-81200125587.asia-east2.run.app'; 
+        
+        async function accessReport() {
+            const password = document.getElementById('password').value.trim().toUpperCase();
+            const loading = document.getElementById('loading');
+            const errorMessage = document.getElementById('errorMessage');
+            const successMessage = document.getElementById('successMessage');
+            const submitBtn = document.getElementById('submitBtn');
+            
+            errorMessage.style.display = 'none';
+            successMessage.style.display = 'none';
+            
+            if (password.length !== 7) {
+                showError('Mã truy cập phải có đúng 7 ký tự.');
+                return;
+            }
+            
+            loading.style.display = 'block';
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Đang xác thực...';
+            
+            try {
+                const data = await makeJSONPRequest(password);
+                
+                if (data.success) {
+                    showSuccess(`Đã tìm thấy báo cáo! Đang tải ${data.data.filename}...`);
+                    
+                    currentPdfUrl = data.data.url;
+                    currentFilename = data.data.filename;
+                    currentPassword = password;
+                    
+                    document.getElementById('pdfTitle').textContent = data.data.project || 'Báo Cáo Dự Án';
+                    document.getElementById('accessCount').textContent = data.data.accessCount;
+                    
+                    setTimeout(() => {
+                        loadPDF(data.data.url);
+                    }, 1000);
+                    
+                } else {
+                    showError(data.error || 'Không tìm thấy báo cáo. Vui lòng kiểm tra lại mã truy cập.');
+                }
+                
+            } catch (error) {
+                console.error('Lỗi:', error);
+                showError('Lỗi kết nối. Vui lòng kiểm tra kết nối internet và thử lại.');
+            } finally {
+                loading.style.display = 'none';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Truy Cập Báo Cáo';
+            }
+        }
+        
+        function makeJSONPRequest(password) {
+            return new Promise((resolve, reject) => {
+                const callbackName = 'jsonp_callback_' + Math.round(100000 * Math.random());
+                
+                window[callbackName] = function(data) {
+                    delete window[callbackName];
+                    document.body.removeChild(script);
+                    resolve(data);
+                };
+                
+                const script = document.createElement('script');
+                script.src = `${API_SERVER_URL}/access-report-jsonp?password=${encodeURIComponent(password)}&callback=${callbackName}`;
+                script.onerror = function() {
+                    delete window[callbackName];
+                    if (document.body.contains(script)) {
+                        document.body.removeChild(script);
+                    }
+                    reject(new Error('Yêu cầu JSONP thất bại'));
+                };
+                
+                document.body.appendChild(script);
+                
+                setTimeout(() => {
+                    if (window[callbackName]) {
+                        delete window[callbackName];
+                        if (document.body.contains(script)) {
+                            document.body.removeChild(script);
+                        }
+                        reject(new Error('Hết thời gian chờ'));
+                    }
+                }, 15000);
+            });
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        function showSuccess(message) {
+            const successDiv = document.getElementById('successMessage');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+        }
+        
+        // --- REWRITTEN loadPDF FUNCTION ---
+        function loadPDF(url) {
+            const accessForm = document.getElementById('accessForm');
+            const pdfViewer = document.getElementById('pdfViewer');
+            const pdfContainer = document.querySelector('.pdf-content');
+            const pdfLoadingIndicator = document.getElementById('pdfLoadingIndicator');
+        
+            // 1. Switch views and show the loader
+            accessForm.style.display = 'none';
+            pdfViewer.style.display = 'block';
+            pdfLoadingIndicator.style.display = 'flex';
+        
+            // 2. The function to run when the PDF finally loads
+            const onPdfLoad = (e) => {
+                console.log('PDF viewer loaded.');
+                pdfLoadingIndicator.style.display = 'none';
+                e.target.style.display = 'block';
+            };
+        
+            // 3. Create the embed/iframe element fresh to avoid caching issues
+            // This robustly handles the "Go Back" case
+            let embedElement = document.createElement('embed');
+            embedElement.id = 'pdfEmbed';
+            embedElement.className = 'pdf-embed';
+            embedElement.type = 'application/pdf';
+            embedElement.style.display = 'none'; // Keep hidden until 'load' event fires
+            embedElement.addEventListener('load', onPdfLoad, { once: true });
+        
+            // Clear previous viewer and add the new one
+            pdfContainer.innerHTML = '';
+            pdfContainer.appendChild(pdfLoadingIndicator);
+            pdfContainer.appendChild(embedElement);
+            pdfLoadingIndicator.style.display = 'flex'; // Ensure loader is visible
+        
+            // 4. Start loading the PDF
+            embedElement.src = url;
+        
+            // 5. Fallback for browsers that can't render PDFs natively
+            setTimeout(() => {
+                const currentElement = document.getElementById('pdfEmbed');
+                // If it's still an <embed> tag and hasn't loaded a document, it has likely failed.
+                if (currentElement && currentElement.tagName === 'EMBED' && !currentElement.contentDocument) {
+                    console.log('Native embed failed. Falling back to Google Docs Viewer.');
+                    const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`;
+                    
+                    let iframeElement = document.createElement('iframe');
+                    iframeElement.id = 'pdfEmbed';
+                    iframeElement.className = 'pdf-embed';
+                    iframeElement.style.display = 'none';
+                    iframeElement.addEventListener('load', onPdfLoad, { once: true });
+                    
+                    currentElement.replaceWith(iframeElement); // Replace failed embed with iframe
+                    
+                    iframeElement.src = googleViewerUrl;
+                }
+            }, 3000); // Wait 3 seconds before checking for failure
+        }
+        
+        // --- REWRITTEN goBack FUNCTION ---
+        function goBack() {
+            const accessForm = document.getElementById('accessForm');
+            const pdfViewer = document.getElementById('pdfViewer');
+            const pdfContainer = document.querySelector('.pdf-content');
+        
+            // Hide the PDF viewer section
+            pdfViewer.style.display = 'none';
+            
+            // Completely reset the PDF content area to its initial state
+            pdfContainer.innerHTML = `
+                <div id="pdfLoadingIndicator" class="pdf-loader">
+                    <span class="spinner"></span>
+                    <p>Đang chuẩn bị báo cáo...</p>
+                </div>
+                <embed id="pdfEmbed" class="pdf-embed" type="application/pdf" src="" style="display: none;">
+            `;
+            
+            // Show the access form again
+            accessForm.style.display = 'block';
+            
+            // Reset form state
+            document.getElementById('password').value = '';
+            document.getElementById('errorMessage').style.display = 'none';
+            document.getElementById('successMessage').style.display = 'none';
+            currentPassword = '';
+            document.getElementById('password').focus();
+        }
+
+        function downloadPDF() {
+            if (currentPdfUrl) {
+                const link = document.createElement('a');
+                link.href = currentPdfUrl;
+                link.download = currentFilename || 'bao-cao.pdf';
+                link.target = '_blank';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+        
+        function showFeedbackModal() {
+            document.getElementById('feedbackModal').style.display = 'block';
+            document.getElementById('responderName').focus();
+        }
+        
+        function closeFeedbackModal() {
+            document.getElementById('feedbackModal').style.display = 'none';
+            document.getElementById('feedbackForm').reset();
+            document.getElementById('feedbackError').style.display = 'none';
+            document.getElementById('feedbackSuccess').style.display = 'none';
+            document.getElementById('feedbackLoading').style.display = 'none';
+        }
+        
+        async function submitFeedback() {
+            const responderName = document.getElementById('responderName').value.trim();
+            const responderComment = document.getElementById('responderComment').value.trim();
+            const loading = document.getElementById('feedbackLoading');
+            const errorDiv = document.getElementById('feedbackError');
+            const successDiv = document.getElementById('feedbackSuccess');
+            const submitBtn = document.getElementById('submitFeedbackBtn');
+            
+            errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
+            
+            if (!responderName) {
+                showFeedbackError('Vui lòng nhập tên của bạn.');
+                return;
+            }
+            
+            if (!responderComment) {
+                showFeedbackError('Vui lòng nhập nhận xét hoặc phản hồi.');
+                return;
+            }
+            
+            if (!currentPassword) {
+                showFeedbackError('Lỗi: Không tìm thấy thông tin báo cáo.');
+                return;
+            }
+            
+            loading.style.display = 'block';
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Đang gửi...';
+            
+            try {
+                const data = await submitFeedbackJSONP(currentPassword, responderName, responderComment);
+                
+                if (data.success) {
+                    showFeedbackSuccess('✅ Cảm ơn bạn đã gửi phản hồi! Chúng tôi sẽ nhận được phản hồi của bạn sớm.');
+                    
+                    setTimeout(() => {
+                        closeFeedbackModal();
+                    }, 3000);
+                    
+                } else {
+                    showFeedbackError(data.error || 'Có lỗi xảy ra khi gửi phản hồi. Vui lòng thử lại.');
+                }
+                
+            } catch (error) {
+                console.error('Lỗi gửi phản hồi:', error);
+                showFeedbackError('Lỗi kết nối. Vui lòng kiểm tra internet và thử lại.');
+            } finally {
+                loading.style.display = 'none';
+                submitBtn.disabled = false;
+                submitBtn.textContent = '📤 Gửi Phản Hồi';
+            }
+        }
+        
+        function submitFeedbackJSONP(password, name, comment) {
+            return new Promise((resolve, reject) => {
+                const callbackName = 'feedback_callback_' + Math.round(100000 * Math.random());
+                
+                window[callbackName] = function(data) {
+                    delete window[callbackName];
+                    document.body.removeChild(script);
+                    resolve(data);
+                };
+                
+                const script = document.createElement('script');
+                const params = new URLSearchParams({
+                    password: password,
+                    responder_name: name,
+                    responder_comment: comment,
+                    callback: callbackName
+                });
+                
+                script.src = `${API_SERVER_URL}/submit-feedback-jsonp?${params.toString()}`;
+                script.onerror = function() {
+                    delete window[callbackName];
+                    if (document.body.contains(script)) {
+                        document.body.removeChild(script);
+                    }
+                    reject(new Error('Yêu cầu gửi phản hồi thất bại'));
+                };
+                
+                document.body.appendChild(script);
+                
+                setTimeout(() => {
+                    if (window[callbackName]) {
+                        delete window[callbackName];
+                        if (document.body.contains(script)) {
+                            document.body.removeChild(script);
+                        }
+                        reject(new Error('Hết thời gian chờ'));
+                    }
+                }, 15000);
+            });
+        }
+        
+        function showFeedbackError(message) {
+            const errorDiv = document.getElementById('feedbackError');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        function showFeedbackSuccess(message) {
+            const successDiv = document.getElementById('feedbackSuccess');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+        }
+        
+        document.getElementById('password').addEventListener('input', function(e) {
+            this.value = this.value.toUpperCase();
+        });
+        
+        document.getElementById('password').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                accessReport();
+            }
+        });
+        
+        window.onclick = function(event) {
+            const modal = document.getElementById('feedbackModal');
+            if (event.target === modal) {
+                closeFeedbackModal();
+            }
+        }
+        
+        window.addEventListener('load', function() {
+            document.getElementById('password').focus();
+        });
+    </script>
+</body>
+</html>

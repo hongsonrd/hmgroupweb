@@ -1465,7 +1465,129 @@ class _NewsSectionState extends State<NewsSection> with AutomaticKeepAliveClient
      },
    );
  }
-
+Future<NewsActivityModel?> _loadLatestCommentForNews(String newsId) async {
+  try {
+    final results = await _dbHelper.rawQuery(
+      "SELECT * FROM NewsActivity WHERE NewsID = ? AND PhanLoai = 'Comment' ORDER BY Ngay DESC, Gio DESC LIMIT 1",
+      [newsId]
+    );
+    
+    if (results.isNotEmpty) {
+      return NewsActivityModel.fromMap({
+        'likeID': results.first['LikeID'],
+        'newsID': results.first['NewsID'],
+        'ngay': results.first['Ngay'],
+        'gio': results.first['Gio'],
+        'phanLoai': results.first['PhanLoai'],
+        'noiDung': results.first['NoiDung'],
+        'nguoiDung': results.first['NguoiDung'],
+      });
+    }
+    return null;
+  } catch (e) {
+    print('Error loading latest comment from database: $e');
+    return null;
+  }
+}
+Widget _buildCommentPreview(String newsId) {
+  return FutureBuilder<NewsActivityModel?>(
+    future: _loadLatestCommentForNews(newsId),
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return SizedBox.shrink(); // Don't show loading for preview
+      } else if (snapshot.hasData && snapshot.data != null) {
+        final comment = snapshot.data!;
+        return Container(
+          margin: EdgeInsets.fromLTRB(12, 4, 12, 0),
+          padding: EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.grey[200]!),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                backgroundImage: AssetImage('assets/avatar.png'),
+                radius: 10,
+              ),
+              SizedBox(width: 6),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          comment.nguoiDung ?? 'Ẩn danh',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                        SizedBox(width: 4),
+                        Text(
+                          '•',
+                          style: TextStyle(
+                            color: Colors.grey[400],
+                            fontSize: 11,
+                          ),
+                        ),
+                        SizedBox(width: 4),
+                        Text(
+                          _formatCommentTime(comment.ngay, comment.gio),
+                          style: TextStyle(
+                            color: Colors.grey[500],
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      comment.noiDung ?? '',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey[800],
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      } else {
+        return SizedBox.shrink(); // No comment to show
+      }
+    },
+  );
+}
+String _formatCommentTime(String? ngay, String? gio) {
+  if (ngay == null || gio == null) return '';
+  
+  try {
+    DateTime commentDate = DateTime.parse('$ngay $gio');
+    final now = DateTime.now();
+    final difference = now.difference(commentDate);
+    
+    if (difference.inDays > 0) {
+      return '${difference.inDays}d';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m';
+    } else {
+      return 'now';
+    }
+  } catch (e) {
+    return '$ngay';
+  }
+}
  Widget _buildNewsCard(NewsModel news) {
    bool hasVideo = news.hinhAnh != null && _isVideoUrl(news.hinhAnh!);
    String newsId = news.newsID ?? 'unknown';
@@ -1729,7 +1851,9 @@ class _NewsSectionState extends State<NewsSection> with AutomaticKeepAliveClient
                    overflow: TextOverflow.ellipsis,
                  ),
                ),
-             
+             if (news.newsID != null)
+  _buildCommentPreview(news.newsID!),
+
              Padding(
                padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
                child: Row(

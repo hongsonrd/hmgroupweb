@@ -78,6 +78,7 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
   {'icon': 'assets/logoonline.png', 'name': 'Đào tạo online', 'link': 'https://yourworldtravel.vn/api/index3.html', 'tab': 0},
   {'icon': 'assets/emaillogo.png', 'name': 'Tạo chữ ký email', 'link': 'https://yourworldtravel.vn/api/indexsignature.html', 'tab': 0},
   {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo hàng ngày', 'link': 'https://yourworldtravel.vn/drive/dailyreport.html', 'tab': 1},
+  {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo hàng ngày (win)', 'link': 'https://yourworldtravel.vn/drive/dailyreport2.html', 'tab': 1},
   {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Robot tự động', 'link': 'https://yourworldtravel.vn/drive/dailyrobot.html', 'tab': 1},
   {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Lịch chuyến bay', 'link': 'https://yourworldtravel.vn/drive/dailyrobot2.html', 'tab': 1},
   {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo máy móc',
