@@ -997,10 +997,13 @@ double _calculateSoPhepSuDung(String nguoiDung, String date) {
 }
 
 double _calculateTangCa(String nguoiDung, String date) {
+  double total = 0; 
+  
   for (final record in _otherCaseData) {
     if (record['NguoiDung'] == nguoiDung && 
         record['PhanLoai'] == 'Tăng ca' &&
         record['TrangThai'] == 'Đồng ý') {
+      
       final ngayBatDauStr = record['NgayBatDau']?.toString() ?? '';
       final ngayKetThucStr = record['NgayKetThuc']?.toString() ?? '';
       
@@ -1010,11 +1013,29 @@ double _calculateTangCa(String nguoiDung, String date) {
       
       if (ngayBatDau != null && ngayKetThuc != null &&
           !currentDate.isBefore(ngayBatDau) && !currentDate.isAfter(ngayKetThuc)) {
-        return double.tryParse(record['GiaTriNgay']?.toString() ?? '0') ?? 0;
+        
+        // Changed from GiaTriNgay to TruongHop
+        final truongHopValue = record['TruongHop']?.toString() ?? '0';
+        
+        // Try to parse as double first, if that fails, try to extract numbers from text
+        double parsedValue = double.tryParse(truongHopValue) ?? 0;
+        
+        // If direct parsing failed, try to extract numeric value from text
+        if (parsedValue == 0 && truongHopValue.isNotEmpty) {
+          // Extract numbers from text (e.g., "Tăng ca 2 giờ" -> 2)
+          final regex = RegExp(r'(\d+(?:\.\d+)?)');
+          final match = regex.firstMatch(truongHopValue);
+          if (match != null) {
+            parsedValue = double.tryParse(match.group(1) ?? '0') ?? 0;
+          }
+        }
+        
+        total += parsedValue;
       }
     }
   }
-  return 0;
+  
+  return total;
 }
 
 double _calculateDiMuon(String nguoiDung, String date) {
