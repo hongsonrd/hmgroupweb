@@ -354,29 +354,41 @@ Future<void> _loadCustomerKPI() async {
 
     // Calculate revenue by staff from filtered orders
     for (var order in filteredOrdersInPeriod) {
-      final staff = order.nguoiTao!;
-      if (staffKPIMap.containsKey(staff)) {
-        // Add tongTien to doanhThuTruocThue
-        if (order.tongTien != null) {
-          try {
-            double tongTien = double.parse(order.tongTien.toString());
-            staffKPIMap[staff]!.doanhThuTruocThue += tongTien;
-          } catch (e) {
-            print('Error parsing tongTien: ${order.tongTien}');
-          }
+  final staff = order.nguoiTao!;
+  if (staffKPIMap.containsKey(staff)) {
+    // Add tongTien to doanhThuTruocThue (after subtracting hoaHong10)
+    if (order.tongTien != null) {
+      try {
+        double tongTien = double.parse(order.tongTien.toString());
+        double hoaHong10 = 0;
+
+        if (order.hoaHong10 != null) {
+          hoaHong10 = double.tryParse(order.hoaHong10.toString()) ?? 0;
         }
-        
-        // Add tongCong to doanhThuHoaDon
-        if (order.tongCong != null) {
-          try {
-            double tongCong = double.parse(order.tongCong.toString());
-            staffKPIMap[staff]!.doanhThuHoaDon += tongCong;
-          } catch (e) {
-            print('Error parsing tongCong: ${order.tongCong}');
-          }
-        }
+
+        staffKPIMap[staff]!.doanhThuTruocThue += (tongTien - hoaHong10);
+      } catch (e) {
+        print('Error parsing tongTien or hoaHong10: ${order.tongTien}, ${order.hoaHong10}');
       }
     }
+
+    // Add tongCong to doanhThuHoaDon (unchanged)
+    if (order.tongCong != null) {
+  try {
+    double tongCong = double.parse(order.tongCong.toString());
+    double hoaHong10 = 0;
+
+    if (order.hoaHong10 != null) {
+      hoaHong10 = double.tryParse(order.hoaHong10.toString()) ?? 0;
+    }
+
+    staffKPIMap[staff]!.doanhThuHoaDon += (tongCong - hoaHong10);
+  } catch (e) {
+    print('Error parsing tongCong or hoaHong10: ${order.tongCong}, ${order.hoaHong10}');
+  }
+}
+  }
+}
 
     // Get final filtered lists
     List<StaffCustomerKPI> filteredStaffKPI = staffKPIMap.values.toList();
