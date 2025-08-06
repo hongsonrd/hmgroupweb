@@ -1422,7 +1422,7 @@ bool showAirportButton = airportPermissions.isEmpty || airportPermissions.contai
                       Container(
                         margin: const EdgeInsets.only(bottom: 15),
                         child: const Text(
-                          '1.0.9',
+                          '1.1.0',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 18,

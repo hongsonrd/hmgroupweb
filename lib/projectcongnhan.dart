@@ -13,9 +13,10 @@ import 'dart:typed_data';
 import 'db_helper.dart';
 import 'table_models.dart';
 import 'projectcongnhanexcel.dart';
+import 'projectcongnhanns.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'projectcongnhanllv.dart';
-
+import 'dart:math';
 class ProjectCongNhan extends StatefulWidget {
   final String username;
 
@@ -71,9 +72,30 @@ List<QRLookupModel> _qrLookups = [];
     super.dispose();
   }
 
-  Future<void> _initializeData() async {
+ Future<void> _initializeData() async {
   await _checkAndSync();
   await _loadAllData();
+  
+  // 33% base chance, but can be modified by other factors
+  double syncProbability = 0.18;
+  
+  // Optional: Increase chance if it's been a while since last sync
+  final prefs = await SharedPreferences.getInstance();
+  final lastSync = prefs.getInt('lastTaskScheduleSync') ?? 0;
+  final hoursSinceLastSync = (DateTime.now().millisecondsSinceEpoch - lastSync) / (1000 * 60 * 60);
+  
+  if (hoursSinceLastSync > 24) {
+    syncProbability = 0.36; // Increase to 36% if more than 24 hours
+  }
+  
+  final random = Random();
+  if (random.nextDouble() < syncProbability) {
+    print('TaskSchedule sync triggered (${(syncProbability * 100).toInt()}% chance)');
+    _syncTaskSchedules();
+  } else {
+    print('TaskSchedule sync skipped');
+  }
+  
   _processBoPhanCorrection();
   _updateFilterOptions();
   _autoSelectFilters();
@@ -1306,6 +1328,18 @@ Future<void> _exportMonth() async {
     });
   }
 }
+void _navigateToDepartmentEvaluation() {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => ProjectCongNhanNS(
+        username: widget.username,
+        taskSchedules: _taskSchedules,
+        qrLookups: _qrLookups,
+      ),
+    ),
+  );
+}
  Widget _buildWorkersTable() {
    if (_selectedProject == null || _selectedDate == null) {
      return Container(
@@ -1408,42 +1442,60 @@ Future<void> _exportMonth() async {
         ],
       ),
       SizedBox(height: 12),
-      Row(
-        children: [
-          ElevatedButton.icon(
-            onPressed: _isLoading ? null : () => _exportExcel(),
-            icon: Icon(Icons.table_chart, size: 18),
-            label: Text('Xuất excel'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green[600],
-              foregroundColor: Colors.white,
-            ),
+      Container(
+  height: 50,
+  child: SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: Row(
+      children: [
+        ElevatedButton.icon(
+          onPressed: _isLoading ? null : () => _exportExcel(),
+          icon: Icon(Icons.table_chart, size: 18),
+          label: Text('Xuất excel'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green[600],
+            foregroundColor: Colors.white,
           ),
-          SizedBox(width: 12),
-          ElevatedButton.icon(
-            onPressed: _isLoading ? null : () => _exportMonth(),
-            icon: Icon(Icons.calendar_month, size: 18),
-            label: Text('Xuất tháng'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange[600],
-              foregroundColor: Colors.white,
-            ),
+        ),
+        SizedBox(width: 12),
+        ElevatedButton.icon(
+          onPressed: _isLoading ? null : () => _exportMonth(),
+          icon: Icon(Icons.calendar_month, size: 18),
+          label: Text('Xuất tháng'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.orange[600],
+            foregroundColor: Colors.white,
           ),
-          SizedBox(width: 12),
-          // Add the new View Schedule button
-          ElevatedButton.icon(
-            onPressed: (_isLoading || _selectedProject == null || _taskSchedules.isEmpty) 
-                ? null 
-                : () => _showProjectScheduleDialog(),
-            icon: Icon(Icons.schedule, size: 18),
-            label: Text('Xem lịch làm việc'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.purple[600],
-              foregroundColor: Colors.white,
-            ),
+        ),
+        SizedBox(width: 12),
+        ElevatedButton.icon(
+          onPressed: (_isLoading || _selectedProject == null || _taskSchedules.isEmpty) 
+              ? null 
+              : () => _showProjectScheduleDialog(),
+          icon: Icon(Icons.schedule, size: 18),
+          label: Text('Xem lịch làm việc'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.purple[600],
+            foregroundColor: Colors.white,
           ),
-        ],
-      ),
+        ),
+        SizedBox(width: 12),
+        ElevatedButton.icon(
+          onPressed: (_isLoading || _taskSchedules.isEmpty) 
+              ? null 
+              : () => _navigateToDepartmentEvaluation(),
+          icon: Icon(Icons.assessment_outlined, size: 18),
+          label: Text('Đánh giá bộ phận'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.indigo[600],
+            foregroundColor: Colors.white,
+          ),
+        ),
+        SizedBox(width: 16),
+      ],
+    ),
+  ),
+),
     ],
   ),
 ),
@@ -1900,44 +1952,44 @@ final List<QRLookupModel> qrLookups;
     }
   }
 
-  String _getTimeDifferenceText(String reportTime, String scheduleInfo) {
-    try {
-      // Parse schedule info (format: START-END-TASK)
-      final parts = scheduleInfo.split('-');
-      if (parts.length >= 2) {
-        final scheduleTime = parts[0];
-        final timeDiff = TaskScheduleManager.calculateTimeDifference(reportTime, scheduleTime);
-        
-        if (timeDiff == 0) {
-          return '⏰ Đúng giờ';
-        } else if (timeDiff > 0) {
-          return '⏰ Muộn ${timeDiff} phút';
-        } else {
-          return '⏰ Sớm ${(-timeDiff)} phút';
-        }
+String _getTimeDifferenceText(String reportTime, String scheduleInfo) {
+  try {
+    // Parse schedule info (format: START-END-TASK)
+    final parts = scheduleInfo.split('-');
+    if (parts.length >= 2) {
+      final scheduleEndTime = parts[1];
+      final timeDiff = TaskScheduleManager.calculateTimeDifference(reportTime, scheduleEndTime);
+      
+      if (timeDiff == 0) {
+        return '⏰ Đúng giờ';
+      } else if (timeDiff > 0) {
+        return '⏰ Muộn ${timeDiff} phút';
+      } else {
+        return '⏰ Sớm ${(-timeDiff)} phút';
       }
-      return '';
-    } catch (e) {
-      return '';
     }
+    return '';
+  } catch (e) {
+    return '';
   }
+}
 
-  Color _getTimeDifferenceColor(String reportTime, String scheduleInfo) {
-    try {
-      final parts = scheduleInfo.split('-');
-      if (parts.length >= 2) {
-        final scheduleTime = parts[0];
-        final timeDiff = TaskScheduleManager.calculateTimeDifference(reportTime, scheduleTime);
-        
-        if (timeDiff == 0) return Colors.green;
-        if (timeDiff > 0) return Colors.red;
-        return Colors.blue;
-      }
-      return Colors.grey;
-    } catch (e) {
-      return Colors.grey;
+Color _getTimeDifferenceColor(String reportTime, String scheduleInfo) {
+  try {
+    final parts = scheduleInfo.split('-');
+    if (parts.length >= 2) {
+      final scheduleEndTime = parts[1];
+      final timeDiff = TaskScheduleManager.calculateTimeDifference(reportTime, scheduleEndTime);
+      
+      if (timeDiff == 0) return Colors.green;
+      if (timeDiff > 0) return Colors.red;
+      return Colors.blue;
     }
+    return Colors.grey;
+  } catch (e) {
+    return Colors.grey;
   }
+}
 
   String _getWorkerPosition() {
   final positions = <String, int>{};

@@ -825,22 +825,78 @@ Future<void> _generatePDFReport() async {
   }
 
   Widget _buildSummaryTab() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildReportCountChart(),
-          SizedBox(height: 24),
-          _buildResultPercentage(),
-          SizedBox(height: 24),
-          _buildProjectList(),
-          SizedBox(height: 24),
-        _buildNonOkIncidents(),
-        ],
+  return Column(
+    children: [
+      // Add project filter at the top
+      Container(
+        padding: EdgeInsets.all(16),
+        color: Colors.grey[50],
+        child: Row(
+          children: [
+            Icon(Icons.filter_list, color: Colors.grey[600]),
+            SizedBox(width: 8),
+            Text(
+              'Lọc theo dự án:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            SizedBox(width: 16),
+            Expanded(
+              child: DropdownButton<String>(
+                value: _selectedProject ?? 'Tất cả',
+                isExpanded: true,
+                items: _availableProjects.map((project) {
+                  return DropdownMenuItem<String>(
+                    value: project,
+                    child: Text(
+                      project,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _selectedProject = value;
+                    _applyFilters();
+                  });
+                },
+              ),
+            ),
+            SizedBox(width: 16),
+            if (_selectedProject != null && _selectedProject != 'Tất cả')
+              IconButton(
+                icon: Icon(Icons.clear, color: Colors.red),
+                onPressed: () {
+                  setState(() {
+                    _selectedProject = 'Tất cả';
+                    _applyFilters();
+                  });
+                },
+                tooltip: 'Xóa bộ lọc',
+              ),
+          ],
+        ),
       ),
-    );
-  }
+      // Existing summary content
+      Expanded(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildReportCountChart(),
+              SizedBox(height: 24),
+              _buildResultPercentage(),
+              SizedBox(height: 24),
+              _buildProjectList(),
+              SizedBox(height: 24),
+              _buildNonOkIncidents(),
+            ],
+          ),
+        ),
+      ),
+    ],
+  );
+}
 
   Widget _buildReportCountChart() {
   final dateGroups = <String, int>{};
