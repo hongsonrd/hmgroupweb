@@ -60,7 +60,202 @@ class _MachineryUsageReportState extends State<MachineryUsageReport>
     _tabController.dispose();
     super.dispose();
   }
+String _getMachineType(String? chiTiet2) {
+  if (chiTiet2 == null || chiTiet2.isEmpty) return 'Không xác định';
+  
+  final parts = chiTiet2.split('-');
+  if (parts.length != 2) return 'Không xác định';
+  
+  final machineCode = parts[0].toUpperCase();
+  
+  // Machine type mapping based on your provided data
+  final machineTypes = {
+    'BD': 'Bộ đàm',
+    'BGG': 'Bộ giàn giáo', 
+    'BGN': 'Bộ giàn nhỏ',
+    'MBN': 'Máy bơm nước',
+    'MCC': 'Máy cắt cỏ',
+    'MCHA': 'Máy chà hút acquy',
+    'MCHDD': 'Máy chà hút dây điện',
+    'MDBD': 'Máy đánh bóng đá',
+    'MDSC': 'Máy đánh sàn chậm',
+    'MDSN': 'Máy đánh sàn nhanh',
+    'MG': 'Máy giặt',
+    'MHB': 'Máy hút bụi',
+    'MHN': 'Máy hút nước',
+    'MNL': 'Máy người lái',
+    'MPAL': 'Máy phun áp lực',
+    'MS': 'Máy sấy',
+    'MTT': 'Máy thổi thảm',
+    'MTC': 'Máy thông cống',
+    'MTL': 'Máy thổi lá',
+    'TR': 'Thùng rác',
+    'XCDI': 'Xe chở đồ inox',
+    'XCRA': 'Xe chở rác acquy',
+    'XGRMT': 'Xe gom rác môi trường',
+    'XI2X': 'Xe inox 2 xô',
+    'XLB': 'Xe làm buồng',
+    'XVD': 'Xe vắt đơn',
+    'OD': 'Ống dây',
+    'DT': 'Điện thoại',
+  };
+  
+  return machineTypes[machineCode] ?? 'Không xác định ($machineCode)';
+}
+Widget _buildMachineUsageSummary() {
+  // Count individual machines
+  final machineUsage = <String, int>{};
+  final machineTypeUsage = <String, int>{};
+  
+  for (final record in _filteredData) {
+    if (record.chiTiet2?.isNotEmpty == true) {
+      // Count individual machines
+      machineUsage[record.chiTiet2!] = (machineUsage[record.chiTiet2!] ?? 0) + 1;
+      
+      // Count machine types
+      final machineType = _getMachineType(record.chiTiet2);
+      machineTypeUsage[machineType] = (machineTypeUsage[machineType] ?? 0) + 1;
+    }
+  }
+  
+  // Sort by usage count
+  final sortedMachines = machineUsage.entries.toList()
+    ..sort((a, b) => b.value.compareTo(a.value));
+  final sortedMachineTypes = machineTypeUsage.entries.toList()
+    ..sort((a, b) => b.value.compareTo(a.value));
 
+  return Card(
+    child: Padding(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Thống kê sử dụng máy móc',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          SizedBox(height: 16),
+          
+          if (machineUsage.isEmpty)
+            Center(child: Text('Không có dữ liệu máy móc'))
+          else
+            Column(
+              children: [
+                // Machine Types Summary
+                ExpansionTile(
+                  title: Text(
+                    'Loại máy (${machineTypeUsage.length} loại)',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  initiallyExpanded: true,
+                  children: [
+                    Container(
+                      height: 200,
+                      child: ListView.builder(
+                        itemCount: sortedMachineTypes.length,
+                        itemBuilder: (context, index) {
+                          final entry = sortedMachineTypes[index];
+                          final percentage = _filteredData.length > 0 
+                              ? (entry.value / _filteredData.length * 100) 
+                              : 0.0;
+                          
+                          return Padding(
+                            padding: EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  flex: 3,
+                                  child: Text(
+                                    entry.key,
+                                    style: TextStyle(fontSize: 13),
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 2,
+                                  child: LinearProgressIndicator(
+                                    value: percentage / 100,
+                                    backgroundColor: Colors.grey[200],
+                                    valueColor: AlwaysStoppedAnimation(Colors.blue),
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  '${entry.value} (${percentage.toStringAsFixed(1)}%)',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                
+                SizedBox(height: 12),
+                
+                // Individual Machines Summary
+                ExpansionTile(
+                  title: Text(
+                    'Máy cụ thể (${machineUsage.length} máy)',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  children: [
+                    Container(
+                      height: 300,
+                      child: ListView.builder(
+                        itemCount: sortedMachines.length,
+                        itemBuilder: (context, index) {
+                          final entry = sortedMachines[index];
+                          final machineType = _getMachineType(entry.key);
+                          final percentage = _filteredData.length > 0 
+                              ? (entry.value / _filteredData.length * 100) 
+                              : 0.0;
+                          
+                          return Card(
+                            margin: EdgeInsets.symmetric(vertical: 2),
+                            child: ListTile(
+                              dense: true,
+                              title: Text(
+                                entry.key,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              subtitle: Text(
+                                machineType,
+                                style: TextStyle(fontSize: 12),
+                              ),
+                              trailing: Container(
+                                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue[100],
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '${entry.value} lần (${percentage.toStringAsFixed(1)}%)',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue[800],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+        ],
+      ),
+    ),
+  );
+}
   void _setupAutoSync() {
     // Auto sync every 30 minutes
     Stream.periodic(Duration(minutes: 30)).listen((_) {
@@ -495,7 +690,364 @@ Future<void> _generatePDFReport() async {
         ],
       ),
     );
+// Add this new page for machine usage statistics after the project details page
+pdf.addPage(
+  pw.MultiPage(
+    pageFormat: PdfPageFormat.a4,
+    margin: pw.EdgeInsets.all(20),
+    build: (context) {
+      // Process machine data
+      final machineUsage = <String, int>{};
+      final machineTypeUsage = <String, int>{};
+      
+      for (final record in _filteredData) {
+        if (record.chiTiet2?.isNotEmpty == true) {
+          machineUsage[record.chiTiet2!] = (machineUsage[record.chiTiet2!] ?? 0) + 1;
+          final machineType = _getMachineType(record.chiTiet2);
+          machineTypeUsage[machineType] = (machineTypeUsage[machineType] ?? 0) + 1;
+        }
+      }
+      
+      final sortedMachineTypes = machineTypeUsage.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      final sortedMachines = machineUsage.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
 
+      return [
+        // Page header
+        pw.Row(
+          children: [
+            pw.Container(
+              width: 30,
+              height: 30,
+              decoration: pw.BoxDecoration(
+                color: PdfColors.blue,
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: pw.Center(
+                child: pw.Text('🔧', 
+                  style: pw.TextStyle(color: PdfColors.white, fontSize: 16)),
+              ),
+            ),
+            pw.SizedBox(width: 12),
+            pw.Text(
+              'THỐNG KÊ SỬ DỤNG MÁY MÓC',
+              style: pw.TextStyle(font: ttf, fontSize: 18, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.Spacer(),
+            pw.Container(
+              padding: pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.blue100,
+                borderRadius: pw.BorderRadius.circular(8),
+              ),
+              child: pw.Text(
+                'Tháng ${DateFormat('MM/yyyy').format(DateTime.parse('${_selectedPeriod}-01'))}',
+                style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        pw.SizedBox(height: 20),
+        
+        // Summary statistics
+        pw.Container(
+          padding: pw.EdgeInsets.all(12),
+          decoration: pw.BoxDecoration(
+            color: PdfColors.blue50,
+            border: pw.Border.all(color: PdfColors.blue200),
+            borderRadius: pw.BorderRadius.circular(6),
+          ),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+            children: [
+              pw.Column(
+                children: [
+                  pw.Text(
+                    '${sortedMachineTypes.length}',
+                    style: pw.TextStyle(font: ttf, fontSize: 24, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800),
+                  ),
+                  pw.Text('Loại máy', style: pw.TextStyle(font: ttf, fontSize: 12)),
+                ],
+              ),
+              pw.Container(width: 1, height: 40, color: PdfColors.blue200),
+              pw.Column(
+                children: [
+                  pw.Text(
+                    '${sortedMachines.length}',
+                    style: pw.TextStyle(font: ttf, fontSize: 24, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800),
+                  ),
+                  pw.Text('Máy cụ thể', style: pw.TextStyle(font: ttf, fontSize: 12)),
+                ],
+              ),
+              pw.Container(width: 1, height: 40, color: PdfColors.blue200),
+              pw.Column(
+                children: [
+                  pw.Text(
+                    '${machineUsage.values.fold(0, (a, b) => a + b)}',
+                    style: pw.TextStyle(font: ttf, fontSize: 24, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800),
+                  ),
+                  pw.Text('Lượt sử dụng', style: pw.TextStyle(font: ttf, fontSize: 12)),
+                ],
+              ),
+            ],
+          ),
+        ),
+        pw.SizedBox(height: 25),
+        
+        // Machine types section
+        pw.Text(
+          'THỐNG KÊ THEO LOẠI MÁY',
+          style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.SizedBox(height: 12),
+        
+        if (machineTypeUsage.isEmpty)
+          pw.Text('Không có dữ liệu máy móc', style: pw.TextStyle(font: ttf, fontSize: 12))
+        else
+          pw.Table(
+            border: pw.TableBorder.all(color: PdfColors.grey400),
+            columnWidths: {
+              0: pw.FlexColumnWidth(1),
+              1: pw.FlexColumnWidth(4),
+              2: pw.FlexColumnWidth(2),
+              3: pw.FlexColumnWidth(2),
+              4: pw.FlexColumnWidth(3),
+            },
+            children: [
+              // Header row
+              pw.TableRow(
+                decoration: pw.BoxDecoration(color: PdfColors.blue100),
+                children: [
+                  pw.Padding(
+                    padding: pw.EdgeInsets.all(6),
+                    child: pw.Text('#', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  ),
+                  pw.Padding(
+                    padding: pw.EdgeInsets.all(6),
+                    child: pw.Text('Loại máy', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  ),
+                  pw.Padding(
+                    padding: pw.EdgeInsets.all(6),
+                    child: pw.Text('Số lần', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  ),
+                  pw.Padding(
+                    padding: pw.EdgeInsets.all(6),
+                    child: pw.Text('Tỷ lệ', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  ),
+                  pw.Padding(
+                    padding: pw.EdgeInsets.all(6),
+                    child: pw.Text('Biểu đồ', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  ),
+                ],
+              ),
+              // Data rows
+              ...sortedMachineTypes.asMap().entries.map((entry) {
+                final index = entry.key + 1;
+                final machineEntry = entry.value;
+                final percentage = _filteredData.length > 0 ? (machineEntry.value / _filteredData.length * 100) : 0.0;
+                final barWidth = 100.0;
+                final fillWidth = barWidth * (percentage / 100);
+                
+                return pw.TableRow(
+                  decoration: pw.BoxDecoration(
+                    color: index % 2 == 0 ? PdfColors.grey50 : PdfColors.white,
+                  ),
+                  children: [
+                    pw.Padding(
+                      padding: pw.EdgeInsets.all(6),
+                      child: pw.Text(index.toString(), style: pw.TextStyle(font: ttf, fontSize: 10)),
+                    ),
+                    pw.Padding(
+                      padding: pw.EdgeInsets.all(6),
+                      child: pw.Text(machineEntry.key, style: pw.TextStyle(font: ttf, fontSize: 10)),
+                    ),
+                    pw.Padding(
+                      padding: pw.EdgeInsets.all(6),
+                      child: pw.Text(machineEntry.value.toString(), style: pw.TextStyle(font: ttf, fontSize: 10)),
+                    ),
+                    pw.Padding(
+                      padding: pw.EdgeInsets.all(6),
+                      child: pw.Text('${percentage.toStringAsFixed(1)}%', style: pw.TextStyle(font: ttf, fontSize: 10)),
+                    ),
+                    pw.Padding(
+                      padding: pw.EdgeInsets.all(6),
+                      child: pw.Container(
+                        width: barWidth,
+                        height: 8,
+                        decoration: pw.BoxDecoration(
+                          color: PdfColors.grey200,
+                          borderRadius: pw.BorderRadius.circular(4),
+                        ),
+                        child: pw.Stack(
+                          children: [
+                            if (fillWidth > 0)
+                              pw.Container(
+                                width: fillWidth,
+                                height: 8,
+                                decoration: pw.BoxDecoration(
+                                  color: PdfColors.blue,
+                                  borderRadius: pw.BorderRadius.circular(4),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }).toList(),
+            ],
+          ),
+        
+        pw.SizedBox(height: 25),
+        
+        // Individual machines section
+        pw.Text(
+          'CHI TIẾT TỪNG MÁY',
+          style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.SizedBox(height: 12),
+        
+        if (machineUsage.isEmpty)
+          pw.Text('Không có dữ liệu máy cụ thể', style: pw.TextStyle(font: ttf, fontSize: 12))
+        else
+          pw.Table(
+            border: pw.TableBorder.all(color: PdfColors.grey400),
+            columnWidths: {
+              0: pw.FlexColumnWidth(1),
+              1: pw.FlexColumnWidth(2),
+              2: pw.FlexColumnWidth(4),
+              3: pw.FlexColumnWidth(2),
+              4: pw.FlexColumnWidth(2),
+            },
+            children: [
+              // Header row
+              pw.TableRow(
+                decoration: pw.BoxDecoration(color: PdfColors.green100),
+                children: [
+                  pw.Padding(
+                    padding: pw.EdgeInsets.all(6),
+                    child: pw.Text('#', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  ),
+                  pw.Padding(
+                    padding: pw.EdgeInsets.all(6),
+                    child: pw.Text('Mã máy', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  ),
+                  pw.Padding(
+                    padding: pw.EdgeInsets.all(6),
+                    child: pw.Text('Loại máy', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  ),
+                  pw.Padding(
+                    padding: pw.EdgeInsets.all(6),
+                    child: pw.Text('Số lần', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  ),
+                  pw.Padding(
+                    padding: pw.EdgeInsets.all(6),
+                    child: pw.Text('Tỷ lệ', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  ),
+                ],
+              ),
+              // Data rows - show top 20 machines
+              ...sortedMachines.take(20).toList().asMap().entries.map((entry) {
+                final index = entry.key + 1;
+                final machineEntry = entry.value;
+                final machineType = _getMachineType(machineEntry.key);
+                final percentage = _filteredData.length > 0 ? (machineEntry.value / _filteredData.length * 100) : 0.0;
+                
+                return pw.TableRow(
+                  decoration: pw.BoxDecoration(
+                    color: index % 2 == 0 ? PdfColors.grey50 : PdfColors.white,
+                  ),
+                  children: [
+                    pw.Padding(
+                      padding: pw.EdgeInsets.all(6),
+                      child: pw.Text(index.toString(), style: pw.TextStyle(font: ttf, fontSize: 10)),
+                    ),
+                    pw.Padding(
+                      padding: pw.EdgeInsets.all(6),
+                      child: pw.Text(
+                        machineEntry.key, 
+                        style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold),
+                      ),
+                    ),
+                    pw.Padding(
+                      padding: pw.EdgeInsets.all(6),
+                      child: pw.Text(machineType, style: pw.TextStyle(font: ttf, fontSize: 9)),
+                    ),
+                    pw.Padding(
+                      padding: pw.EdgeInsets.all(6),
+                      child: pw.Text(machineEntry.value.toString(), style: pw.TextStyle(font: ttf, fontSize: 10)),
+                    ),
+                    pw.Padding(
+                      padding: pw.EdgeInsets.all(6),
+                      child: pw.Text('${percentage.toStringAsFixed(1)}%', style: pw.TextStyle(font: ttf, fontSize: 10)),
+                    ),
+                  ],
+                );
+              }).toList(),
+            ],
+          ),
+        
+        if (sortedMachines.length > 20) ...[
+          pw.SizedBox(height: 10),
+          pw.Container(
+            padding: pw.EdgeInsets.all(8),
+            decoration: pw.BoxDecoration(
+              color: PdfColors.yellow50,
+              border: pw.Border.all(color: PdfColors.yellow200),
+              borderRadius: pw.BorderRadius.circular(4),
+            ),
+            child: pw.Text(
+              'Lưu ý: Chỉ hiển thị 20 máy được sử dụng nhiều nhất. Tổng số máy: ${sortedMachines.length}',
+              style: pw.TextStyle(font: ttf, fontSize: 10, fontStyle: pw.FontStyle.italic),
+            ),
+          ),
+        ],
+        
+        // Summary footer
+        pw.SizedBox(height: 20),
+        pw.Container(
+          padding: pw.EdgeInsets.all(12),
+          decoration: pw.BoxDecoration(
+            color: PdfColors.grey100,
+            borderRadius: pw.BorderRadius.circular(6),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'TÓM TẮT THỐNG KÊ:',
+                style: pw.TextStyle(font: ttf, fontSize: 12, fontWeight: pw.FontWeight.bold),
+              ),
+              pw.SizedBox(height: 4),
+              if (sortedMachineTypes.isNotEmpty) ...[
+                pw.Text(
+                  '• Loại máy được sử dụng nhiều nhất: ${sortedMachineTypes.first.key} (${sortedMachineTypes.first.value} lần)',
+                  style: pw.TextStyle(font: ttf, fontSize: 10),
+                ),
+              ],
+              if (sortedMachines.isNotEmpty) ...[
+                pw.Text(
+                  '• Máy cụ thể được sử dụng nhiều nhất: ${sortedMachines.first.key} (${sortedMachines.first.value} lần)',
+                  style: pw.TextStyle(font: ttf, fontSize: 10),
+                ),
+              ],
+              pw.Text(
+                '• Tổng lượt sử dụng tất cả máy: ${machineUsage.values.fold(0, (a, b) => a + b)} lần',
+                style: pw.TextStyle(font: ttf, fontSize: 10),
+              ),
+              pw.Text(
+                '• Trung bình mỗi máy được sử dụng: ${machineUsage.isNotEmpty ? (machineUsage.values.fold(0, (a, b) => a + b) / machineUsage.length).toStringAsFixed(1) : 0} lần',
+                style: pw.TextStyle(font: ttf, fontSize: 10),
+              ),
+            ],
+          ),
+        ),
+      ];
+    },
+  ),
+);
     // Second page for project details
     pdf.addPage(
       pw.MultiPage(
@@ -886,6 +1438,8 @@ Future<void> _generatePDFReport() async {
               _buildReportCountChart(),
               SizedBox(height: 24),
               _buildResultPercentage(),
+              SizedBox(height: 24),
+              _buildMachineUsageSummary(),  // ADD THIS LINE
               SizedBox(height: 24),
               _buildProjectList(),
               SizedBox(height: 24),
@@ -1480,57 +2034,58 @@ Widget _buildNonOkIncidents() {
   }
 
   Widget _buildRecordItem(TaskHistoryModel record) {
-    return Card(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: ListTile(
-        leading: Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            color: _getStatusColor(record.ketQua),
-            shape: BoxShape.circle,
-          ),
+  return Card(
+    margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    child: ListTile(
+      leading: Container(
+        width: 12,
+        height: 12,
+        decoration: BoxDecoration(
+          color: _getStatusColor(record.ketQua),
+          shape: BoxShape.circle,
         ),
-        title: Text(
-          record.boPhan ?? 'Không có dự án',
-          style: TextStyle(fontWeight: FontWeight.bold),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              record.chiTiet ?? 'Không có mô tả',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            SizedBox(height: 4),
-            Row(
-              children: [
-                Text(
-                  DateFormat('dd/MM/yyyy HH:mm').format(record.ngay),
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                ),
-                if (record.hinhAnh?.isNotEmpty == true) ...[
-                  SizedBox(width: 8),
-                  Icon(Icons.image, size: 16, color: Colors.blue),
-                ],
-              ],
-            ),
-          ],
-        ),
-        trailing: Text(
-          _formatKetQua(record.ketQua),
-          style: TextStyle(
-            color: _getStatusColor(record.ketQua),
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        onTap: () => _showRecordDetail(record),
       ),
-    );
-  }
+      title: Text(
+        record.boPhan ?? 'Không có dự án',
+        style: TextStyle(fontWeight: FontWeight.bold),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            record.chiTiet ?? 'Không có mô tả',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          SizedBox(height: 4),
+          Row(
+            children: [
+              Text(
+                // Fix: Combine date and time properly
+                '${DateFormat('dd/MM/yyyy').format(record.ngay)} ${record.gio ?? ''}',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+              if (record.hinhAnh?.isNotEmpty == true) ...[
+                SizedBox(width: 8),
+                Icon(Icons.image, size: 16, color: Colors.blue),
+              ],
+            ],
+          ),
+        ],
+      ),
+      trailing: Text(
+        _formatKetQua(record.ketQua),
+        style: TextStyle(
+          color: _getStatusColor(record.ketQua),
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      onTap: () => _showRecordDetail(record),
+    ),
+  );
+}
 
   void _showRecordDetail(TaskHistoryModel record) {
     showDialog(
