@@ -13,6 +13,7 @@ import 'projectworker.dart';
 import 'projectorder.dart';
 import 'projectimage.dart';
 import 'projectmachineorder.dart';
+import 'projectcongnhanns2.dart';
 class ProjectUpdateScreen extends StatefulWidget {
   final String boPhan;
 
@@ -59,6 +60,21 @@ class _ProjectUpdateScreenState extends State<ProjectUpdateScreen> {
     MaterialPageRoute(
       builder: (context) => ProjectWorker(
         selectedBoPhan: widget.boPhan,
+      ),
+    ),
+  ),
+),
+MenuCard(
+  title: 'Báo chất lượng\nVị trí LLV',
+  icon: Icons.cloud_sync,
+  color: Colors.pink,
+  onTap: () => Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => ProjectCongNhanNS(
+        username: Provider.of<UserCredentials>(context, listen: false).username,
+        //taskSchedules: [],
+        //qrLookups: [],
       ),
     ),
   ),
