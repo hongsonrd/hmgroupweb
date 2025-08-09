@@ -22,7 +22,9 @@ class ProjectCongNhanNS extends StatefulWidget {
 class _ProjectCongNhanNSState extends State<ProjectCongNhanNS> {
   bool _isLoading = false;
   String _syncStatus = '';
-  
+  Map<String, VolumeEntryModel> _volumeByTaskId = {};
+static const _klHistoryKey = 'lichcn_khoiluong_history_v1';
+
   // Task schedule data (fetched using TaskScheduleManager)
   List<TaskScheduleModel> _taskSchedules = [];
   List<QRLookupModel> _qrLookups = [];
@@ -41,9 +43,61 @@ class _ProjectCongNhanNSState extends State<ProjectCongNhanNS> {
     super.initState();
     _initializeData();
   }
+Future<void> _syncVolumeHistory() async {
+  try {
+    final url = '$baseUrl/lichcnlskhoiluong/${widget.username}';
+    final resp = await http.get(Uri.parse(url));
+    if (resp.statusCode == 200) {
+      final List<dynamic> list = json.decode(resp.body);
+      final entries = list.map((e) => VolumeEntryModel.fromMap(e)).toList();
+
+      // Keep latest by taskId (assume last by date/time is latest)
+      final map = <String, VolumeEntryModel>{};
+      for (final v in entries) {
+        final existing = map[v.taskId];
+        if (existing == null) {
+          map[v.taskId] = v;
+        } else {
+          final a = '${v.date} ${v.time}';
+          final b = '${existing.date} ${existing.time}';
+          if (a.compareTo(b) >= 0) map[v.taskId] = v;
+        }
+      }
+
+      // Save locally
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_klHistoryKey, json.encode(map.map((k, v) => MapEntry(k, v.toMap()))));
+
+      setState(() {
+        _volumeByTaskId = map;
+      });
+    } else {
+      // fallback to local
+      await _loadLocalVolumeHistory();
+    }
+  } catch (e) {
+    await _loadLocalVolumeHistory();
+  }
+}
+
+Future<void> _loadLocalVolumeHistory() async {
+  final prefs = await SharedPreferences.getInstance();
+  final str = prefs.getString(_klHistoryKey);
+  if (str == null || str.isEmpty) {
+    setState(() => _volumeByTaskId = {});
+    return;
+  }
+  final decoded = json.decode(str) as Map<String, dynamic>;
+  final map = <String, VolumeEntryModel>{};
+  decoded.forEach((taskId, val) {
+    map[taskId] = VolumeEntryModel.fromMap(val);
+  });
+  setState(() => _volumeByTaskId = map);
+}
 
   Future<void> _initializeData() async {
     await _checkAndSyncTaskSchedules();
+    await _syncVolumeHistory();
     _extractProjectPositions();
     await _checkAndSyncHistory();
     setState(() {});
@@ -86,16 +140,23 @@ class _ProjectCongNhanNSState extends State<ProjectCongNhanNS> {
       await prefs.setInt('lastTaskScheduleSync_NS', DateTime.now().millisecondsSinceEpoch);
       
       _showSuccess('Đồng bộ danh sách công việc thành công - ${_taskSchedules.length} nhiệm vụ, ${_qrLookups.length} ánh xạ');
+      await _syncVolumeHistory();
     } catch (e) {
       print('Error syncing task schedules: $e');
       _showError('Không thể đồng bộ danh sách công việc: ${e.toString()}');
       await _loadLocalTaskSchedules(); // Load local data if sync fails
     } finally {
-      setState(() {
-        _isLoading = false;
-        _syncStatus = '';
-      });
-    }
+  // 1) Do async work outside setState
+  await _loadLocalVolumeHistory();
+
+  // 2) Then update flags synchronously
+  if (!mounted) return;
+  setState(() {
+    _isLoading = false;
+    _syncStatus = '';
+  });
+}
+
   }
 
   Future<void> _loadLocalTaskSchedules() async {
@@ -345,17 +406,24 @@ class _ProjectCongNhanNSState extends State<ProjectCongNhanNS> {
    );
  }
 
- void _showPositionTaskList(String projectName, String positionName) {
-   showDialog(
-     context: context,
-     builder: (context) => PositionTaskListDialog(
-       projectName: projectName,
-       positionName: positionName,
-       taskSchedules: _taskSchedules,
-       qrLookups: _qrLookups,
-     ),
-   );
- }
+void _showPositionTaskList(String projectName, String positionName) {
+  showDialog(
+    context: context,
+    builder: (context) => PositionTaskListDialog(
+      projectName: projectName,
+      positionName: positionName,
+      taskSchedules: _taskSchedules,
+      qrLookups: _qrLookups,
+      currentUser: widget.username,      
+      baseUrl: baseUrl,
+      volumeByTaskId: _volumeByTaskId,    
+    ),
+  ).then((_) async {
+    // Refresh history after a possible edit/add
+    await _syncVolumeHistory();
+    setState(() {});
+  });
+}
 
  void _showSuccess(String message) {
    if (mounted) {
@@ -596,203 +664,195 @@ class _ProjectCongNhanNSState extends State<ProjectCongNhanNS> {
  }
 
  Widget _buildPositionsList() {
-   final isMobile = MediaQuery.of(context).size.width < 600;
-   
-   if (_selectedProject == null || _projectPositions[_selectedProject] == null) {
-     return Container(
-       padding: EdgeInsets.all(32),
-       child: Center(
-         child: Column(
-           children: [
-             Icon(
-               Icons.work_outline,
-               size: isMobile ? 48 : 64,
-               color: Colors.grey[400],
-             ),
-             SizedBox(height: 16),
-             Text(
-               'Vui lòng chọn dự án để xem danh sách vị trí',
-               style: TextStyle(
-                 fontSize: isMobile ? 14 : 16,
-                 color: Colors.grey[600],
-               ),
-               textAlign: TextAlign.center,
-             ),
-           ],
-         ),
-       ),
-     );
-   }
+  final isMobile = MediaQuery.of(context).size.width < 600;
+  
+  if (_selectedProject == null || _projectPositions[_selectedProject] == null) {
+    return Container(
+      padding: EdgeInsets.all(32),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(
+              Icons.work_outline,
+              size: isMobile ? 48 : 64,
+              color: Colors.grey[400],
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Vui lòng chọn dự án để xem danh sách vị trí',
+              style: TextStyle(
+                fontSize: isMobile ? 14 : 16,
+                color: Colors.grey[600],
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-   final positions = _projectPositions[_selectedProject]!;
-   
-   return Container(
-     margin: EdgeInsets.all(isMobile ? 12 : 16),
-     decoration: BoxDecoration(
-       color: Colors.white,
-       borderRadius: BorderRadius.circular(8),
-       boxShadow: [
-         BoxShadow(
-           color: Colors.grey.withOpacity(0.1),
-           spreadRadius: 1,
-           blurRadius: 3,
-           offset: Offset(0, 2),
-         ),
-       ],
-     ),
-     child: Column(
-       crossAxisAlignment: CrossAxisAlignment.start,
-       children: [
-         // Header
-         Container(
-           padding: EdgeInsets.all(isMobile ? 12 : 16),
-           decoration: BoxDecoration(
-             color: Colors.indigo[50],
-             borderRadius: BorderRadius.only(
-               topLeft: Radius.circular(8),
-               topRight: Radius.circular(8),
-             ),
-           ),
-           child: Column(
-             crossAxisAlignment: CrossAxisAlignment.start,
-             children: [
-               Row(
-                 children: [
-                   Icon(Icons.people_outline, color: Colors.indigo[600]),
-                   SizedBox(width: 8),
-                   Expanded(
-                     child: Text(
-                       'Danh sách vị trí - $_selectedProject',
-                       style: TextStyle(
-                         fontSize: isMobile ? 16 : 18,
-                         fontWeight: FontWeight.bold,
-                         color: Colors.indigo[800],
-                       ),
-                     ),
-                   ),
-                 ],
-               ),
-               SizedBox(height: isMobile ? 8 : 12),
-               ElevatedButton.icon(
-                 onPressed: () => _showEvaluationHistory(_selectedProject!),
-                 icon: Icon(Icons.history, size: isMobile ? 14 : 16),
-                 label: Text(
-                   'Xem lịch sử',
-                   style: TextStyle(fontSize: isMobile ? 12 : 14),
-                 ),
-                 style: ElevatedButton.styleFrom(
-                   backgroundColor: Colors.blue[600],
-                   foregroundColor: Colors.white,
-                   padding: EdgeInsets.symmetric(
-                     horizontal: isMobile ? 10 : 12,
-                     vertical: isMobile ? 6 : 8,
-                   ),
-                   minimumSize: Size(0, isMobile ? 32 : 36),
-                 ),
-               ),
-             ],
-           ),
-         ),
-         // Positions list
-         ListView.separated(
-           shrinkWrap: true,
-           physics: NeverScrollableScrollPhysics(),
-           itemCount: positions.length,
-           separatorBuilder: (context, index) => Divider(height: 1),
-           itemBuilder: (context, index) {
-             final position = positions[index];
-             
-             return Padding(
-               padding: EdgeInsets.all(isMobile ? 12 : 16),
-               child: Row(
-                 children: [
-                   // Position icon and info
-                   Container(
-                     width: isMobile ? 40 : 48,
-                     height: isMobile ? 40 : 48,
-                     decoration: BoxDecoration(
-                       color: Colors.indigo[100],
-                       borderRadius: BorderRadius.circular(isMobile ? 20 : 24),
-                     ),
-                     child: Icon(
-                       Icons.work,
-                       color: Colors.indigo[600],
-                       size: isMobile ? 20 : 24,
-                     ),
-                   ),
-                   SizedBox(width: isMobile ? 12 : 16),
-                   Expanded(
-                     child: Column(
-                       crossAxisAlignment: CrossAxisAlignment.start,
-                       children: [
-                         Text(
-                           position,
-                           style: TextStyle(
-                             fontSize: isMobile ? 14 : 16,
-                             fontWeight: FontWeight.w600,
-                           ),
-                         ),
-                         Text(
-                           'Vị trí trong dự án $_selectedProject',
-                           style: TextStyle(
-                             fontSize: isMobile ? 11 : 12,
-                             color: Colors.grey[600],
-                           ),
-                         ),
-                       ],
-                     ),
-                   ),
-                   // Action buttons
-                   Column(
-                     children: [
-                       SizedBox(
-                         width: isMobile ? 80 : 90,
-                         height: isMobile ? 32 : 36,
-                         child: ElevatedButton(
-                           onPressed: _isLoading 
-                               ? null 
-                               : () => _showPositionTaskList(_selectedProject!, position),
-                           child: Text(
-                             'Xem lịch',
-                             style: TextStyle(fontSize: isMobile ? 11 : 12),
-                           ),
-                           style: ElevatedButton.styleFrom(
-                             backgroundColor: Colors.green[600],
-                             foregroundColor: Colors.white,
-                             padding: EdgeInsets.symmetric(horizontal: 8),
-                           ),
-                         ),
-                       ),
-                       SizedBox(height: 6),
-                       SizedBox(
-                         width: isMobile ? 80 : 90,
-                         height: isMobile ? 32 : 36,
-                         child: ElevatedButton(
-                           onPressed: _isLoading 
-                               ? null 
-                               : () => _showEvaluationDialog(_selectedProject!, position),
-                           child: Text(
-                             'Đánh giá',
-                             style: TextStyle(fontSize: isMobile ? 11 : 12),
-                           ),
-                           style: ElevatedButton.styleFrom(
-                             backgroundColor: Colors.orange[600],
-                             foregroundColor: Colors.white,
-                             padding: EdgeInsets.symmetric(horizontal: 8),
-                           ),
-                         ),
-                       ),
-                     ],
-                   ),
-                 ],
-               ),
-             );
-           },
-         ),
-       ],
-     ),
-   );
- }
+  final positions = _projectPositions[_selectedProject]!;
+  
+  return Container(
+    margin: EdgeInsets.all(isMobile ? 12 : 16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(8),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.grey.withOpacity(0.1),
+          spreadRadius: 1,
+          blurRadius: 3,
+          offset: Offset(0, 2),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header
+        Container(
+          padding: EdgeInsets.all(isMobile ? 12 : 16),
+          decoration: BoxDecoration(
+            color: Colors.indigo[50],
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(8),
+              topRight: Radius.circular(8),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.people_outline, color: Colors.indigo[600]),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Danh sách vị trí - $_selectedProject',
+                      style: TextStyle(
+                        fontSize: isMobile ? 16 : 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.indigo[800],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: isMobile ? 8 : 12),
+              ElevatedButton.icon(
+                onPressed: () => _showEvaluationHistory(_selectedProject!),
+                icon: Icon(Icons.history, size: isMobile ? 14 : 16),
+                label: Text(
+                  'Xem lịch sử',
+                  style: TextStyle(fontSize: isMobile ? 12 : 14),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue[600],
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isMobile ? 10 : 12,
+                    vertical: isMobile ? 6 : 8,
+                  ),
+                  minimumSize: Size(0, isMobile ? 32 : 36),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Positions list
+        ListView.separated(
+          shrinkWrap: true,
+          physics: NeverScrollableScrollPhysics(),
+          itemCount: positions.length,
+          separatorBuilder: (context, index) => Divider(height: 1),
+          itemBuilder: (context, index) {
+            final position = positions[index];
+            
+            return InkWell(
+              onTap: _isLoading 
+                  ? null 
+                  : () => _showPositionTaskList(_selectedProject!, position),
+              child: Padding(
+                padding: EdgeInsets.all(isMobile ? 12 : 16),
+                child: Row(
+                  children: [
+                    // Position icon and info
+                    Container(
+                      width: isMobile ? 40 : 48,
+                      height: isMobile ? 40 : 48,
+                      decoration: BoxDecoration(
+                        color: Colors.indigo[100],
+                        borderRadius: BorderRadius.circular(isMobile ? 20 : 24),
+                      ),
+                      child: Icon(
+                        Icons.work,
+                        color: Colors.indigo[600],
+                        size: isMobile ? 20 : 24,
+                      ),
+                    ),
+                    SizedBox(width: isMobile ? 12 : 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            position,
+                            style: TextStyle(
+                              fontSize: isMobile ? 14 : 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            'Vị trí trong dự án $_selectedProject',
+                            style: TextStyle(
+                              fontSize: isMobile ? 11 : 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                          // Add a hint that the item is clickable
+                          SizedBox(height: 4),
+                          Text(
+                            'Nhấn để xem lịch công việc',
+                            style: TextStyle(
+                              fontSize: isMobile ? 10 : 11,
+                              color: Colors.blue[600],
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Only keep the evaluation button
+                    SizedBox(
+                      width: isMobile ? 80 : 90,
+                      height: isMobile ? 32 : 36,
+                      child: ElevatedButton(
+                        onPressed: _isLoading 
+                            ? null 
+                            : () => _showEvaluationDialog(_selectedProject!, position),
+                        child: Text(
+                          'Đánh giá',
+                          style: TextStyle(fontSize: isMobile ? 11 : 12),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange[600],
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    ),
+  );
+}
 
  @override
  Widget build(BuildContext context) {
