@@ -22,6 +22,7 @@ import '../projecttimelinemay.dart';
 import '../projectcongnhan.dart';
 import '../projectgiamsat.dart';
 import 'daily_report_screen.dart';
+import '../checklist_manager.dart';
 
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
@@ -93,6 +94,11 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
   },
     {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo giám sát',
     'link': 'giamsat_link',
+    'isDirectNavigation': true,
+    'tab': 1, 
+  },
+      {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Checklist dự án',
+    'link': 'list_link',
     'isDirectNavigation': true,
     'tab': 1, 
   },
@@ -256,6 +262,18 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (context) => ProjectGiamSat(username: username),
+        ),
+      );
+      return;
+    }
+        if (title == 'Checklist dự án') {
+      final userState = Provider.of<UserState>(context, listen: false);
+      final userData = userState.currentUser;
+      final username = userData?['username'] ?? '';
+      
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => ChecklistManager(username: username),
         ),
       );
       return;

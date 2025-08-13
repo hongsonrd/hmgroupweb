@@ -7,7 +7,10 @@ import 'db_helper.dart';
 import 'table_models.dart';
 import 'dart:async';
 import 'dart:math';
-
+import 'package:excel/excel.dart' hide Border;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'dart:io';
 class HSDSHangScreen extends StatefulWidget {
   const HSDSHangScreen({Key? key}) : super(key: key);
 
@@ -55,6 +58,306 @@ class _HSDSHangScreenState extends State<HSDSHangScreen> with SingleTickerProvid
     _loadCurrentUser();
     _loadDSHangData();
   }
+  Future<void> _exportDSHangToExcel() async {
+  try {
+    // Show choice dialog for desktop or direct export for mobile
+    final choice = await _showExportChoiceDialog();
+    if (choice == null) return; // User cancelled
+    
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    // Create Excel workbook
+    var excel = Excel.createExcel();
+    var sheetObject = excel['Danh sách hàng'];
+
+    // Add headers
+    List<String> headers = [
+      'STT',
+      'UID',
+      'SKU',
+      'Mã nhập kho',
+      'Tên sản phẩm',
+      'Phân loại',
+      'Chất liệu',
+      'Màu sắc',
+      'Thương hiệu',
+      'Nhà cung cấp',
+      'Xuất xứ',
+      'Đơn vị',
+      'Kích thước',
+      'Dung tích',
+      'Khối lượng',
+      'Quy cách đóng gói',
+      'Số lượng đóng gói',
+      'Kích thước đóng gói',
+      'Công dụng',
+      'Mô tả',
+      'Có thời hạn',
+      'Hàng tiêu hao',
+      'Thời hạn sử dụng',
+    ];
+
+    // Add headers to Excel
+    for (int i = 0; i < headers.length; i++) {
+      var cell = sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+      cell.value = headers[i];
+    }
+
+    // Add data rows
+    for (int rowIndex = 0; rowIndex < _filteredDSHang.length; rowIndex++) {
+      final item = _filteredDSHang[rowIndex];
+      final excelRowIndex = rowIndex + 1;
+
+      List<String> rowData = [
+        (rowIndex + 1).toString(), // STT
+        item.uid ?? '',
+        item.sku ?? '',
+        item.maNhapKho ?? '',
+        item.tenSanPham ?? '',
+        item.phanLoai1 ?? '',
+        item.chatLieu ?? '',
+        item.mauSac ?? '',
+        item.thuongHieu ?? '',
+        item.nhaCungCap ?? '',
+        item.xuatXu ?? '',
+        item.donVi ?? '',
+        item.kichThuoc ?? '',
+        item.dungTich ?? '',
+        item.khoiLuong ?? '',
+        item.quyCachDongGoi ?? '',
+        item.soLuongDongGoi?.toString() ?? '',
+        item.kichThuocDongGoi ?? '',
+        item.congDung ?? '',
+        item.moTa ?? '',
+        item.coThoiHan == true ? 'Có' : 'Không',
+        item.hangTieuHao == true ? 'Có' : 'Không',
+        item.thoiHanSuDung ?? '',
+      ];
+
+      for (int colIndex = 0; colIndex < rowData.length; colIndex++) {
+        var cell = sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: colIndex, rowIndex: excelRowIndex));
+        cell.value = rowData[colIndex];
+      }
+    }
+
+    // Generate filename
+    final fileName = 'DanhSachHang_${DateFormat('ddMMyyyy_HHmmss').format(DateTime.now())}.xlsx';
+    
+    // Save and handle based on user choice
+    final fileBytes = excel.encode()!;
+    
+    // Close loading dialog
+    Navigator.pop(context);
+    
+    if (choice == 'share') {
+      await _handleShareDSHang(fileBytes, fileName);
+    } else {
+      await _handleSaveToAppFolderDSHang(fileBytes, fileName);
+    }
+
+  } catch (e) {
+    // Close loading dialog if still open
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
+    
+    print('Error exporting to Excel: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Lỗi khi xuất Excel: $e')),
+    );
+  }
+}
+
+Future<String?> _showExportChoiceDialog() async {
+  return showDialog<String>(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Text('Xuất file Excel'),
+        content: Text('Bạn muốn chia sẻ file hay lưu vào thư mục ứng dụng?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop('share'),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.share, size: 16),
+                SizedBox(width: 4),
+                Text('Chia sẻ'),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop('save'),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.folder, size: 16),
+                SizedBox(width: 4),
+                Text('Lưu vào thư mục'),
+              ],
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+Future<void> _handleShareDSHang(List<int> fileBytes, String fileName) async {
+  try {
+    final tempDir = await getTemporaryDirectory();
+    final file = File('${tempDir.path}/$fileName');
+    await file.writeAsBytes(fileBytes);
+    
+    final box = context.findRenderObject() as RenderBox?;
+    await Share.shareXFiles(
+      [XFile(file.path)],
+      text: 'Danh sách hàng được xuất từ ứng dụng',
+      subject: 'Danh sách hàng - $fileName',
+      sharePositionOrigin: box != null 
+          ? Rect.fromLTWH(
+              box.localToGlobal(Offset.zero).dx,
+              box.localToGlobal(Offset.zero).dy,
+              box.size.width,
+              box.size.height / 2,
+            )
+          : null,
+    );
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Đã xuất ${_filteredDSHang.length} sản phẩm ra Excel')),
+    );
+  } catch (e) {
+    print('Error sharing file: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Lỗi khi chia sẻ file: $e')),
+    );
+  }
+}
+
+Future<void> _handleSaveToAppFolderDSHang(List<int> fileBytes, String fileName) async {
+  try {
+    final directory = await getApplicationDocumentsDirectory();
+    final appFolder = Directory('${directory.path}/DanhSach_Hang');
+    
+    // Create folder if it doesn't exist
+    if (!await appFolder.exists()) {
+      await appFolder.create(recursive: true);
+    }
+    
+    final filePath = '${appFolder.path}/$fileName';
+    final file = File(filePath);
+    await file.writeAsBytes(fileBytes);
+    
+    // Show success dialog with option to open folder
+    await _showSaveSuccessDialogDSHang(appFolder.path, fileName);
+    
+  } catch (e) {
+    print('Error saving to app folder: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Lỗi khi lưu file: $e')),
+    );
+  }
+}
+
+Future<void> _showSaveSuccessDialogDSHang(String folderPath, String fileName) async {
+  return showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green),
+            SizedBox(width: 8),
+            Text('Lưu thành công'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('File đã được lưu:'),
+            SizedBox(height: 8),
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: SelectableText(
+                fileName,
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            SizedBox(height: 8),
+            Text('Đường dẫn thư mục:'),
+            SizedBox(height: 4),
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: SelectableText(
+                folderPath,
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+            SizedBox(height: 8),
+            Text('Đã xuất ${_filteredDSHang.length} sản phẩm'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Đóng'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              await _openFolderDSHang(folderPath);
+            },
+            icon: Icon(Icons.folder_open, size: 16),
+            label: Text('Mở thư mục'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFF837826),
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+Future<void> _openFolderDSHang(String folderPath) async {
+  try {
+    if (Platform.isWindows) {
+      await Process.run('explorer', [folderPath]);
+    } else if (Platform.isMacOS) {
+      await Process.run('open', [folderPath]);
+    } else if (Platform.isLinux) {
+      await Process.run('xdg-open', [folderPath]);
+    }
+  } catch (e) {
+    print('Error opening folder: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Không thể mở thư mục: $e')),
+    );
+  }
+}
   Future<void> _loadCurrentUser() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -386,7 +689,46 @@ class _HSDSHangScreenState extends State<HSDSHangScreen> with SingleTickerProvid
             },
           ),
         ),
-        
+        // Results count and download button
+Padding(
+  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+  child: Row(
+    children: [
+      Text(
+        'Kết quả: ${_filteredDSHang.length} / ${_allDSHang.length}',
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Colors.grey[600],
+        ),
+      ),
+      Spacer(),
+      ElevatedButton.icon(
+        onPressed: _filteredDSHang.isNotEmpty ? _exportDSHangToExcel : null,
+        icon: Icon(Icons.download, size: 18),
+        label: Text('Xuất Excel'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Color(0xFF837826),
+          foregroundColor: Colors.white,
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          minimumSize: Size(0, 36),
+        ),
+      ),
+    ],
+  ),
+),
+
+SizedBox(height: 4),
+
+Padding(
+  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+  child: Text(
+    'Cập nhật: ${DateFormat('HH:mm, dd/MM/yyyy').format(DateTime.now())}',
+    style: TextStyle(
+      fontSize: 12,
+      color: Colors.grey[500],
+    ),
+  ),
+),
         // Filter section
         Container(
           padding: EdgeInsets.symmetric(horizontal: 8.0),

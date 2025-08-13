@@ -570,12 +570,10 @@ return filePath;
   }
 
   static String _getRatingLabel(double rating) {
-    if (rating >= 80) return 'Xuất sắc';
-    if (rating >= 70) return 'Tốt';
-    if (rating >= 60) return 'Khá';
-    if (rating >= 50) return 'Trung bình';
-    return 'Cần cải thiện';
-  }
+  if (rating >= 70) return 'Tốt';
+  if (rating >= 50) return 'Khá';
+  return 'Trung bình';
+}
 
   // Rest of the existing methods remain the same...
   static Future<List<Map<String, dynamic>>> _getDetailedReportData(String projectName, DateTime selectedMonth) async {

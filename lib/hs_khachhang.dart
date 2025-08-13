@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Border;
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
@@ -11,7 +11,10 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'hs_khachhangsua.dart';
 import 'dart:math';
-
+import 'package:excel/excel.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'dart:io';
 class HSKhachHangScreen extends StatefulWidget {
   @override
   _HSKhachHangScreenState createState() => _HSKhachHangScreenState();
@@ -57,6 +60,353 @@ class _HSKhachHangScreenState extends State<HSKhachHangScreen> {
     _searchController.dispose();
     super.dispose();
   }
+  Future<void> _exportToExcel() async {
+  try {
+    // Show choice dialog for desktop or direct export for mobile
+    final choice = await _showExportChoiceDialog();
+    if (choice == null) return; // User cancelled
+    
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    // Create Excel workbook
+    var excel = Excel.createExcel();
+    
+    // Create new sheet with custom name
+    var sheetObject = excel['Khách hàng'];
+
+    // Add headers
+    List<String> headers = [
+      'STT',
+      'UID',
+      'Tên dự án',
+      'Tên kỹ thuật', 
+      'Tên rút gọn',
+      'Người dùng',
+      'Phân loại',
+      'Vùng miền',
+      'Loại hình',
+      'Loại công trình',
+      'Trạng thái HĐ',
+      'Địa chỉ',
+      'Địa chỉ VP',
+      'Tỉnh thành',
+      'Quận huyện',
+      'Phường xã',
+      'Điện thoại',
+      'Fax',
+      'Website',
+      'Email',
+      'Mã số thuế',
+      'Số tài khoản',
+      'Ngân hàng',
+      'Loại mua hàng',
+      'Kênh tiếp cận',
+      'Dự kiến triển khai',
+      'Tiềm năng DVTM',
+      'Giám sát',
+      'QLDV',
+      'Yêu cầu nhân sự',
+      'Cách thức tuyển',
+      'Mức lương tuyển',
+      'Lương BP',
+      'Ghi chú',
+      'Đánh dấu',
+      'Ngày khởi tạo',
+      'Ngày cập nhật cuối',
+    ];
+
+    // Add headers to Excel (no styling)
+    for (int i = 0; i < headers.length; i++) {
+      var cell = sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+      cell.value = headers[i];
+    }
+
+    // Get ordered customer list (same as display)
+    final orderedList = _getOrderedCustomerList();
+
+    // Add data rows
+    for (int rowIndex = 0; rowIndex < orderedList.length; rowIndex++) {
+      final customer = orderedList[rowIndex];
+      final excelRowIndex = rowIndex + 1;
+
+      List<String> rowData = [
+        (rowIndex + 1).toString(), // STT
+        customer.uid ?? '',
+        customer.tenDuAn ?? '',
+        customer.tenKyThuat ?? '',
+        customer.tenRutGon ?? '',
+        customer.nguoiDung ?? '',
+        customer.phanLoai ?? '',
+        customer.vungMien ?? '',
+        customer.loaiHinh ?? '',
+        customer.loaiCongTrinh ?? '',
+        customer.trangThaiHopDong ?? '',
+        customer.diaChi ?? '',
+        customer.diaChiVanPhong ?? '',
+        customer.tinhThanh ?? '',
+        customer.quanHuyen ?? '',
+        customer.phuongXa ?? '',
+        customer.soDienThoai ?? '',
+        customer.fax ?? '',
+        customer.website ?? '',
+        customer.email ?? '',
+        customer.maSoThue ?? '',
+        customer.soTaiKhoan ?? '',
+        customer.nganHang ?? '',
+        customer.loaiMuaHang ?? '',
+        customer.kenhTiepCan ?? '',
+        customer.duKienTrienKhai ?? '',
+        customer.tiemNangDVTM ?? '',
+        customer.giamSat ?? '',
+        customer.qldv ?? '',
+        customer.yeuCauNhanSu ?? '',
+        customer.cachThucTuyen ?? '',
+        customer.mucLuongTuyen ?? '',
+        customer.luongBP ?? '',
+        customer.ghiChu ?? '',
+        customer.danhDau ?? '',
+        customer.ngayKhoiTao != null ? DateFormat('dd/MM/yyyy HH:mm').format(customer.ngayKhoiTao!) : '',
+        customer.ngayCapNhatCuoi != null ? DateFormat('dd/MM/yyyy HH:mm').format(customer.ngayCapNhatCuoi!) : '',
+      ];
+
+      for (int colIndex = 0; colIndex < rowData.length; colIndex++) {
+        var cell = sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: colIndex, rowIndex: excelRowIndex));
+        cell.value = rowData[colIndex];
+      }
+    }
+
+    // Generate filename
+    final fileName = 'DanhSachKhachHang_${DateFormat('ddMMyyyy_HHmmss').format(DateTime.now())}.xlsx';
+    
+    // Save and handle based on user choice
+    final fileBytes = excel.encode()!;
+    
+    // Close loading dialog
+    Navigator.pop(context);
+    
+    if (choice == 'share') {
+      await _handleShare(fileBytes, fileName);
+    } else {
+      await _handleSaveToAppFolder(fileBytes, fileName);
+    }
+
+  } catch (e) {
+    // Close loading dialog if still open
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
+    
+    print('Error exporting to Excel: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Lỗi khi xuất Excel: $e')),
+    );
+  }
+}
+Future<String?> _showExportChoiceDialog() async {
+  return showDialog<String>(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Text('Xuất file Excel'),
+        content: Text('Bạn muốn chia sẻ file hay lưu vào thư mục ứng dụng?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop('share'),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.share, size: 16),
+                SizedBox(width: 4),
+                Text('Chia sẻ'),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop('save'),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.folder, size: 16),
+                SizedBox(width: 4),
+                Text('Lưu vào thư mục'),
+              ],
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+Future<void> _handleShare(List<int> fileBytes, String fileName) async {
+  try {
+    final tempDir = await getTemporaryDirectory();
+    final file = File('${tempDir.path}/$fileName');
+    await file.writeAsBytes(fileBytes);
+    
+    final box = context.findRenderObject() as RenderBox?;
+    await Share.shareXFiles(
+      [XFile(file.path)],
+      text: 'Danh sách khách hàng được xuất từ ứng dụng',
+      subject: 'Danh sách khách hàng - $fileName',
+      sharePositionOrigin: box != null 
+          ? Rect.fromLTWH(
+              box.localToGlobal(Offset.zero).dx,
+              box.localToGlobal(Offset.zero).dy,
+              box.size.width,
+              box.size.height / 2,
+            )
+          : null,
+    );
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Đã xuất ${_filteredList.length} khách hàng ra Excel')),
+    );
+  } catch (e) {
+    print('Error sharing file: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Lỗi khi chia sẻ file: $e')),
+    );
+  }
+}
+
+Future<void> _handleSaveToAppFolder(List<int> fileBytes, String fileName) async {
+  try {
+    final directory = await getApplicationDocumentsDirectory();
+    final appFolder = Directory('${directory.path}/DanhSach_KhachHang');
+    
+    // Create folder if it doesn't exist
+    if (!await appFolder.exists()) {
+      await appFolder.create(recursive: true);
+    }
+    
+    final filePath = '${appFolder.path}/$fileName';
+    final file = File(filePath);
+    await file.writeAsBytes(fileBytes);
+    
+    // Show success dialog with option to open folder
+    await _showSaveSuccessDialog(appFolder.path, fileName);
+    
+  } catch (e) {
+    print('Error saving to app folder: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Lỗi khi lưu file: $e')),
+    );
+  }
+}
+
+Future<void> _showSaveSuccessDialog(String folderPath, String fileName) async {
+  return showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green),
+            SizedBox(width: 8),
+            Text('Lưu thành công'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('File đã được lưu:'),
+            SizedBox(height: 8),
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: SelectableText(
+                fileName,
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            SizedBox(height: 8),
+            Text('Đường dẫn thư mục:'),
+            SizedBox(height: 4),
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: SelectableText(
+                folderPath,
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+            SizedBox(height: 8),
+            Text('Đã xuất ${_filteredList.length} khách hàng'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Đóng'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              await _openFolder(folderPath);
+            },
+            icon: Icon(Icons.folder_open, size: 16),
+            label: Text('Mở thư mục'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: buttonColor,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+Future<void> _openFolder(String folderPath) async {
+  try {
+    if (Platform.isWindows) {
+      await Process.run('explorer', [folderPath]);
+    } else if (Platform.isMacOS) {
+      await Process.run('open', [folderPath]);
+    } else if (Platform.isLinux) {
+      await Process.run('xdg-open', [folderPath]);
+    }
+  } catch (e) {
+    print('Error opening folder: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Không thể mở thư mục: $e')),
+    );
+  }
+}
+
+Future<void> _shareExcelFile(String filePath, String fileName) async {
+  try {
+    await Share.shareXFiles(
+      [XFile(filePath)],
+      text: 'Danh sách khách hàng được xuất từ ứng dụng',
+      subject: 'Danh sách khách hàng - $fileName',
+    );
+  } catch (e) {
+    print('Error sharing file: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Lỗi khi chia sẻ file: $e')),
+    );
+  }
+}
   Future<void> _loadUsername() async {
     print('=== LOADING USERNAME ===');
     final prefs = await SharedPreferences.getInstance();
@@ -532,47 +882,80 @@ bool _canEditCustomer(KhachHangModel customer) {
   }
 
   Widget _buildFilterChips() {
-    final Set<String> phanLoaiSet = _khachHangList
-        .where((c) => c.phanLoai != null && c.phanLoai!.isNotEmpty)
-        .map((c) => c.phanLoai!)
-        .toSet();
-    
-    final Set<String> vungMienSet = _khachHangList
-        .where((c) => c.vungMien != null && c.vungMien!.isNotEmpty)
-        .map((c) => c.vungMien!)
-        .toSet();
-    
-    final List<String> filterOptions = ['Tất cả', ...phanLoaiSet, ...vungMienSet];
-    
-    return Container(
-      height: 50,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: filterOptions.length,
-        itemBuilder: (context, index) {
-          final option = filterOptions[index];
-          final isSelected = _filterBy == option;
-          
-          return Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4),
-            child: ChoiceChip(
-              label: Text(option),
-              selected: isSelected,
-              selectedColor: buttonColor,
-              labelStyle: TextStyle(
-                color: isSelected ? Colors.white : Colors.black87,
+  final Set<String> phanLoaiSet = _khachHangList
+      .where((c) => c.phanLoai != null && c.phanLoai!.isNotEmpty)
+      .map((c) => c.phanLoai!)
+      .toSet();
+  
+  final Set<String> vungMienSet = _khachHangList
+      .where((c) => c.vungMien != null && c.vungMien!.isNotEmpty)
+      .map((c) => c.vungMien!)
+      .toSet();
+  
+  final List<String> filterOptions = ['Tất cả', ...phanLoaiSet, ...vungMienSet];
+  
+  return Column(
+    children: [
+      // Filter chips row
+      Container(
+        height: 50,
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          itemCount: filterOptions.length,
+          itemBuilder: (context, index) {
+            final option = filterOptions[index];
+            final isSelected = _filterBy == option;
+            
+            return Padding(
+              padding: EdgeInsets.symmetric(horizontal: 4),
+              child: ChoiceChip(
+                label: Text(option),
+                selected: isSelected,
+                selectedColor: buttonColor,
+                labelStyle: TextStyle(
+                  color: isSelected ? Colors.white : Colors.black87,
+                ),
+                onSelected: (selected) {
+                  if (selected) {
+                    _updateFilter(option);
+                  }
+                },
               ),
-              onSelected: (selected) {
-                if (selected) {
-                  _updateFilter(option);
-                }
-              },
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
-    );
-  }
+      
+      // Download button row
+      Container(
+        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Row(
+          children: [
+            Text(
+              'Tìm thấy ${_filteredList.length} khách hàng',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 14,
+              ),
+            ),
+            Spacer(),
+            ElevatedButton.icon(
+              onPressed: _filteredList.isNotEmpty ? _exportToExcel : null,
+              icon: Icon(Icons.download, size: 18),
+              label: Text('Xuất Excel'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: buttonColor,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                minimumSize: Size(0, 36),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
+}
 
   int _getItemsToShow(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -676,121 +1059,114 @@ bool _canEditCustomer(KhachHangModel customer) {
   }
 
   Widget _buildCustomerCard(KhachHangModel customer) {
-    Color vungMienColor;
-    String vungMienText = '?';
-    
-    if (customer.vungMien != null && customer.vungMien!.isNotEmpty) {
-      vungMienText = customer.vungMien!.substring(0, 1).toUpperCase();
-      switch (customer.vungMien!.toLowerCase()) {
-        case 'bắc':
-          vungMienColor = Colors.blue;
-          break;
-        case 'trung':
-          vungMienColor = Colors.red;
-          break;
-        default:
-          vungMienColor = Colors.green;
-      }
-    } else {
-      vungMienColor = Colors.grey;
+  Color vungMienColor;
+  String vungMienText = '?';
+  
+  if (customer.vungMien != null && customer.vungMien!.isNotEmpty) {
+    vungMienText = customer.vungMien!.substring(0, 1).toUpperCase();
+    switch (customer.vungMien!.toLowerCase()) {
+      case 'bắc':
+        vungMienColor = Colors.blue;
+        break;
+      case 'trung':
+        vungMienColor = Colors.red;
+        break;
+      default:
+        vungMienColor = Colors.green;
     }
+  } else {
+    vungMienColor = Colors.grey;
+  }
 
-    final bool isMarked = customer.danhDau != null && customer.danhDau!.isNotEmpty;
-    final Color titleColor = isMarked ? Colors.blueAccent : Colors.black87;
-    final FontWeight titleWeight = isMarked ? FontWeight.w900 : FontWeight.bold;
+  final bool isMarked = customer.danhDau != null && customer.danhDau!.isNotEmpty;
+  final Color titleColor = isMarked ? Colors.blueAccent : Colors.black87;
+  final FontWeight titleWeight = isMarked ? FontWeight.w900 : FontWeight.bold;
 
-    return Card(
-      margin: EdgeInsets.all(3),
-      elevation: isMarked ? 3 : 1,
-      child: InkWell(
-        onTap: () => _showCustomerDetailDialog(customer),
-        borderRadius: BorderRadius.circular(4),
-        child: Container(
-          padding: EdgeInsets.all(8), 
-          decoration: isMarked 
-            ? BoxDecoration(
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: Colors.green.withOpacity(0.3), width: 1),
-              )
-            : null,
-          child: Row(
-            children: [
-              Stack(
-                children: [
-                  CircleAvatar(
-                    backgroundColor: vungMienColor,
-                    radius: 16,
-                    child: Text(
-                      vungMienText,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
+  return Card(
+    margin: EdgeInsets.all(3),
+    elevation: isMarked ? 3 : 1,
+    child: InkWell(
+      onTap: () => _showCustomerDetailDialog(customer),
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        padding: EdgeInsets.all(8), 
+        child: Row(
+          children: [
+            Stack(
+              children: [
+                CircleAvatar(
+                  backgroundColor: vungMienColor,
+                  radius: 16,
+                  child: Text(
+                    vungMienText,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
                     ),
                   ),
-                  if (isMarked)
-                    Positioned(
-                      right: -2,
-                      top: -2,
-                      child: Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 1),
-                        ),
-                        child: Icon(Icons.star, size: 6, color: Colors.white),
+                ),
+                if (isMarked)
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
                       ),
+                      child: Icon(Icons.star, size: 6, color: Colors.white),
                     ),
+                  ),
+              ],
+            ),
+            
+            SizedBox(width: 8),
+            
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min, 
+                children: [
+                  Text(
+                    customer.tenDuAn ?? 'Không có tên',
+                    style: TextStyle(
+                      fontWeight: titleWeight,
+                      color: titleColor,
+                      fontSize: 13, 
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  
+                  SizedBox(height: 2), 
+                  
+                  Text(
+                    [
+                      customer.nguoiDung ?? '',
+                      customer.phanLoai ?? '',
+                      customer.loaiCongTrinh ?? '',
+                    ].where((text) => text.isNotEmpty).join(' • '),
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey[600],
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
-              
-              SizedBox(width: 8),
-              
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min, 
-                  children: [
-                    Text(
-                      customer.tenDuAn ?? 'Không có tên',
-                      style: TextStyle(
-                        fontWeight: titleWeight,
-                        color: titleColor,
-                        fontSize: 13, 
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    
-                    SizedBox(height: 2), 
-                    
-                    Text(
-                      [
-                        customer.nguoiDung ?? '',
-                        customer.phanLoai ?? '',
-                        customer.loaiCongTrinh ?? '',
-                      ].where((text) => text.isNotEmpty).join(' • '),
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.grey[600],
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              
-              Icon(Icons.arrow_forward_ios, size: 12, color: Colors.grey),
-            ],
-          ),
+            ),
+            
+            Icon(Icons.arrow_forward_ios, size: 12, color: Colors.grey),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   void _showCustomerDetailDialog(KhachHangModel customer) async {
     List<KhachHangContactModel> contacts = [];
