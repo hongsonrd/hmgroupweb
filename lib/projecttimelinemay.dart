@@ -15,6 +15,7 @@ import 'db_helper.dart';
 import 'table_models.dart';
 import 'http_client.dart';
 import 'dart:math' as math;
+import 'projecttimelinemayexcel.dart';
 
 class MachineryUsageReport extends StatefulWidget {
   final String username;
@@ -27,7 +28,8 @@ class MachineryUsageReport extends StatefulWidget {
 
 class _MachineryUsageReportState extends State<MachineryUsageReport> 
     with SingleTickerProviderStateMixin {
-  
+  bool _isExcelExporting = false;
+
   late TabController _tabController;
   bool _isLoading = false;
   bool _isExporting = false;
@@ -45,7 +47,48 @@ class _MachineryUsageReportState extends State<MachineryUsageReport>
   String? _selectedKetQua;
   List<String> _availableProjects = ['Tất cả'];
   List<String> _availableKetQua = ['Tất cả', '✔️', '❌', '⚠️'];
+double? _extractAreaM2(String? chiTiet) {
+  if (chiTiet == null || chiTiet.trim().isEmpty) return null;
 
+  // Look for a line that (optionally) starts with a bullet, then the label,
+  // optional "(m2|m²)", then ":", then the number.
+  // Works across multiple lines due to multiLine: true
+  final reg = RegExp(
+    r'(?:^|[\r\n])\s*[*\-\u2022]?\s*Diện\s*tích\s*sử\s*dụng(?:\s*\((?:m2|m²)\))?\s*:\s*([0-9\.,]+)',
+    multiLine: true,
+    caseSensitive: false,
+    unicode: true,
+  );
+
+  final m = reg.firstMatch(chiTiet);
+  if (m == null) return null;
+
+  var raw = m.group(1)!.trim();
+
+  // Normalize number to standard "1234.56"
+  // vi-style "1.234,5" -> "1234.5"
+  // en-style "1,234.5" -> "1234.5"
+  if (raw.contains(',') && raw.contains('.')) {
+    // assume comma is decimal sep, dot is thousands
+    raw = raw.replaceAll('.', '').replaceAll(',', '.');
+  } else if (raw.contains(',')) {
+    // "125,5" -> "125.5"
+    raw = raw.replaceAll(',', '.');
+  } else {
+    // Handle "1.234" as thousands if looks like ### group
+    final dotIdx = raw.indexOf('.');
+    if (dotIdx != -1) {
+      final tail = raw.substring(dotIdx + 1);
+      if (tail.length == 3 && RegExp(r'^\d{3}$').hasMatch(tail)) {
+        raw = raw.replaceAll('.', '');
+      }
+    }
+  }
+
+  final v = double.tryParse(raw);
+  if (v == null || v.isNaN || v.isInfinite || v < 0) return null;
+  return v;
+}
   @override
   void initState() {
     super.initState();
@@ -60,6 +103,62 @@ class _MachineryUsageReportState extends State<MachineryUsageReport>
     _tabController.dispose();
     super.dispose();
   }
+  Future<void> _exportExcelCsv() async {
+  if (_isExcelExporting) return;
+  setState(() => _isExcelExporting = true);
+
+  try {
+    // Export exactly what user is seeing: _filteredData
+    final filePath = await MachineryCsvExporter.exportCsv(
+      records: _filteredData,
+      selectedPeriod: _selectedPeriod,
+    );
+    if (!mounted) return;
+
+    final fileDir = File(filePath).parent.path;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Xuất Excel (CSV) thành công'),
+        content: Text('Đã lưu:\n$filePath'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              MachineryCsvExporter.openFile(filePath);
+            },
+            child: const Text('Mở file'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              MachineryCsvExporter.openFolder(fileDir);
+            },
+            child: const Text('Mở thư mục'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              await Share.shareXFiles([XFile(filePath)], text: 'Báo cáo máy móc ${_selectedPeriod}');
+            },
+            child: const Text('Chia sẻ'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Đóng'),
+          ),
+        ],
+      ),
+    );
+    _showSuccess('Xuất CSV thành công');
+  } catch (e) {
+    _showError('Lỗi xuất CSV: $e');
+  } finally {
+    if (mounted) setState(() => _isExcelExporting = false);
+  }
+}
+
 String _getMachineType(String? chiTiet2) {
   if (chiTiet2 == null || chiTiet2.isEmpty) return 'Không xác định';
   
@@ -103,21 +202,32 @@ String _getMachineType(String? chiTiet2) {
   return machineTypes[machineCode] ?? 'Không xác định ($machineCode)';
 }
 Widget _buildMachineUsageSummary() {
-  // Count individual machines
+  // Count individual machines and types; also collect which projects used each machine
   final machineUsage = <String, int>{};
   final machineTypeUsage = <String, int>{};
-  
+  final machineProjects = <String, Set<String>>{};
+
   for (final record in _filteredData) {
-    if (record.chiTiet2?.isNotEmpty == true) {
-      // Count individual machines
-      machineUsage[record.chiTiet2!] = (machineUsage[record.chiTiet2!] ?? 0) + 1;
-      
-      // Count machine types
-      final machineType = _getMachineType(record.chiTiet2);
-      machineTypeUsage[machineType] = (machineTypeUsage[machineType] ?? 0) + 1;
+    final code = record.chiTiet2;
+    if (!_isValidMachineCode(code)) continue;
+
+    // count machines
+    machineUsage[code!] = (machineUsage[code] ?? 0) + 1;
+
+    // count machine types
+    final machineType = _getMachineType(code);
+    machineTypeUsage[machineType] = (machineTypeUsage[machineType] ?? 0) + 1;
+
+    // collect projects for this machine
+    final bp = record.boPhan;
+    if (_isValidProject(bp)) {
+      machineProjects.putIfAbsent(code, () => <String>{}).add(bp!.trim());
     }
   }
-  
+
+  // Totals for proper percentages (only from valid machine records)
+  final totalMachineEvents = machineUsage.values.fold<int>(0, (a, b) => a + b);
+
   // Sort by usage count
   final sortedMachines = machineUsage.entries.toList()
     ..sort((a, b) => b.value.compareTo(a.value));
@@ -135,7 +245,7 @@ Widget _buildMachineUsageSummary() {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           SizedBox(height: 16),
-          
+
           if (machineUsage.isEmpty)
             Center(child: Text('Không có dữ liệu máy móc'))
           else
@@ -144,7 +254,7 @@ Widget _buildMachineUsageSummary() {
                 // Machine Types Summary
                 ExpansionTile(
                   title: Text(
-                    'Loại máy (${machineTypeUsage.length} loại)',
+                    'Loại máy (${sortedMachineTypes.length} loại)',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   initiallyExpanded: true,
@@ -155,10 +265,10 @@ Widget _buildMachineUsageSummary() {
                         itemCount: sortedMachineTypes.length,
                         itemBuilder: (context, index) {
                           final entry = sortedMachineTypes[index];
-                          final percentage = _filteredData.length > 0 
-                              ? (entry.value / _filteredData.length * 100) 
+                          final percentage = totalMachineEvents > 0
+                              ? (entry.value / totalMachineEvents * 100)
                               : 0.0;
-                          
+
                           return Padding(
                             padding: EdgeInsets.symmetric(vertical: 4),
                             child: Row(
@@ -191,13 +301,13 @@ Widget _buildMachineUsageSummary() {
                     ),
                   ],
                 ),
-                
+
                 SizedBox(height: 12),
-                
-                // Individual Machines Summary
+
+                // Individual Machines Summary (with projects used)
                 ExpansionTile(
                   title: Text(
-                    'Máy cụ thể (${machineUsage.length} máy)',
+                    'Máy cụ thể (${sortedMachines.length} máy)',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   children: [
@@ -208,10 +318,17 @@ Widget _buildMachineUsageSummary() {
                         itemBuilder: (context, index) {
                           final entry = sortedMachines[index];
                           final machineType = _getMachineType(entry.key);
-                          final percentage = _filteredData.length > 0 
-                              ? (entry.value / _filteredData.length * 100) 
+                          final percentage = totalMachineEvents > 0
+                              ? (entry.value / totalMachineEvents * 100)
                               : 0.0;
-                          
+
+                          final projects = (machineProjects[entry.key] ?? <String>{}).toList()..sort();
+                          final shown = projects.take(3).toList();
+                          final more = projects.length - shown.length;
+                          final projectsSummary = projects.isEmpty
+                              ? 'Chưa xác định dự án'
+                              : (shown.join(', ') + (more > 0 ? ' +$more' : ''));
+
                           return Card(
                             margin: EdgeInsets.symmetric(vertical: 2),
                             child: ListTile(
@@ -223,9 +340,18 @@ Widget _buildMachineUsageSummary() {
                                   fontSize: 14,
                                 ),
                               ),
-                              subtitle: Text(
-                                machineType,
-                                style: TextStyle(fontSize: 12),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(machineType, style: TextStyle(fontSize: 12)),
+                                  SizedBox(height: 2),
+                                  Text(
+                                    'Dự án: $projectsSummary',
+                                    style: TextStyle(fontSize: 12, color: Colors.black87),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
                               ),
                               trailing: Container(
                                 padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -256,6 +382,7 @@ Widget _buildMachineUsageSummary() {
     ),
   );
 }
+
   void _setupAutoSync() {
     // Auto sync every 30 minutes
     Stream.periodic(Duration(minutes: 30)).listen((_) {
@@ -402,6 +529,13 @@ Widget _buildMachineUsageSummary() {
       }
     });
   }
+bool _isValidMachineCode(String? code) {
+  if (code == null) return false;
+  final c = code.trim();
+  if (c.isEmpty) return false;
+  // Filter out codes that start with "hm" (case-insensitive)
+  return !c.toLowerCase().startsWith('hm');
+}
 
   bool _isValidProject(String? boPhan) {
     if (boPhan == null || boPhan.trim().isEmpty) return false;
@@ -449,10 +583,9 @@ Widget _buildMachineUsageSummary() {
     }
   }
 
-  // Generate PDF Report - Enhanced with detailed content (Fixed)
-Future<void> _generatePDFReport() async {
+  Future<void> _generatePDFReport() async {
   if (_isExporting) return;
-  
+
   setState(() {
     _isExporting = true;
   });
@@ -462,48 +595,42 @@ Future<void> _generatePDFReport() async {
     final fontData = await rootBundle.load("assets/fonts/RobotoCondensed-Regular.ttf");
     final ttf = pw.Font.ttf(fontData);
 
-    // Prepare all data similar to Tab 1
+    // ===== Common precomputation (period, counts, etc.) =====
     final dateGroups = <String, int>{};
     final resultCounts = <String, int>{'✔️': 0, '❌': 0, '⚠️': 0};
     final projectData = <String, Map<String, int>>{};
     final allDates = <String>{};
 
-    // Process data
     for (final record in _filteredData) {
       final dateStr = DateFormat('dd/MM').format(record.ngay);
       dateGroups[dateStr] = (dateGroups[dateStr] ?? 0) + 1;
       allDates.add(dateStr);
-      
+
       if (record.ketQua != null) {
         resultCounts[record.ketQua!] = (resultCounts[record.ketQua!] ?? 0) + 1;
       }
-      
+
       if (record.boPhan != null && _isValidProject(record.boPhan)) {
-        if (!projectData.containsKey(record.boPhan!)) {
-          projectData[record.boPhan!] = {};
-        }
-        projectData[record.boPhan!]![dateStr] = 
+        projectData.putIfAbsent(record.boPhan!, () => <String, int>{});
+        projectData[record.boPhan!]![dateStr] =
             (projectData[record.boPhan!]![dateStr] ?? 0) + 1;
       }
     }
 
     final sortedDates = allDates.toList()..sort();
     final sortedProjects = projectData.keys.toList()
-      ..sort((a, b) => (projectData[b]!.values.fold(0, (a, b) => a + b))
-          .compareTo(projectData[a]!.values.fold(0, (a, b) => a + b)));
+      ..sort((a, b) =>
+          (projectData[b]!.values.fold<int>(0, (x, y) => x + y))
+              .compareTo(projectData[a]!.values.fold<int>(0, (x, y) => x + y)));
 
-    // Filter non-OK incidents
-    final nonOkIncidents = _filteredData.where((record) => 
-      record.ketQua == '❌' || record.ketQua == '⚠️'
-    ).toList();
+    final nonOkIncidents = _filteredData
+        .where((r) => r.ketQua == '❌' || r.ketQua == '⚠️')
+        .toList();
 
-    // Group incidents by project
     final projectIncidents = <String, List<TaskHistoryModel>>{};
     for (final incident in nonOkIncidents) {
       if (incident.boPhan != null && _isValidProject(incident.boPhan)) {
-        if (!projectIncidents.containsKey(incident.boPhan!)) {
-          projectIncidents[incident.boPhan!] = [];
-        }
+        projectIncidents.putIfAbsent(incident.boPhan!, () => <TaskHistoryModel>[]);
         projectIncidents[incident.boPhan!]!.add(incident);
       }
     }
@@ -511,12 +638,11 @@ Future<void> _generatePDFReport() async {
     final sortedIncidentProjects = projectIncidents.keys.toList()
       ..sort((a, b) => projectIncidents[b]!.length.compareTo(projectIncidents[a]!.length));
 
-    // Generate all dates in the selected month for chart data
+    // Build all days in selected month for daily chart-like list
     final selectedDate = DateTime.parse('${_selectedPeriod}-01');
     final year = selectedDate.year;
     final month = selectedDate.month;
     final daysInMonth = DateTime(year, month + 1, 0).day;
-    
     final allDateEntries = <MapEntry<String, int>>[];
     for (int day = 1; day <= daysInMonth; day++) {
       final date = DateTime(year, month, day);
@@ -525,13 +651,12 @@ Future<void> _generatePDFReport() async {
       allDateEntries.add(MapEntry(dateStr, count));
     }
 
-    // Create PDF with multiple pages
+    // ===== Page 1: Overview =====
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: pw.EdgeInsets.all(20),
         build: (context) => [
-          // Header
           pw.Header(
             level: 0,
             child: pw.Column(
@@ -555,12 +680,10 @@ Future<void> _generatePDFReport() async {
             ),
           ),
           pw.SizedBox(height: 20),
-          
-          // Summary section
-          pw.Text(
-            'TỔNG QUAN',
-            style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold),
-          ),
+
+          // Summary
+          pw.Text('TỔNG QUAN',
+              style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 10),
           pw.Container(
             padding: pw.EdgeInsets.all(12),
@@ -571,98 +694,90 @@ Future<void> _generatePDFReport() async {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text('Tổng số báo cáo: ${_filteredData.length}', 
-                  style: pw.TextStyle(font: ttf, fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                pw.Text('Số dự án tham gia: ${sortedProjects.length}', 
-                  style: pw.TextStyle(font: ttf, fontSize: 12)),
-                pw.Text('Số sự cố không đạt: ${nonOkIncidents.length}', 
-                  style: pw.TextStyle(font: ttf, fontSize: 12)),
+                pw.Text('Tổng số báo cáo: ${_filteredData.length}',
+                    style: pw.TextStyle(font: ttf, fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                pw.Text('Số dự án tham gia: ${sortedProjects.length}',
+                    style: pw.TextStyle(font: ttf, fontSize: 12)),
+                pw.Text('Số sự cố không đạt: ${nonOkIncidents.length}',
+                    style: pw.TextStyle(font: ttf, fontSize: 12)),
               ],
             ),
           ),
           pw.SizedBox(height: 20),
-          
-          // Result percentage section
-          pw.Text(
-            'KẾT QUẢ THEO PHẦN TRĂM',
-            style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold),
-          ),
+
+          // Result percentage
+          pw.Text('KẾT QUẢ THEO PHẦN TRĂM',
+              style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 10),
-          if (_filteredData.length == 0)
+          if (_filteredData.isEmpty)
             pw.Text('Không có dữ liệu', style: pw.TextStyle(font: ttf, fontSize: 12))
           else
-            pw.Container(
-              child: pw.Column(
-                children: resultCounts.entries.map((entry) {
-                  final percentage = _filteredData.length > 0 ? (entry.value / _filteredData.length * 100) : 0.0;
-                  final barWidth = 200.0; // Total width for progress bar
-                  final fillWidth = barWidth * (percentage / 100);
-                  
-                  return pw.Padding(
-                    padding: pw.EdgeInsets.symmetric(vertical: 4),
-                    child: pw.Row(
-                      children: [
-                        pw.Container(
-                          width: 15,
-                          height: 15,
-                          decoration: pw.BoxDecoration(
-                            color: entry.key == '✔️' ? PdfColors.green : 
-                                   entry.key == '❌' ? PdfColors.red : PdfColors.orange,
-                            borderRadius: pw.BorderRadius.circular(2),
-                          ),
+            pw.Column(
+              children: resultCounts.entries.map((entry) {
+                final percentage =
+                    _filteredData.isNotEmpty ? (entry.value / _filteredData.length * 100) : 0.0;
+                final barWidth = 200.0;
+                final fillWidth = barWidth * (percentage / 100);
+                final color = entry.key == '✔️'
+                    ? PdfColors.green
+                    : entry.key == '❌'
+                        ? PdfColors.red
+                        : PdfColors.orange;
+                return pw.Padding(
+                  padding: pw.EdgeInsets.symmetric(vertical: 4),
+                  child: pw.Row(
+                    children: [
+                      pw.Container(
+                        width: 15,
+                        height: 15,
+                        decoration: pw.BoxDecoration(color: color, borderRadius: pw.BorderRadius.circular(2)),
+                      ),
+                      pw.SizedBox(width: 8),
+                      pw.Container(
+                        width: 80,
+                        child: pw.Text(_formatKetQua(entry.key), style: pw.TextStyle(font: ttf, fontSize: 12)),
+                      ),
+                      pw.SizedBox(width: 8),
+                      pw.Container(
+                        width: barWidth,
+                        height: 12,
+                        decoration: pw.BoxDecoration(
+                          color: PdfColors.grey200,
+                          borderRadius: pw.BorderRadius.circular(6),
                         ),
-                        pw.SizedBox(width: 8),
-                        pw.Container(
-                          width: 80,
-                          child: pw.Text(_formatKetQua(entry.key), 
-                            style: pw.TextStyle(font: ttf, fontSize: 12)),
-                        ),
-                        pw.SizedBox(width: 8),
-                        pw.Container(
-                          width: barWidth,
-                          height: 12,
-                          decoration: pw.BoxDecoration(
-                            color: PdfColors.grey200,
-                            borderRadius: pw.BorderRadius.circular(6),
-                          ),
-                          child: pw.Stack(
-                            children: [
-                              if (fillWidth > 0)
-                                pw.Container(
-                                  width: fillWidth,
-                                  height: 12,
-                                  decoration: pw.BoxDecoration(
-                                    color: entry.key == '✔️' ? PdfColors.green : 
-                                           entry.key == '❌' ? PdfColors.red : PdfColors.orange,
-                                    borderRadius: pw.BorderRadius.circular(6),
-                                  ),
+                        child: pw.Stack(
+                          children: [
+                            if (fillWidth > 0)
+                              pw.Container(
+                                width: fillWidth,
+                                height: 12,
+                                decoration: pw.BoxDecoration(
+                                  color: color,
+                                  borderRadius: pw.BorderRadius.circular(6),
                                 ),
-                            ],
-                          ),
+                              ),
+                          ],
                         ),
-                        pw.SizedBox(width: 8),
-                        pw.Text('${entry.value} (${percentage.toStringAsFixed(1)}%)', 
+                      ),
+                      pw.SizedBox(width: 8),
+                      pw.Text('${entry.value} (${percentage.toStringAsFixed(1)}%)',
                           style: pw.TextStyle(font: ttf, fontSize: 11)),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ),
+                    ],
+                  ),
+                );
+              }).toList(),
             ),
           pw.SizedBox(height: 20),
-          
-          // Daily report chart data
-          pw.Text(
-            'SỐ LƯỢNG BÁO CÁO THEO NGÀY',
-            style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold),
-          ),
+
+          // Daily counts (as tags)
+          pw.Text('SỐ LƯỢNG BÁO CÁO THEO NGÀY',
+              style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 10),
           pw.Text(
             'Biểu đồ cột thể hiện số lượng báo cáo theo từng ngày trong tháng ${DateFormat('MM/yyyy').format(selectedDate)}',
             style: pw.TextStyle(font: ttf, fontSize: 10, color: PdfColors.grey600),
           ),
           pw.SizedBox(height: 8),
-          // Create a simple text representation of the chart
           pw.Container(
             padding: pw.EdgeInsets.all(8),
             decoration: pw.BoxDecoration(
@@ -672,400 +787,316 @@ Future<void> _generatePDFReport() async {
             child: pw.Wrap(
               spacing: 4,
               runSpacing: 4,
-              children: allDateEntries.where((entry) => entry.value > 0).map((entry) {
-                return pw.Container(
-                  padding: pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: pw.BoxDecoration(
-                    color: PdfColors.blue100,
-                    borderRadius: pw.BorderRadius.circular(3),
-                  ),
-                  child: pw.Text(
-                    '${entry.key}: ${entry.value}',
-                    style: pw.TextStyle(font: ttf, fontSize: 9),
-                  ),
-                );
-              }).toList(),
+              children: allDateEntries
+                  .where((e) => e.value > 0)
+                  .map((e) => pw.Container(
+                        padding: pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: pw.BoxDecoration(
+                          color: PdfColors.blue100,
+                          borderRadius: pw.BorderRadius.circular(3),
+                        ),
+                        child: pw.Text('${e.key}: ${e.value}', style: pw.TextStyle(font: ttf, fontSize: 9)),
+                      ))
+                  .toList(),
             ),
           ),
         ],
       ),
     );
-// Add this new page for machine usage statistics after the project details page
-pdf.addPage(
-  pw.MultiPage(
-    pageFormat: PdfPageFormat.a4,
-    margin: pw.EdgeInsets.all(20),
-    build: (context) {
-      // Process machine data
-      final machineUsage = <String, int>{};
-      final machineTypeUsage = <String, int>{};
-      
-      for (final record in _filteredData) {
-        if (record.chiTiet2?.isNotEmpty == true) {
-          machineUsage[record.chiTiet2!] = (machineUsage[record.chiTiet2!] ?? 0) + 1;
-          final machineType = _getMachineType(record.chiTiet2);
-          machineTypeUsage[machineType] = (machineTypeUsage[machineType] ?? 0) + 1;
-        }
-      }
-      
-      final sortedMachineTypes = machineTypeUsage.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
-      final sortedMachines = machineUsage.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
 
-      return [
-        // Page header
-        pw.Row(
-          children: [
-            pw.Container(
-              width: 30,
-              height: 30,
-              decoration: pw.BoxDecoration(
-                color: PdfColors.blue,
-                borderRadius: pw.BorderRadius.circular(4),
-              ),
-              child: pw.Center(
-                child: pw.Text('🔧', 
-                  style: pw.TextStyle(color: PdfColors.white, fontSize: 16)),
-              ),
-            ),
-            pw.SizedBox(width: 12),
-            pw.Text(
-              'THỐNG KÊ SỬ DỤNG MÁY MÓC',
-              style: pw.TextStyle(font: ttf, fontSize: 18, fontWeight: pw.FontWeight.bold),
-            ),
-            pw.Spacer(),
-            pw.Container(
-              padding: pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: pw.BoxDecoration(
-                color: PdfColors.blue100,
-                borderRadius: pw.BorderRadius.circular(8),
-              ),
-              child: pw.Text(
-                'Tháng ${DateFormat('MM/yyyy').format(DateTime.parse('${_selectedPeriod}-01'))}',
-                style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-        pw.SizedBox(height: 20),
-        
-        // Summary statistics
-        pw.Container(
-          padding: pw.EdgeInsets.all(12),
-          decoration: pw.BoxDecoration(
-            color: PdfColors.blue50,
-            border: pw.Border.all(color: PdfColors.blue200),
-            borderRadius: pw.BorderRadius.circular(6),
-          ),
-          child: pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
-            children: [
-              pw.Column(
-                children: [
-                  pw.Text(
-                    '${sortedMachineTypes.length}',
-                    style: pw.TextStyle(font: ttf, fontSize: 24, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800),
-                  ),
-                  pw.Text('Loại máy', style: pw.TextStyle(font: ttf, fontSize: 12)),
-                ],
-              ),
-              pw.Container(width: 1, height: 40, color: PdfColors.blue200),
-              pw.Column(
-                children: [
-                  pw.Text(
-                    '${sortedMachines.length}',
-                    style: pw.TextStyle(font: ttf, fontSize: 24, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800),
-                  ),
-                  pw.Text('Máy cụ thể', style: pw.TextStyle(font: ttf, fontSize: 12)),
-                ],
-              ),
-              pw.Container(width: 1, height: 40, color: PdfColors.blue200),
-              pw.Column(
-                children: [
-                  pw.Text(
-                    '${machineUsage.values.fold(0, (a, b) => a + b)}',
-                    style: pw.TextStyle(font: ttf, fontSize: 24, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800),
-                  ),
-                  pw.Text('Lượt sử dụng', style: pw.TextStyle(font: ttf, fontSize: 12)),
-                ],
-              ),
-            ],
-          ),
-        ),
-        pw.SizedBox(height: 25),
-        
-        // Machine types section
-        pw.Text(
-          'THỐNG KÊ THEO LOẠI MÁY',
-          style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold),
-        ),
-        pw.SizedBox(height: 12),
-        
-        if (machineTypeUsage.isEmpty)
-          pw.Text('Không có dữ liệu máy móc', style: pw.TextStyle(font: ttf, fontSize: 12))
-        else
-          pw.Table(
-            border: pw.TableBorder.all(color: PdfColors.grey400),
-            columnWidths: {
-              0: pw.FlexColumnWidth(1),
-              1: pw.FlexColumnWidth(4),
-              2: pw.FlexColumnWidth(2),
-              3: pw.FlexColumnWidth(2),
-              4: pw.FlexColumnWidth(3),
-            },
-            children: [
-              // Header row
-              pw.TableRow(
-                decoration: pw.BoxDecoration(color: PdfColors.blue100),
-                children: [
-                  pw.Padding(
-                    padding: pw.EdgeInsets.all(6),
-                    child: pw.Text('#', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
-                  ),
-                  pw.Padding(
-                    padding: pw.EdgeInsets.all(6),
-                    child: pw.Text('Loại máy', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
-                  ),
-                  pw.Padding(
-                    padding: pw.EdgeInsets.all(6),
-                    child: pw.Text('Số lần', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
-                  ),
-                  pw.Padding(
-                    padding: pw.EdgeInsets.all(6),
-                    child: pw.Text('Tỷ lệ', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
-                  ),
-                  pw.Padding(
-                    padding: pw.EdgeInsets.all(6),
-                    child: pw.Text('Biểu đồ', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
-                  ),
-                ],
-              ),
-              // Data rows
-              ...sortedMachineTypes.asMap().entries.map((entry) {
-                final index = entry.key + 1;
-                final machineEntry = entry.value;
-                final percentage = _filteredData.length > 0 ? (machineEntry.value / _filteredData.length * 100) : 0.0;
-                final barWidth = 100.0;
-                final fillWidth = barWidth * (percentage / 100);
-                
-                return pw.TableRow(
+    // ===== Page 2: Machine usage statistics (filtered hm*, show projects) =====
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: pw.EdgeInsets.all(20),
+        build: (context) {
+          // Build machine stats with filters + project aggregation
+          final machineUsage = <String, int>{};
+          final machineTypeUsage = <String, int>{};
+          final machineProjects = <String, Set<String>>{};
+
+          for (final record in _filteredData) {
+            final code = record.chiTiet2;
+            if (!_isValidMachineCode(code)) continue;
+
+            machineUsage[code!] = (machineUsage[code] ?? 0) + 1;
+
+            final machineType = _getMachineType(code);
+            machineTypeUsage[machineType] = (machineTypeUsage[machineType] ?? 0) + 1;
+
+            final bp = record.boPhan;
+            if (_isValidProject(bp)) {
+              machineProjects.putIfAbsent(code, () => <String>{}).add(bp!.trim());
+            }
+          }
+
+          final sortedMachineTypes = machineTypeUsage.entries.toList()
+            ..sort((a, b) => b.value.compareTo(a.value));
+          final sortedMachines = machineUsage.entries.toList()
+            ..sort((a, b) => b.value.compareTo(a.value));
+          final totalMachineEvents =
+              machineUsage.values.fold<int>(0, (a, b) => a + b);
+
+          return [
+            // Header
+            pw.Row(
+              children: [
+                pw.Container(
+                  width: 30,
+                  height: 30,
                   decoration: pw.BoxDecoration(
-                    color: index % 2 == 0 ? PdfColors.grey50 : PdfColors.white,
+                    color: PdfColors.blue,
+                    borderRadius: pw.BorderRadius.circular(4),
                   ),
-                  children: [
-                    pw.Padding(
-                      padding: pw.EdgeInsets.all(6),
-                      child: pw.Text(index.toString(), style: pw.TextStyle(font: ttf, fontSize: 10)),
-                    ),
-                    pw.Padding(
-                      padding: pw.EdgeInsets.all(6),
-                      child: pw.Text(machineEntry.key, style: pw.TextStyle(font: ttf, fontSize: 10)),
-                    ),
-                    pw.Padding(
-                      padding: pw.EdgeInsets.all(6),
-                      child: pw.Text(machineEntry.value.toString(), style: pw.TextStyle(font: ttf, fontSize: 10)),
-                    ),
-                    pw.Padding(
-                      padding: pw.EdgeInsets.all(6),
-                      child: pw.Text('${percentage.toStringAsFixed(1)}%', style: pw.TextStyle(font: ttf, fontSize: 10)),
-                    ),
-                    pw.Padding(
-                      padding: pw.EdgeInsets.all(6),
-                      child: pw.Container(
-                        width: barWidth,
-                        height: 8,
-                        decoration: pw.BoxDecoration(
-                          color: PdfColors.grey200,
-                          borderRadius: pw.BorderRadius.circular(4),
-                        ),
-                        child: pw.Stack(
-                          children: [
-                            if (fillWidth > 0)
-                              pw.Container(
-                                width: fillWidth,
-                                height: 8,
-                                decoration: pw.BoxDecoration(
-                                  color: PdfColors.blue,
-                                  borderRadius: pw.BorderRadius.circular(4),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              }).toList(),
-            ],
-          ),
-        
-        pw.SizedBox(height: 25),
-        
-        // Individual machines section
-        pw.Text(
-          'CHI TIẾT TỪNG MÁY',
-          style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold),
-        ),
-        pw.SizedBox(height: 12),
-        
-        if (machineUsage.isEmpty)
-          pw.Text('Không có dữ liệu máy cụ thể', style: pw.TextStyle(font: ttf, fontSize: 12))
-        else
-          pw.Table(
-            border: pw.TableBorder.all(color: PdfColors.grey400),
-            columnWidths: {
-              0: pw.FlexColumnWidth(1),
-              1: pw.FlexColumnWidth(2),
-              2: pw.FlexColumnWidth(4),
-              3: pw.FlexColumnWidth(2),
-              4: pw.FlexColumnWidth(2),
-            },
-            children: [
-              // Header row
-              pw.TableRow(
-                decoration: pw.BoxDecoration(color: PdfColors.green100),
-                children: [
-                  pw.Padding(
-                    padding: pw.EdgeInsets.all(6),
-                    child: pw.Text('#', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  child: pw.Center(
+                    child: pw.Text('🔧', style: pw.TextStyle(color: PdfColors.white, fontSize: 16)),
                   ),
-                  pw.Padding(
-                    padding: pw.EdgeInsets.all(6),
-                    child: pw.Text('Mã máy', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
-                  ),
-                  pw.Padding(
-                    padding: pw.EdgeInsets.all(6),
-                    child: pw.Text('Loại máy', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
-                  ),
-                  pw.Padding(
-                    padding: pw.EdgeInsets.all(6),
-                    child: pw.Text('Số lần', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
-                  ),
-                  pw.Padding(
-                    padding: pw.EdgeInsets.all(6),
-                    child: pw.Text('Tỷ lệ', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
-                  ),
-                ],
-              ),
-              // Data rows - show top 20 machines
-              ...sortedMachines.take(20).toList().asMap().entries.map((entry) {
-                final index = entry.key + 1;
-                final machineEntry = entry.value;
-                final machineType = _getMachineType(machineEntry.key);
-                final percentage = _filteredData.length > 0 ? (machineEntry.value / _filteredData.length * 100) : 0.0;
-                
-                return pw.TableRow(
-                  decoration: pw.BoxDecoration(
-                    color: index % 2 == 0 ? PdfColors.grey50 : PdfColors.white,
-                  ),
-                  children: [
-                    pw.Padding(
-                      padding: pw.EdgeInsets.all(6),
-                      child: pw.Text(index.toString(), style: pw.TextStyle(font: ttf, fontSize: 10)),
-                    ),
-                    pw.Padding(
-                      padding: pw.EdgeInsets.all(6),
-                      child: pw.Text(
-                        machineEntry.key, 
-                        style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold),
-                      ),
-                    ),
-                    pw.Padding(
-                      padding: pw.EdgeInsets.all(6),
-                      child: pw.Text(machineType, style: pw.TextStyle(font: ttf, fontSize: 9)),
-                    ),
-                    pw.Padding(
-                      padding: pw.EdgeInsets.all(6),
-                      child: pw.Text(machineEntry.value.toString(), style: pw.TextStyle(font: ttf, fontSize: 10)),
-                    ),
-                    pw.Padding(
-                      padding: pw.EdgeInsets.all(6),
-                      child: pw.Text('${percentage.toStringAsFixed(1)}%', style: pw.TextStyle(font: ttf, fontSize: 10)),
-                    ),
-                  ],
-                );
-              }).toList(),
-            ],
-          ),
-        
-        if (sortedMachines.length > 20) ...[
-          pw.SizedBox(height: 10),
-          pw.Container(
-            padding: pw.EdgeInsets.all(8),
-            decoration: pw.BoxDecoration(
-              color: PdfColors.yellow50,
-              border: pw.Border.all(color: PdfColors.yellow200),
-              borderRadius: pw.BorderRadius.circular(4),
-            ),
-            child: pw.Text(
-              'Lưu ý: Chỉ hiển thị 20 máy được sử dụng nhiều nhất. Tổng số máy: ${sortedMachines.length}',
-              style: pw.TextStyle(font: ttf, fontSize: 10, fontStyle: pw.FontStyle.italic),
-            ),
-          ),
-        ],
-        
-        // Summary footer
-        pw.SizedBox(height: 20),
-        pw.Container(
-          padding: pw.EdgeInsets.all(12),
-          decoration: pw.BoxDecoration(
-            color: PdfColors.grey100,
-            borderRadius: pw.BorderRadius.circular(6),
-          ),
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Text(
-                'TÓM TẮT THỐNG KÊ:',
-                style: pw.TextStyle(font: ttf, fontSize: 12, fontWeight: pw.FontWeight.bold),
-              ),
-              pw.SizedBox(height: 4),
-              if (sortedMachineTypes.isNotEmpty) ...[
+                ),
+                pw.SizedBox(width: 12),
                 pw.Text(
-                  '• Loại máy được sử dụng nhiều nhất: ${sortedMachineTypes.first.key} (${sortedMachineTypes.first.value} lần)',
-                  style: pw.TextStyle(font: ttf, fontSize: 10),
+                  'THỐNG KÊ SỬ DỤNG MÁY MÓC',
+                  style: pw.TextStyle(font: ttf, fontSize: 18, fontWeight: pw.FontWeight.bold),
+                ),
+                pw.Spacer(),
+                pw.Container(
+                  padding: pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.blue100,
+                    borderRadius: pw.BorderRadius.circular(8),
+                  ),
+                  child: pw.Text(
+                    'Tháng ${DateFormat('MM/yyyy').format(DateTime.parse('${_selectedPeriod}-01'))}',
+                    style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold),
+                  ),
                 ),
               ],
-              if (sortedMachines.isNotEmpty) ...[
-                pw.Text(
-                  '• Máy cụ thể được sử dụng nhiều nhất: ${sortedMachines.first.key} (${sortedMachines.first.value} lần)',
-                  style: pw.TextStyle(font: ttf, fontSize: 10),
-                ),
-              ],
-              pw.Text(
-                '• Tổng lượt sử dụng tất cả máy: ${machineUsage.values.fold(0, (a, b) => a + b)} lần',
-                style: pw.TextStyle(font: ttf, fontSize: 10),
+            ),
+            pw.SizedBox(height: 20),
+
+            // Summary cards
+            pw.Container(
+              padding: pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.blue50,
+                border: pw.Border.all(color: PdfColors.blue200),
+                borderRadius: pw.BorderRadius.circular(6),
               ),
-              pw.Text(
-                '• Trung bình mỗi máy được sử dụng: ${machineUsage.isNotEmpty ? (machineUsage.values.fold(0, (a, b) => a + b) / machineUsage.length).toStringAsFixed(1) : 0} lần',
-                style: pw.TextStyle(font: ttf, fontSize: 10),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+                children: [
+                  pw.Column(
+                    children: [
+                      pw.Text('${sortedMachineTypes.length}',
+                          style: pw.TextStyle(
+                              font: ttf, fontSize: 24, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800)),
+                      pw.Text('Loại máy', style: pw.TextStyle(font: ttf, fontSize: 12)),
+                    ],
+                  ),
+                  pw.Container(width: 1, height: 40, color: PdfColors.blue200),
+                  pw.Column(
+                    children: [
+                      pw.Text('${sortedMachines.length}',
+                          style: pw.TextStyle(
+                              font: ttf, fontSize: 24, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800)),
+                      pw.Text('Máy cụ thể', style: pw.TextStyle(font: ttf, fontSize: 12)),
+                    ],
+                  ),
+                  pw.Container(width: 1, height: 40, color: PdfColors.blue200),
+                  pw.Column(
+                    children: [
+                      pw.Text('${totalMachineEvents}',
+                          style: pw.TextStyle(
+                              font: ttf, fontSize: 24, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800)),
+                      pw.Text('Lượt sử dụng', style: pw.TextStyle(font: ttf, fontSize: 12)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 25),
+
+            // Machine types table
+            pw.Text('THỐNG KÊ THEO LOẠI MÁY',
+                style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 12),
+            if (sortedMachineTypes.isEmpty)
+              pw.Text('Không có dữ liệu máy móc', style: pw.TextStyle(font: ttf, fontSize: 12))
+            else
+              pw.Table(
+                border: pw.TableBorder.all(color: PdfColors.grey400),
+                columnWidths: {
+                  0: pw.FlexColumnWidth(1),
+                  1: pw.FlexColumnWidth(4),
+                  2: pw.FlexColumnWidth(2),
+                  3: pw.FlexColumnWidth(2),
+                  4: pw.FlexColumnWidth(3),
+                },
+                children: [
+                  pw.TableRow(
+                    decoration: pw.BoxDecoration(color: PdfColors.blue100),
+                    children: [
+                      pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('#', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold))),
+                      pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('Loại máy', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold))),
+                      pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('Số lần', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold))),
+                      pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('Tỷ lệ', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold))),
+                      pw.Padding(
+                        padding: pw.EdgeInsets.all(6),
+                        child: pw.Text('Biểu đồ', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  ...sortedMachineTypes.asMap().entries.map((e) {
+                    final idx = e.key + 1;
+                    final row = e.value;
+                    final pct = totalMachineEvents > 0 ? (row.value / totalMachineEvents * 100) : 0.0;
+                    final barWidth = 100.0;
+                    final fillWidth = barWidth * (pct / 100);
+                    return pw.TableRow(
+                      decoration: pw.BoxDecoration(color: idx % 2 == 0 ? PdfColors.grey50 : PdfColors.white),
+                      children: [
+                        pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('$idx', style: pw.TextStyle(font: ttf, fontSize: 10))),
+                        pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text(row.key, style: pw.TextStyle(font: ttf, fontSize: 10))),
+                        pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('${row.value}', style: pw.TextStyle(font: ttf, fontSize: 10))),
+                        pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('${pct.toStringAsFixed(1)}%', style: pw.TextStyle(font: ttf, fontSize: 10))),
+                        pw.Padding(
+                          padding: pw.EdgeInsets.all(6),
+                          child: pw.Container(
+                            width: barWidth,
+                            height: 8,
+                            decoration: pw.BoxDecoration(color: PdfColors.grey200, borderRadius: pw.BorderRadius.circular(4)),
+                            child: pw.Stack(
+                              children: [
+                                if (fillWidth > 0)
+                                  pw.Container(
+                                    width: fillWidth,
+                                    height: 8,
+                                    decoration: pw.BoxDecoration(color: PdfColors.blue, borderRadius: pw.BorderRadius.circular(4)),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
+                ],
+              ),
+            pw.SizedBox(height: 25),
+
+            // Individual machines table (with project list)
+            pw.Text('CHI TIẾT TỪNG MÁY',
+                style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 12),
+            if (sortedMachines.isEmpty)
+              pw.Text('Không có dữ liệu máy cụ thể', style: pw.TextStyle(font: ttf, fontSize: 12))
+            else
+              pw.Table(
+                border: pw.TableBorder.all(color: PdfColors.grey400),
+                columnWidths: {
+                  0: pw.FlexColumnWidth(1),
+                  1: pw.FlexColumnWidth(2),
+                  2: pw.FlexColumnWidth(4),
+                  3: pw.FlexColumnWidth(3), // Dự án
+                  4: pw.FlexColumnWidth(2),
+                  5: pw.FlexColumnWidth(2),
+                },
+                children: [
+                  pw.TableRow(
+                    decoration: pw.BoxDecoration(color: PdfColors.green100),
+                    children: [
+                      pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('#', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold))),
+                      pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('Mã máy', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold))),
+                      pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('Loại máy', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold))),
+                      pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('Dự án', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold))), // NEW
+                      pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('Số lần', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold))),
+                      pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('Tỷ lệ', style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold))),
+                    ],
+                  ),
+                  ...sortedMachines.take(20).toList().asMap().entries.map((e) {
+                    final idx = e.key + 1;
+                    final row = e.value;
+                    final machineType = _getMachineType(row.key);
+                    final pct = totalMachineEvents > 0 ? (row.value / totalMachineEvents * 100) : 0.0;
+
+                    final projects = (machineProjects[row.key] ?? <String>{}).toList()..sort();
+                    final shown = projects.take(3).toList();
+                    final more = projects.length - shown.length;
+                    final projectsSummary = projects.isEmpty ? '—' : (shown.join(', ') + (more > 0 ? ' +$more' : ''));
+
+                    return pw.TableRow(
+                      decoration: pw.BoxDecoration(color: idx % 2 == 0 ? PdfColors.grey50 : PdfColors.white),
+                      children: [
+                        pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('$idx', style: pw.TextStyle(font: ttf, fontSize: 10))),
+                        pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text(row.key, style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text(machineType, style: pw.TextStyle(font: ttf, fontSize: 9))),
+                        pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text(projectsSummary, style: pw.TextStyle(font: ttf, fontSize: 9))), // NEW
+                        pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('${row.value}', style: pw.TextStyle(font: ttf, fontSize: 10))),
+                        pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('${pct.toStringAsFixed(1)}%', style: pw.TextStyle(font: ttf, fontSize: 10))),
+                      ],
+                    );
+                  }),
+                ],
+              ),
+
+            if (sortedMachines.length > 20) ...[
+              pw.SizedBox(height: 10),
+              pw.Container(
+                padding: pw.EdgeInsets.all(8),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.yellow50,
+                  border: pw.Border.all(color: PdfColors.yellow200),
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: pw.Text(
+                  'Lưu ý: Chỉ hiển thị 20 máy được sử dụng nhiều nhất. Tổng số máy: ${sortedMachines.length}',
+                  style: pw.TextStyle(font: ttf, fontSize: 10, fontStyle: pw.FontStyle.italic),
+                ),
               ),
             ],
-          ),
-        ),
-      ];
-    },
-  ),
-);
-    // Second page for project details
+
+            pw.SizedBox(height: 20),
+            pw.Container(
+              padding: pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(color: PdfColors.grey100, borderRadius: pw.BorderRadius.circular(6)),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('TÓM TẮT THỐNG KÊ:',
+                      style: pw.TextStyle(font: ttf, fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                  pw.SizedBox(height: 4),
+                  if (sortedMachineTypes.isNotEmpty)
+                    pw.Text('• Loại máy được sử dụng nhiều nhất: ${sortedMachineTypes.first.key} (${sortedMachineTypes.first.value} lần)',
+                        style: pw.TextStyle(font: ttf, fontSize: 10)),
+                  if (sortedMachines.isNotEmpty)
+                    pw.Text('• Máy cụ thể được sử dụng nhiều nhất: ${sortedMachines.first.key} (${sortedMachines.first.value} lần)',
+                        style: pw.TextStyle(font: ttf, fontSize: 10)),
+                  pw.Text('• Tổng lượt sử dụng tất cả máy: $totalMachineEvents lần',
+                      style: pw.TextStyle(font: ttf, fontSize: 10)),
+                  pw.Text(
+                    '• Trung bình mỗi máy được sử dụng: ${machineUsage.isNotEmpty ? (totalMachineEvents / machineUsage.length).toStringAsFixed(1) : 0} lần',
+                    style: pw.TextStyle(font: ttf, fontSize: 10),
+                  ),
+                ],
+              ),
+            ),
+          ];
+        },
+      ),
+    );
+
+    // ===== Page 3: Project detail table =====
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: pw.EdgeInsets.all(20),
         build: (context) => [
-          pw.Text(
-            'DANH SÁCH DỰ ÁN CHI TIẾT',
-            style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold),
-          ),
+          pw.Text('DANH SÁCH DỰ ÁN CHI TIẾT',
+              style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 10),
-          pw.Text(
-            'Tổng số dự án: ${sortedProjects.length}',
-            style: pw.TextStyle(font: ttf, fontSize: 12, fontWeight: pw.FontWeight.bold),
-          ),
+          pw.Text('Tổng số dự án: ${sortedProjects.length}',
+              style: pw.TextStyle(font: ttf, fontSize: 12, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 15),
-          
-          // Project table
+
           if (projectData.isEmpty)
             pw.Text('Không có dữ liệu dự án', style: pw.TextStyle(font: ttf, fontSize: 12))
           else
@@ -1080,30 +1111,30 @@ pdf.addPage(
               },
               border: pw.TableBorder.all(color: PdfColors.grey400),
               children: [
-                // Header row
                 pw.TableRow(
                   decoration: pw.BoxDecoration(color: PdfColors.grey300),
                   children: [
                     pw.Padding(
                       padding: pw.EdgeInsets.all(4),
-                      child: pw.Text('Dự án', 
-                        style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                      child: pw.Text('Dự án',
+                          style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold)),
                     ),
                     pw.Padding(
                       padding: pw.EdgeInsets.all(4),
-                      child: pw.Text('Tổng', 
-                        style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                      child: pw.Text('Tổng',
+                          style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold)),
                     ),
-                    ...sortedDates.take(15).map((date) => pw.Padding(
-                      padding: pw.EdgeInsets.all(4),
-                      child: pw.Text(date.split('/')[0], // Show only day
-                        style: pw.TextStyle(font: ttf, fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                    )),
+                    ...sortedDates.take(15).map(
+                      (d) => pw.Padding(
+                        padding: pw.EdgeInsets.all(4),
+                        child: pw.Text(d.split('/')[0],
+                            style: pw.TextStyle(font: ttf, fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                      ),
+                    ),
                   ],
                 ),
-                // Data rows
-                ...sortedProjects.take(20).map((project) { // Limit to first 20 projects for PDF
-                  final totalCount = projectData[project]!.values.fold(0, (a, b) => a + b);
+                ...sortedProjects.take(20).map((project) {
+                  final totalCount = projectData[project]!.values.fold<int>(0, (x, y) => x + y);
                   return pw.TableRow(
                     children: [
                       pw.Padding(
@@ -1115,25 +1146,24 @@ pdf.addPage(
                       ),
                       pw.Padding(
                         padding: pw.EdgeInsets.all(4),
-                        child: pw.Text(totalCount.toString(),
-                          style: pw.TextStyle(font: ttf, fontSize: 9)),
+                        child: pw.Text('$totalCount', style: pw.TextStyle(font: ttf, fontSize: 9)),
                       ),
-                      ...sortedDates.take(15).map((date) {
-                        final count = projectData[project]![date] ?? 0;
+                      ...sortedDates.take(15).map((d) {
+                        final c = projectData[project]![d] ?? 0;
                         return pw.Padding(
                           padding: pw.EdgeInsets.all(4),
                           child: pw.Container(
                             decoration: pw.BoxDecoration(
-                              color: count > 0 ? PdfColors.green100 : PdfColors.grey100,
+                              color: c > 0 ? PdfColors.green100 : PdfColors.grey100,
                               borderRadius: pw.BorderRadius.circular(2),
                             ),
                             child: pw.Center(
                               child: pw.Text(
-                                count > 0 ? count.toString() : '-',
+                                c > 0 ? '$c' : '-',
                                 style: pw.TextStyle(
-                                  font: ttf, 
+                                  font: ttf,
                                   fontSize: 8,
-                                  color: count > 0 ? PdfColors.green800 : PdfColors.grey600,
+                                  color: c > 0 ? PdfColors.green800 : PdfColors.grey600,
                                 ),
                               ),
                             ),
@@ -1145,19 +1175,19 @@ pdf.addPage(
                 }),
               ],
             ),
-          
-          if (sortedProjects.length > 20)
+
+          if (sortedProjects.length > 20) ...[
             pw.SizedBox(height: 10),
-          if (sortedProjects.length > 20)
             pw.Text(
               'Lưu ý: Chỉ hiển thị 20 dự án đầu tiên. Tổng số dự án: ${sortedProjects.length}',
               style: pw.TextStyle(font: ttf, fontSize: 10, fontStyle: pw.FontStyle.italic),
             ),
+          ],
         ],
       ),
     );
 
-    // Third page for incidents
+    // ===== Page 4: Incidents =====
     if (nonOkIncidents.isNotEmpty) {
       pdf.addPage(
         pw.MultiPage(
@@ -1169,41 +1199,27 @@ pdf.addPage(
                 pw.Container(
                   width: 20,
                   height: 20,
-                  decoration: pw.BoxDecoration(
-                    color: PdfColors.red,
-                    borderRadius: pw.BorderRadius.circular(2),
-                  ),
+                  decoration: pw.BoxDecoration(color: PdfColors.red, borderRadius: pw.BorderRadius.circular(2)),
                   child: pw.Center(
-                    child: pw.Text('!', 
-                      style: pw.TextStyle(color: PdfColors.white, fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                    child: pw.Text('!', style: pw.TextStyle(color: PdfColors.white, fontSize: 14, fontWeight: pw.FontWeight.bold)),
                   ),
                 ),
                 pw.SizedBox(width: 8),
-                pw.Text(
-                  'SỰ CỐ KHÔNG ĐẠT YÊU CẦU',
-                  style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold),
-                ),
+                pw.Text('SỰ CỐ KHÔNG ĐẠT YÊU CẦU',
+                    style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold)),
                 pw.Spacer(),
                 pw.Container(
                   padding: pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: pw.BoxDecoration(
-                    color: PdfColors.red100,
-                    borderRadius: pw.BorderRadius.circular(8),
-                  ),
-                  child: pw.Text(
-                    'Tổng: ${nonOkIncidents.length}',
-                    style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold),
-                  ),
+                  decoration: pw.BoxDecoration(color: PdfColors.red100, borderRadius: pw.BorderRadius.circular(8)),
+                  child: pw.Text('Tổng: ${nonOkIncidents.length}',
+                      style: pw.TextStyle(font: ttf, fontSize: 11, fontWeight: pw.FontWeight.bold)),
                 ),
               ],
             ),
             pw.SizedBox(height: 15),
-            
             ...sortedIncidentProjects.map((project) {
               final incidents = projectIncidents[project]!;
-              final incidentDates = incidents.map((i) => DateFormat('dd/MM').format(i.ngay)).toSet().toList()
-                ..sort();
-              
+              final incidentDates = incidents.map((i) => DateFormat('dd/MM').format(i.ngay)).toSet().toList()..sort();
               final failureCount = incidents.where((i) => i.ketQua == '❌').length;
               final warningCount = incidents.where((i) => i.ketQua == '⚠️').length;
 
@@ -1223,72 +1239,39 @@ pdf.addPage(
                         pw.Expanded(
                           child: pw.Text(
                             project,
-                            style: pw.TextStyle(
-                              font: ttf,
-                              fontWeight: pw.FontWeight.bold,
-                              fontSize: 12,
-                            ),
+                            style: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold, fontSize: 12),
                             maxLines: 2,
                           ),
                         ),
                         pw.Container(
                           padding: pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: pw.BoxDecoration(
-                            color: PdfColors.red200,
-                            borderRadius: pw.BorderRadius.circular(4),
-                          ),
-                          child: pw.Text(
-                            '${incidents.length} sự cố',
-                            style: pw.TextStyle(
-                              font: ttf,
-                              fontSize: 10,
-                              fontWeight: pw.FontWeight.bold,
-                            ),
-                          ),
+                          decoration: pw.BoxDecoration(color: PdfColors.red200, borderRadius: pw.BorderRadius.circular(4)),
+                          child: pw.Text('${incidents.length} sự cố',
+                              style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold)),
                         ),
                       ],
                     ),
                     pw.SizedBox(height: 6),
                     pw.Row(
                       children: [
-                        if (failureCount > 0) ...[
+                        if (failureCount > 0)
                           pw.Container(
                             padding: pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                            decoration: pw.BoxDecoration(
-                              color: PdfColors.red100,
-                              borderRadius: pw.BorderRadius.circular(3),
-                            ),
-                            child: pw.Text(
-                              'Không làm: $failureCount',
-                              style: pw.TextStyle(font: ttf, fontSize: 9),
-                            ),
+                            decoration: pw.BoxDecoration(color: PdfColors.red100, borderRadius: pw.BorderRadius.circular(3)),
+                            child: pw.Text('Không làm: $failureCount', style: pw.TextStyle(font: ttf, fontSize: 9)),
                           ),
-                          pw.SizedBox(width: 6),
-                        ],
-                        if (warningCount > 0) ...[
+                        if (failureCount > 0) pw.SizedBox(width: 6),
+                        if (warningCount > 0)
                           pw.Container(
                             padding: pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                            decoration: pw.BoxDecoration(
-                              color: PdfColors.orange100,
-                              borderRadius: pw.BorderRadius.circular(3),
-                            ),
-                            child: pw.Text(
-                              'Chưa tốt: $warningCount',
-                              style: pw.TextStyle(font: ttf, fontSize: 9),
-                            ),
+                            decoration: pw.BoxDecoration(color: PdfColors.orange100, borderRadius: pw.BorderRadius.circular(3)),
+                            child: pw.Text('Chưa tốt: $warningCount', style: pw.TextStyle(font: ttf, fontSize: 9)),
                           ),
-                        ],
                       ],
                     ),
                     pw.SizedBox(height: 4),
-                    pw.Text(
-                      'Ngày xảy ra: ${incidentDates.join(", ")}',
-                      style: pw.TextStyle(
-                        font: ttf,
-                        fontSize: 10,
-                        fontStyle: pw.FontStyle.italic,
-                      ),
-                    ),
+                    pw.Text('Ngày xảy ra: ${incidentDates.join(", ")}',
+                        style: pw.TextStyle(font: ttf, fontSize: 10, fontStyle: pw.FontStyle.italic)),
                   ],
                 ),
               );
@@ -1297,40 +1280,26 @@ pdf.addPage(
         ),
       );
     } else {
-      // Add a page showing no incidents
       pdf.addPage(
         pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          margin: pw.EdgeInsets.all(20),
           build: (context) => pw.Center(
             child: pw.Column(
               mainAxisAlignment: pw.MainAxisAlignment.center,
               children: [
                 pw.Container(
-                  width: 60,
-                  height: 60,
-                  decoration: pw.BoxDecoration(
-                    color: PdfColors.green,
-                    shape: pw.BoxShape.circle,
-                  ),
+                  width: 60, height: 60,
+                  decoration: pw.BoxDecoration(color: PdfColors.green, shape: pw.BoxShape.circle),
                   child: pw.Center(
-                    child: pw.Text('✓', 
-                      style: pw.TextStyle(color: PdfColors.white, fontSize: 30, fontWeight: pw.FontWeight.bold)),
+                    child: pw.Text('✓', style: pw.TextStyle(color: PdfColors.white, fontSize: 30, fontWeight: pw.FontWeight.bold)),
                   ),
                 ),
                 pw.SizedBox(height: 16),
-                pw.Text(
-                  'KHÔNG CÓ SỰ CỐ NÀO TRONG KỲ NÀY',
-                  style: pw.TextStyle(
-                    font: ttf,
-                    fontSize: 18,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.green,
-                  ),
-                ),
+                pw.Text('KHÔNG CÓ SỰ CỐ NÀO TRONG KỲ NÀY',
+                    style: pw.TextStyle(font: ttf, fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.green)),
                 pw.SizedBox(height: 8),
-                pw.Text(
-                  'Tất cả báo cáo đều đạt yêu cầu',
-                  style: pw.TextStyle(font: ttf, fontSize: 14),
-                ),
+                pw.Text('Tất cả báo cáo đều đạt yêu cầu', style: pw.TextStyle(font: ttf, fontSize: 14)),
               ],
             ),
           ),
@@ -1338,13 +1307,14 @@ pdf.addPage(
       );
     }
 
+    // ===== Save & Share =====
     final output = await getTemporaryDirectory();
     final file = File('${output.path}/machinery_report_detailed_${_selectedPeriod}.pdf');
     await file.writeAsBytes(await pdf.save());
 
-    await Share.shareXFiles([XFile(file.path)], 
-      text: 'Báo cáo chi tiết sử dụng máy móc ${_selectedPeriod}');
-      
+    await Share.shareXFiles([XFile(file.path)],
+        text: 'Báo cáo chi tiết sử dụng máy móc ${_selectedPeriod}');
+
     _showSuccess('Xuất PDF chi tiết thành công');
   } catch (e) {
     print('Error generating PDF: $e');
@@ -1355,7 +1325,6 @@ pdf.addPage(
     });
   }
 }
-
   String _formatKetQua(String? ketQua) {
     if (ketQua == null) return '';
     switch (ketQua) {
@@ -1647,24 +1616,35 @@ pdf.addPage(
   final projectData = <String, Map<String, int>>{};
   final allDates = <String>{};
 
-  // Collect all dates in the period
+  // NEW: total area per project
+  final projectAreaTotals = <String, double>{};
+
+  // Collect all dates in the period + counts + area
   for (final record in _filteredData) {
     final dateStr = DateFormat('dd/MM').format(record.ngay);
     allDates.add(dateStr);
-    
-    if (record.boPhan != null && _isValidProject(record.boPhan)) {
-      if (!projectData.containsKey(record.boPhan!)) {
-        projectData[record.boPhan!] = {};
+
+    final proj = record.boPhan;
+    if (proj != null && _isValidProject(proj)) {
+      projectData.putIfAbsent(proj, () => {});
+      projectData[proj]![dateStr] = (projectData[proj]![dateStr] ?? 0) + 1;
+
+      // NEW: extract and sum area
+      final area = _extractAreaM2(record.chiTiet);
+      if (area != null) {
+        projectAreaTotals[proj] = (projectAreaTotals[proj] ?? 0) + area;
       }
-      projectData[record.boPhan!]![dateStr] = 
-          (projectData[record.boPhan!]![dateStr] ?? 0) + 1;
     }
   }
 
   final sortedDates = allDates.toList()..sort();
-  final sortedProjects = projectData.keys.toList()
-    ..sort((a, b) => (projectData[b]!.values.fold(0, (a, b) => a + b))
-        .compareTo(projectData[a]!.values.fold(0, (a, b) => a + b)));
+
+  // Sort projects by total count desc (as before)
+final sortedProjects = projectData.keys.toList()
+  ..sort((a, b) => (projectData[b]!.values.fold<int>(0, (x, y) => x + y))
+      .compareTo(projectData[a]!.values.fold<int>(0, (x, y) => x + y)));
+
+  final numFmt = NumberFormat.decimalPattern('vi_VN'); // for nicer area rendering
 
   return Card(
     child: Padding(
@@ -1706,26 +1686,38 @@ pdf.addPage(
                 columnSpacing: 12,
                 columns: [
                   DataColumn(
-                    label: Container(
+                    label: SizedBox(
                       width: 240,
-                      child: Text(
-                        'Dự án',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
+                      child: Text('Dự án', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ),
-                  DataColumn(label: Text('Tổng')),
-                  // Show ALL dates, not just 10
+                  // NEW: Area column inserted BEFORE Tổng
+                  DataColumn(
+                    label: Text('Diện tích (m²)', style: TextStyle(fontWeight: FontWeight.bold)),
+                    numeric: true,
+                  ),
+                  DataColumn(
+                    label: Text('Tổng', style: TextStyle(fontWeight: FontWeight.bold)),
+                    numeric: true,
+                  ),
+                  // Show ALL dates
                   ...sortedDates.map((date) => DataColumn(
-                    label: Text(date, style: TextStyle(fontSize: 12)),
-                  )),
+                        label: Text(date, style: TextStyle(fontSize: 12)),
+                      )),
                 ],
-                rows: sortedProjects.map((project) { // Show ALL projects, not just 10
-                  final totalCount = projectData[project]!.values.fold(0, (a, b) => a + b);
+                rows: sortedProjects.map((project) {
+                  final totalCount = projectData[project]!.values.fold<int>(0, (a, b) => a + b);
+
+                  final area = projectAreaTotals[project] ?? 0.0;
+                  // Show empty string if area == 0 and no records had an area parsed
+                  final areaCellText = area > 0
+                      ? numFmt.format(area)
+                      : ''; // keep it visually clean when no area parsed
+
                   return DataRow(
                     cells: [
                       DataCell(
-                        Container(
+                        SizedBox(
                           width: 240,
                           child: Text(
                             project,
@@ -1735,8 +1727,20 @@ pdf.addPage(
                           ),
                         ),
                       ),
-                      DataCell(Text(totalCount.toString())),
-                      // Show ALL dates
+                      // NEW: area cell
+                      DataCell(
+                        Text(
+                          areaCellText,
+                          textAlign: TextAlign.right,
+                          style: TextStyle(fontFeatures: const [FontFeature.tabularFigures()]),
+                        ),
+                      ),
+                      DataCell(Text(
+                        totalCount.toString(),
+                        textAlign: TextAlign.right,
+                        style: TextStyle(fontFeatures: const [FontFeature.tabularFigures()]),
+                      )),
+                      // All dates
                       ...sortedDates.map((date) {
                         final count = projectData[project]![date] ?? 0;
                         return DataCell(
@@ -1769,6 +1773,7 @@ pdf.addPage(
     ),
   );
 }
+
 Widget _buildNonOkIncidents() {
   // Filter non-OK incidents (❌ and ⚠️)
   final nonOkIncidents = _filteredData.where((record) => 
@@ -2310,6 +2315,21 @@ Widget _buildNonOkIncidents() {
              icon: Icon(Icons.calendar_month, color: Colors.black87),
            ),
          ),
+// Excel (CSV) Export button
+IconButton(
+  icon: _isExcelExporting
+      ? const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          ),
+        )
+      : const Icon(Icons.grid_on),
+  onPressed: _isExcelExporting ? null : _exportExcelCsv,
+  tooltip: 'Xuất Excel (CSV)',
+),
          // PDF Export button
          IconButton(
            icon: _isExporting 
