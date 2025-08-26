@@ -366,7 +366,7 @@ Future<void> _openFolderDSHang(String folderPath) async {
       setState(() {
         _currentUser = username;
         // Check if user has edit permissions - specifically for the authorized users
-        _canEditItems = ['hm.tason', 'hm.manhha', 'hm.lehoa' , 'hm.vulinh', 'hm.phiminh']
+        _canEditItems = ['hm.tason', 'hm.manhha', 'hm.lehoa' , 'hm.thanhthao', 'hm.thanhhao', 'hm.phiminh']
             .contains(_currentUser);
       });
       

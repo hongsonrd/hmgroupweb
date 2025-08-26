@@ -16,6 +16,7 @@ import 'projectcongnhanexcel.dart';
 import 'projectcongnhanns.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'projectcongnhanllv.dart';
+import 'projectcongnhanbio.dart';
 
 import 'dart:math';
 class ProjectCongNhan extends StatefulWidget {
@@ -1329,6 +1330,27 @@ Future<void> _exportMonth() async {
     });
   }
 }
+Future<void> _exportStaffBio() async {
+  if (_isLoading) return;
+  
+  setState(() {
+    _isLoading = true;
+    _syncStatus = 'Đang xuất hồ sơ nhân sự...';
+  });
+
+  try {
+    await ProjectCongNhanBio.exportStaffBioToExcel(context: context);
+    _showSuccess('Xuất hồ sơ nhân sự thành công');
+  } catch (e) {
+    print('Error exporting staff bio: $e');
+    _showError('Lỗi xuất hồ sơ nhân sự: ${e.toString()}');
+  } finally {
+    setState(() {
+      _isLoading = false;
+      _syncStatus = '';
+    });
+  }
+}
 void _navigateToDepartmentEvaluation() {
   Navigator.push(
     context,
@@ -1465,6 +1487,16 @@ void _navigateToDepartmentEvaluation() {
           label: Text('Xuất tháng'),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.orange[600],
+            foregroundColor: Colors.white,
+          ),
+        ),
+        SizedBox(width: 12),
+        ElevatedButton.icon(
+          onPressed: _isLoading ? null : () => _exportStaffBio(),
+          icon: Icon(Icons.person_outline, size: 18),
+          label: Text('Xuất hồ sơ NS'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.teal[600],
             foregroundColor: Colors.white,
           ),
         ),
