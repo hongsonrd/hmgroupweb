@@ -11,66 +11,72 @@ import 'db_helper.dart'; // Add this import
 
 class ProjectCongNhanExcel {
   static Future<void> exportToExcel({
-    required List<TaskHistoryModel> allData,
-    required List<String> projectOptions,
-    required BuildContext context,
-  }) async {
-    // Apply BoPhan correction before export
-    final correctedData = _applyCorrectionToData(allData);
-    
-    // Get staff name mapping
-    final staffNameMap = await _getStaffNameMap();
-    
-    final excel = Excel.createExcel();
-    
-    // Remove default sheet
-    excel.delete('Sheet1');
-    
-    // Create TongHop sheet
-    await _createTongHopSheet(excel, correctedData, projectOptions, staffNameMap);
-    
-    // Create ChiTiet sheet
-    await _createChiTietSheet(excel, correctedData, staffNameMap);
-    
-    // Save and share/save file based on platform
-    final fileName = 'DuAn_CongNhan_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
-    await _saveAndHandleFile(excel, fileName, context);
-  }
+  required List<TaskHistoryModel> allData,
+  required List<String> projectOptions,
+  required BuildContext context,
+}) async {
+  // Apply BoPhan correction before export
+  final correctedData = _applyCorrectionToData(allData);
+  
+  // Get staff name mapping
+  final staffNameMap = await _getStaffNameMap();
+  
+  final excel = Excel.createExcel();
+  
+  // Remove default sheet
+  excel.delete('Sheet1');
+  
+  // Create TongHop sheet
+  await _createTongHopSheet(excel, correctedData, projectOptions, staffNameMap);
+  
+  // Create ChiTiet sheet
+  await _createChiTietSheet(excel, correctedData, staffNameMap);
+  
+  // ADD: Create daily matrix sheet
+  //await _createDailyMatrixSheet(excel, correctedData, staffNameMap);
+  
+  // Save and share/save file based on platform
+  final fileName = 'DuAn_CongNhan_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
+  await _saveAndHandleFile(excel, fileName, context);
+}
 
-  static Future<void> exportToExcelMonth({
-    required List<TaskHistoryModel> allData,
-    required List<String> projectOptions,
-    required DateTime selectedMonth,
-    required BuildContext context,
-  }) async {
-    // Filter data for the selected month
-    final monthData = allData.where((record) {
-      return record.ngay.year == selectedMonth.year && 
-             record.ngay.month == selectedMonth.month;
-    }).toList();
+static Future<void> exportToExcelMonth({
+  required List<TaskHistoryModel> allData,
+  required List<String> projectOptions,
+  required DateTime selectedMonth,
+  required BuildContext context,
+}) async {
+  // Filter data for the selected month
+  final monthData = allData.where((record) {
+    return record.ngay.year == selectedMonth.year && 
+           record.ngay.month == selectedMonth.month;
+  }).toList();
 
-    // Apply BoPhan correction before export
-    final correctedData = _applyCorrectionToData(monthData);
+  // Apply BoPhan correction before export
+  final correctedData = _applyCorrectionToData(monthData);
 
-    // Get staff name mapping
-    final staffNameMap = await _getStaffNameMap();
+  // Get staff name mapping
+  final staffNameMap = await _getStaffNameMap();
 
-    final excel = Excel.createExcel();
-    
-    // Remove default sheet
-    excel.delete('Sheet1');
-    
-    // Create TongHop sheet for the month
-    await _createTongHopSheet(excel, correctedData, projectOptions, staffNameMap);
-    
-    // Create ChiTiet sheet for the month
-    await _createChiTietSheet(excel, correctedData, staffNameMap);
-    
-    // Save and share/save file based on platform
-    final monthName = DateFormat('yyyy_MM').format(selectedMonth);
-    final fileName = 'DuAn_CongNhan_Thang_${monthName}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
-    await _saveAndHandleFile(excel, fileName, context);
-  }
+  final excel = Excel.createExcel();
+  
+  // Remove default sheet
+  excel.delete('Sheet1');
+  
+  // Create TongHop sheet for the month
+  await _createTongHopSheet(excel, correctedData, projectOptions, staffNameMap);
+  
+  // Create ChiTiet sheet for the month
+  await _createChiTietSheet(excel, correctedData, staffNameMap);
+  
+  // ADD: Create daily matrix sheet
+  //await _createDailyMatrixSheet(excel, correctedData, staffNameMap);
+  
+  // Save and share/save file based on platform
+  final monthName = DateFormat('yyyy_MM').format(selectedMonth);
+  final fileName = 'DuAn_CongNhan_Thang_${monthName}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
+  await _saveAndHandleFile(excel, fileName, context);
+}
 
   // Add this new method to get staff names
   static Future<Map<String, String>> _getStaffNameMap() async {
@@ -390,7 +396,75 @@ class ProjectCongNhanExcel {
       }
     }
   }
-
+static Future<void> _createDailyMatrixSheet(
+  Excel excel,
+  List<TaskHistoryModel> data,
+  Map<String, String> staffNameMap,
+) async {
+  final matrixSheet = excel['Ma_tran_bao_cao_hang_ngay'];
+  
+  // Get unique dates and workers
+  final dateSet = <String>{};
+  final workerSet = <String>{};
+  
+  for (final record in data) {
+    if (record.boPhan != null && !_shouldFilterProject(record.boPhan!)) {
+      final dateStr = DateFormat('yyyy-MM-dd').format(record.ngay);
+      dateSet.add(dateStr);
+      if (record.nguoiDung?.isNotEmpty == true) {
+        workerSet.add(record.nguoiDung!);
+      }
+    }
+  }
+  
+  final sortedDates = dateSet.toList()..sort((a, b) => b.compareTo(a));
+  final sortedWorkers = workerSet.toList()..sort();
+  
+  // ADD: Safety check to prevent Excel from freezing with too much data
+  if (sortedDates.length > 366 || sortedWorkers.length > 1000) {
+    print('Warning: Too much data for matrix sheet. Dates: ${sortedDates.length}, Workers: ${sortedWorkers.length}');
+    // Create a simple info sheet instead
+    matrixSheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0)).value = 'Dữ liệu quá lớn để tạo ma trận';
+    return;
+  }
+  
+  // Create headers
+  final headers = ['Mã NV', 'Tên công nhân', ...sortedDates.map((d) => DateFormat('dd/MM').format(DateTime.parse(d)))];
+  
+  for (int i = 0; i < headers.length; i++) {
+    final cell = matrixSheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+    cell.value = headers[i];
+    cell.cellStyle = CellStyle(
+      bold: true,
+      backgroundColorHex: '#70AD47',
+      fontColorHex: '#FFFFFF',
+    );
+  }
+  
+  // Fill data
+  int rowIndex = 1;
+  for (final worker in sortedWorkers) {
+    final capitalizedWorker = worker.toUpperCase();
+    final staffName = staffNameMap[capitalizedWorker] ?? '❓❓❓';
+    
+    matrixSheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: rowIndex)).value = worker;
+    matrixSheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: rowIndex)).value = staffName;
+    
+    for (int dateIndex = 0; dateIndex < sortedDates.length; dateIndex++) {
+      final dateStr = sortedDates[dateIndex];
+      final reportCount = data.where((record) =>
+        DateFormat('yyyy-MM-dd').format(record.ngay) == dateStr &&
+        record.nguoiDung == worker &&
+        record.boPhan != null &&
+        !_shouldFilterProject(record.boPhan!)
+      ).length;
+      
+      final cell = matrixSheet.cell(CellIndex.indexByColumnRow(columnIndex: dateIndex + 2, rowIndex: rowIndex));
+      cell.value = reportCount > 0 ? reportCount.toString() : '';
+    }
+    rowIndex++;
+  }
+}
   static Future<void> _createChiTietSheet(
     Excel excel, 
     List<TaskHistoryModel> data,

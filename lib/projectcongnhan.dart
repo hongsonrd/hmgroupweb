@@ -1363,452 +1363,757 @@ void _navigateToDepartmentEvaluation() {
     ),
   );
 }
- Widget _buildWorkersTable() {
-   if (_selectedProject == null || _selectedDate == null) {
-     return Container(
-       padding: EdgeInsets.all(32),
-       child: Center(
-         child: Column(
-           children: [
-             Icon(
-               Icons.filter_list,
-               size: 64,
-               color: Colors.grey[400],
-             ),
-             SizedBox(height: 16),
-             Text(
-               'Vui lòng chọn dự án và ngày để xem danh sách công nhân',
-               style: TextStyle(
-                 fontSize: 16,
-                 color: Colors.grey[600],
-               ),
-               textAlign: TextAlign.center,
-             ),
-           ],
-         ),
-       ),
-     );
-   }
-
-   final isDesktop = MediaQuery.of(context).size.width > 1200;
-   final isTablet = MediaQuery.of(context).size.width > 600;
-   final allWorkers = [..._filteredWorkers, ..._unavailableWorkers];
-
-   if (allWorkers.isEmpty) {
-     return Container(
-       padding: EdgeInsets.all(32),
-       child: Center(
-         child: Column(
-           children: [
-             Icon(
-               Icons.person_off,
-               size: 64,
-               color: Colors.grey[400],
-             ),
-             SizedBox(height: 16),
-             Text(
-               'Không có công nhân nào trong dự án đã chọn',
-               style: TextStyle(
-                 fontSize: 16,
-                 color: Colors.grey[600],
-               ),
-               textAlign: TextAlign.center,
-             ),
-           ],
-         ),
-       ),
-     );
-   }
-
-   return Container(
-     margin: EdgeInsets.all(16),
-     decoration: BoxDecoration(
-       color: Colors.white,
-       borderRadius: BorderRadius.circular(8),
-       boxShadow: [
-         BoxShadow(
-           color: Colors.grey.withOpacity(0.1),
-           spreadRadius: 1,
-           blurRadius: 3,
-           offset: Offset(0, 2),
-         ),
-       ],
-     ),
-     child: Column(
-       crossAxisAlignment: CrossAxisAlignment.start,
-       children: [
-         // Header
-         Container(
-  padding: EdgeInsets.all(16),
-  decoration: BoxDecoration(
-    color: Colors.blue[50],
-    borderRadius: BorderRadius.only(
-      topLeft: Radius.circular(8),
-      topRight: Radius.circular(8),
-    ),
-  ),
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(
-        children: [
-          Icon(Icons.people, color: Colors.blue[600]),
-          SizedBox(width: 8),
-          Text(
-            'Danh sách công nhân (${_filteredWorkers.length} có mặt, ${_unavailableWorkers.length} vắng)',
-            style: TextStyle(
-              fontSize: isDesktop ? 18 : 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.blue[800],
+Widget _buildWorkersTable() {
+  if (_selectedProject == null || _selectedDate == null) {
+    return Container(
+      padding: EdgeInsets.all(32),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(
+              Icons.filter_list,
+              size: 64,
+              color: Colors.grey[400],
             ),
-          ),
-        ],
+            SizedBox(height: 16),
+            Text(
+              'Vui lòng chọn dự án và ngày để xem danh sách công nhân',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[600],
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
-      SizedBox(height: 12),
-      Container(
-  height: 50,
-  child: SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    child: Row(
-      children: [
-        ElevatedButton.icon(
-          onPressed: _isLoading ? null : () => _exportExcel(),
-          icon: Icon(Icons.table_chart, size: 18),
-          label: Text('Xuất excel'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green[600],
-            foregroundColor: Colors.white,
-          ),
+    );
+  }
+
+  final isDesktop = MediaQuery.of(context).size.width > 1200;
+  final isTablet = MediaQuery.of(context).size.width > 600;
+  final allWorkers = [..._filteredWorkers, ..._unavailableWorkers];
+
+  if (allWorkers.isEmpty) {
+    return Container(
+      padding: EdgeInsets.all(32),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(
+              Icons.person_off,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Không có công nhân nào trong dự án đã chọn',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[600],
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
-        SizedBox(width: 12),
-        ElevatedButton.icon(
-          onPressed: _isLoading ? null : () => _exportMonth(),
-          icon: Icon(Icons.calendar_month, size: 18),
-          label: Text('Xuất tháng'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.orange[600],
-            foregroundColor: Colors.white,
-          ),
+      ),
+    );
+  }
+
+  return Container(
+    margin: EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(8),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.grey.withOpacity(0.1),
+          spreadRadius: 1,
+          blurRadius: 3,
+          offset: Offset(0, 2),
         ),
-        SizedBox(width: 12),
-        ElevatedButton.icon(
-          onPressed: _isLoading ? null : () => _exportStaffBio(),
-          icon: Icon(Icons.person_outline, size: 18),
-          label: Text('Xuất hồ sơ NS'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.teal[600],
-            foregroundColor: Colors.white,
-          ),
-        ),
-        SizedBox(width: 12),
-        ElevatedButton.icon(
-          onPressed: (_isLoading || _selectedProject == null || _taskSchedules.isEmpty) 
-              ? null 
-              : () => _showProjectScheduleDialog(),
-          icon: Icon(Icons.schedule, size: 18),
-          label: Text('Xem lịch làm việc'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.purple[600],
-            foregroundColor: Colors.white,
-          ),
-        ),
-        SizedBox(width: 12),
-        ElevatedButton.icon(
-          onPressed: (_isLoading || _taskSchedules.isEmpty) 
-              ? null 
-              : () => _navigateToDepartmentEvaluation(),
-          icon: Icon(Icons.assessment_outlined, size: 18),
-          label: Text('Đánh giá bộ phận'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.indigo[600],
-            foregroundColor: Colors.white,
-          ),
-        ),
-        SizedBox(width: 16),
       ],
     ),
-  ),
-),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header
+        Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.blue[50],
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(8),
+              topRight: Radius.circular(8),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.people, color: Colors.blue[600]),
+                  SizedBox(width: 8),
+                  Text(
+                    'Danh sách công nhân (${_filteredWorkers.length} có mặt, ${_unavailableWorkers.length} vắng)',
+                    style: TextStyle(
+                      fontSize: isDesktop ? 18 : 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue[800],
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8),
+              // Add descriptive text
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.amber[100],
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.amber[300]!),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.info_outline, size: 14, color: Colors.amber[700]),
+                    SizedBox(width: 4),
+                    Text(
+                      'Cuộn xuống để xem ma trận báo cáo theo ngày',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.amber[800],
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 12),
+              Container(
+                height: 50,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: _isLoading ? null : () => _exportExcel(),
+                        icon: Icon(Icons.table_chart, size: 18),
+                        label: Text('Xuất excel'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green[600],
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        onPressed: _isLoading ? null : () => _exportMonth(),
+                        icon: Icon(Icons.calendar_month, size: 18),
+                        label: Text('Xuất tháng'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange[600],
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        onPressed: _isLoading ? null : () => _exportStaffBio(),
+                        icon: Icon(Icons.person_outline, size: 18),
+                        label: Text('Xuất hồ sơ NS'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.teal[600],
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        onPressed: (_isLoading || _selectedProject == null || _taskSchedules.isEmpty) 
+                            ? null 
+                            : () => _showProjectScheduleDialog(),
+                        icon: Icon(Icons.schedule, size: 18),
+                        label: Text('Xem lịch làm việc'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.purple[600],
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        onPressed: (_isLoading || _taskSchedules.isEmpty) 
+                            ? null 
+                            : () => _navigateToDepartmentEvaluation(),
+                        icon: Icon(Icons.assessment_outlined, size: 18),
+                        label: Text('Đánh giá bộ phận'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.indigo[600],
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                      SizedBox(width: 16),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Table
+        Container(
+          constraints: BoxConstraints(maxHeight: isDesktop ? 500 : 400),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SingleChildScrollView(
+              child: DataTable(
+                border: TableBorder.all(color: Colors.grey[300]!),
+                headingRowColor: MaterialStateColor.resolveWith(
+                  (states) => Colors.grey[100]!,
+                ),
+                columnSpacing: isDesktop ? 24 : 16,
+                headingTextStyle: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[700],
+                  fontSize: isDesktop ? 14 : 12,
+                ),
+                dataTextStyle: TextStyle(
+                  fontSize: isDesktop ? 13 : 11,
+                  color: Colors.grey[800],
+                ),
+                columns: [
+                  DataColumn(
+                    label: Container(
+                      width: 40,
+                      child: Text('STT', textAlign: TextAlign.center),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Container(
+                      width: isDesktop ? 120 : 100,
+                      child: Text('Mã NV'),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Container(
+                      width: isDesktop ? 200 : 150,
+                      child: Text('Tên công nhân'),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Container(
+                      width: isDesktop ? 80 : 60,
+                      child: Text('Báo cáo', textAlign: TextAlign.center),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Container(
+                      width: isDesktop ? 80 : 60,
+                      child: Text('Hình ảnh', textAlign: TextAlign.center),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Container(
+                      width: isDesktop ? 120 : 100,
+                      child: Text('Chủ đề', textAlign: TextAlign.center),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Container(
+                      width: isDesktop ? 120 : 100,
+                      child: Text('Giờ làm', textAlign: TextAlign.center),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Container(
+                      width: 80,
+                      child: Text('Thao tác', textAlign: TextAlign.center),
+                    ),
+                  ),
+                ],
+                rows: List.generate(allWorkers.length, (index) {
+                  final worker = allWorkers[index];
+                  final isAvailable = worker.isAvailable;
+                  
+                  return DataRow(
+                    color: MaterialStateColor.resolveWith((states) {
+                      if (!isAvailable) return Colors.grey[100]!;
+                      return index % 2 == 0 ? Colors.white : Colors.grey[50]!;
+                    }),
+                    cells: [
+                      DataCell(
+                        Container(
+                          width: 40,
+                          child: Text(
+                            (index + 1).toString(),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: isAvailable ? Colors.black : Colors.grey[500],
+                            ),
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Container(
+                          width: isDesktop ? 120 : 100,
+                          child: Text(
+                            worker.name, // This is the MaNV
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: isAvailable ? Colors.black : Colors.grey[500],
+                              fontWeight: isAvailable ? FontWeight.normal : FontWeight.w300,
+                            ),
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Container(
+                          width: isDesktop ? 200 : 150,
+                          child: Text(
+                            worker.displayName, 
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: isAvailable ? Colors.black : Colors.grey[500],
+                              fontWeight: isAvailable ? FontWeight.bold : FontWeight.w300,
+                            ),
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Container(
+                          width: isDesktop ? 80 : 60,
+                          child: isAvailable ? Container(
+                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.blue[100],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              worker.reportCount.toString(),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue[800],
+                              ),
+                            ),
+                          ) : Text('-', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[400])),
+                        ),
+                      ),
+                      DataCell(
+                        Container(
+                          width: isDesktop ? 80 : 60,
+                          child: isAvailable ? Container(
+                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.green[100],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              worker.imageCount.toString(),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green[800],
+                              ),
+                            ),
+                          ) : Text('-', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[400])),
+                        ),
+                      ),
+                      DataCell(
+                        Container(
+                          width: isDesktop ? 120 : 100,
+                          child: isAvailable ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange[100],
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  worker.topicCount.toString(),
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.orange[800],
+                                  ),
+                                ),
+                              ),
+                              if (worker.topics.isNotEmpty) 
+                                Padding(
+                                  padding: EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    worker.topics.take(3).join(', '),
+                                    style: TextStyle(
+                                      fontSize: 8,
+                                      color: Colors.grey[600],
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                            ],
+                          ) : Text('-', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[400])),
+                        ),
+                      ),
+                      DataCell(
+                        Container(
+                          width: isDesktop ? 120 : 100,
+                          child: isAvailable ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.purple[100],
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  worker.hourCount.toString(),
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.purple[800],
+                                  ),
+                                ),
+                              ),
+                              if (worker.hours.isNotEmpty) 
+                                Padding(
+                                  padding: EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    worker.hours.map((h) => h + 'h').take(5).join(', '),
+                                    style: TextStyle(
+                                      fontSize: 8,
+                                      color: Colors.grey[600],
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                            ],
+                          ) : Text('-', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[400])),
+                        ),
+                      ),
+                      DataCell(
+                        Container(
+                          width: 80,
+                          child: isAvailable ? IconButton(
+                            icon: Icon(Icons.open_in_new, 
+                              color: Colors.blue[600], 
+                              size: isDesktop ? 20 : 16
+                            ),
+                            onPressed: () => _showWorkerDetails(worker),
+                            tooltip: 'Xem chi tiết',
+                          ) : Icon(Icons.remove, color: Colors.grey[400], size: 16),
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+              ),
+            ),
+          ),
+        ),
+        // Table legend
+        Container(
+          padding: EdgeInsets.all(16),
+          child: Wrap(
+            spacing: 16,
+            runSpacing: 8,
+            children: [
+              _buildLegendItem('Báo cáo', 'Tổng số báo cáo', Colors.blue[100]!, Colors.blue[800]!),
+              _buildLegendItem('Hình ảnh', 'Báo cáo có hình', Colors.green[100]!, Colors.green[800]!),
+              _buildLegendItem('Chủ đề', 'Loại công việc', Colors.orange[100]!, Colors.orange[800]!),
+              _buildLegendItem('Giờ làm', 'Khung giờ khác nhau', Colors.purple[100]!, Colors.purple[800]!),
+            ],
+          ),
+        ),
+        
+        // NEW: Daily Report Matrix Section
+        _buildDailyReportMatrix(),
+      ],
+    ),
+  );
+}
+
+Color _getReportCountColor(int count) {
+  if (count == 0) return Colors.grey;
+  if (count <= 2) return Colors.blue;
+  if (count <= 5) return Colors.green;
+  if (count <= 10) return Colors.orange;
+  return Colors.red;
+}
+
+Widget _buildMatrixLegendItem(String label, Color color) {
+  return Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        width: 16,
+        height: 16,
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color),
+        ),
+      ),
+      SizedBox(width: 4),
+      Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          color: Colors.grey[600],
+        ),
+      ),
     ],
+  );
+}
+
+ Widget _buildDailyReportMatrix() {
+  if (_selectedProject == null || _chartDates.isEmpty || _filteredWorkers.isEmpty) {
+    return SizedBox.shrink();
+  }
+
+  final isDesktop = MediaQuery.of(context).size.width > 1200;
+  final isTablet = MediaQuery.of(context).size.width > 600;
+
+  // Get report counts for each worker per day
+  Map<String, Map<String, int>> workerDayReports = {};
+  
+  for (final worker in _filteredWorkers) {
+    workerDayReports[worker.name] = {};
+    for (final dateStr in _chartDates) {
+      final dailyReports = _processedData.where((record) => 
+        record.boPhan == _selectedProject &&
+        DateFormat('yyyy-MM-dd').format(record.ngay) == dateStr &&
+        record.nguoiDung == worker.name
+      ).length;
+      workerDayReports[worker.name]![dateStr] = dailyReports;
+    }
+  }
+
+  return Container(
+    margin: EdgeInsets.only(top: 24),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Matrix Header
+        Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.green[50],
+            border: Border(top: BorderSide(color: Colors.grey[300]!)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.grid_on, color: Colors.green[600]),
+              SizedBox(width: 8),
+              Text(
+                'Công nhân báo cáo theo ngày',
+                style: TextStyle(
+                  fontSize: isDesktop ? 18 : 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green[800],
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Matrix Table
+        Container(
+          constraints: BoxConstraints(maxHeight: isDesktop ? 400 : 300),
+          child: Row(
+            children: [
+              // Fixed left column (worker names)
+              Container(
+                width: isDesktop ? 200 : 150,
+                decoration: BoxDecoration(
+                  border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                ),
+                child: Column(
+                  children: [
+                    // Header for names column
+                    Container(
+                      height: 50,
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        'Tên công nhân',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: isDesktop ? 14 : 12,
+                        ),
+                      ),
+                    ),
+                    // Worker names
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: _filteredWorkers.length,
+                        itemBuilder: (context, index) {
+                          final worker = _filteredWorkers[index];
+                          return Container(
+                            height: 40,
+                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: index % 2 == 0 ? Colors.white : Colors.grey[50],
+                              border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+                            ),
+                            alignment: Alignment.centerLeft,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  worker.displayName,
+                                  style: TextStyle(
+                                    fontSize: isDesktop ? 12 : 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  worker.name,
+                                  style: TextStyle(
+                                    fontSize: isDesktop ? 10 : 8,
+                                    color: Colors.grey[600],
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Scrollable date columns
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Container(
+                    width: _chartDates.length * (isDesktop ? 80.0 : 60.0),
+                    child: Column(
+                      children: [
+                        // Date headers - REMOVE WEEKDAY
+Container(
+  height: 50,
+  child: Row(
+    children: _chartDates.map((dateStr) {
+      final date = DateTime.parse(dateStr);
+      return Container(
+        width: isDesktop ? 80 : 60,
+        padding: EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: Colors.grey[200],
+          border: Border(
+            bottom: BorderSide(color: Colors.grey[300]!),
+            right: BorderSide(color: Colors.grey[300]!),
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          DateFormat('dd/MM').format(date), // Only show day/month
+          style: TextStyle(
+            fontSize: isDesktop ? 12 : 10,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      );
+    }).toList(),
   ),
 ),
-         // Table
-         Container(
-           constraints: BoxConstraints(maxHeight: isDesktop ? 500 : 400),
-           child: SingleChildScrollView(
-             scrollDirection: Axis.horizontal,
-             child: SingleChildScrollView(
-               child: DataTable(
-                 border: TableBorder.all(color: Colors.grey[300]!),
-                 headingRowColor: MaterialStateColor.resolveWith(
-                   (states) => Colors.grey[100]!,
-                 ),
-                 columnSpacing: isDesktop ? 24 : 16,
-                 headingTextStyle: TextStyle(
-                   fontWeight: FontWeight.bold,
-                   color: Colors.grey[700],
-                   fontSize: isDesktop ? 14 : 12,
-                 ),
-                 dataTextStyle: TextStyle(
-                   fontSize: isDesktop ? 13 : 11,
-                   color: Colors.grey[800],
-                 ),
-                 columns: [
-  DataColumn(
-    label: Container(
-      width: 40,
-      child: Text('STT', textAlign: TextAlign.center),
-    ),
-  ),
-  DataColumn(
-    label: Container(
-      width: isDesktop ? 120 : 100,
-      child: Text('Mã NV'),
-    ),
-  ),
-  DataColumn(
-    label: Container(
-      width: isDesktop ? 200 : 150,
-      child: Text('Tên công nhân'),
-    ),
-  ),
-                   DataColumn(
-                     label: Container(
-                       width: isDesktop ? 80 : 60,
-                       child: Text('Báo cáo', textAlign: TextAlign.center),
-                     ),
-                   ),
-                   DataColumn(
-                     label: Container(
-                       width: isDesktop ? 80 : 60,
-                       child: Text('Hình ảnh', textAlign: TextAlign.center),
-                     ),
-                   ),
-                   DataColumn(
-                     label: Container(
-                       width: isDesktop ? 120 : 100,
-                       child: Text('Chủ đề', textAlign: TextAlign.center),
-                     ),
-                   ),
-                   DataColumn(
-                     label: Container(
-                       width: isDesktop ? 120 : 100,
-                       child: Text('Giờ làm', textAlign: TextAlign.center),
-                     ),
-                   ),
-                   DataColumn(
-                     label: Container(
-                       width: 80,
-                       child: Text('Thao tác', textAlign: TextAlign.center),
-                     ),
-                   ),
-                 ],
-                 rows: List.generate(allWorkers.length, (index) {
-                   final worker = allWorkers[index];
-                   final isAvailable = worker.isAvailable;
-                   
-                   return DataRow(
-                     color: MaterialStateColor.resolveWith((states) {
-                       if (!isAvailable) return Colors.grey[100]!;
-                       return index % 2 == 0 ? Colors.white : Colors.grey[50]!;
-                     }),
-                     cells: [
-  DataCell(
-    Container(
-      width: 40,
-      child: Text(
-        (index + 1).toString(),
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: isAvailable ? Colors.black : Colors.grey[500],
+                        // Report count cells
+                        Expanded(
+                          child: ListView.builder(
+                            itemCount: _filteredWorkers.length,
+                            itemBuilder: (context, workerIndex) {
+                              final worker = _filteredWorkers[workerIndex];
+                              return Container(
+                                height: 40,
+                                child: Row(
+                                  children: _chartDates.map((dateStr) {
+                                    final reportCount = workerDayReports[worker.name]?[dateStr] ?? 0;
+                                    return Container(
+                                      width: isDesktop ? 80 : 60,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: workerIndex % 2 == 0 ? Colors.white : Colors.grey[50],
+                                        border: Border(
+                                          bottom: BorderSide(color: Colors.grey[200]!),
+                                          right: BorderSide(color: Colors.grey[300]!),
+                                        ),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: reportCount > 0
+                                          ? Container(
+                                              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: _getReportCountColor(reportCount).withOpacity(0.1),
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(
+                                                  color: _getReportCountColor(reportCount),
+                                                  width: 1,
+                                                ),
+                                              ),
+                                              child: Text(
+                                                reportCount.toString(),
+                                                style: TextStyle(
+                                                  fontSize: isDesktop ? 12 : 10,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: _getReportCountColor(reportCount),
+                                                ),
+                                              ),
+                                            )
+                                          : Text(
+                                              '-',
+                                              style: TextStyle(
+                                                fontSize: isDesktop ? 12 : 10,
+                                                color: Colors.grey[400],
+                                              ),
+                                            ),
+                                    );
+                                  }).toList(),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-    ),
-  ),
-  DataCell(
-    Container(
-      width: isDesktop ? 120 : 100,
-      child: Text(
-        worker.name, // This is the MaNV
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: isAvailable ? Colors.black : Colors.grey[500],
-          fontWeight: isAvailable ? FontWeight.normal : FontWeight.w300,
+        // Matrix Legend
+        Container(
+          padding: EdgeInsets.all(16),
+          child: Wrap(
+            spacing: 16,
+            runSpacing: 8,
+            children: [
+              _buildMatrixLegendItem('1-2 báo cáo', Colors.blue),
+              _buildMatrixLegendItem('3-5 báo cáo', Colors.green),
+              _buildMatrixLegendItem('6-10 báo cáo', Colors.orange),
+              _buildMatrixLegendItem('>10 báo cáo', Colors.red),
+              _buildMatrixLegendItem('Không báo cáo', Colors.grey),
+            ],
+          ),
         ),
-      ),
+      ],
     ),
-  ),
-  DataCell(
-    Container(
-      width: isDesktop ? 200 : 150,
-      child: Text(
-        worker.displayName, 
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: isAvailable ? Colors.black : Colors.grey[500],
-          fontWeight: isAvailable ? FontWeight.bold : FontWeight.w300,
-        ),
-      ),
-    ),
-  ),
-                       DataCell(
-                         Container(
-                           width: isDesktop ? 80 : 60,
-                           child: isAvailable ? Container(
-                             padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                             decoration: BoxDecoration(
-                               color: Colors.blue[100],
-                               borderRadius: BorderRadius.circular(12),
-                             ),
-                             child: Text(
-                               worker.reportCount.toString(),
-                               textAlign: TextAlign.center,
-                               style: TextStyle(
-                                 fontWeight: FontWeight.bold,
-                                 color: Colors.blue[800],
-                               ),
-                             ),
-                           ) : Text('-', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[400])),
-                         ),
-                       ),
-                       DataCell(
-                         Container(
-                           width: isDesktop ? 80 : 60,
-                           child: isAvailable ? Container(
-                             padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                             decoration: BoxDecoration(
-                               color: Colors.green[100],
-                               borderRadius: BorderRadius.circular(12),
-                             ),
-                             child: Text(
-                               worker.imageCount.toString(),
-                               textAlign: TextAlign.center,
-                               style: TextStyle(
-                                 fontWeight: FontWeight.bold,
-                                 color: Colors.green[800],
-                               ),
-                             ),
-                           ) : Text('-', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[400])),
-                         ),
-                       ),
-                       DataCell(
-                         Container(
-                           width: isDesktop ? 120 : 100,
-                           child: isAvailable ? Column(
-                             crossAxisAlignment: CrossAxisAlignment.center,
-                             mainAxisAlignment: MainAxisAlignment.center,
-                             children: [
-                               Container(
-                                 padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                 decoration: BoxDecoration(
-                                   color: Colors.orange[100],
-                                   borderRadius: BorderRadius.circular(12),
-                                 ),
-                                 child: Text(
-                                   worker.topicCount.toString(),
-                                   textAlign: TextAlign.center,
-                                   style: TextStyle(
-                                     fontWeight: FontWeight.bold,
-                                     color: Colors.orange[800],
-                                   ),
-                                 ),
-                               ),
-                               if (worker.topics.isNotEmpty) 
-                                 Padding(
-                                   padding: EdgeInsets.only(top: 2),
-                                   child: Text(
-                                     worker.topics.take(3).join(', '),
-                                     style: TextStyle(
-                                       fontSize: 8,
-                                       color: Colors.grey[600],
-                                     ),
-                                     textAlign: TextAlign.center,
-                                     maxLines: 2,
-                                     overflow: TextOverflow.ellipsis,
-                                   ),
-                                 ),
-                             ],
-                           ) : Text('-', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[400])),
-                         ),
-                       ),
-                       DataCell(
-                         Container(
-                           width: isDesktop ? 120 : 100,
-                           child: isAvailable ? Column(
-                             crossAxisAlignment: CrossAxisAlignment.center,
-                             mainAxisAlignment: MainAxisAlignment.center,
-                             children: [
-                               Container(
-                                 padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                 decoration: BoxDecoration(
-                                   color: Colors.purple[100],
-                                   borderRadius: BorderRadius.circular(12),
-                                 ),
-                                 child: Text(
-                                   worker.hourCount.toString(),
-                                   textAlign: TextAlign.center,
-                                   style: TextStyle(
-                                     fontWeight: FontWeight.bold,
-                                     color: Colors.purple[800],
-                                   ),
-                                 ),
-                               ),
-                               if (worker.hours.isNotEmpty) 
-                                 Padding(
-                                   padding: EdgeInsets.only(top: 2),
-                                   child: Text(
-                                     worker.hours.map((h) => h + 'h').take(5).join(', '),
-                                     style: TextStyle(
-                                       fontSize: 8,
-                                       color: Colors.grey[600],
-                                     ),
-                                     textAlign: TextAlign.center,
-                                     maxLines: 2,
-                                     overflow: TextOverflow.ellipsis,
-                                   ),
-                                 ),
-                             ],
-                           ) : Text('-', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[400])),
-                         ),
-                       ),
-                       DataCell(
-                         Container(
-                           width: 80,
-                           child: isAvailable ? IconButton(
-                             icon: Icon(Icons.open_in_new, 
-                               color: Colors.blue[600], 
-                               size: isDesktop ? 20 : 16
-                             ),
-                             onPressed: () => _showWorkerDetails(worker),
-                             tooltip: 'Xem chi tiết',
-                           ) : Icon(Icons.remove, color: Colors.grey[400], size: 16),
-                         ),
-                       ),
-                     ],
-                   );
-                 }),
-               ),
-             ),
-           ),
-         ),
-         // Table legend
-         Container(
-           padding: EdgeInsets.all(16),
-           child: Wrap(
-             spacing: 16,
-             runSpacing: 8,
-             children: [
-               _buildLegendItem('Báo cáo', 'Tổng số báo cáo', Colors.blue[100]!, Colors.blue[800]!),
-               _buildLegendItem('Hình ảnh', 'Báo cáo có hình', Colors.green[100]!, Colors.green[800]!),
-               _buildLegendItem('Chủ đề', 'Loại công việc', Colors.orange[100]!, Colors.orange[800]!),
-               _buildLegendItem('Giờ làm', 'Khung giờ khác nhau', Colors.purple[100]!, Colors.purple[800]!),
-             ],
-           ),
-         ),
-       ],
-     ),
-   );
- }
+  );
+}
+
 void _showProjectScheduleDialog() {
   if (_selectedProject == null || _selectedDate == null) {
     _showError('Vui lòng chọn dự án và ngày');
