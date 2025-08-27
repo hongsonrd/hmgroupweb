@@ -109,7 +109,7 @@ double? _extractAreaM2(String? chiTiet) {
 
   try {
     // Export exactly what user is seeing: _filteredData
-    final filePath = await MachineryCsvExporter.exportCsv(
+    final filePath = await MachineryExcelExporter.exportExcel(
       records: _filteredData,
       selectedPeriod: _selectedPeriod,
     );
@@ -126,14 +126,14 @@ double? _extractAreaM2(String? chiTiet) {
           TextButton(
             onPressed: () {
               Navigator.of(ctx).pop();
-              MachineryCsvExporter.openFile(filePath);
+              MachineryExcelExporter.openFile(filePath);
             },
             child: const Text('Mở file'),
           ),
           TextButton(
             onPressed: () {
               Navigator.of(ctx).pop();
-              MachineryCsvExporter.openFolder(fileDir);
+              MachineryExcelExporter.openFolder(fileDir);
             },
             child: const Text('Mở thư mục'),
           ),

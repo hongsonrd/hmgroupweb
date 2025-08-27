@@ -1,20 +1,24 @@
 // projecttimelinemayexcel.dart
 import 'dart:io';
-import 'dart:convert';
 import 'dart:math';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:excel/excel.dart';
 import 'table_models.dart';
 
-class MachineryCsvExporter {
-  /// Export records to a UTF-8 CSV (Excel-compatible).
+class MachineryExcelExporter {
+  /// Export records to an Excel file (.xlsx).
   /// Returns the saved file path.
-  static Future<String> exportCsv({
+  static Future<String> exportExcel({
     required List<TaskHistoryModel> records,
     required String selectedPeriod, // yyyy-MM
     String subfolderName = 'BaoCao_DuAn',
     String filePrefix = 'machinery_report',
   }) async {
+    // Create a new Excel document
+    final excel = Excel.createExcel();
+    final sheet = excel['Sheet1'];
+    
     final headers = <String>[
       'UID',
       'TaskID',
@@ -33,14 +37,23 @@ class MachineryCsvExporter {
     ];
 
     final dfDate = DateFormat('yyyy-MM-dd');
-    final sb = StringBuffer();
 
-    // Header row
-    sb.writeln(headers.map(_csvEscape).join(','));
+    // Add header row
+    for (int i = 0; i < headers.length; i++) {
+      final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+      cell.value = headers[i];
+      
+      // Optional: Style the header
+      cell.cellStyle = CellStyle(
+        bold: true,
+        backgroundColorHex: '#D3D3D3', // Light gray
+      );
+    }
 
-    // Data rows
-    for (final r in records) {
-      final row = <String>[
+    // Add data rows
+    for (int rowIndex = 0; rowIndex < records.length; rowIndex++) {
+      final r = records[rowIndex];
+      final rowData = <String>[
         r.uid ?? '',
         r.taskId ?? '',
         dfDate.format(r.ngay),
@@ -56,24 +69,36 @@ class MachineryCsvExporter {
         r.giaiPhap ?? '',
         r.hinhAnh ?? '',
       ];
-      sb.writeln(row.map(_csvEscape).join(','));
+
+      for (int colIndex = 0; colIndex < rowData.length; colIndex++) {
+        final cell = sheet.cell(CellIndex.indexByColumnRow(
+          columnIndex: colIndex, 
+          rowIndex: rowIndex + 1
+        ));
+        cell.value = rowData[colIndex];
+      }
     }
 
-    // Save with UTF-8 BOM to render Vietnamese correctly in Excel on Windows
-    final bytes = <int>[0xEF, 0xBB, 0xBF] + utf8.encode(sb.toString());
+    // Remove the setColumnWidth calls since they don't exist in this version
+    // Excel will auto-size columns when opened
 
+    // Get the bytes of the Excel file
+    final excelBytes = excel.encode()!;
+
+    // Save to file
     final dir = await getApplicationDocumentsDirectory();
     final reportDir = Directory('${dir.path}/$subfolderName');
     if (!await reportDir.exists()) {
       await reportDir.create(recursive: true);
     }
 
-    // Filename: YYYYMMDDHHMMSS + baocao + random + .csv
+    // Filename: YYYYMMDDHHMMSS + baocao + random + .xlsx
     final now = DateTime.now();
     final ts = DateFormat('yyyyMMddHHmmss').format(now);
     final rand = 1000000 + Random().nextInt(9000000);
-    final file = File('${reportDir.path}/${ts}baocao$rand.csv');
-    await file.writeAsBytes(bytes, flush: true);
+    final file = File('${reportDir.path}/${ts}baocao$rand.xlsx');
+    await file.writeAsBytes(excelBytes, flush: true);
+    
     return file.path;
   }
 
@@ -89,16 +114,6 @@ class MachineryCsvExporter {
       default:
         return ketQua ?? '';
     }
-  }
-
-  /// Wrap in quotes if needed; escape inner quotes by doubling them.
-  static String _csvEscape(String value) {
-    final needsQuotes = value.contains(',') ||
-        value.contains('"') ||
-        value.contains('\n') ||
-        value.contains('\r');
-    var v = value.replaceAll('"', '""');
-    return needsQuotes ? '"$v"' : v;
   }
 
   /// Open a file using OS default apps (desktop platforms).
