@@ -55,7 +55,7 @@ final List<String> adminUsers = [
 ];
   final Map<String, List<String>> locationAdminMap = {
   'HN': ['hm.tason', 'hm.manhha','hm.lehoa' , 'hm.vulinh', 'nvthunghiem', 'hm.phiminh'],
-  'SG': ['hm.quocchien', 'hm.damchinh', 'hm.tason', 'hm.manhha'],
+  'SG': ['hm.quocchien', 'hm.damchinh', 'hm.tason', 'hm.manhha', 'hm.lehoa'],
   'DN': ['hotel.danang', 'hm.tason', 'hm.manhha'],
   'NT': ['hotel.nhatrang', 'hm.tason', 'hm.manhha']
 };

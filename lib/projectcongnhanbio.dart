@@ -30,10 +30,8 @@ class ProjectCongNhanBio {
 
       // Define columns in the order you want them to appear
       final List<String> columns = [
-        'UID',
         'MaNV', 
         'Ho_ten',
-        'Ngay_vao',
         'Thang_vao', 
         'So_thang',
         'Loai_hinh_lao_dong',
@@ -42,14 +40,11 @@ class ProjectCongNhanBio {
         'Ngay_sinh',
         'Tuoi',
         'Can_cuoc_cong_dan',
-        'Ngay_cap',
-        'Noi_cap',
-        'Nguyen_quan',
         'Thuong_tru',
         'Dia_chi_lien_lac',
         'SDT',
         'Don_vi',
-        'Giam_sat',
+        'Giam_sat', 'Tinh_trang', 'Loai_dt',
       ];
 
       // Add headers
@@ -275,10 +270,8 @@ class ProjectCongNhanBio {
 
   static String _getColumnDisplayName(String columnName) {
     final Map<String, String> columnMapping = {
-      'UID': 'ID',
       'MaNV': 'Mã nhân viên',
       'Ho_ten': 'Họ và tên',
-      'Ngay_vao': 'Ngày vào',
       'Thang_vao': 'Tháng vào',
       'So_thang': 'Số tháng',
       'Loai_hinh_lao_dong': 'Loại hình lao động',
@@ -287,14 +280,13 @@ class ProjectCongNhanBio {
       'Ngay_sinh': 'Ngày sinh',
       'Tuoi': 'Tuổi',
       'Can_cuoc_cong_dan': 'Căn cước công dân',
-      'Ngay_cap': 'Ngày cấp',
-      'Noi_cap': 'Nơi cấp',
-      'Nguyen_quan': 'Nguyên quán',
       'Thuong_tru': 'Thường trú',
       'Dia_chi_lien_lac': 'Địa chỉ liên lạc',
       'SDT': 'Số điện thoại',
       'Don_vi': 'Đơn vị',
       'Giam_sat': 'Giám sát',
+      'Tinh_trang': 'Tình trạng',
+      'Loai_dt': 'Loại điện thoại',
     };
     
     return columnMapping[columnName] ?? columnName;

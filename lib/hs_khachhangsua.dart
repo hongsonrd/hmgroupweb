@@ -58,7 +58,7 @@ class _AddKhachHangScreenState extends State<AddKhachHangScreen>
   // Special usernames list for phanLoai auto-selection
   final List<String> thuongMaiUsers = [
     'hm.trangiang', 'hm.tranly', 'hm.nguyenhanh2', 'hm.dinhmai', 
-    'hm.hoangthao', 'hm.vutoan', 'hm.lehoa', 'hm.lemanh', 
+    'hm.hoangthao', 'hm.vutoan', 'hm.lehoa', 'hm.lemanh', 'hm.viethoang',
     'hm.nguyentoan', 'hm.nguyendung', 'hm.nguyennga', 'hm.conghai', 
     'hm.thuytrang', 'hm.nguyenvy', 'hm.baoha', 'hm.trantien', 
     'hm.myha', 'hm.phiminh', 'hm.thanhhao', 'hm.luongtrang', 

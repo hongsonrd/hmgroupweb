@@ -368,6 +368,7 @@ void _showRecipientContactSelectionDialog() {
 } else if (username.contains('hm.hoangthao')) { userPrefix = '13111';
 } else if (username.contains('hm.lehoa')) { userPrefix = 'Kho';
 } else if (username.contains('hm.lemanh')) { userPrefix = '13118';
+} else if (username.contains('hm.viethoang')) { userPrefix = '13119';
 } else if (username.contains('hm.nguyentoan')) { userPrefix = 'Kho';
 } else if (username.contains('hm.nguyendung')) { userPrefix = '1312';
 } else if (username.contains('hm.nguyennga')) { userPrefix = '13114';

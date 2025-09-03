@@ -64,7 +64,7 @@ final List<String> _baoGiaOptions = [
   'hm.dinhmai', 
   'hm.hoangthao',
   'hm.lehoa',
-  'hm.lemanh',
+  'hm.lemanh', 'hm.viethoang',
   'hm.nguyentoan',
   'hm.nguyendung',
   'hm.nguyennga',
@@ -309,6 +309,8 @@ Future<void> _loadExistingOrderForEdit() async {
       userPrefix = 'Kho';
     } else if (username.contains('hm.lemanh')) {
       userPrefix = '13118';
+        } else if (username.contains('hm.viethoang')) {
+      userPrefix = '13119';
     } else if (username.contains('hm.nguyentoan')) {
       userPrefix = 'Kho';
     } else if (username.contains('hm.nguyendung')) {
@@ -369,6 +371,8 @@ Future<void> _loadExistingOrderForEdit() async {
     } else if (username.contains('hm.lehoa')) {
       return 'HN';
     } else if (username.contains('hm.lemanh')) {
+      return 'HN';
+    } else if (username.contains('hm.viethoang')) {
       return 'HN';
     } else if (username.contains('hm.nguyentoan')) {
       return 'HN';

@@ -694,7 +694,7 @@ class ExportFormGenerator {
   static pw.Widget _buildSignatureBox(String title, pw.Font font, {String? nvkd}) {
     final List<String> validNVKD = [
       'hm.trangiang', 'hm.tranly', 'hm.dinhmai', 'hm.hoangthao', 'hm.vutoan',
-      'hm.lehoa', 'hm.lemanh', 'hm.nguyentoan', 'hm.nguyennga', 'hm.conghai',
+      'hm.lehoa', 'hm.lemanh','hm.viethoang', 'hm.nguyentoan', 'hm.nguyennga', 'hm.conghai',
       'hm.thuytrang', 'hm.nguyenvy', 'hm.phiminh', 'hm.doanly'
     ];
 

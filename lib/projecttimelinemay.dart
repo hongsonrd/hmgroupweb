@@ -47,6 +47,54 @@ class _MachineryUsageReportState extends State<MachineryUsageReport>
   String? _selectedKetQua;
   List<String> _availableProjects = ['Tất cả'];
   List<String> _availableKetQua = ['Tất cả', '✔️', '❌', '⚠️'];
+  int? _extractWorkerCount(String? chiTiet) {
+  if (chiTiet == null || chiTiet.trim().isEmpty) return null;
+
+  // Look for "Số CN sử dụng: " followed by a number
+  final reg = RegExp(
+    r'(?:^|[\r\n])\s*[*\-\u2022]?\s*Số\s*CN\s*sử\s*dụng\s*:\s*([0-9]+)',
+    multiLine: true,
+    caseSensitive: false,
+    unicode: true,
+  );
+
+  final m = reg.firstMatch(chiTiet);
+  if (m == null) return null;
+
+  final raw = m.group(1)!.trim();
+  final value = int.tryParse(raw);
+  
+  if (value == null || value < 0) return null;
+  return value;
+}
+
+int? _extractUsageTimeMinutes(String? chiTiet) {
+  if (chiTiet == null || chiTiet.trim().isEmpty) return null;
+
+  // Look for "Thời gian sử dụng (phút): " followed by a number
+  final reg = RegExp(
+    r'(?:^|[\r\n])\s*[*\-\u2022]?\s*Thời\s*gian\s*sử\s*dụng\s*\(phút\)\s*:\s*([0-9]+)',
+    multiLine: true,
+    caseSensitive: false,
+    unicode: true,
+  );
+
+  final m = reg.firstMatch(chiTiet);
+  if (m == null) return null;
+
+  final raw = m.group(1)!.trim();
+  final value = int.tryParse(raw);
+  
+  if (value == null || value < 0) return null;
+  return value;
+}
+
+double _calculateWorkDays(int? workerCount, int? usageMinutes) {
+  if (workerCount == null || usageMinutes == null || workerCount == 0) return 0.0;
+  
+  // Formula: (workerCount * usageMinutes) / 480
+  return (workerCount * usageMinutes) / 480.0;
+}
 double? _extractAreaM2(String? chiTiet) {
   if (chiTiet == null || chiTiet.trim().isEmpty) return null;
 
@@ -1085,107 +1133,248 @@ bool _isValidMachineCode(String? code) {
     );
 
     // ===== Page 3: Project detail table =====
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: pw.EdgeInsets.all(20),
-        build: (context) => [
-          pw.Text('DANH SÁCH DỰ ÁN CHI TIẾT',
-              style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold)),
-          pw.SizedBox(height: 10),
-          pw.Text('Tổng số dự án: ${sortedProjects.length}',
-              style: pw.TextStyle(font: ttf, fontSize: 12, fontWeight: pw.FontWeight.bold)),
-          pw.SizedBox(height: 15),
+pdf.addPage(
+  pw.MultiPage(
+    pageFormat: PdfPageFormat.a4,
+    margin: pw.EdgeInsets.all(20),
+    build: (context) {
+      // Recalculate project data with new columns for PDF
+      final projectData = <String, Map<String, int>>{};
+      final allDates = <String>{};
+      final projectAreaTotals = <String, double>{};
+      final projectWorkerCountTotals = <String, int>{};
+      final projectWorkDaysTotals = <String, double>{};
 
-          if (projectData.isEmpty)
-            pw.Text('Không có dữ liệu dự án', style: pw.TextStyle(font: ttf, fontSize: 12))
-          else
-            pw.Table(
-              columnWidths: {
-                0: pw.FlexColumnWidth(4),
-                1: pw.FlexColumnWidth(1),
-                ...Map.fromIterables(
-                  List.generate(math.min(sortedDates.length, 15), (i) => i + 2),
-                  List.generate(math.min(sortedDates.length, 15), (i) => pw.FlexColumnWidth(0.8)),
-                ),
-              },
-              border: pw.TableBorder.all(color: PdfColors.grey400),
-              children: [
-                pw.TableRow(
-                  decoration: pw.BoxDecoration(color: PdfColors.grey300),
+      for (final record in _filteredData) {
+        final dateStr = DateFormat('dd/MM').format(record.ngay);
+        allDates.add(dateStr);
+
+        final proj = record.boPhan;
+        if (proj != null && _isValidProject(proj)) {
+          projectData.putIfAbsent(proj, () => {});
+          projectData[proj]![dateStr] = (projectData[proj]![dateStr] ?? 0) + 1;
+
+          // Extract area
+          final area = _extractAreaM2(record.chiTiet);
+          if (area != null) {
+            projectAreaTotals[proj] = (projectAreaTotals[proj] ?? 0) + area;
+          }
+
+          // Extract worker count
+          final workerCount = _extractWorkerCount(record.chiTiet);
+          if (workerCount != null) {
+            projectWorkerCountTotals[proj] = (projectWorkerCountTotals[proj] ?? 0) + workerCount;
+          }
+
+          // Calculate work days
+          final usageMinutes = _extractUsageTimeMinutes(record.chiTiet);
+          final workDays = _calculateWorkDays(workerCount, usageMinutes);
+          if (workDays > 0) {
+            projectWorkDaysTotals[proj] = (projectWorkDaysTotals[proj] ?? 0) + workDays;
+          }
+        }
+      }
+
+      final sortedDates = allDates.toList()..sort();
+      final sortedProjects = projectData.keys.toList()
+        ..sort((a, b) => (projectData[b]!.values.fold<int>(0, (x, y) => x + y))
+            .compareTo(projectData[a]!.values.fold<int>(0, (x, y) => x + y)));
+
+      final numFmt = NumberFormat.decimalPattern('vi_VN');
+
+      return [
+        pw.Text('DANH SÁCH DỰ ÁN CHI TIẾT',
+            style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 10),
+        pw.Text('Tổng số dự án: ${sortedProjects.length}',
+            style: pw.TextStyle(font: ttf, fontSize: 12, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 15),
+
+        if (projectData.isEmpty)
+          pw.Text('Không có dữ liệu dự án', style: pw.TextStyle(font: ttf, fontSize: 12))
+        else
+          pw.Table(
+            columnWidths: {
+              0: pw.FlexColumnWidth(4),    // Project name
+              1: pw.FlexColumnWidth(1.2),  // Area
+              2: pw.FlexColumnWidth(1),    // Worker count
+              3: pw.FlexColumnWidth(1.2),  // Work days
+              4: pw.FlexColumnWidth(1),    // Total count
+              // Date columns - show fewer to fit new columns
+              ...Map.fromIterables(
+                List.generate(math.min(sortedDates.length, 12), (i) => i + 5),
+                List.generate(math.min(sortedDates.length, 12), (i) => pw.FlexColumnWidth(0.7)),
+              ),
+            },
+            border: pw.TableBorder.all(color: PdfColors.grey400),
+            children: [
+              pw.TableRow(
+                decoration: pw.BoxDecoration(color: PdfColors.grey300),
+                children: [
+                  pw.Padding(
+                    padding: pw.EdgeInsets.all(4),
+                    child: pw.Text('Dự án',
+                        style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                  ),
+                  pw.Padding(
+                    padding: pw.EdgeInsets.all(4),
+                    child: pw.Text('Diện tích\n(m²)',
+                        style: pw.TextStyle(font: ttf, fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                  ),
+                  pw.Padding(
+                    padding: pw.EdgeInsets.all(4),
+                    child: pw.Text('Số CN\nsử dụng',
+                        style: pw.TextStyle(font: ttf, fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                  ),
+                  pw.Padding(
+                    padding: pw.EdgeInsets.all(4),
+                    child: pw.Text('Số công\nsử dụng',
+                        style: pw.TextStyle(font: ttf, fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                  ),
+                  pw.Padding(
+                    padding: pw.EdgeInsets.all(4),
+                    child: pw.Text('Tổng',
+                        style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                  ),
+                  ...sortedDates.take(12).map(
+                    (d) => pw.Padding(
+                      padding: pw.EdgeInsets.all(4),
+                      child: pw.Text(d.split('/')[0],
+                          style: pw.TextStyle(font: ttf, fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+              ...sortedProjects.take(20).map((project) {
+                final totalCount = projectData[project]!.values.fold<int>(0, (x, y) => x + y);
+                
+                final area = projectAreaTotals[project] ?? 0.0;
+                final areaText = area > 0 ? numFmt.format(area) : '—';
+                
+                final workerCount = projectWorkerCountTotals[project] ?? 0;
+                final workerCountText = workerCount > 0 ? workerCount.toString() : '—';
+                
+                final workDays = projectWorkDaysTotals[project] ?? 0.0;
+                final workDaysText = workDays > 0 ? workDays.toStringAsFixed(2) : '—';
+
+                return pw.TableRow(
                   children: [
                     pw.Padding(
                       padding: pw.EdgeInsets.all(4),
-                      child: pw.Text('Dự án',
-                          style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                      child: pw.Text(
+                        project.length > 40 ? '${project.substring(0, 37)}...' : project,
+                        style: pw.TextStyle(font: ttf, fontSize: 9),
+                      ),
                     ),
                     pw.Padding(
                       padding: pw.EdgeInsets.all(4),
-                      child: pw.Text('Tổng',
-                          style: pw.TextStyle(font: ttf, fontSize: 10, fontWeight: pw.FontWeight.bold)),
-                    ),
-                    ...sortedDates.take(15).map(
-                      (d) => pw.Padding(
-                        padding: pw.EdgeInsets.all(4),
-                        child: pw.Text(d.split('/')[0],
-                            style: pw.TextStyle(font: ttf, fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                      ),
-                    ),
-                  ],
-                ),
-                ...sortedProjects.take(20).map((project) {
-                  final totalCount = projectData[project]!.values.fold<int>(0, (x, y) => x + y);
-                  return pw.TableRow(
-                    children: [
-                      pw.Padding(
-                        padding: pw.EdgeInsets.all(4),
-                        child: pw.Text(
-                          project.length > 40 ? '${project.substring(0, 37)}...' : project,
+                      child: pw.Text(areaText, 
                           style: pw.TextStyle(font: ttf, fontSize: 9),
-                        ),
-                      ),
-                      pw.Padding(
+                          textAlign: pw.TextAlign.right),
+                    ),
+                    pw.Padding(
+                      padding: pw.EdgeInsets.all(4),
+                      child: pw.Text(workerCountText, 
+                          style: pw.TextStyle(font: ttf, fontSize: 9),
+                          textAlign: pw.TextAlign.right),
+                    ),
+                    pw.Padding(
+                      padding: pw.EdgeInsets.all(4),
+                      child: pw.Text(workDaysText, 
+                          style: pw.TextStyle(font: ttf, fontSize: 9),
+                          textAlign: pw.TextAlign.right),
+                    ),
+                    pw.Padding(
+                      padding: pw.EdgeInsets.all(4),
+                      child: pw.Text('$totalCount', style: pw.TextStyle(font: ttf, fontSize: 9)),
+                    ),
+                    ...sortedDates.take(12).map((d) {
+                      final c = projectData[project]![d] ?? 0;
+                      return pw.Padding(
                         padding: pw.EdgeInsets.all(4),
-                        child: pw.Text('$totalCount', style: pw.TextStyle(font: ttf, fontSize: 9)),
-                      ),
-                      ...sortedDates.take(15).map((d) {
-                        final c = projectData[project]![d] ?? 0;
-                        return pw.Padding(
-                          padding: pw.EdgeInsets.all(4),
-                          child: pw.Container(
-                            decoration: pw.BoxDecoration(
-                              color: c > 0 ? PdfColors.green100 : PdfColors.grey100,
-                              borderRadius: pw.BorderRadius.circular(2),
-                            ),
-                            child: pw.Center(
-                              child: pw.Text(
-                                c > 0 ? '$c' : '-',
-                                style: pw.TextStyle(
-                                  font: ttf,
-                                  fontSize: 8,
-                                  color: c > 0 ? PdfColors.green800 : PdfColors.grey600,
-                                ),
+                        child: pw.Container(
+                          decoration: pw.BoxDecoration(
+                            color: c > 0 ? PdfColors.green100 : PdfColors.grey100,
+                            borderRadius: pw.BorderRadius.circular(2),
+                          ),
+                          child: pw.Center(
+                            child: pw.Text(
+                              c > 0 ? '$c' : '-',
+                              style: pw.TextStyle(
+                                font: ttf,
+                                fontSize: 8,
+                                color: c > 0 ? PdfColors.green800 : PdfColors.grey600,
                               ),
                             ),
                           ),
-                        );
-                      }),
-                    ],
-                  );
-                }),
-              ],
-            ),
+                        ),
+                      );
+                    }),
+                  ],
+                );
+              }),
+            ],
+          ),
 
-          if (sortedProjects.length > 20) ...[
-            pw.SizedBox(height: 10),
-            pw.Text(
-              'Lưu ý: Chỉ hiển thị 20 dự án đầu tiên. Tổng số dự án: ${sortedProjects.length}',
-              style: pw.TextStyle(font: ttf, fontSize: 10, fontStyle: pw.FontStyle.italic),
-            ),
-          ],
+        if (sortedProjects.length > 20) ...[
+          pw.SizedBox(height: 10),
+          pw.Text(
+            'Lưu ý: Chỉ hiển thị 20 dự án đầu tiên. Tổng số dự án: ${sortedProjects.length}',
+            style: pw.TextStyle(font: ttf, fontSize: 10, fontStyle: pw.FontStyle.italic),
+          ),
         ],
-      ),
-    );
+
+        pw.SizedBox(height: 20),
+
+        // Summary statistics
+        pw.Container(
+          padding: pw.EdgeInsets.all(12),
+          decoration: pw.BoxDecoration(
+            color: PdfColors.blue50,
+            border: pw.Border.all(color: PdfColors.blue200),
+            borderRadius: pw.BorderRadius.circular(6),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text('THỐNG KÊ TỔNG HỢP:',
+                  style: pw.TextStyle(font: ttf, fontSize: 12, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 8),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+                children: [
+                  pw.Column(
+                    children: [
+                      pw.Text('${numFmt.format(projectAreaTotals.values.fold<double>(0, (a, b) => a + b))}',
+                          style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800)),
+                      pw.Text('Tổng diện tích (m²)', style: pw.TextStyle(font: ttf, fontSize: 10)),
+                    ],
+                  ),
+                  pw.Container(width: 1, height: 40, color: PdfColors.blue200),
+                  pw.Column(
+                    children: [
+                      pw.Text('${projectWorkerCountTotals.values.fold<int>(0, (a, b) => a + b)}',
+                          style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800)),
+                      pw.Text('Tổng số CN', style: pw.TextStyle(font: ttf, fontSize: 10)),
+                    ],
+                  ),
+                  pw.Container(width: 1, height: 40, color: PdfColors.blue200),
+                  pw.Column(
+                    children: [
+                      pw.Text('${projectWorkDaysTotals.values.fold<double>(0, (a, b) => a + b).toStringAsFixed(2)}',
+                          style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800)),
+                      pw.Text('Tổng số công', style: pw.TextStyle(font: ttf, fontSize: 10)),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ];
+    },
+  ),
+);
 
     // ===== Page 4: Incidents =====
     if (nonOkIncidents.isNotEmpty) {
@@ -1611,15 +1800,18 @@ bool _isValidMachineCode(String? code) {
       ),
     );
   }
-
-  Widget _buildProjectList() {
+Widget _buildProjectList() {
   final projectData = <String, Map<String, int>>{};
   final allDates = <String>{};
 
-  // NEW: total area per project
+  // Area totals per project
   final projectAreaTotals = <String, double>{};
+  
+  // NEW: Worker count and work days totals per project
+  final projectWorkerCountTotals = <String, int>{};
+  final projectWorkDaysTotals = <String, double>{};
 
-  // Collect all dates in the period + counts + area
+  // Collect all dates in the period + counts + area + worker data
   for (final record in _filteredData) {
     final dateStr = DateFormat('dd/MM').format(record.ngay);
     allDates.add(dateStr);
@@ -1629,10 +1821,23 @@ bool _isValidMachineCode(String? code) {
       projectData.putIfAbsent(proj, () => {});
       projectData[proj]![dateStr] = (projectData[proj]![dateStr] ?? 0) + 1;
 
-      // NEW: extract and sum area
+      // Extract and sum area
       final area = _extractAreaM2(record.chiTiet);
       if (area != null) {
         projectAreaTotals[proj] = (projectAreaTotals[proj] ?? 0) + area;
+      }
+
+      // NEW: Extract and sum worker count
+      final workerCount = _extractWorkerCount(record.chiTiet);
+      if (workerCount != null) {
+        projectWorkerCountTotals[proj] = (projectWorkerCountTotals[proj] ?? 0) + workerCount;
+      }
+
+      // NEW: Calculate and sum work days
+      final usageMinutes = _extractUsageTimeMinutes(record.chiTiet);
+      final workDays = _calculateWorkDays(workerCount, usageMinutes);
+      if (workDays > 0) {
+        projectWorkDaysTotals[proj] = (projectWorkDaysTotals[proj] ?? 0) + workDays;
       }
     }
   }
@@ -1640,9 +1845,9 @@ bool _isValidMachineCode(String? code) {
   final sortedDates = allDates.toList()..sort();
 
   // Sort projects by total count desc (as before)
-final sortedProjects = projectData.keys.toList()
-  ..sort((a, b) => (projectData[b]!.values.fold<int>(0, (x, y) => x + y))
-      .compareTo(projectData[a]!.values.fold<int>(0, (x, y) => x + y)));
+  final sortedProjects = projectData.keys.toList()
+    ..sort((a, b) => (projectData[b]!.values.fold<int>(0, (x, y) => x + y))
+        .compareTo(projectData[a]!.values.fold<int>(0, (x, y) => x + y)));
 
   final numFmt = NumberFormat.decimalPattern('vi_VN'); // for nicer area rendering
 
@@ -1691,9 +1896,19 @@ final sortedProjects = projectData.keys.toList()
                       child: Text('Dự án', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ),
-                  // NEW: Area column inserted BEFORE Tổng
+                  // Area column
                   DataColumn(
                     label: Text('Diện tích (m²)', style: TextStyle(fontWeight: FontWeight.bold)),
+                    numeric: true,
+                  ),
+                  // NEW: Worker count column
+                  DataColumn(
+                    label: Text('Số CN sử dụng', style: TextStyle(fontWeight: FontWeight.bold)),
+                    numeric: true,
+                  ),
+                  // NEW: Work days column
+                  DataColumn(
+                    label: Text('Số công sử dụng', style: TextStyle(fontWeight: FontWeight.bold)),
                     numeric: true,
                   ),
                   DataColumn(
@@ -1709,10 +1924,14 @@ final sortedProjects = projectData.keys.toList()
                   final totalCount = projectData[project]!.values.fold<int>(0, (a, b) => a + b);
 
                   final area = projectAreaTotals[project] ?? 0.0;
-                  // Show empty string if area == 0 and no records had an area parsed
-                  final areaCellText = area > 0
-                      ? numFmt.format(area)
-                      : ''; // keep it visually clean when no area parsed
+                  final areaCellText = area > 0 ? numFmt.format(area) : '';
+
+                  // NEW: Worker count and work days
+                  final workerCount = projectWorkerCountTotals[project] ?? 0;
+                  final workerCountText = workerCount > 0 ? workerCount.toString() : '';
+
+                  final workDays = projectWorkDaysTotals[project] ?? 0.0;
+                  final workDaysText = workDays > 0 ? workDays.toStringAsFixed(2) : '';
 
                   return DataRow(
                     cells: [
@@ -1727,10 +1946,26 @@ final sortedProjects = projectData.keys.toList()
                           ),
                         ),
                       ),
-                      // NEW: area cell
+                      // Area cell
                       DataCell(
                         Text(
                           areaCellText,
+                          textAlign: TextAlign.right,
+                          style: TextStyle(fontFeatures: const [FontFeature.tabularFigures()]),
+                        ),
+                      ),
+                      // NEW: Worker count cell
+                      DataCell(
+                        Text(
+                          workerCountText,
+                          textAlign: TextAlign.right,
+                          style: TextStyle(fontFeatures: const [FontFeature.tabularFigures()]),
+                        ),
+                      ),
+                      // NEW: Work days cell
+                      DataCell(
+                        Text(
+                          workDaysText,
                           textAlign: TextAlign.right,
                           style: TextStyle(fontFeatures: const [FontFeature.tabularFigures()]),
                         ),

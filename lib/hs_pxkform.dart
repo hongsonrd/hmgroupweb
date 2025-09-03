@@ -750,7 +750,7 @@ class ExportFormGenerator {
       'hm.hoangthao',
       'hm.vutoan',
       'hm.lehoa',
-      'hm.lemanh',
+      'hm.lemanh', 'hm.viethoang',
       'hm.nguyentoan',
       'hm.nguyennga',
       'hm.conghai',
