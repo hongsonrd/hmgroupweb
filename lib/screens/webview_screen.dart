@@ -20,6 +20,7 @@ import '../hs_khachhang.dart';
 import '../hd_page.dart';
 import '../projecttimelinemay.dart';
 import '../projectcongnhan.dart';
+import '../projectcongnhanvitri.dart';
 import '../projectgiamsat.dart';
 import 'daily_report_screen.dart';
 import '../checklist_manager.dart';
@@ -89,6 +90,11 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
 },
   {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo công nhân',
     'link': 'congnhan_link',
+    'isDirectNavigation': true,
+    'tab': 1, 
+  },
+    {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo vị trí',
+    'link': 'congnhanvt_link',
     'isDirectNavigation': true,
     'tab': 1, 
   },
@@ -253,7 +259,18 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
       );
       return;
     }
-
+    if (title == 'Báo cáo vị trí') {
+      final userState = Provider.of<UserState>(context, listen: false);
+      final userData = userState.currentUser;
+      final username = userData?['username'] ?? '';
+      
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => ProjectCongNhanVT(username: username),
+        ),
+      );
+      return;
+    }
     if (title == 'Báo cáo giám sát') {
       final userState = Provider.of<UserState>(context, listen: false);
       final userData = userState.currentUser;

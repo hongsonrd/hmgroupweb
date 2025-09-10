@@ -14,7 +14,6 @@ import 'db_helper.dart';
 import 'table_models.dart';
 import 'projectcongnhanexcel.dart';
 import 'projectcongnhanns.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'projectcongnhanllv.dart';
 import 'projectcongnhanbio.dart';
 
@@ -1871,7 +1870,7 @@ Widget _buildMatrixLegendItem(String label, Color color) {
   );
 }
 
- Widget _buildDailyReportMatrix() {
+Widget _buildDailyReportMatrix() {
   if (_selectedProject == null || _chartDates.isEmpty || _filteredWorkers.isEmpty) {
     return SizedBox.shrink();
   }
@@ -1924,174 +1923,163 @@ Widget _buildMatrixLegendItem(String label, Color color) {
         // Matrix Table
         Container(
           constraints: BoxConstraints(maxHeight: isDesktop ? 400 : 300),
-          child: Row(
-            children: [
-              // Fixed left column (worker names)
-              Container(
-                width: isDesktop ? 200 : 150,
-                decoration: BoxDecoration(
-                  border: Border(right: BorderSide(color: Colors.grey[300]!)),
-                ),
-                child: Column(
-                  children: [
-                    // Header for names column
-                    Container(
-                      height: 50,
-                      padding: EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[200],
-                        border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        'Tên công nhân',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: isDesktop ? 14 : 12,
-                        ),
-                      ),
-                    ),
-                    // Worker names
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: _filteredWorkers.length,
-                        itemBuilder: (context, index) {
-                          final worker = _filteredWorkers[index];
-                          return Container(
-                            height: 40,
-                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: index % 2 == 0 ? Colors.white : Colors.grey[50],
-                              border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
-                            ),
-                            alignment: Alignment.centerLeft,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  worker.displayName,
-                                  style: TextStyle(
-                                    fontSize: isDesktop ? 12 : 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                Text(
-                                  worker.name,
-                                  style: TextStyle(
-                                    fontSize: isDesktop ? 10 : 8,
-                                    color: Colors.grey[600],
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Scrollable date columns
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Container(
-                    width: _chartDates.length * (isDesktop ? 80.0 : 60.0),
-                    child: Column(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Container(
+              width: (isDesktop ? 200 : 150) + (_chartDates.length * (isDesktop ? 80.0 : 60.0)),
+              child: Column(
+                children: [
+                  // Header row
+                  Container(
+                    height: 50,
+                    child: Row(
                       children: [
-                        // Date headers - REMOVE WEEKDAY
-Container(
-  height: 50,
-  child: Row(
-    children: _chartDates.map((dateStr) {
-      final date = DateTime.parse(dateStr);
-      return Container(
-        width: isDesktop ? 80 : 60,
-        padding: EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: Colors.grey[200],
-          border: Border(
-            bottom: BorderSide(color: Colors.grey[300]!),
-            right: BorderSide(color: Colors.grey[300]!),
-          ),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          DateFormat('dd/MM').format(date), // Only show day/month
-          style: TextStyle(
-            fontSize: isDesktop ? 12 : 10,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      );
-    }).toList(),
-  ),
-),
-                        // Report count cells
-                        Expanded(
-                          child: ListView.builder(
-                            itemCount: _filteredWorkers.length,
-                            itemBuilder: (context, workerIndex) {
-                              final worker = _filteredWorkers[workerIndex];
-                              return Container(
-                                height: 40,
-                                child: Row(
-                                  children: _chartDates.map((dateStr) {
-                                    final reportCount = workerDayReports[worker.name]?[dateStr] ?? 0;
-                                    return Container(
-                                      width: isDesktop ? 80 : 60,
-                                      height: 40,
-                                      decoration: BoxDecoration(
-                                        color: workerIndex % 2 == 0 ? Colors.white : Colors.grey[50],
-                                        border: Border(
-                                          bottom: BorderSide(color: Colors.grey[200]!),
-                                          right: BorderSide(color: Colors.grey[300]!),
-                                        ),
-                                      ),
-                                      alignment: Alignment.center,
-                                      child: reportCount > 0
-                                          ? Container(
-                                              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                              decoration: BoxDecoration(
-                                                color: _getReportCountColor(reportCount).withOpacity(0.1),
-                                                borderRadius: BorderRadius.circular(8),
-                                                border: Border.all(
-                                                  color: _getReportCountColor(reportCount),
-                                                  width: 1,
-                                                ),
-                                              ),
-                                              child: Text(
-                                                reportCount.toString(),
-                                                style: TextStyle(
-                                                  fontSize: isDesktop ? 12 : 10,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: _getReportCountColor(reportCount),
-                                                ),
-                                              ),
-                                            )
-                                          : Text(
-                                              '-',
-                                              style: TextStyle(
-                                                fontSize: isDesktop ? 12 : 10,
-                                                color: Colors.grey[400],
-                                              ),
-                                            ),
-                                    );
-                                  }).toList(),
-                                ),
-                              );
-                            },
+                        // Worker header
+                        Container(
+                          width: isDesktop ? 200 : 150,
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[200],
+                            border: Border(
+                              bottom: BorderSide(color: Colors.grey[300]!),
+                              right: BorderSide(color: Colors.grey[300]!),
+                            ),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            'Tên công nhân',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: isDesktop ? 14 : 12,
+                            ),
                           ),
                         ),
+                        // Date headers
+                        ..._chartDates.map((dateStr) {
+                          final date = DateTime.parse(dateStr);
+                          return Container(
+                            width: isDesktop ? 80 : 60,
+                            padding: EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[200],
+                              border: Border(
+                                bottom: BorderSide(color: Colors.grey[300]!),
+                                right: BorderSide(color: Colors.grey[300]!),
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              DateFormat('dd/MM').format(date),
+                              style: TextStyle(
+                                fontSize: isDesktop ? 12 : 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          );
+                        }).toList(),
                       ],
                     ),
                   ),
-                ),
+                  // Data rows
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: List.generate(_filteredWorkers.length, (workerIndex) {
+                          final worker = _filteredWorkers[workerIndex];
+                          
+                          return Container(
+                            height: 40,
+                            child: Row(
+                              children: [
+                                // Worker name cell
+                                Container(
+                                  width: isDesktop ? 200 : 150,
+                                  height: 40,
+                                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: workerIndex % 2 == 0 ? Colors.white : Colors.grey[50],
+                                    border: Border(
+                                      bottom: BorderSide(color: Colors.grey[200]!),
+                                      right: BorderSide(color: Colors.grey[300]!),
+                                    ),
+                                  ),
+                                  alignment: Alignment.centerLeft,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        worker.displayName,
+                                        style: TextStyle(
+                                          fontSize: isDesktop ? 12 : 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Text(
+                                        worker.name,
+                                        style: TextStyle(
+                                          fontSize: isDesktop ? 10 : 8,
+                                          color: Colors.grey[600],
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                // Report count cells
+                                ..._chartDates.map((dateStr) {
+                                  final reportCount = workerDayReports[worker.name]?[dateStr] ?? 0;
+                                  return Container(
+                                    width: isDesktop ? 80 : 60,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: workerIndex % 2 == 0 ? Colors.white : Colors.grey[50],
+                                      border: Border(
+                                        bottom: BorderSide(color: Colors.grey[200]!),
+                                        right: BorderSide(color: Colors.grey[300]!),
+                                      ),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: reportCount > 0
+                                        ? Container(
+                                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: _getReportCountColor(reportCount).withOpacity(0.1),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: _getReportCountColor(reportCount),
+                                                width: 1,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              reportCount.toString(),
+                                              style: TextStyle(
+                                                fontSize: isDesktop ? 12 : 10,
+                                                fontWeight: FontWeight.bold,
+                                                color: _getReportCountColor(reportCount),
+                                              ),
+                                            ),
+                                          )
+                                        : Text(
+                                            '-',
+                                            style: TextStyle(
+                                              fontSize: isDesktop ? 12 : 10,
+                                              color: Colors.grey[400],
+                                            ),
+                                          ),
+                                  );
+                                }).toList(),
+                              ],
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
         // Matrix Legend
