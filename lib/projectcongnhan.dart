@@ -1281,17 +1281,24 @@ Future<void> _exportExcel() async {
   
   setState(() {
     _isLoading = true;
-    _syncStatus = 'Đang xuất file Excel...';
+    _syncStatus = 'Đang chuẩn bị xuất file Excel...';
   });
+
+  ProgressDialog.show(context, 'Đang chuẩn bị dữ liệu...');
 
   try {
     await ProjectCongNhanExcel.exportToExcel(
       allData: _processedData,
       projectOptions: _projectOptions,
       context: context,
+      taskSchedules: _taskSchedules,
+      qrLookups: _qrLookups,
     );
+    
+    ProgressDialog.hide(); // Remove context parameter
     _showSuccess('Xuất Excel thành công');
   } catch (e) {
+    ProgressDialog.hide(); // Remove context parameter
     print('Error exporting to Excel: $e');
     _showError('Lỗi xuất Excel: ${e.toString()}');
   } finally {
@@ -1307,8 +1314,10 @@ Future<void> _exportMonth() async {
   
   setState(() {
     _isLoading = true;
-    _syncStatus = 'Đang xuất file Excel tháng...';
+    _syncStatus = 'Đang chuẩn bị xuất file Excel tháng...';
   });
+
+  ProgressDialog.show(context, 'Đang chuẩn bị dữ liệu tháng...');
 
   try {
     final selectedDateTime = DateTime.parse(_selectedDate!);
@@ -1317,11 +1326,49 @@ Future<void> _exportMonth() async {
       projectOptions: _projectOptions,
       selectedMonth: selectedDateTime,
       context: context,
+      taskSchedules: _taskSchedules,
+      qrLookups: _qrLookups,
     );
+    
+    ProgressDialog.hide(); // Remove context parameter
     _showSuccess('Xuất Excel tháng thành công');
   } catch (e) {
+    ProgressDialog.hide(); // Remove context parameter
     print('Error exporting month to Excel: $e');
     _showError('Lỗi xuất Excel tháng: ${e.toString()}');
+  } finally {
+    setState(() {
+      _isLoading = false;
+      _syncStatus = '';
+    });
+  }
+}
+
+Future<void> _exportEvaluationOnly() async {
+  if (_isLoading) return;
+  
+  setState(() {
+    _isLoading = true;
+    _syncStatus = 'Đang xuất đánh giá công nhân...';
+  });
+
+  ProgressDialog.show(context, 'Đang chuẩn bị đánh giá công nhân...');
+
+  try {
+    await ProjectCongNhanExcel.exportEvaluationOnly(
+      allData: _processedData,
+      projectOptions: _projectOptions,
+      context: context,
+      taskSchedules: _taskSchedules,
+      qrLookups: _qrLookups,
+    );
+    
+    ProgressDialog.hide(); // Remove context parameter
+    _showSuccess('Xuất đánh giá công nhân thành công');
+  } catch (e) {
+    ProgressDialog.hide(); // Remove context parameter
+    print('Error exporting evaluation: $e');
+    _showError('Lỗi xuất đánh giá: ${e.toString()}');
   } finally {
     setState(() {
       _isLoading = false;
@@ -1508,12 +1555,24 @@ Widget _buildWorkersTable() {
                       ElevatedButton.icon(
                         onPressed: _isLoading ? null : () => _exportMonth(),
                         icon: Icon(Icons.calendar_month, size: 18),
-                        label: Text('Xuất tháng'),
+                        label: Text('Xuất nhanh'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.orange[600],
                           foregroundColor: Colors.white,
                         ),
                       ),
+                                            SizedBox(width: 12),
+ElevatedButton.icon(
+  onPressed: (_isLoading || _taskSchedules.isEmpty) 
+      ? null 
+      : () => _exportEvaluationOnly(),
+  icon: Icon(Icons.star_rate, size: 18),
+  label: Text('Đánh giá CN'),
+  style: ElevatedButton.styleFrom(
+    backgroundColor: Colors.deepPurple[600],
+    foregroundColor: Colors.white,
+  ),
+),
                       SizedBox(width: 12),
                       ElevatedButton.icon(
                         onPressed: _isLoading ? null : () => _exportStaffBio(),
@@ -1530,7 +1589,7 @@ Widget _buildWorkersTable() {
                             ? null 
                             : () => _showProjectScheduleDialog(),
                         icon: Icon(Icons.schedule, size: 18),
-                        label: Text('Xem lịch làm việc'),
+                        label: Text('Xem lịch'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.purple[600],
                           foregroundColor: Colors.white,

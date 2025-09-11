@@ -8,46 +8,356 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'table_models.dart';
 import 'db_helper.dart';
+import 'projectcongnhanllv.dart';
+import 'dart:async';
 
 class ProjectCongNhanExcel {
- static Future<void> exportToExcel({
- required List<TaskHistoryModel> allData,
- required List<String> projectOptions,
- required BuildContext context,
+static Future<void> exportToExcel({
+  required List<TaskHistoryModel> allData,
+  required List<String> projectOptions,
+  required BuildContext context,
+  List<TaskScheduleModel> taskSchedules = const [],
+  List<QRLookupModel> qrLookups = const [],
 }) async {
- final correctedData = _applyCorrectionToData(allData);
- final staffNameMap = await _getStaffNameMap();
- final excel = Excel.createExcel();
- excel.delete('Sheet1');
- await _createTongHopSheet(excel, correctedData, projectOptions, staffNameMap);
- await _createChiTietSheet(excel, correctedData, staffNameMap);
- await _createDailyMatrixSheet(excel, correctedData, staffNameMap);
- final fileName = 'DuAn_CongNhan_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
- await _saveAndHandleFile(excel, fileName, context);
+  ProgressDialog.show(context, 'Đang chuẩn bị dữ liệu...');
+  
+  try {
+    final correctedData = _applyCorrectionToData(allData);
+    final staffNameMap = await _getStaffNameMap();
+    final excel = Excel.createExcel();
+    excel.delete('Sheet1');
+    
+    ProgressDialog.updateMessage('Đang tạo bảng tổng hợp...');
+    await _createTongHopSheet(excel, correctedData, projectOptions, staffNameMap);
+    
+    ProgressDialog.updateMessage('Đang tạo bảng chi tiết...');
+    await _createChiTietSheet(excel, correctedData, staffNameMap);
+    
+    ProgressDialog.updateMessage('Đang tạo ma trận báo cáo...');
+    await _createDailyMatrixSheet(excel, correctedData, staffNameMap);
+    
+    if (taskSchedules.isNotEmpty && qrLookups.isNotEmpty) {
+      ProgressDialog.updateMessage('Đang tạo bảng đánh giá công nhân...');
+await _createDanhGiaCongNhanSheet(excel, correctedData, staffNameMap, taskSchedules, qrLookups);
+    }
+    
+    ProgressDialog.updateMessage('Đang lưu file...');
+    final fileName = 'DuAn_CongNhan_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
+    await _saveAndHandleFile(excel, fileName, context);
+    
+    // Success - hide progress dialog
+    ProgressDialog.hide();
+    
+  } catch (e) {
+    // Error - hide progress dialog and show error
+    ProgressDialog.hide();
+    if (context.mounted) {
+      _showErrorDialog(context, e.toString());
+    }
+    rethrow;
+  }
+}
+static void _showErrorDialog(BuildContext context, String error) {
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.error, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Lỗi xuất file'),
+          ],
+        ),
+        content: Text('Đã xảy ra lỗi: $error'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Đóng'),
+          ),
+        ],
+      );
+    },
+  );
+}
+static Future<void> _createDanhGiaCongNhanSheet(
+  Excel excel,
+  List<TaskHistoryModel> data,
+  Map<String, String> staffNameMap,
+  List<TaskScheduleModel> taskSchedules,
+  List<QRLookupModel> qrLookups,
+) async {
+  print('Starting staff evaluation sheet creation');
+  final evaluationSheet = excel['DanhGiaCongNhan'];
+  
+  // Headers...
+  final headers = [
+    'STT',
+    'Ngày',
+    'Mã NV',
+    'Tên công nhân',
+    'Dự án',
+    'Số giờ báo cáo',
+    'Danh sách giờ',
+    'Số báo cáo',
+    'Nhiệm vụ theo lịch',
+    'Hoàn thành đúng hạn',
+    'Điểm giờ (3.0)',
+    'Điểm báo cáo (3.5)',
+    'Điểm lịch trình (2.0)',
+    'Điểm đúng hạn (1.5)',
+    'Tổng điểm (10.0)',
+  ];
+  
+  // Create headers with styling
+  for (int i = 0; i < headers.length; i++) {
+    final cell = evaluationSheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+    cell.value = headers[i];
+    cell.cellStyle = CellStyle(
+      bold: true,
+      backgroundColorHex: '#8E44AD',
+      fontColorHex: '#FFFFFF',
+    );
+  }
+  
+  // Group data by worker-date-project
+  final workerDayProjectData = <String, WorkerDayEvaluation>{};
+  
+  for (final record in data) {
+    if (record.nguoiDung?.isEmpty != false || 
+        record.boPhan == null || 
+        _shouldFilterProject(record.boPhan!)) continue;
+    
+    final key = '${record.nguoiDung}_${DateFormat('yyyy-MM-dd').format(record.ngay)}_${record.boPhan}';
+    
+    workerDayProjectData.putIfAbsent(key, () => WorkerDayEvaluation(
+      workerName: record.nguoiDung!,
+      date: record.ngay,
+      projectName: record.boPhan!,
+    ));
+    
+    workerDayProjectData[key]!.addRecord(record);
+  }
+  
+  // Sort by date and worker name
+  final sortedKeys = workerDayProjectData.keys.toList()..sort();
+  
+  int rowIndex = 1;
+  int stt = 1;
+  final totalEvaluations = sortedKeys.length;
+  
+  for (int i = 0; i < sortedKeys.length; i++) {
+    final key = sortedKeys[i];
+    final evaluation = workerDayProjectData[key]!;
+    
+    if (i % 500 == 0 || i == sortedKeys.length - 1) {
+      final progressPercent = ((i / totalEvaluations) * 100).round();
+      ProgressDialog.updateMessage('Đang đánh giá: ${i + 1}/$totalEvaluations ($progressPercent%)');
+    }
+    
+    // Get scheduled tasks for this worker-date-project
+    final scheduledTasks = _getScheduledTasksForWorkerDateProject(
+      evaluation.workerName,
+      evaluation.date,
+      evaluation.projectName,
+      taskSchedules,
+      qrLookups,
+    );
+    
+    // Calculate scores
+    final scores = _calculateWorkerDayScores(evaluation, scheduledTasks);
+    
+    // Get staff name
+    final capitalizedWorkerName = evaluation.workerName.toUpperCase();
+    final staffName = staffNameMap[capitalizedWorkerName] ?? '❓❓❓';
+    
+    // Prepare row data
+    final rowData = [
+      stt.toString(),
+      DateFormat('dd/MM/yyyy').format(evaluation.date),
+      evaluation.workerName,
+      staffName,
+      evaluation.projectName,
+      evaluation.uniqueHours.length.toString(),
+      evaluation.hoursList.join(', '),
+      evaluation.totalReports.toString(),
+      scheduledTasks.length.toString(),
+      scores['onTimeTasksCount'].toString(),
+      scores['hourScore']!.toStringAsFixed(1),
+      scores['reportScore']!.toStringAsFixed(1),
+      scores['scheduleScore']!.toStringAsFixed(1),
+      scores['onTimeScore']!.toStringAsFixed(1),
+      scores['totalScore']!.toStringAsFixed(1),
+    ];
+    
+    // Write row data with conditional formatting
+    for (int j = 0; j < rowData.length; j++) {
+      final cell = evaluationSheet.cell(CellIndex.indexByColumnRow(
+        columnIndex: j, 
+        rowIndex: rowIndex
+      ));
+      cell.value = rowData[j];
+      
+      // Color code the total score
+      if (j == rowData.length - 1) {
+        final totalScore = scores['totalScore']!;
+        cell.cellStyle = CellStyle(
+          backgroundColorHex: _getScoreColorHex(totalScore),
+        );
+      }
+    }
+    
+    rowIndex++;
+    stt++;
+    
+    // Add small delay every 100 rows to prevent UI blocking
+    if (i % 100 == 0) {
+      await Future.delayed(Duration(milliseconds: 5));
+    }
+  }
+  
+  print('Staff evaluation sheet completed: $totalEvaluations evaluations processed');
+}
+
+// Helper method to get scheduled tasks for a specific worker-date-project
+static List<TaskScheduleModel> _getScheduledTasksForWorkerDateProject(
+  String workerName,
+  DateTime date,
+  String projectName,
+  List<TaskScheduleModel> taskSchedules,
+  List<QRLookupModel> qrLookups,
+) {
+  final dayOfWeek = date.weekday % 7; // Convert to 0-6 format
+  
+  return taskSchedules.where((task) {
+    // Check if this task applies to the worker through QR lookup
+    final userMapping = qrLookups.firstWhere(
+      (lookup) => lookup.qrvalue == task.username, // Fixed: use qrvalue instead of username
+      orElse: () => QRLookupModel(id: '', qrvalue: '', bpvalue: '', vtvalue: ''), // Fixed: use correct constructor
+    );
+    
+    if (userMapping.bpvalue != projectName) return false; // Fixed: use bpvalue instead of projectName
+    
+    // Check if the task applies to this day of week
+    if (task.weekday.isNotEmpty) {
+      final allowedDays = task.weekday.split(',').map((d) => int.tryParse(d.trim()) ?? -1).toList();
+      if (!allowedDays.contains(dayOfWeek)) return false;
+    }
+    
+    return true;
+  }).toList();
+}
+
+static Map<String, dynamic> _calculateWorkerDayScores(
+  WorkerDayEvaluation evaluation,
+  List<TaskScheduleModel> scheduledTasks,
+) {
+  // Updated scoring weights (total = 10.0) - RELAXED CRITERIA
+  const hourWeight = 3.0;      // Hours worked (target: 5 unique hours) - RELAXED from 8
+  const reportWeight = 3.5;    // Number of reports (target: 40% of scheduled tasks) - RELAXED from 60%
+  const scheduleWeight = 2.0;  // Schedule adherence (completed vs scheduled tasks)
+  const onTimeWeight = 1.5;    // On-time completion (within 15 minutes)
+  
+  // Calculate hour score (0-3.0) - RELAXED TARGET
+  final uniqueHours = evaluation.uniqueHours.length;
+  final hourScore = (uniqueHours / 5.0).clamp(0.0, 1.0) * hourWeight; // Changed from 8.0 to 5.0
+  
+  // Calculate report score (0-3.5) - RELAXED TARGET
+  final expectedReports = (scheduledTasks.length * 0.4).ceil(); // Changed from 0.6 to 0.4 (40%)
+  final reportRatio = expectedReports > 0 ? (evaluation.totalReports / expectedReports).clamp(0.0, 1.0) : 0.0;
+  final reportScore = reportRatio * reportWeight;
+  
+  // Calculate schedule adherence score (0-2.0)
+  final scheduleRatio = scheduledTasks.isNotEmpty ? 
+    (evaluation.getCompletedTasksCount(scheduledTasks) / scheduledTasks.length).clamp(0.0, 1.0) : 0.0;
+  final scheduleScore = scheduleRatio * scheduleWeight;
+  
+  // Calculate on-time score (0-1.5)
+  final onTimeTasksCount = evaluation.getOnTimeTasksCount(scheduledTasks);
+  final onTimeRatio = scheduledTasks.isNotEmpty ? 
+    (onTimeTasksCount / scheduledTasks.length).clamp(0.0, 1.0) : 0.0;
+  final onTimeScore = onTimeRatio * onTimeWeight;
+  
+  // Total score
+  final totalScore = hourScore + reportScore + scheduleScore + onTimeScore;
+  
+  return {
+    'hourScore': hourScore,
+    'reportScore': reportScore,
+    'scheduleScore': scheduleScore,
+    'onTimeScore': onTimeScore,
+    'totalScore': totalScore,
+    'onTimeTasksCount': onTimeTasksCount,
+  };
+}
+static String _getScoreColorHex(double score) {
+  if (score >= 8.0) return '#27AE60'; // Green - Excellent
+  if (score >= 6.0) return '#F39C12'; // Orange - Good
+  if (score >= 4.0) return '#E67E22'; // Dark Orange - Fair
+  return '#E74C3C'; // Red - Poor
 }
 
 static Future<void> exportToExcelMonth({
- required List<TaskHistoryModel> allData,
- required List<String> projectOptions,
- required DateTime selectedMonth,
- required BuildContext context,
+  required List<TaskHistoryModel> allData,
+  required List<String> projectOptions,
+  required DateTime selectedMonth,
+  required BuildContext context,
+  List<TaskScheduleModel> taskSchedules = const [],
+  List<QRLookupModel> qrLookups = const [],
 }) async {
- final monthData = allData.where((record) {
-   return record.ngay.year == selectedMonth.year && 
-          record.ngay.month == selectedMonth.month;
- }).toList();
- final correctedData = _applyCorrectionToData(monthData);
- final staffNameMap = await _getStaffNameMap();
- final excel = Excel.createExcel();
- excel.delete('Sheet1');
- await _createTongHopSheet(excel, correctedData, projectOptions, staffNameMap);
- await _createChiTietSheet(excel, correctedData, staffNameMap);
- await _createDailyMatrixSheet(excel, correctedData, staffNameMap);
- final monthName = DateFormat('yyyy_MM').format(selectedMonth);
- final fileName = 'DuAn_CongNhan_Thang_${monthName}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
- await _saveAndHandleFile(excel, fileName, context);
+  final monthData = allData.where((record) {
+    return record.ngay.year == selectedMonth.year && 
+           record.ngay.month == selectedMonth.month;
+  }).toList();
+  
+  final correctedData = _applyCorrectionToData(monthData);
+  final staffNameMap = await _getStaffNameMap();
+  final excel = Excel.createExcel();
+  excel.delete('Sheet1');
+  
+  // Update progress
+  ProgressDialog.updateMessage('Đang tạo bảng tổng hợp tháng...');
+  await _createTongHopSheet(excel, correctedData, projectOptions, staffNameMap);
+  
+  // Update progress
+  ProgressDialog.updateMessage('Đang tạo bảng chi tiết tháng...');
+  await _createChiTietSheet(excel, correctedData, staffNameMap);
+  
+  // Update progress
+  ProgressDialog.updateMessage('Đang tạo ma trận báo cáo tháng...');
+  await _createDailyMatrixSheet(excel, correctedData, staffNameMap);
+  
+  // SKIP the evaluation sheet for month export to keep it fast
+  // The evaluation sheet is very computationally expensive and not needed for monthly reports
+  
+  ProgressDialog.updateMessage('Đang lưu file tháng...');
+  final monthName = DateFormat('yyyy_MM').format(selectedMonth);
+  final fileName = 'DuAn_CongNhan_Thang_${monthName}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
+  await _saveAndHandleFile(excel, fileName, context);
 }
-
+static Future<void> exportEvaluationOnly({
+  required List<TaskHistoryModel> allData,
+  required List<String> projectOptions,
+  required BuildContext context,
+  List<TaskScheduleModel> taskSchedules = const [],
+  List<QRLookupModel> qrLookups = const [],
+}) async {
+  final correctedData = _applyCorrectionToData(allData);
+  final staffNameMap = await _getStaffNameMap();
+  final excel = Excel.createExcel();
+  excel.delete('Sheet1');
+  
+  if (taskSchedules.isNotEmpty && qrLookups.isNotEmpty) {
+    ProgressDialog.updateMessage('Đang tạo bảng đánh giá công nhân...');
+    await _createDanhGiaCongNhanSheet(excel, correctedData, staffNameMap, taskSchedules, qrLookups); // Remove context
+  } else {
+    throw Exception('Không có dữ liệu lịch làm việc để tạo bảng đánh giá');
+  }
+  
+  ProgressDialog.updateMessage('Đang lưu file đánh giá...');
+  final fileName = 'DanhGia_CongNhan_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
+  await _saveAndHandleFile(excel, fileName, context);
+}
  static Future<Map<String, String>> _getStaffNameMap() async {
    try {
      final dbHelper = DBHelper();
@@ -119,38 +429,120 @@ static Future<void> exportToExcelMonth({
  }
 
  static Future<void> _saveAndHandleFile(Excel excel, String fileName, BuildContext context) async {
-   try {
-     final fileBytes = excel.save();
-     if (fileBytes == null) {
-       throw Exception('Failed to generate Excel file');
-     }
-     if (kIsWeb || Platform.isAndroid || Platform.isIOS) {
-       final directory = await getTemporaryDirectory();
-       final filePath = '${directory.path}/$fileName';
-       final file = File(filePath);
-       await file.writeAsBytes(fileBytes);
-       await Share.shareXFiles(
-         [XFile(filePath)],
-         text: 'Báo cáo dự án - công nhân',
-       );
-     } else {
-       final directory = await getApplicationDocumentsDirectory();
-       final appFolder = Directory('${directory.path}/ProjectCongNhan');
-       if (!await appFolder.exists()) {
-         await appFolder.create(recursive: true);
-       }
-       final filePath = '${appFolder.path}/$fileName';
-       final file = File(filePath);
-       await file.writeAsBytes(fileBytes);
-       if (context.mounted) {
-         _showDesktopSaveDialog(context, filePath, appFolder.path);
-       }
-     }
-   } catch (e) {
-     print('Error saving Excel file: $e');
-     rethrow;
-   }
- }
+  try {
+    ProgressDialog.updateMessage('Đang tạo file Excel...');
+    final fileBytes = excel.save();
+    if (fileBytes == null) {
+      throw Exception('Failed to generate Excel file');
+    }
+    
+    final fileSizeMB = (fileBytes.length / (1024 * 1024)).toStringAsFixed(1);
+    ProgressDialog.updateMessage('Đang ghi file ($fileSizeMB MB) - Có thể mất vài phút...');
+    
+    if (kIsWeb || Platform.isAndroid || Platform.isIOS) {
+      final directory = await getTemporaryDirectory();
+      final filePath = '${directory.path}/$fileName';
+      final file = File(filePath);
+      
+      try {
+        // Write file with timeout
+        await file.writeAsBytes(fileBytes).timeout(
+          Duration(minutes: 2),
+          onTimeout: () {
+            throw TimeoutException('File writing timed out after 2 minutes', Duration(minutes: 2));
+          },
+        );
+        
+        ProgressDialog.updateMessage('Đang chia sẻ file...');
+        await Share.shareXFiles(
+          [XFile(filePath)],
+          text: 'Báo cáo dự án - công nhân',
+        );
+      } on TimeoutException catch (e) {
+        print('Timeout error: $e');
+        // Hide progress dialog before showing error
+        if (context.mounted) {
+          ProgressDialog.hide();
+          _showTimeoutErrorDialog(context, fileName, fileSizeMB);
+        }
+        return; // Exit early on timeout
+      }
+    } else {
+      final directory = await getApplicationDocumentsDirectory();
+      final appFolder = Directory('${directory.path}/ProjectCongNhan');
+      if (!await appFolder.exists()) {
+        await appFolder.create(recursive: true);
+      }
+      final filePath = '${appFolder.path}/$fileName';
+      final file = File(filePath);
+      
+      try {
+        // Write file with timeout
+        await file.writeAsBytes(fileBytes).timeout(
+          Duration(minutes: 2),
+          onTimeout: () {
+            throw TimeoutException('File writing timed out after 2 minutes', Duration(minutes: 2));
+          },
+        );
+        
+        if (context.mounted) {
+          _showDesktopSaveDialog(context, filePath, appFolder.path);
+        }
+      } on TimeoutException catch (e) {
+        print('Timeout error: $e');
+        // Hide progress dialog before showing error
+        if (context.mounted) {
+          ProgressDialog.hide();
+          _showTimeoutErrorDialog(context, fileName, fileSizeMB);
+        }
+        return; // Exit early on timeout
+      }
+    }
+  } catch (e) {
+    print('Error saving Excel file: $e');
+    // Hide progress dialog before rethrowing
+    if (context.mounted) {
+      ProgressDialog.hide();
+    }
+    rethrow;
+  }
+}
+
+// Add this helper method to show timeout error dialog
+static void _showTimeoutErrorDialog(BuildContext context, String fileName, String fileSizeMB) {
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Timeout khi ghi file'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('File Excel ($fileSizeMB MB) quá lớn và việc ghi file đã vượt quá thời gian cho phép (2 phút).'),
+            SizedBox(height: 12),
+            Text('Khuyến nghị:', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text('• Thử xuất dữ liệu theo tháng thay vì toàn bộ'),
+            Text('• Giảm phạm vi dữ liệu xuất'),
+            Text('• Kiểm tra dung lượng trống trên thiết bị'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Đóng'),
+          ),
+        ],
+      );
+    },
+  );
+}
 
  static void _showDesktopSaveDialog(BuildContext context, String filePath, String folderPath) {
    showDialog(
@@ -244,6 +636,7 @@ static Future<void> exportToExcelMonth({
      },
    );
  }
+
 static Future<void> _createDailyMatrixSheet(
   Excel excel,
   List<TaskHistoryModel> data,
@@ -645,4 +1038,193 @@ class WorkerProjectSummary {
  int get workDays => dates.length;
  int get uniqueTopics => topics.length;
  int get uniqueHours => hours.length;
+}
+
+class WorkerDayEvaluation {
+  final String workerName;
+  final DateTime date;
+  final String projectName;
+  int totalReports = 0;
+  final Set<String> uniqueHours = <String>{};
+  final List<String> hoursList = <String>[];
+  final List<TaskHistoryModel> reports = <TaskHistoryModel>[];
+  
+  WorkerDayEvaluation({
+    required this.workerName,
+    required this.date,
+    required this.projectName,
+  });
+  
+  void addRecord(TaskHistoryModel record) {
+    reports.add(record);
+    totalReports++;
+    
+    if (record.gio?.isNotEmpty == true) {
+      try {
+        final timeParts = record.gio!.split(':');
+        if (timeParts.isNotEmpty) {
+          final hour = timeParts[0];
+          if (uniqueHours.add(hour)) {
+            hoursList.add('${hour}h');
+          }
+        }
+      } catch (e) {
+        // Handle time parsing errors
+      }
+    }
+  }
+  
+  int getCompletedTasksCount(List<TaskScheduleModel> scheduledTasks) {
+    int completedCount = 0;
+    for (final task in scheduledTasks) {
+      for (final report in reports) {
+        if (report.chiTiet2?.contains(task.task) == true) {
+          completedCount++;
+          break;
+        }
+      }
+    }
+    return completedCount;
+  }
+  
+  int getOnTimeTasksCount(List<TaskScheduleModel> scheduledTasks) {
+    int onTimeCount = 0;
+    for (final task in scheduledTasks) {
+      for (final report in reports) {
+        if (report.chiTiet2?.contains(task.task) == true && report.gio != null) {
+          final timeDiff = _calculateTimeDifference(report.gio!, task.end);
+          if (timeDiff.abs() <= 15) { // Within 15 minutes
+            onTimeCount++;
+            break;
+          }
+        }
+      }
+    }
+    return onTimeCount;
+  }
+  
+  static int _calculateTimeDifference(String reportTime, String scheduleTime) {
+    try {
+      final reportParts = reportTime.split(':');
+      final scheduleParts = scheduleTime.split(':');
+      
+      final reportMinutes = int.parse(reportParts[0]) * 60 + int.parse(reportParts[1]);
+      final scheduleMinutes = int.parse(scheduleParts[0]) * 60 + int.parse(scheduleParts[1]);
+      
+      return reportMinutes - scheduleMinutes;
+    } catch (e) {
+      return 999; // Large difference for parsing errors
+    }
+  }
+}
+class ProgressDialog {
+  static OverlayEntry? _overlayEntry;
+  static ValueNotifier<String>? _messageNotifier;
+
+  static void show(BuildContext context, String message) {
+    hide(); // Ensure no duplicate dialogs
+    
+    _messageNotifier = ValueNotifier<String>(message);
+    
+    _overlayEntry = OverlayEntry(
+      builder: (context) => Material(
+        color: Colors.black54,
+        child: Center(
+          child: Container(
+            padding: EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: ValueListenableBuilder<String>(
+              valueListenable: _messageNotifier!,
+              builder: (context, message, child) {
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(width: 20),
+                    Flexible(
+                      child: Text(
+                        message,
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  static void updateMessage(String newMessage) {
+    _messageNotifier?.value = newMessage;
+  }
+
+  static void hide() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+    _messageNotifier?.dispose();
+    _messageNotifier = null;
+  }
+}
+
+class EvaluationProgressDialog extends StatefulWidget {
+  final String initialMessage;
+  final Function(_EvaluationProgressDialogState) onStateCreated;
+
+  const EvaluationProgressDialog({
+    Key? key, 
+    required this.initialMessage,
+    required this.onStateCreated,
+  }) : super(key: key);
+
+  @override
+  _EvaluationProgressDialogState createState() => _EvaluationProgressDialogState();
+}
+
+class _EvaluationProgressDialogState extends State<EvaluationProgressDialog> {
+  String _currentMessage = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _currentMessage = widget.initialMessage;
+    widget.onStateCreated(this);
+  }
+
+  // Make this method public (no underscore)
+  void updateMessage(String newMessage) {
+    if (mounted) {
+      setState(() {
+        _currentMessage = newMessage;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: () async => false,
+      child: AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Expanded(
+              child: Text(
+                _currentMessage,
+                style: TextStyle(fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

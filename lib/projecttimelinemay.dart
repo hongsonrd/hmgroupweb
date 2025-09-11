@@ -16,7 +16,7 @@ import 'table_models.dart';
 import 'http_client.dart';
 import 'dart:math' as math;
 import 'projecttimelinemayexcel.dart';
-
+import 'projectmanagementllv.dart'; 
 class MachineryUsageReport extends StatefulWidget {
   final String username;
 
@@ -137,14 +137,14 @@ double? _extractAreaM2(String? chiTiet) {
   if (v == null || v.isNaN || v.isInfinite || v < 0) return null;
   return v;
 }
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _setupAutoSync();
-    _initializePeriods();
-    _checkAndSync();
-  }
+@override
+void initState() {
+  super.initState();
+  _tabController = TabController(length: 3, vsync: this); 
+  _setupAutoSync();
+  _initializePeriods();
+  _checkAndSync();
+}
 
   @override
   void dispose() {
@@ -474,57 +474,85 @@ Widget _buildMachineUsageSummary() {
   }
 
   Future<void> _syncData() async {
-    if (_isLoading) return;
+  if (_isLoading) return;
 
-    setState(() {
-      _isLoading = true;
-      _syncStatus = 'Đang đồng bộ dữ liệu máy móc...';
-    });
+  setState(() {
+    _isLoading = true;
+    _syncStatus = 'Đang đồng bộ dữ liệu máy móc...';
+  });
 
-    try {
-      final response = await AuthenticatedHttpClient.get(
-        Uri.parse('$baseUrl')
-      );
+  try {
+    // Step 1: Sync main machinery data
+    final response = await AuthenticatedHttpClient.get(
+      Uri.parse('$baseUrl')
+    );
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        await dbHelper.clearTable(DatabaseTables.taskHistoryTable);
+    if (response.statusCode == 200) {
+      final List<dynamic> data = json.decode(response.body);
+      await dbHelper.clearTable(DatabaseTables.taskHistoryTable);
 
-        final taskHistories = data.map((item) => TaskHistoryModel(
-          uid: item['UID'],
-          taskId: item['TaskID'],
-          ngay: DateTime.parse(item['Ngay']),
-          gio: item['Gio'],
-          nguoiDung: item['NguoiDung'],
-          ketQua: item['KetQua'],
-          chiTiet: item['ChiTiet'],
-          chiTiet2: item['ChiTiet2'],
-          viTri: item['ViTri'],
-          boPhan: item['BoPhan'],
-          phanLoai: item['PhanLoai'],
-          hinhAnh: item['HinhAnh'],
-          giaiPhap: item['GiaiPhap'],
-        )).toList();
+      final taskHistories = data.map((item) => TaskHistoryModel(
+        uid: item['UID'],
+        taskId: item['TaskID'],
+        ngay: DateTime.parse(item['Ngay']),
+        gio: item['Gio'],
+        nguoiDung: item['NguoiDung'],
+        ketQua: item['KetQua'],
+        chiTiet: item['ChiTiet'],
+        chiTiet2: item['ChiTiet2'],
+        viTri: item['ViTri'],
+        boPhan: item['BoPhan'],
+        phanLoai: item['PhanLoai'],
+        hinhAnh: item['HinhAnh'],
+        giaiPhap: item['GiaiPhap'],
+      )).toList();
 
-        await dbHelper.batchInsertTaskHistory(taskHistories);
-        await _updateLastSyncTime();
-        
-        _showSuccess('Đồng bộ thành công');
-        await _loadData();
-      } else {
-        throw Exception('Failed to sync data: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('Error syncing machinery data: $e');
-      _showError('Không thể đồng bộ: ${e.toString()}');
-      await _loadData(); // Load cached data
-    } finally {
+      await dbHelper.batchInsertTaskHistory(taskHistories);
+      
+      // Step 2: Update Lich Lam Viec (with cooldown)
       setState(() {
-        _isLoading = false;
-        _syncStatus = '';
+        _syncStatus = 'Đang cập nhật lịch làm việc...';
       });
+      
+      final shouldSyncLLV = await LichLamViecManager.shouldSync();
+      print('Should sync LLV: $shouldSyncLLV'); // DEBUG
+      print('Username for LLV sync: ${widget.username}'); // DEBUG
+
+      if (shouldSyncLLV) {
+        try {
+          final success = await LichLamViecManager.syncData(widget.username);
+          print('LLV sync result: $success'); // DEBUG
+          
+          if (success) {
+            print('Lich Lam Viec sync completed successfully');
+          } else {
+            print('Lich Lam Viec sync failed but continuing...');
+          }
+        } catch (e) {
+          print('Error updating Lich Lam Viec data: $e');
+          // Don't throw error - this is optional sync
+        }
+      } else {
+        print('Skipping Lich Lam Viec sync - cooldown period active');
+      }
+
+      await _updateLastSyncTime();
+      _showSuccess('Đồng bộ thành công');
+      await _loadData();
+    } else {
+      throw Exception('Failed to sync data: ${response.statusCode}');
     }
+  } catch (e) {
+    print('Error syncing machinery data: $e');
+    _showError('Không thể đồng bộ: ${e.toString()}');
+    await _loadData();
+  } finally {
+    setState(() {
+      _isLoading = false;
+      _syncStatus = '';
+    });
   }
+}
 
   Future<void> _loadData() async {
     try {
@@ -1533,7 +1561,51 @@ pdf.addPage(
       default: return Colors.grey;
     }
   }
-
+ Widget _buildLLVTab() {
+  return Container(
+    child: Column(
+      children: [
+        // Project filter integration
+        if (_selectedProject != null && _selectedProject != 'Tất cả')
+          Container(
+            padding: EdgeInsets.all(16),
+            color: Colors.blue[50],
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.blue),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Hiển thị lịch làm việc cho dự án: $_selectedProject',
+                    style: TextStyle(
+                      color: Colors.blue[800],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _selectedProject = 'Tất cả';
+                      _applyFilters();
+                    });
+                  },
+                  child: Text('Xem tất cả'),
+                ),
+              ],
+            ),
+          ),
+        // LLV content
+        Expanded(
+          child: LLVMayScreen(
+            boPhan: _selectedProject == 'Tất cả' ? '' : (_selectedProject ?? ''),
+            username: widget.username,
+          ),
+        ),
+      ],
+    ),
+  );
+}
   Widget _buildSummaryTab() {
   return Column(
     children: [
@@ -2516,12 +2588,13 @@ Widget _buildNonOkIncidents() {
          ),
        ),
        bottom: TabBar(
-         controller: _tabController,
-         tabs: [
-           Tab(text: 'Tổng quan', icon: Icon(Icons.analytics)),
-           Tab(text: 'Chi tiết', icon: Icon(Icons.list)),
-         ],
-       ),
+  controller: _tabController,
+  tabs: [
+    Tab(text: 'Tổng quan', icon: Icon(Icons.analytics)),
+    Tab(text: 'Chi tiết', icon: Icon(Icons.list)),
+    Tab(text: 'Lịch làm việc', icon: Icon(Icons.schedule)), 
+  ],
+),
        actions: [
          // Period selector
          Container(
@@ -2619,6 +2692,7 @@ IconButton(
              children: [
                _buildSummaryTab(),
                _buildDetailTab(),
+               _buildLLVTab(), 
              ],
            ),
          ),
