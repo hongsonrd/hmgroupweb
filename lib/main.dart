@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/intro_screen.dart';
 import 'screens/webview_screen.dart';
+import 'screens/webview_screenKH.dart';
+
 import 'user_credentials.dart';
 import 'projectrouter.dart';
 import 'package:encrypt/encrypt.dart' as encrypt;
@@ -419,6 +421,7 @@ class _MainScreenState extends State<MainScreen> {
     const WebViewScreen(),
     const HMAIScreen(), 
     IntroScreen(userData: _currentUser),
+    const WebViewScreenKH(),
   ];
 
   @override
@@ -1317,7 +1320,8 @@ Widget build(BuildContext context) {
     0: [], // Projects tab
     1: ['1','2', '4'], // Work tab
     2: ['1','2', '4'], // HM AI tab
-    3: ['1','2', '4'], // Guide tab
+    3: ['1','2', '4', '5'], // Guide tab
+    4: [''] //KH tab
   };
   
   // Define permissions for floating action buttons
@@ -1347,6 +1351,10 @@ Widget build(BuildContext context) {
     BottomNavigationBarItem(
       icon: Icon(Icons.home),
       label: 'Hướng\ndẫn',
+    ),
+      BottomNavigationBarItem(
+      icon: Icon(Icons.dry),
+      label: 'Khách\nhàng',
     ),
   ];
   
@@ -1422,7 +1430,7 @@ bool showAirportButton = airportPermissions.isEmpty || airportPermissions.contai
                       Container(
                         margin: const EdgeInsets.only(bottom: 15),
                         child: const Text(
-                          '1.2.1',
+                          '1.2.3',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 18,

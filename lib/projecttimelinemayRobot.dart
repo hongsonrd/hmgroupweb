@@ -17,16 +17,16 @@ import 'http_client.dart';
 import 'dart:math' as math;
 import 'projecttimelinemayexcel.dart';
 import 'projectmanagementllv.dart'; 
-class MachineryUsageReport extends StatefulWidget {
+class MachineryUsageReportRobot extends StatefulWidget {
   final String username;
 
-  const MachineryUsageReport({Key? key, required this.username}) : super(key: key);
+  const MachineryUsageReportRobot({Key? key, required this.username}) : super(key: key);
 
   @override
-  _MachineryUsageReportState createState() => _MachineryUsageReportState();
+  _MachineryUsageReportRobotState createState() => _MachineryUsageReportRobotState();
 }
 
-class _MachineryUsageReportState extends State<MachineryUsageReport> 
+class _MachineryUsageReportRobotState extends State<MachineryUsageReportRobot> 
     with SingleTickerProviderStateMixin {
   bool _isExcelExporting = false;
 
@@ -37,7 +37,7 @@ class _MachineryUsageReportState extends State<MachineryUsageReport>
   List<TaskHistoryModel> _filteredData = [];
   
   final dbHelper = DBHelper();
-  final baseUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/historybaocaomay';
+  final baseUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app/historybaocaorobotx';
   String _syncStatus = '';
   
   // Filter controls
@@ -188,7 +188,7 @@ void initState() {
           TextButton(
             onPressed: () async {
               Navigator.of(ctx).pop();
-              await Share.shareXFiles([XFile(filePath)], text: 'Báo cáo máy móc ${_selectedPeriod}');
+              await Share.shareXFiles([XFile(filePath)], text: 'Báo cáo Robot ${_selectedPeriod}');
             },
             child: const Text('Chia sẻ'),
           ),
@@ -208,16 +208,15 @@ void initState() {
 }
 
 String _getMachineType(String? chiTiet2) {
-  if (chiTiet2 == null || chiTiet2.isEmpty) return 'Không xác định';
+  if (chiTiet2 == null || chiTiet2.isEmpty) return 'Robot';
   
   final parts = chiTiet2.split('-');
-  if (parts.length != 2) return 'Không xác định';
+  if (parts.length != 2) return 'Robot';
   
   final machineCode = parts[0].toUpperCase();
   
   // Machine type mapping based on your provided data
   final machineTypes = {
-    'XRAC': 'Xe rác',
     'BD': 'Bộ đàm',
     'BGG': 'Bộ giàn giáo', 
     'BGN': 'Bộ giàn nhỏ',
@@ -246,9 +245,10 @@ String _getMachineType(String? chiTiet2) {
     'XVD': 'Xe vắt đơn',
     'OD': 'Ống dây',
     'DT': 'Điện thoại',
+    'XRAC': 'Xe rác',
   };
   
-  return machineTypes[machineCode] ?? 'Không xác định ($machineCode)';
+  return machineTypes[machineCode] ?? 'Robot ($machineCode)';
 }
 Widget _buildMachineUsageSummary() {
   // Count individual machines and types; also collect which projects used each machine
@@ -290,13 +290,13 @@ Widget _buildMachineUsageSummary() {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Thống kê sử dụng máy móc',
+            'Thống kê sử dụng Robot',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           SizedBox(height: 16),
 
           if (machineUsage.isEmpty)
-            Center(child: Text('Không có dữ liệu máy móc'))
+            Center(child: Text('Không có dữ liệu Robot'))
           else
             Column(
               children: [
@@ -479,7 +479,7 @@ Widget _buildMachineUsageSummary() {
 
   setState(() {
     _isLoading = true;
-    _syncStatus = 'Đang đồng bộ dữ liệu máy móc...';
+    _syncStatus = 'Đang đồng bộ dữ liệu Robot...';
   });
 
   try {
@@ -740,7 +740,7 @@ bool _isValidMachineCode(String? code) {
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Text(
-                  'BÁO CÁO SỬ DỤNG MÁY MÓC',
+                  'BÁO CÁO SỬ DỤNG ROBOT',
                   style: pw.TextStyle(font: ttf, fontSize: 20, fontWeight: pw.FontWeight.bold),
                 ),
                 pw.SizedBox(height: 8),
@@ -931,7 +931,7 @@ bool _isValidMachineCode(String? code) {
                 ),
                 pw.SizedBox(width: 12),
                 pw.Text(
-                  'THỐNG KÊ SỬ DỤNG MÁY MÓC',
+                  'THỐNG KÊ SỬ DỤNG ROBOT',
                   style: pw.TextStyle(font: ttf, fontSize: 18, fontWeight: pw.FontWeight.bold),
                 ),
                 pw.Spacer(),
@@ -997,7 +997,7 @@ bool _isValidMachineCode(String? code) {
                 style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 12),
             if (sortedMachineTypes.isEmpty)
-              pw.Text('Không có dữ liệu máy móc', style: pw.TextStyle(font: ttf, fontSize: 12))
+              pw.Text('Không có dữ liệu Robot', style: pw.TextStyle(font: ttf, fontSize: 12))
             else
               pw.Table(
                 border: pw.TableBorder.all(color: PdfColors.grey400),
@@ -1531,7 +1531,7 @@ pdf.addPage(
     await file.writeAsBytes(await pdf.save());
 
     await Share.shareXFiles([XFile(file.path)],
-        text: 'Báo cáo chi tiết sử dụng máy móc ${_selectedPeriod}');
+        text: 'Báo cáo chi tiết sử dụng Robot ${_selectedPeriod}');
 
     _showSuccess('Xuất PDF chi tiết thành công');
   } catch (e) {
@@ -2426,7 +2426,7 @@ Widget _buildNonOkIncidents() {
                     children: [
                       Expanded(
                         child: Text(
-                          'Chi tiết báo cáo máy móc',
+                          'Chi tiết báo cáo Robot',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -2573,7 +2573,7 @@ Widget _buildNonOkIncidents() {
  Widget build(BuildContext context) {
    return Scaffold(
      appBar: AppBar(
-       title: Text('Báo cáo máy móc - ${widget.username.toUpperCase()}'),
+       title: Text('Báo cáo Robot - ${widget.username.toUpperCase()}'),
        flexibleSpace: Container(
          decoration: BoxDecoration(
            gradient: LinearGradient(

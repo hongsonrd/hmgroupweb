@@ -10,31 +10,19 @@ import 'package:intl/intl.dart';
 import '../user_state.dart';
 import '../main.dart' show MainScreen;
 import '../floating_draggable_icon.dart';
-import '../chamcong.dart';
 import '../location_provider.dart';
 import '../user_credentials.dart';
-import '../hs_page.dart';
 import '../news_section.dart'; 
 import '../projectmanagement4.dart';
-import '../hs_khachhang.dart';
-import '../hd_page.dart';
-import '../projecttimelinemay.dart';
-import '../projecttimelinemayRobot.dart';
 import '../projectcongnhan.dart';
-import '../projectcongnhanSB.dart';
-import '../projectcongnhanvitri.dart';
-import '../projectgiamsat.dart';
-import 'daily_report_screen.dart';
-import '../checklist_manager.dart';
-//import '../pay_page.dart';
-import '../checklist_supervisor.dart';
-class WebViewScreen extends StatefulWidget {
-  const WebViewScreen({super.key});
+
+class WebViewScreenKH extends StatefulWidget {
+  const WebViewScreenKH({super.key});
   @override
-  State<WebViewScreen> createState() => _WebViewScreenState();
+  State<WebViewScreenKH> createState() => _WebViewScreenKHState();
 }
 
-class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveClientMixin, SingleTickerProviderStateMixin {
+class _WebViewScreenKHState extends State<WebViewScreenKH> with AutomaticKeepAliveClientMixin, SingleTickerProviderStateMixin {
   @override
   bool get wantKeepAlive => true;
 
@@ -58,82 +46,16 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
   final Color tabBarColor = Color(0xFF034d58);
   
   final List<Map<String, dynamic>> gridData = [
-  {'icon': 'assets/timelogo.png', 'important': 'true', 'name': 'HM Time',
-    'link': 'time_link',
-    'isDirectNavigation': true,
-    'tab': 0,
-  },
-  {'icon': 'assets/hotellogo.png', 'important': 'true', 'name': 'HM Hotel',
-    'link': 'hotel_link',
-    'isDirectNavigation': true,
-    'tab': 0, 
-  },
   {'icon': 'assets/logogoclean.png', 'important': 'true', 'name': 'HM GoClean',
     'link': 'goclean_link',
     'isDirectNavigation': true,
     'tab': 0, 
   },
-    {'icon': 'assets/hopdonglogo.png', 'important': 'true', 'name': 'Hợp đồng của tôi',
-  'link': 'hopdong_link',
-  'isDirectNavigation': true,
-  'tab': 0, 
-},
-        {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Kiểm tra checklist QR',
-    'link': 'suplist_link',
-    'isDirectNavigation': true,
-    'tab': 0, 
-  },
-  {'icon': 'assets/zaloviplogo.png','important': 'true', 'name': 'OA Kinh Doanh', 'link': 'https://zalo.me/g/rzccet697', 'tab': 0},
-  {'icon': 'assets/zaloviplogo.png','important': 'true', 'name': 'OA QLDV', 'link': 'https://zalo.me/g/xbcalx122', 'tab': 0},
-  {'icon': 'assets/logoonline.png', 'name': 'Đào tạo online', 'link': 'https://yourworldtravel.vn/api/index3.html', 'tab': 0},
-  {'icon': 'assets/emaillogo.png', 'name': 'Tạo chữ ký email', 'link': 'https://yourworldtravel.vn/api/indexsignature.html', 'tab': 0},
-  {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo hàng ngày', 'link': 'https://yourworldtravel.vn/drive/dailyreport.html', 'tab': 1},
-  {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo hàng ngày (win)', 'link': 'https://yourworldtravel.vn/drive/dailyreport2.html', 'tab': 1},
-  {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Robot tự động', 'link': 'https://yourworldtravel.vn/drive/dailyrobot.html', 'tab': 1},
-  {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Lịch chuyến bay', 'link': 'https://yourworldtravel.vn/drive/dailyrobot2.html', 'tab': 1},
-  {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo máy móc',
-  'link': 'maymoc_link',
-  'isDirectNavigation': true,
-  'tab': 1, 
-},
-  {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo Robot (mới)',
-  'link': 'robot_link',
-  'isDirectNavigation': true,
-  'tab': 1, 
-},
   {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo công nhân',
     'link': 'congnhan_link',
     'isDirectNavigation': true,
     'tab': 1, 
   },
-    {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo vị trí',
-    'link': 'congnhanvt_link',
-    'isDirectNavigation': true,
-    'tab': 1, 
-  },
-    {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo sân bay T1',
-    'link': 'sanbay_link',
-    'isDirectNavigation': true,
-    'tab': 1, 
-  },
-    {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo giám sát',
-    'link': 'giamsat_link',
-    'isDirectNavigation': true,
-    'tab': 1, 
-  },
-      {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Checklist dự án',
-    'link': 'list_link',
-    'isDirectNavigation': true,
-    'tab': 1, 
-  },
-
-  {'icon': 'assets/logokt.png', 'important': 'true','name': 'HM Kỹ thuật', 'link': 'https://www.appsheet.com/start/f2040b99-7558-4e2c-9e02-df100c83d8ce', 'tab': 0},
-  {'icon': 'assets/zalologo.png', 'name': 'Zalo Hoàn Mỹ', 'link': 'https://zalo.me/2746464448500686217', 'tab': 0},
-  {'icon': 'assets/fblogo.png','important': 'true', 'name': 'Facebook Hoàn Mỹ', 'link': 'https://www.facebook.com/Hoanmykleanco', 'tab': 0},
-  {'icon': 'assets/tiktoklogo.png','important': 'true', 'name': 'Tiktok Hoàn Mỹ', 'link': 'https://www.tiktok.com/@hoanmykleanco', 'tab': 0},
-  {'icon': 'assets/weblogo.png','important': 'true', 'name': 'Website Hoàn Mỹ', 'link': 'https://hoanmykleanco.com/', 'tab': 0},
-  {'icon': 'assets/iglogo.png','important': 'true', 'name': 'Instagram Hoàn Mỹ', 'link': 'https://www.instagram.com/hoanmykleanco/', 'tab': 0},
-  {'icon': 'assets/ytlogo.png','important': 'true', 'name': 'Youtube Hoàn Mỹ', 'link': 'https://www.youtube.com/@hoanmykleanco', 'tab': 0},
 ];
 
   @override
@@ -190,109 +112,6 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
 
   Future<void> _handleUrlOpen(String url, String title) async {
     // Special case for HM Time - navigate to ChamCongScreen
-    if (title == 'HM Time') {
-      final userState = Provider.of<UserState>(context, listen: false);
-      final userData = userState.currentUser;
-      
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => MultiProvider(
-            providers: [
-              ChangeNotifierProvider<LocationProvider>(
-                create: (_) => LocationProvider(),
-              ),
-            ],
-            child: ChamCongScreen(userData: userData),
-          ),
-        ),
-      );
-      return;
-    }
-    
-    // Special case for HM Hotel - navigate to hs_page.dart
-    if (title == 'HM Hotel') {
-      final userState = Provider.of<UserState>(context, listen: false);
-      final userData = userState.currentUser;
-      
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => HSPage(userData: userData),
-        ),
-      );
-      return;
-    }
-
-    // Special case for HM GoClean - navigate to ProjectManagement4
-    if (title == 'HM GoClean') {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => ProjectManagement4(),
-        ),
-      );
-      return;
-    }
-
-    if (title == 'Hợp đồng của tôi') {
-      final userState = Provider.of<UserState>(context, listen: false);
-      final userData = userState.currentUser;
-      
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => HDPage(),
-        ),
-      );
-      return;
-    }
-
-    // Special case for Báo cáo hàng ngày - navigate to DailyReportScreen
-    if (title == 'Báo cáo hàng ngày') {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => DailyReportScreen(
-            reportUrl: url,
-            reportTitle: title,
-          ),
-        ),
-      );
-      return;
-    }
-    if (title == 'Kiểm tra checklist QR') {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => ChecklistSupervisorScreen(
-          ),
-        ),
-      );
-      return;
-    }
-    if (title == 'Báo cáo máy móc') {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => MachineryUsageReport(username: 'x'),
-        ),
-      );
-      return;
-    }
-    if (title == 'Báo cáo Robot (mới)') {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => MachineryUsageReportRobot(username: 'x'),
-        ),
-      );
-      return;
-    }
-    if (title == 'Báo cáo sân bay T1') {
-      final userState = Provider.of<UserState>(context, listen: false);
-      final userData = userState.currentUser;
-      final username = userData?['username'] ?? '';
-      
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => ProjectStaffReports(username: username),
-        ),
-      );
-      return;
-    }
     if (title == 'Báo cáo công nhân') {
       final userState = Provider.of<UserState>(context, listen: false);
       final userData = userState.currentUser;
@@ -305,43 +124,6 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
       );
       return;
     }
-    if (title == 'Báo cáo vị trí') {
-      final userState = Provider.of<UserState>(context, listen: false);
-      final userData = userState.currentUser;
-      final username = userData?['username'] ?? '';
-      
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => ProjectCongNhanVT(username: username),
-        ),
-      );
-      return;
-    }
-    if (title == 'Báo cáo giám sát') {
-      final userState = Provider.of<UserState>(context, listen: false);
-      final userData = userState.currentUser;
-      final username = userData?['username'] ?? '';
-      
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => ProjectGiamSat(username: username),
-        ),
-      );
-      return;
-    }
-        if (title == 'Checklist dự án') {
-      final userState = Provider.of<UserState>(context, listen: false);
-      final userData = userState.currentUser;
-      final username = userData?['username'] ?? '';
-      
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => ChecklistManager(username: username),
-        ),
-      );
-      return;
-    }
-
     // External URL handling with desktop_webview_window
     final Uri uri = Uri.parse(url);
     
@@ -509,46 +291,6 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
             ),
             textAlign: TextAlign.center,
           ),
-        ),
-        Row(
-          children: [
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  _handleUrlOpen('time_link', 'HM Time');
-                },
-                icon: Icon(Icons.hourglass_bottom, color: Colors.white, size: 18),
-                label: Text('Chấm công', style: TextStyle(color: Colors.white, fontSize: 14.0)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: buttonColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(width: 16),
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  final userState = Provider.of<UserState>(context, listen: false);
-                  final userData = userState.currentUser;
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => HSKhachHangScreen()),
-                  );
-                },
-                icon: Icon(Icons.local_library, color: Colors.white, size: 18),
-                label: Text('Khách hàng', style: TextStyle(color: Colors.white, fontSize: 14.0)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: buttonColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ),
-          ],
         ),
         Padding(
           padding: EdgeInsets.only(top: 11),
@@ -823,46 +565,6 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
                           ),
                           textAlign: TextAlign.center,
                         ),
-                      ),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: () {
-                                _handleUrlOpen('time_link', 'HM Time');
-                              },
-                              icon: Icon(Icons.hourglass_bottom, color: Colors.white, size: 18),
-                              label: Text('Chấm công', style: TextStyle(color: Colors.white, fontSize: 14.0)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: buttonColor,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: 16),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: () {
-                                final userState = Provider.of<UserState>(context, listen: false);
-                                final userData = userState.currentUser;
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (context) => HSKhachHangScreen()),
-                                );
-                              },
-                              icon: Icon(Icons.local_library, color: Colors.white, size: 18),
-                              label: Text('Khách hàng', style: TextStyle(color: Colors.white, fontSize: 14.0)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: buttonColor,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
                       ),
                       Padding(
                         padding: EdgeInsets.only(top: 11),
