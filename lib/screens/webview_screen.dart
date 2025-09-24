@@ -26,7 +26,7 @@ import '../projectcongnhanvitri.dart';
 import '../projectgiamsat.dart';
 import 'daily_report_screen.dart';
 import '../checklist_manager.dart';
-//import '../pay_page.dart';
+import '../pay_page.dart';
 import '../checklist_supervisor.dart';
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
@@ -80,6 +80,11 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
 },
         {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Kiểm tra checklist QR',
     'link': 'suplist_link',
+    'isDirectNavigation': true,
+    'tab': 0, 
+  },
+          {'icon': 'assets/linklogo.png', 'important': 'true', 'name': 'HR & Công lương',
+    'link': 'hrcongluong_link',
     'isDirectNavigation': true,
     'tab': 0, 
   },
@@ -231,7 +236,14 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
       );
       return;
     }
-
+    if (title == 'HR & Công lương') {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => PayPage(),
+        ),
+      );
+      return;
+    }
     if (title == 'Hợp đồng của tôi') {
       final userState = Provider.of<UserState>(context, listen: false);
       final userData = userState.currentUser;

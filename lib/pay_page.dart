@@ -4,10 +4,12 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:flutter/cupertino.dart';
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
 import 'dart:io';
-
+import 'pay_account.dart';
+import 'pay_account2.dart';
+import 'pay_hour.dart';
+import 'pay_location.dart';
+import 'pay_standard.dart';
 class PayPage extends StatefulWidget {
   const PayPage({Key? key}) : super(key: key);
 
@@ -15,30 +17,58 @@ class PayPage extends StatefulWidget {
   _PayPageState createState() => _PayPageState();
 }
 
+class PayMenuItem {
+  final String title;
+  final IconData icon;
+  final List<String> allowedRoles;
+  final VoidCallback? onTap;
+
+  PayMenuItem({
+    required this.title,
+    required this.icon,
+    required this.allowedRoles,
+    this.onTap,
+  });
+}
+
 class _PayPageState extends State<PayPage> {
   VideoPlayerController? _videoController;
   bool _isVideoInitialized = false;
   bool _isSyncing = false;
   int _currentSyncStep = 0;
-  List<bool> _syncStepsCompleted = List.filled(1, false); // Only 1 step for now
+  List<bool> _syncStepsCompleted = List.filled(6, false); 
   String _username = '';
   String _userPayRole = '';
-  int _syncedRecordsCount = 0;
   bool _syncFailed = false;
   String _syncErrorMessage = '';
   Map<String, int> _syncedCounts = {};
-  Database? _database;
+  bool _showDashboard = false;
+
+  // In-memory data storage
+  List<Map<String, dynamic>> _taiKhoanData = [];
+  List<Map<String, dynamic>> _gioLamData = [];
+  List<Map<String, dynamic>> _congLamData = [];
+  List<Map<String, dynamic>> _congChuanData = [];
+  List<Map<String, dynamic>> _luongCheDoData = [];
+  List<Map<String, dynamic>> _luongLichSuData = [];
 
   final List<String> _stepLabels = [
-    'Công chuẩn', // CongChuan sync
+    'Tài khoản',
+    'Giờ làm việc', 
+    'Vị trí chấm công',
+    'Công chuẩn',
+    'Chế độ lương',
+    'Lịch sử lương'
   ];
+
+  late List<PayMenuItem> _menuItems;
 
   @override
   void initState() {
     super.initState();
+    _initializeMenuItems();
     _initializeVideo();
     _loadUsername();
-    _initializeDatabase();
 
     Future.delayed(Duration(milliseconds: 500), () {
       if (mounted) {
@@ -47,27 +77,220 @@ class _PayPageState extends State<PayPage> {
     });
   }
 
-  Future<void> _initializeDatabase() async {
-    final databasesPath = await getDatabasesPath();
-    final path = join(databasesPath, 'pay_database.db');
+  void _initializeMenuItems() {
+    _menuItems = [
+      PayMenuItem(
+        title: 'Tài khoản app',
+        icon: Icons.manage_accounts,
+        allowedRoles: ['Admin', 'HR'],
+        onTap: () => _navigateToPage('TaiKhoanApp'),
+      ),
+      PayMenuItem(
+        title: 'Xem tài khoản',
+        icon: Icons.account_circle,
+        allowedRoles: ['Viewer', 'AC','Admin'],
+        onTap: () => _navigateToPage('XemTaiKhoan'),
+      ),
+      PayMenuItem(
+        title: 'Quy định giờ làm',
+        icon: Icons.access_time,
+        allowedRoles: ['Admin', 'HR'],
+        onTap: () => _navigateToPage('QuyDinhGioLam'),
+      ),
+      PayMenuItem(
+        title: 'Xem quy định giờ',
+        icon: Icons.schedule,
+        allowedRoles: ['Viewer', 'AC','Admin'],
+        onTap: () => _navigateToPage('XemQuyDinhGio'),
+      ),
+      PayMenuItem(
+        title: 'Vị trí chấm công',
+        icon: Icons.location_on,
+        allowedRoles: ['Admin', 'HR','Admin'],
+        onTap: () => _navigateToPage('ViTriChamCong'),
+      ),
+      PayMenuItem(
+        title: 'Xem điểm chấm',
+        icon: Icons.location_searching,
+        allowedRoles: ['Viewer', 'AC','Admin'],
+        onTap: () => _navigateToPage('XemDiemCham'),
+      ),
+      PayMenuItem(
+        title: 'Sửa công chuẩn',
+        icon: Icons.edit_calendar,
+        allowedRoles: ['Admin', 'HR'],
+        onTap: () => _navigateToPage('SuaCongChuan'),
+      ),
+      PayMenuItem(
+        title: 'Xem công chuẩn',
+        icon: Icons.calendar_view_day,
+        allowedRoles: ['Viewer', 'AC','Admin'],
+        onTap: () => _navigateToPage('XemCongChuan'),
+      ),
+      PayMenuItem(
+        title: 'Sửa chế độ lương',
+        icon: Icons.edit_note,
+        allowedRoles: ['Admin', 'AC'],
+        onTap: () => _navigateToPage('SuaCheDo'),
+      ),
+      PayMenuItem(
+        title: 'Lịch sử lương HR',
+        icon: Icons.history_edu,
+        allowedRoles: ['Admin', 'HR'],
+        onTap: () => _navigateToPage('LichSuLuongHR'),
+      ),
+      PayMenuItem(
+        title: 'Lịch sử lương KT',
+        icon: Icons.receipt_long,
+        allowedRoles: ['AC','Admin'],
+        onTap: () => _navigateToPage('LichSuLuongKT'),
+      ),
+      PayMenuItem(
+        title: 'Lịch sử chấm công HR',
+        icon: Icons.access_time_filled,
+        allowedRoles: ['Admin', 'HR'],
+        onTap: () => _navigateToPage('LichSuChamCongHR'),
+      ),
+      PayMenuItem(
+        title: 'Lịch sử chấm công',
+        icon: Icons.timer,
+        allowedRoles: ['AC', 'Viewer','Admin'],
+        onTap: () => _navigateToPage('LichSuChamCong'),
+      ),
+    ];
+  }
 
-    _database = await openDatabase(
-      path,
-      version: 1,
-      onCreate: (Database db, int version) async {
-        await db.execute('''
-          CREATE TABLE PayCongChuan (
-            uid TEXT PRIMARY KEY,
-            giaiDoan TEXT,
-            congGs REAL,
-            congVp REAL,
-            congCn REAL,
-            congKhac REAL,
-            chiNhanh TEXT
-          )
-        ''');
-      },
+void _navigateToPage(String pageName) {
+  Map<String, dynamic> pageData = {};
+  
+  switch (pageName) {
+    case 'TaiKhoanApp':
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PayAccountScreen(
+            username: _username,
+            userRole: _userPayRole,
+            accountData: _taiKhoanData,
+          ),
+        ),
+      );
+      return;
+    case 'XemTaiKhoan':
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PayAccountScreen2(
+            username: _username,
+            userRole: _userPayRole,
+            accountData: _taiKhoanData,
+          ),
+        ),
+      );
+      break;
+      case 'QuyDinhGioLam':
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => PayHourScreen(
+        username: _username,
+        userRole: _userPayRole,
+        hourData: _gioLamData,
+      ),
+    ),
+  );
+  return;
+      case 'XemQuyDinhGio':
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => PayHourScreen(
+        username: _username,
+        userRole: _userPayRole,
+        hourData: _gioLamData,
+      ),
+    ),
+  );
+  return;
+        pageData = {'data': _gioLamData, 'userRole': _userPayRole};
+        break;
+      case 'ViTriChamCong':
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => PayLocationScreen(
+        username: _username,
+        userRole: _userPayRole,
+        locationData: _congLamData,
+      ),
+    ),
+  );
+  return;
+      case 'XemDiemCham':
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => PayLocationScreen(
+        username: _username,
+        userRole: _userPayRole,
+        locationData: _congLamData,
+      ),
+    ),
+  );
+  return;
+      case 'SuaCongChuan':
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => PayStandardScreen(
+        username: _username,
+        userRole: _userPayRole,
+        standardData: _congChuanData,
+      ),
+    ),
+  );
+  return;
+case 'XemCongChuan':
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => PayStandardScreen(
+        username: _username,
+        userRole: _userPayRole,
+        standardData: _congChuanData,
+      ),
+    ),
+  );
+  return;
+      case 'SuaCheDo':
+        pageData = {'data': _luongCheDoData, 'userRole': _userPayRole};
+        break;
+      case 'LichSuLuongHR':
+      case 'LichSuLuongKT':
+        pageData = {'data': _luongLichSuData, 'userRole': _userPayRole};
+        break;
+      case 'LichSuChamCongHR':
+      case 'LichSuChamCong':
+        pageData = {
+          'gioLamData': _gioLamData,
+          'congLamData': _congLamData,
+          'userRole': _userPayRole
+        };
+        break;
+    }
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Navigating to $pageName with ${pageData['data']?.length ?? 0} records'),
+        backgroundColor: Colors.blue,
+      ),
     );
+  }
+
+  List<PayMenuItem> _getFilteredMenuItems() {
+    return _menuItems.where((item) => 
+      item.allowedRoles.contains(_userPayRole)
+    ).toList();
   }
 
   Future<void> _initializeVideo() async {
@@ -79,7 +302,7 @@ class _PayPageState extends State<PayPage> {
     }
     
     try {
-      _videoController = VideoPlayerController.asset('assets/appvideohopdong.mp4');
+      _videoController = VideoPlayerController.asset('assets/apphr.mp4');
       await _videoController!.initialize();
       _videoController!.setLooping(true);
       _videoController!.setVolume(1.0);
@@ -156,11 +379,19 @@ class _PayPageState extends State<PayPage> {
     setState(() {
       _isSyncing = true;
       _currentSyncStep = 0;
-      _syncStepsCompleted = List.filled(1, false);
+      _syncStepsCompleted = List.filled(6, false);
       _syncFailed = false;
       _syncErrorMessage = '';
-      _syncedRecordsCount = 0;
       _syncedCounts.clear();
+      _showDashboard = false;
+      
+      // Clear previous data
+      _taiKhoanData.clear();
+      _gioLamData.clear();
+      _congLamData.clear();
+      _congChuanData.clear();
+      _luongCheDoData.clear();
+      _luongLichSuData.clear();
     });
 
     try {
@@ -174,21 +405,11 @@ class _PayPageState extends State<PayPage> {
         await prefs.setString('last_pay_sync_time', DateTime.now().toIso8601String());
 
         if (_syncStepsCompleted.every((step) => step == true)) {
-          // Navigate to pay dashboard (you'll need to create this)
-          // Navigator.pushReplacement(
-          //   context,
-          //   MaterialPageRoute(
-          //     builder: (context) => PayDashboard(
-          //       username: _username,
-          //       userRole: _userPayRole,
-          //     ),
-          //   ),
-          // );
-          
-          // For now, show success message
           setState(() {
             _isSyncing = false;
+            _showDashboard = true;
           });
+          
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text("Đồng bộ hoàn thành! Role: $_userPayRole"),
@@ -201,13 +422,6 @@ class _PayPageState extends State<PayPage> {
             _isSyncing = false;
             _syncFailed = true;
           });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("Đồng bộ dữ liệu không hoàn thành. Vui lòng thử lại."),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 5),
-            ),
-          );
         }
       }
     } catch (e) {
@@ -218,23 +432,6 @@ class _PayPageState extends State<PayPage> {
           _syncFailed = true;
           _syncErrorMessage = e.toString();
         });
-
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text("Lỗi đồng bộ"),
-            content: Text(
-                "Đã xảy ra lỗi trong quá trình đồng bộ: ${e.toString()}"),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-                child: Text("OK"),
-              ),
-            ],
-          ),
-        );
       }
     }
   }
@@ -242,33 +439,35 @@ class _PayPageState extends State<PayPage> {
   Future<void> _performSync() async {
     final prefs = await SharedPreferences.getInstance();
     final originalUserState = prefs.getString('current_user');
-    print("ORIGINAL USER STATE in _performSync: $originalUserState");
-
-    // First step: Get user role
-    setState(() {
-      _currentSyncStep = 0;
-      _syncStepsCompleted[0] = false;
-      _syncFailed = false;
-    });
 
     try {
-      await _executeSyncStep(0, _username);
-      setState(() {
-        _syncStepsCompleted[0] = true;
-      });
-      await Future.delayed(Duration(milliseconds: 800));
+      await _getUserRole(_username);
+      
+      // Sync all data types
+      for (int i = 0; i < 6; i++) {
+        setState(() {
+          _currentSyncStep = i;
+        });
+        
+        await _executeSyncStep(i, _username);
+        
+        setState(() {
+          _syncStepsCompleted[i] = true;
+        });
+        
+        await Future.delayed(Duration(milliseconds: 800));
+      }
+      
     } catch (e) {
-      print("Error in sync step 1: $e");
+      print("Error in sync process: $e");
       if (mounted) {
         setState(() {
           _syncFailed = true;
-          _syncErrorMessage = "Lỗi đồng bộ bước 1: ${e.toString()}";
+          _syncErrorMessage = e.toString();
         });
       }
       throw e;
     }
-
-    await Future.delayed(Duration(seconds: 1));
 
     if (_syncStepsCompleted.every((step) => step == true)) {
       await prefs.setString('last_pay_sync_time', DateTime.now().toIso8601String());
@@ -276,58 +475,56 @@ class _PayPageState extends State<PayPage> {
 
     final finalUserState = prefs.getString('current_user');
     if (originalUserState != finalUserState) {
-      print("WARNING: User state changed during _performSync! Original: $originalUserState, Final: $finalUserState");
       await prefs.setString('current_user', originalUserState ?? '');
-      print("RESTORED original user state in _performSync");
     }
   }
 
-  Future<void> _executeSyncStep(int step, String usernameForSync) async {
-    if (usernameForSync.isEmpty) {
-      throw Exception('Username for sync not available');
-    }
+  Future<void> _getUserRole(String username) async {
+    final baseUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app';
+    final roleUrl = '$baseUrl/payrole/$username';
 
+    final roleResponse = await http.get(Uri.parse(roleUrl));
+
+    if (roleResponse.statusCode == 200) {
+      final roleText = roleResponse.body.trim();
+      
+      final validRoles = ['Admin', 'HR', 'AC', 'Viewer'];
+      if (!validRoles.contains(roleText)) {
+        throw Exception('Invalid role returned: $roleText');
+      }
+
+      _userPayRole = roleText;
+      print("Pay role received: $_userPayRole");
+
+    } else if (roleResponse.statusCode == 404) {
+      throw Exception('User not found in Pay system');
+    } else {
+      throw Exception('Failed to load user Pay role: ${roleResponse.statusCode}');
+    }
+  }
+
+  Future<void> _executeSyncStep(int step, String username) async {
     final baseUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app';
 
     try {
       switch (step) {
-        case 0:
-          // Get user role first
-          final roleUrl = '$baseUrl/payrole/$usernameForSync';
-          print("REQUEST URL (Pay Role): $roleUrl");
-
-          final roleResponse = await http.get(Uri.parse(roleUrl));
-          print("RESPONSE STATUS (Pay Role): ${roleResponse.statusCode}");
-          print("RESPONSE BODY (Pay Role): ${roleResponse.body}");
-
-          if (roleResponse.statusCode == 200) {
-            final roleText = roleResponse.body.trim();
-            
-            final validRoles = ['Admin', 'HR', 'AC', 'Viewer'];
-            if (!validRoles.contains(roleText)) {
-              setState(() {
-                _syncFailed = true;
-                _syncErrorMessage = 'Vai trò người dùng không hợp lệ: $roleText';
-              });
-              throw Exception('Invalid role returned: $roleText');
-            }
-
-            _userPayRole = roleText;
-            print("Pay role received: $_userPayRole");
-
-            // Now sync CongChuan data
-            await _syncCongChuanData(usernameForSync);
-
-          } else if (roleResponse.statusCode == 404) {
-            setState(() {
-              _syncFailed = true;
-              _syncErrorMessage = 'Người dùng chưa được đăng ký với hệ thống lương';
-            });
-            throw Exception('User not found in Pay system');
-          } else {
-            throw Exception(
-                'Failed to load user Pay role: ${roleResponse.statusCode}, Body: ${roleResponse.body}');
-          }
+        case 0: // TaiKhoan
+          await _syncDataToMemory('$baseUrl/paytaikhoan/$username', 'TaiKhoan', _taiKhoanData);
+          break;
+        case 1: // GioLam
+          await _syncDataToMemory('$baseUrl/paygiolam/$username', 'GioLam', _gioLamData);
+          break;
+        case 2: // CongLam
+          await _syncDataToMemory('$baseUrl/payconglam/$username', 'CongLam', _congLamData);
+          break;
+        case 3: // CongChuan
+          await _syncDataToMemory('$baseUrl/paycongchuan/$username', 'CongChuan', _congChuanData);
+          break;
+        case 4: // LuongCheDo
+          await _syncDataToMemory('$baseUrl/paychedo/$username', 'LuongCheDo', _luongCheDoData);
+          break;
+        case 5: // LuongLichSu
+          await _syncDataToMemory('$baseUrl/luonglichsu/$username', 'LuongLichSu', _luongLichSuData);
           break;
       }
     } catch (e) {
@@ -336,93 +533,201 @@ class _PayPageState extends State<PayPage> {
     }
   }
 
-  Future<void> _syncCongChuanData(String username) async {
-    final baseUrl = 'https://hmclourdrun1-81200125587.asia-southeast1.run.app';
-    final url = '$baseUrl/paycongchuan/$username';
-    print("REQUEST URL (CongChuan): $url");
+  Future<void> _syncDataToMemory(String url, String displayName, List<Map<String, dynamic>> dataList) async {
+    print("REQUEST URL ($displayName): $url");
 
     final response = await http.get(Uri.parse(url));
-    print("RESPONSE STATUS (CongChuan): ${response.statusCode}");
-    
-    String responseBody = response.body;
-    String truncatedBody = responseBody.length > 1000 
-        ? "${responseBody.substring(0, 1000)}..." 
-        : responseBody;
-    print("RESPONSE BODY (CongChuan) [first 1000 chars]: $truncatedBody");
+    print("RESPONSE STATUS ($displayName): ${response.statusCode}");
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
 
       if (data == null) {
-        print("Received null data for CongChuan, treating as empty list");
+        print("Received null data for $displayName");
         setState(() {
-          _syncedCounts['CongChuan'] = 0;
+          _syncedCounts[displayName] = 0;
         });
         return;
       }
 
-      List<dynamic> dataList;
+      List<dynamic> apiDataList;
       if (data is List) {
-        dataList = data;
+        apiDataList = data;
       } else {
-        dataList = [data];
+        apiDataList = [data];
       }
 
-      print("Processing ${dataList.length} CongChuan records");
-      await _saveCongChuanData(dataList);
+      // Store data in memory
+      dataList.clear();
+      dataList.addAll(apiDataList.map((item) => Map<String, dynamic>.from(item)).toList());
 
+      print("Loaded ${dataList.length} $displayName records to memory");
       setState(() {
-        _syncedCounts['CongChuan'] = dataList.length;
+        _syncedCounts[displayName] = dataList.length;
       });
     } else {
-      print("API returned error status for CongChuan: ${response.statusCode}");
-      throw Exception(
-          'Failed to load CongChuan data: ${response.statusCode}, Body: ${response.body}');
+      print("API returned error status for $displayName: ${response.statusCode}");
+      throw Exception('Failed to load $displayName data: ${response.statusCode}');
     }
   }
 
-  Future<void> _saveCongChuanData(List<dynamic> dataList) async {
-    if (_database == null) return;
+  // Helper methods to access data from other screens
+  List<Map<String, dynamic>> get taiKhoanData => _taiKhoanData;
+  List<Map<String, dynamic>> get gioLamData => _gioLamData;
+  List<Map<String, dynamic>> get congLamData => _congLamData;
+  List<Map<String, dynamic>> get congChuanData => _congChuanData;
+  List<Map<String, dynamic>> get luongCheDoData => _luongCheDoData;
+  List<Map<String, dynamic>> get luongLichSuData => _luongLichSuData;
 
-    try {
-      print("Saving ${dataList.length} records to PayCongChuan table");
-      
-      // Clear existing data
-      await _database!.delete('PayCongChuan');
-      print("Cleared old PayCongChuan data");
-      
-      // Insert new data
-      for (var item in dataList) {
-        await _database!.insert(
-          'PayCongChuan',
-          {
-            'uid': item['uid']?.toString() ?? '',
-            'giaiDoan': item['giaiDoan']?.toString() ?? '',
-            'congGs': _parseDouble(item['congGs']),
-            'congVp': _parseDouble(item['congVp']),
-            'congCn': _parseDouble(item['congCn']),
-            'congKhac': _parseDouble(item['congKhac']),
-            'chiNhanh': item['chiNhanh']?.toString() ?? '',
+  Widget _buildDashboard() {
+    final filteredItems = _getFilteredMenuItems();
+    
+    return SafeArea(
+      child: Container(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.85),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.grey.withOpacity(0.2),
+                  width: 0.5,
+                ),
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Text(
+                          'Hệ thống quản lý lương',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Vai trò: $_userPayRole',
+                          style: TextStyle(
+                            color: Colors.blue,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.refresh, color: Colors.white),
+                    onPressed: _startSyncProcess,
+                  ),
+                ],
+              ),
+            ),
+            
+            SizedBox(height: 20),
+            
+            // Grid Menu
+            Expanded(
+  child: Container(
+    padding: EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.black.withOpacity(0.85),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(
+        color: Colors.grey.withOpacity(0.2),
+        width: 0.5,
+      ),
+    ),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        // Auto-detect screen size for responsive grid
+        int crossAxisCount;
+        if (constraints.maxWidth > 1200) {
+          crossAxisCount = 6; // Desktop: 6 items per row
+        } else if (constraints.maxWidth > 800) {
+          crossAxisCount = 4; // Tablet: 4 items per row
+        } else {
+          crossAxisCount = 2; // Mobile: 2 items per row
+        }
+        
+        return GridView.builder(
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            childAspectRatio: 1.0,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+          ),
+          itemCount: filteredItems.length,
+          itemBuilder: (context, index) {
+            final item = filteredItems[index];
+            return _buildMenuItem(item);
           },
-          conflictAlgorithm: ConflictAlgorithm.replace,
         );
-      }
-      
-      print("Inserted ${dataList.length} PayCongChuan records");
-    } catch (e) {
-      print("Error saving PayCongChuan data: $e");
-      throw Exception('Failed to save PayCongChuan data: $e');
-    }
+      },
+    ),
+  ),
+),
+          ],
+        ),
+      ),
+    );
   }
 
-  double _parseDouble(dynamic value) {
-    if (value == null) return 0.0;
-    if (value is double) return value;
-    if (value is int) return value.toDouble();
-    if (value is String) {
-      return double.tryParse(value) ?? 0.0;
-    }
-    return 0.0;
+  Widget _buildMenuItem(PayMenuItem item) {
+    return InkWell(
+      onTap: item.onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.grey.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.grey.withOpacity(0.3),
+            width: 0.5,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                item.icon,
+                size: 32,
+                color: Colors.blue,
+              ),
+            ),
+            SizedBox(height: 12),
+            Text(
+              item.title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildSyncOverlay() {
@@ -445,6 +750,17 @@ class _PayPageState extends State<PayPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  Spacer(),
+                ],
+              ),
+              
               Padding(
                 padding: const EdgeInsets.only(bottom: 12.0),
                 child: Text(
@@ -477,7 +793,7 @@ class _PayPageState extends State<PayPage> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(3),
                   child: LinearProgressIndicator(
-                    value: _syncStepsCompleted.where((completed) => completed).length / 1.0,
+                    value: _syncStepsCompleted.where((completed) => completed).length / 6.0,
                     backgroundColor: Colors.grey.withOpacity(0.3),
                     valueColor: AlwaysStoppedAnimation<Color>(
                       _syncFailed ? Colors.red : Colors.blue,
@@ -489,7 +805,7 @@ class _PayPageState extends State<PayPage> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 16.0),
                 child: Text(
-                  '${_syncStepsCompleted.where((completed) => completed).length}/1 bước hoàn thành',
+                  '${_syncStepsCompleted.where((completed) => completed).length}/6 bước hoàn thành',
                   style: TextStyle(
                     color: Colors.white70,
                     fontSize: 12,
@@ -527,83 +843,29 @@ class _PayPageState extends State<PayPage> {
                   ),
                 ),
 
-              if (_currentSyncStep == 0 && _syncFailed)
-                Container(
-                  margin: EdgeInsets.only(top: 12, bottom: 8),
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Color(0x33FF3B30),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.warning_amber_rounded,
-                          color: Color(0xFFFF3B30), size: 18),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Người dùng chưa đăng ký hệ thống lương',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
               if (_syncStepsCompleted.every((step) => step == true))
-                Column(
-                  children: [
-                    Container(
-                      margin: EdgeInsets.only(top: 16, bottom: 8),
-                      width: double.infinity,
-                      height: 36,
-                      child: CupertinoButton(
-                        padding: EdgeInsets.zero,
-                        color: Color(0xFF34C759),
-                        borderRadius: BorderRadius.circular(18),
-                        onPressed: () {
-                          // Navigate to PayDashboard when ready
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Đồng bộ hoàn thành! Role: $_userPayRole'),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                        },
-                        child: Text(
-                          'Tiếp tục',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
+                Container(
+                  margin: EdgeInsets.only(top: 16, bottom: 8),
+                  width: double.infinity,
+                  height: 36,
+                  child: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    color: Color(0xFF34C759),
+                    borderRadius: BorderRadius.circular(18),
+                    onPressed: () {
+                      setState(() {
+                        _showDashboard = true;
+                      });
+                    },
+                    child: Text(
+                      'Tiếp tục',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
                       ),
                     ),
-                    Container(
-                      margin: EdgeInsets.only(top: 8, bottom: 8),
-                      width: double.infinity,
-                      height: 36,
-                      child: CupertinoButton(
-                        padding: EdgeInsets.zero,
-                        color: Color(0xFF007AFF),
-                        borderRadius: BorderRadius.circular(18),
-                        onPressed: _startSyncProcess,
-                        child: Text(
-                          'Đồng bộ lại',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 )
               else if (_syncFailed && !_isSyncing)
                 Container(
@@ -643,7 +905,6 @@ class _PayPageState extends State<PayPage> {
     } catch (e) {
       print("Error disposing video controller: $e");
     }
-    _database?.close();
     super.dispose();
   }
 
@@ -686,26 +947,9 @@ class _PayPageState extends State<PayPage> {
         children: [
           _buildBackgroundMedia(),
 
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Align(
-                alignment: Alignment.topLeft,
-                child: IconButton(
-                  icon: Icon(
-                    Icons.arrow_back,
-                    color: Colors.white,
-                    size: 28,
-                  ),
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-                ),
-              ),
-            ),
-          ),
-
-          if (!_isSyncing && !_syncFailed)
+          if (_showDashboard)
+            _buildDashboard()
+          else if (!_isSyncing && !_syncFailed)
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -732,8 +976,28 @@ class _PayPageState extends State<PayPage> {
               ],
             ),
 
-          if (_isSyncing || _syncFailed || _syncStepsCompleted.every((step) => step == true))
+          if (_isSyncing || _syncFailed || (_syncStepsCompleted.every((step) => step == true) && !_showDashboard))
             _buildSyncOverlay(),
+
+          if (!_showDashboard)
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: IconButton(
+                    icon: Icon(
+                      Icons.arrow_back,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
