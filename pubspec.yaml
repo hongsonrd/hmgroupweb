@@ -1,7 +1,7 @@
 name: hmgroupweb
 description: "Ứng dụng công nghệ chuyển đổi số Hoàn Mỹ Group."
 publish_to: 'none'
-version: 1.2.4
+version: 1.2.5
 
 environment:
   sdk: ">=3.2.0 <4.0.0"
@@ -130,3 +130,4 @@ flutter:
     - assets/logochecklistVNPT.png
     - assets/logochecklistVISAHO.png
     - assets/apphr.mp4
+    - assets/logochecklistUSEM.jpg

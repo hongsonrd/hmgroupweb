@@ -10,6 +10,11 @@ import 'pay_account2.dart';
 import 'pay_hour.dart';
 import 'pay_location.dart';
 import 'pay_standard.dart';
+import 'chamcongthanghr.dart';
+import 'chamcongthang.dart';
+import 'pay_policy.dart';
+import 'pay_history.dart';
+
 class PayPage extends StatefulWidget {
   const PayPage({Key? key}) : super(key: key);
 
@@ -263,20 +268,66 @@ case 'XemCongChuan':
   );
   return;
       case 'SuaCheDo':
-        pageData = {'data': _luongCheDoData, 'userRole': _userPayRole};
-        break;
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => PayPolicyScreen(
+        username: _username,
+        userRole: _userPayRole,
+        policyData: _luongCheDoData,
+      ),
+    ),
+  );
+  return;
       case 'LichSuLuongHR':
-      case 'LichSuLuongKT':
-        pageData = {'data': _luongLichSuData, 'userRole': _userPayRole};
-        break;
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => PayHistoryScreen(
+        username: _username,
+        userRole: _userPayRole,
+        historyData: _luongLichSuData,
+      ),
+    ),
+  );
+  return;
+case 'LichSuLuongKT':
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => PayHistoryScreen(
+        username: _username,
+        userRole: _userPayRole,
+        historyData: _luongLichSuData,
+      ),
+    ),
+  );
+  return;
       case 'LichSuChamCongHR':
+      Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => ChamCongThangHRScreen(
+        username: _username,
+        userRole: _userPayRole,
+        approverUsername: 'hm.tason',
+        standardData: _congChuanData,
+      ),
+    ),
+  );
+  return;
       case 'LichSuChamCong':
-        pageData = {
-          'gioLamData': _gioLamData,
-          'congLamData': _congLamData,
-          'userRole': _userPayRole
-        };
-        break;
+      Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => ChamCongThangScreen(
+        username: _username,
+        userRole: _userPayRole,
+        approverUsername: 'hm.tason',
+      ),
+    ),
+  );
+  return;
     }
     
     ScaffoldMessenger.of(context).showSnackBar(

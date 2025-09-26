@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'dart:ui' as ui;
 import 'package:barcode/barcode.dart';
+import 'package:excel/excel.dart' hide Border;
 import 'checklist_models.dart';
 import 'checklist_preview_screen.dart';
 import 'db_helper.dart';
@@ -129,6 +130,46 @@ class ChecklistPreviewService {
     }
   }
 
+  static Future<void> generateAndShareExcel({
+    required ChecklistListModel checklist,
+    required List<ChecklistItemModel> items,
+    required List<ChecklistReportModel> reports,
+    required String username,
+    DateTime? selectedStartDate,
+    DateTime? selectedEndDate,
+    bool useBlankDate = false,
+    required BuildContext context,
+  }) async {
+    try {
+      final excel = await _createExcel(
+        checklist: checklist,
+        items: items,
+        reports: reports,
+        username: username,
+        selectedStartDate: selectedStartDate,
+        selectedEndDate: selectedEndDate,
+        useBlankDate: useBlankDate,
+      );
+
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/checklist_${checklist.checklistId}.xlsx');
+      final bytes = excel.encode();
+      if (bytes != null) {
+        await file.writeAsBytes(bytes);
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          text: 'Checklist Excel: ${checklist.checklistTitle}',
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể tạo Excel: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   static Future<void> shareChecklistQr({
     required String checklistId,
     required BuildContext context,
@@ -171,43 +212,56 @@ class ChecklistPreviewService {
   }
 
   static void showChecklistPreview({
-    required BuildContext context,
-    required ChecklistListModel checklist,
-    required List<ChecklistItemModel> items,
-    required List<ChecklistReportModel> reports,
-    DateTime? selectedStartDate,
-    DateTime? selectedEndDate,
-    bool useBlankDate = false,
-    required String username,
-  }) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog.fullscreen(
-        child: ChecklistPreviewScreen(
-          checklist: checklist,
-          items: items,
-          reports: reports,
-          selectedStartDate: selectedStartDate,
-          selectedEndDate: selectedEndDate,
-          useBlankDate: useBlankDate,
-          iconMap: _iconMap,
-          onGeneratePDF: () {
-            Navigator.pop(context);
-            generateAndSharePDF(
-              checklist: checklist,
-              items: items,
-              reports: reports,
-              username: username,
-              selectedStartDate: selectedStartDate,
-              selectedEndDate: selectedEndDate,
-              useBlankDate: useBlankDate,
-              context: context,
-            );
-          },
-        ),
+  required BuildContext context,
+  required ChecklistListModel checklist,
+  required List<ChecklistItemModel> items,
+  required List<ChecklistReportModel> reports,
+  DateTime? selectedStartDate,
+  DateTime? selectedEndDate,
+  bool useBlankDate = false,
+  required String username,
+}) {
+  showDialog(
+    context: context,
+    builder: (context) => Dialog.fullscreen(
+      child: ChecklistPreviewScreen(
+        checklist: checklist,
+        items: items,
+        reports: reports,
+        selectedStartDate: selectedStartDate,
+        selectedEndDate: selectedEndDate,
+        useBlankDate: useBlankDate,
+        iconMap: _iconMap,
+        onGeneratePDF: () {
+          Navigator.pop(context);
+          generateAndSharePDF(
+            checklist: checklist,
+            items: items,
+            reports: reports,
+            username: username,
+            selectedStartDate: selectedStartDate,
+            selectedEndDate: selectedEndDate,
+            useBlankDate: useBlankDate,
+            context: context,
+          );
+        },
+        onGenerateExcel: () {
+          Navigator.pop(context);
+          generateAndShareExcel(
+            checklist: checklist,
+            items: items,
+            reports: reports,
+            username: username,
+            selectedStartDate: selectedStartDate,
+            selectedEndDate: selectedEndDate,
+            useBlankDate: useBlankDate,
+            context: context,
+          );
+        },
       ),
-    );
-  }
+    ),
+  );
+}
 
   static void _showQrSharingOptions(BuildContext context, File qrFile, String id) {
     showDialog(
@@ -350,6 +404,306 @@ class ChecklistPreviewService {
     }
   }
 
+  static Future<Excel> _createExcel({
+    required ChecklistListModel checklist,
+    required List<ChecklistItemModel> items,
+    required List<ChecklistReportModel> reports,
+    required String username,
+    DateTime? selectedStartDate,
+    DateTime? selectedEndDate,
+    bool useBlankDate = false,
+  }) async {
+    final staffNameMap = await _getStaffNameMap();
+    final excel = Excel.createExcel();
+    final sheet = excel['Checklist'];
+    
+    List<DateTime> dateRange = [];
+    if (checklist.checklistDateType == 'Multi') {
+      if (useBlankDate) {
+        dateRange = [];
+      } else if (selectedStartDate != null && selectedEndDate != null) {
+        for (DateTime d = selectedStartDate!; d.isBefore(selectedEndDate!.add(const Duration(days: 1))); d = d.add(const Duration(days: 1))) {
+          dateRange.add(d);
+        }
+      } else if (selectedStartDate != null) {
+        dateRange = [selectedStartDate!];
+      }
+    } else {
+      dateRange = selectedStartDate != null ? [selectedStartDate!] : [DateTime.now()];
+    }
+
+    List<String> timeColumns = [];
+    if (checklist.checklistTimeType == 'PeriodicOut' && checklist.checklistPeriodicStart != null && checklist.checklistPeriodicEnd != null && checklist.checklistPeriodInterval != null) {
+      timeColumns = _generatePeriodicTimeColumns(checklist.checklistPeriodicStart!, checklist.checklistPeriodicEnd!, checklist.checklistPeriodInterval!);
+    }
+
+    int row = 0;
+    sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row)).value = checklist.checklistTitle ?? '';
+    sheet.merge(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row), CellIndex.indexByColumnRow(columnIndex: 10, rowIndex: row));
+    row++;
+    
+    sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row)).value = 'Dự án: ${checklist.projectName ?? ''}';
+    sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: row)).value = 'Khu vực: ${checklist.areaName ?? ''}';
+    sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: row)).value = 'Tầng: ${checklist.floorName ?? ''}';
+    row += 2;
+
+    List<String> headers = [];
+    if (checklist.checklistDateType == 'Multi' && dateRange.isNotEmpty) {
+      headers.add('Ngày');
+    }
+    if (checklist.checklistTimeType == 'InOut') {
+      headers.addAll(['Giờ vào', 'Giờ ra']);
+    } else if (checklist.checklistTimeType == 'PeriodicOut') {
+      headers.addAll(timeColumns);
+    } else {
+      headers.add('Giờ');
+    }
+    for (final it in items) {
+      headers.add(it.itemName ?? it.itemId);
+    }
+    headers.addAll(['Nhân viên', 'Giám sát']);
+
+    for (int i = 0; i < headers.length; i++) {
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: row)).value = headers[i];
+    }
+    row++;
+
+    final relevant = reports.where((r) => r.reportType == 'staff' || r.reportType == 'sup').toList();
+    
+    if (dateRange.isEmpty || useBlankDate) {
+      for (int i = 0; i < 15; i++) {
+        List<String> rowData = [];
+        if (checklist.checklistDateType == 'Multi' && !useBlankDate) {
+          rowData.add('');
+        }
+        if (checklist.checklistTimeType == 'InOut') {
+          rowData.addAll(['', '']);
+        } else if (checklist.checklistTimeType == 'PeriodicOut') {
+          rowData.addAll(List.filled(timeColumns.length, ''));
+        } else {
+          rowData.add('');
+        }
+        for (final _ in items) {
+          rowData.add('');
+        }
+        rowData.addAll(['', '']);
+        
+        for (int j = 0; j < rowData.length; j++) {
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: j, rowIndex: row)).value = rowData[j];
+        }
+        row++;
+      }
+    } else {
+      for (final date in dateRange) {
+        final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+        final dayReports = relevant.where((r) {
+          try {
+            String d;
+            if (r.reportDate.contains('T')) {
+              d = r.reportDate.split('T')[0];
+            } else if (r.reportDate.contains(' ')) {
+              d = r.reportDate.split(' ')[0];
+            } else {
+              d = r.reportDate;
+            }
+            return d == dateStr;
+          } catch (_) {
+            return false;
+          }
+        }).toList();
+
+        if (checklist.checklistTimeType == 'InOut') {
+          final Map<String, Map<String, ChecklistReportModel>> byTime = {};
+          for (final r in dayReports) {
+            final k = r.reportTime;
+            byTime.putIfAbsent(k, () => {});
+            if (r.reportInOut != null) {
+              byTime[k]![r.reportInOut!] = r;
+            }
+          }
+          
+          final times = byTime.keys.toList();
+          if (times.isEmpty) {
+            times.add('');
+          } else {
+            times.sort((a, b) {
+              if (a.isEmpty) return 1;
+              if (b.isEmpty) return -1;
+              try {
+                final timeA = TimeOfDay(hour: int.parse(a.split(':')[0]), minute: int.parse(a.split(':')[1]));
+                final timeB = TimeOfDay(hour: int.parse(b.split(':')[0]), minute: int.parse(b.split(':')[1]));
+                final minutesA = timeA.hour * 60 + timeA.minute;
+                final minutesB = timeB.hour * 60 + timeB.minute;
+                return minutesA.compareTo(minutesB);
+              } catch (_) {
+                return a.compareTo(b);
+              }
+            });
+          }
+          
+          for (final t in times) {
+            final inR = byTime[t]?['In'];
+            final outR = byTime[t]?['Out'];
+            List<String> rowData = [];
+            if (checklist.checklistDateType == 'Multi') {
+              rowData.add('${date.day}/${date.month}');
+            }
+            rowData.add(inR?.reportTime ?? '');
+            rowData.add(outR?.reportTime ?? '');
+            
+            for (final it in items) {
+              String v = '';
+              if (checklist.checklistCompletionType == 'State') {
+                ChecklistReportModel? sp;
+                ChecklistReportModel? s;
+                for (final r in [inR, outR]) {
+                  if (r?.reportType == 'sup' && (r?.reportTaskList?.contains(it.itemId) ?? false) && sp == null) {
+                    sp = r;
+                  }
+                  if (r?.reportType == 'staff' && (r?.reportTaskList?.contains(it.itemId) ?? false) && s == null) {
+                    s = r;
+                  }
+                }
+                
+                if (sp != null) {
+                  v = 'O';
+                } else if (s != null) {
+                  v = s.reportNote ?? '';
+                }
+              } else {
+                bool supHas = false;
+                bool staffHas = false;
+                for (final r in [inR, outR]) {
+                  if (r?.reportType == 'sup' && (r?.reportTaskList?.contains(it.itemId) ?? false)) {
+                    supHas = true;
+                  }
+                  if (r?.reportType == 'staff' && (r?.reportTaskList?.contains(it.itemId) ?? false)) {
+                    staffHas = true;
+                  }
+                }
+                
+                if (supHas) {
+                  v = 'O';
+                } else if (staffHas) {
+                  v = 'X';
+                }
+              }
+              rowData.add(v);
+            }
+            
+            ChecklistReportModel? s;
+            ChecklistReportModel? sp;
+            for (final r in [inR, outR]) {
+              if (r?.reportType == 'staff' && s == null) s = r;
+              if (r?.reportType == 'sup' && sp == null) sp = r;
+            }
+            
+            final staffName = s?.userId != null ? (staffNameMap[s!.userId!.toUpperCase()] ?? s.userId!) : '';
+            final supName = sp?.userId != null ? (staffNameMap[sp!.userId!.toUpperCase()] ?? sp.userId!) : '';
+            
+            rowData.add(staffName);
+            rowData.add(supName);
+            
+            for (int j = 0; j < rowData.length; j++) {
+              sheet.cell(CellIndex.indexByColumnRow(columnIndex: j, rowIndex: row)).value = rowData[j];
+            }
+            row++;
+          }
+        } else {
+          final times = dayReports.map((r) => r.reportTime).toSet().toList();
+          if (times.isEmpty) {
+            times.add('');
+          } else {
+            times.sort((a, b) {
+              if (a.isEmpty) return 1;
+              if (b.isEmpty) return -1;
+              try {
+                final timeA = TimeOfDay(hour: int.parse(a.split(':')[0]), minute: int.parse(a.split(':')[1]));
+                final timeB = TimeOfDay(hour: int.parse(b.split(':')[0]), minute: int.parse(b.split(':')[1]));
+                final minutesA = timeA.hour * 60 + timeA.minute;
+                final minutesB = timeB.hour * 60 + timeB.minute;
+                return minutesA.compareTo(minutesB);
+              } catch (_) {
+                return a.compareTo(b);
+              }
+            });
+          }
+          
+          for (final t in times) {
+            final timeReports = dayReports.where((r) => r.reportTime == t).toList();
+            List<String> rowData = [];
+            
+            if (checklist.checklistDateType == 'Multi') {
+              rowData.add('${date.day}/${date.month}');
+            }
+            
+            if (checklist.checklistTimeType == 'PeriodicOut') {
+              for (final per in timeColumns) {
+                final supHas = timeReports.any((r) => r.reportTime == per && r.reportType == 'sup');
+                final staffHas = timeReports.any((r) => r.reportTime == per && r.reportType == 'staff');
+                
+                if (supHas) {
+                  rowData.add('O');
+                } else if (staffHas) {
+                  rowData.add('X');
+                } else {
+                  rowData.add('');
+                }
+              }
+            } else {
+              rowData.add(t);
+            }
+            
+            for (final it in items) {
+              String v = '';
+              if (checklist.checklistCompletionType == 'State') {
+                final sp = timeReports.where((r) => r.reportType == 'sup' && (r.reportTaskList?.contains(it.itemId) ?? false)).firstOrNull;
+                final s = timeReports.where((r) => r.reportType == 'staff' && (r.reportTaskList?.contains(it.itemId) ?? false)).firstOrNull;
+                
+                if (sp != null) {
+                  v = 'O';
+                } else if (s != null) {
+                  v = s.reportNote ?? '';
+                }
+              } else {
+                final supHas = timeReports.any((r) => r.reportType == 'sup' && (r.reportTaskList?.contains(it.itemId) ?? false));
+                final staffHas = timeReports.any((r) => r.reportType == 'staff' && (r.reportTaskList?.contains(it.itemId) ?? false));
+                
+                if (supHas) {
+                  v = 'O';
+                } else if (staffHas) {
+                  v = 'X';
+                }
+              }
+              rowData.add(v);
+            }
+            
+            final s = timeReports.where((r) => r.reportType == 'staff').firstOrNull;
+            final sp = timeReports.where((r) => r.reportType == 'sup').firstOrNull;
+            
+            final staffName = s?.userId != null ? (staffNameMap[s!.userId!.toUpperCase()] ?? s.userId!) : '';
+            final supName = sp?.userId != null ? (staffNameMap[sp!.userId!.toUpperCase()] ?? sp.userId!) : '';
+            
+            rowData.add(staffName);
+            rowData.add(supName);
+            
+            for (int j = 0; j < rowData.length; j++) {
+              sheet.cell(CellIndex.indexByColumnRow(columnIndex: j, rowIndex: row)).value = rowData[j];
+            }
+            row++;
+          }
+        }
+      }
+    }
+
+    row += 2;
+    sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row)).value = 'Tạo bởi: $username - ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}';
+    row++;
+    sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row)).value = 'ID: ${checklist.checklistId}';
+
+    return excel;
+  }
+
   static Future<pw.Document> _createPDF({
   required ChecklistListModel checklist,
   required List<ChecklistItemModel> items,
@@ -387,7 +741,7 @@ class ChecklistPreviewService {
 
   final Map<String, pw.MemoryImage> cache = {};
   Future<pw.MemoryImage?> loadItemImg(String? f) async {
-    if (f == null || f.isEmpty) return null;
+    if (f== null || f.isEmpty) return null;
     final path = 'assets/checklist/$f';
     if (cache.containsKey(path)) return cache[path];
     try {
@@ -525,23 +879,39 @@ class ChecklistPreviewService {
           for (final it in items) {
             String v = '';
             if (checklist.checklistCompletionType == 'State') {
+              ChecklistReportModel? sp;
               ChecklistReportModel? s;
               for (final r in [inR, outR]) {
-                if (r?.reportType == 'staff' && (r?.reportTaskList?.contains(it.itemId) ?? false)) {
+                if (r?.reportType == 'sup' && (r?.reportTaskList?.contains(it.itemId) ?? false) && sp == null) {
+                  sp = r;
+                }
+                if (r?.reportType == 'staff' && (r?.reportTaskList?.contains(it.itemId) ?? false) && s == null) {
                   s = r;
-                  break;
                 }
               }
-              v = s?.reportNote ?? '';
+              
+              if (sp != null) {
+                v = 'O';
+              } else if (s != null) {
+                v = s.reportNote ?? '';
+              }
             } else {
-              bool has = false;
+              bool supHas = false;
+              bool staffHas = false;
               for (final r in [inR, outR]) {
+                if (r?.reportType == 'sup' && (r?.reportTaskList?.contains(it.itemId) ?? false)) {
+                  supHas = true;
+                }
                 if (r?.reportType == 'staff' && (r?.reportTaskList?.contains(it.itemId) ?? false)) {
-                  has = true;
-                  break;
+                  staffHas = true;
                 }
               }
-              v = has ? 'X' : '';
+              
+              if (supHas) {
+                v = 'O';
+              } else if (staffHas) {
+                v = 'X';
+              }
             }
             row.add(v);
           }
@@ -596,8 +966,16 @@ class ChecklistPreviewService {
           
           if (checklist.checklistTimeType == 'PeriodicOut') {
             for (final per in timeColumns) {
-              final has = timeReports.any((r) => r.reportTime == per && r.reportType == 'staff');
-              row.add(has ? 'X' : '');
+              final supHas = timeReports.any((r) => r.reportTime == per && r.reportType == 'sup');
+              final staffHas = timeReports.any((r) => r.reportTime == per && r.reportType == 'staff');
+              
+              if (supHas) {
+                row.add('O');
+              } else if (staffHas) {
+                row.add('X');
+              } else {
+                row.add('');
+              }
             }
           } else {
             row.add(t);
@@ -606,11 +984,23 @@ class ChecklistPreviewService {
           for (final it in items) {
             String v = '';
             if (checklist.checklistCompletionType == 'State') {
+              final sp = timeReports.where((r) => r.reportType == 'sup' && (r.reportTaskList?.contains(it.itemId) ?? false)).firstOrNull;
               final s = timeReports.where((r) => r.reportType == 'staff' && (r.reportTaskList?.contains(it.itemId) ?? false)).firstOrNull;
-              v = s?.reportNote ?? '';
+              
+              if (sp != null) {
+                v = 'O';
+              } else if (s != null) {
+                v = s.reportNote ?? '';
+              }
             } else {
-              final has = timeReports.any((r) => r.reportType == 'staff' && (r.reportTaskList?.contains(it.itemId) ?? false));
-              v = has ? 'X' : '';
+              final supHas = timeReports.any((r) => r.reportType == 'sup' && (r.reportTaskList?.contains(it.itemId) ?? false));
+              final staffHas = timeReports.any((r) => r.reportType == 'staff' && (r.reportTaskList?.contains(it.itemId) ?? false));
+              
+              if (supHas) {
+                v = 'O';
+              } else if (staffHas) {
+                v = 'X';
+              }
             }
             row.add(v);
           }
@@ -723,7 +1113,19 @@ class ChecklistPreviewService {
     columnWidths: columnWidths,
     children: [
       pw.TableRow(children: headerCells.map((w) => pw.Padding(padding: const pw.EdgeInsets.all(3), child: w)).toList()),
-      ...tableData.skip(1).map((row) => pw.TableRow(children: row.map((cell) => pw.Padding(padding: const pw.EdgeInsets.all(3), child: pw.Text(cell, style: pw.TextStyle(font: font, fontSize: cellFontSize, fontWeight: cell == 'X' ? pw.FontWeight.bold : pw.FontWeight.normal), textAlign: pw.TextAlign.center))).toList())),
+      ...tableData.skip(1).map((row) => pw.TableRow(children: row.map((cell) => pw.Padding(
+        padding: const pw.EdgeInsets.all(3), 
+        child: pw.Text(
+          cell, 
+          style: pw.TextStyle(
+            font: font, 
+            fontSize: cellFontSize, 
+            fontWeight: (cell == 'X' || cell == 'O') ? pw.FontWeight.bold : pw.FontWeight.normal,
+            color: cell == 'O' ? PdfColors.red700 : (cell == 'X' ? PdfColors.green700 : PdfColors.black)
+          ), 
+          textAlign: pw.TextAlign.center
+        )
+      )).toList())),
     ]
   );
 
@@ -734,6 +1136,8 @@ class ChecklistPreviewService {
     pw.Text('Tạo bởi: $username - ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}', style: pw.TextStyle(font: font, fontSize: 3), textAlign: pw.TextAlign.center),
     pw.SizedBox(height: 12),
     pw.Center(child: pw.BarcodeWidget(barcode: Barcode.qrCode(), data: checklist.checklistId, width: 35, height: 35, drawText: false)),
+    pw.SizedBox(height: 4),
+    pw.Text('ID: ${checklist.checklistId}', style: pw.TextStyle(font: font, fontSize: 6), textAlign: pw.TextAlign.center),
   ]);
 
   pdf.addPage(pw.MultiPage(pageFormat: pageFormat, build: (_) => [header, pw.SizedBox(height: 20), table, pw.SizedBox(height: 20), footer]));

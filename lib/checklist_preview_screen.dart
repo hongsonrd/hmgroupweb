@@ -12,6 +12,7 @@ class ChecklistPreviewScreen extends StatelessWidget {
   final bool useBlankDate;
   final Map<String, IconData> iconMap;
   final VoidCallback onGeneratePDF;
+  final VoidCallback onGenerateExcel;
 
   const ChecklistPreviewScreen({
     Key? key,
@@ -23,6 +24,7 @@ class ChecklistPreviewScreen extends StatelessWidget {
     required this.useBlankDate,
     required this.iconMap,
     required this.onGeneratePDF,
+    required this.onGenerateExcel,
   }) : super(key: key);
 
   Future<Map<String, String>> _getStaffNameMap() async {
@@ -116,6 +118,11 @@ class ChecklistPreviewScreen extends StatelessWidget {
             foregroundColor: Colors.white,
             actions: [
               IconButton(
+                icon: const Icon(Icons.table_view),
+                onPressed: onGenerateExcel,
+                tooltip: 'Tạo Excel',
+              ),
+              IconButton(
                 icon: const Icon(Icons.picture_as_pdf),
                 onPressed: onGeneratePDF,
                 tooltip: 'Tạo PDF',
@@ -151,76 +158,75 @@ class ChecklistPreviewScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-Text('Số báo cáo: ${reports.length}',style: TextStyle(fontSize: 5),),
-Text('Ngày bắt đầu: ${selectedStartDate?.toString() ?? 'Không có'}',style: TextStyle(fontSize: 5),),
-Text('Ngày kết thúc: ${selectedEndDate?.toString() ?? 'Không có'}',style: TextStyle(fontSize: 5),),
-Text('Dùng ngày trống: $useBlankDate',style: TextStyle(fontSize: 5),),
-Text('Checklist ID: ${checklist.checklistId}',style: TextStyle(fontSize: 5),),
-Text('Loại thời gian: ${checklist.checklistTimeType}',style: TextStyle(fontSize: 5),),
-Text('Loại hoàn thành: ${checklist.checklistCompletionType}',style: TextStyle(fontSize: 5),),
+          Text('Số báo cáo: ${reports.length}',style: TextStyle(fontSize: 5),),
+          Text('Ngày bắt đầu: ${selectedStartDate?.toString() ?? 'Không có'}',style: TextStyle(fontSize: 5),),
+          Text('Ngày kết thúc: ${selectedEndDate?.toString() ?? 'Không có'}',style: TextStyle(fontSize: 5),),
+          Text('Dùng ngày trống: $useBlankDate',style: TextStyle(fontSize: 5),),
+          Text('Checklist ID: ${checklist.checklistId}',style: TextStyle(fontSize: 5),),
+          Text('Loại thời gian: ${checklist.checklistTimeType}',style: TextStyle(fontSize: 5),),
+          Text('Loại hoàn thành: ${checklist.checklistCompletionType}',style: TextStyle(fontSize: 5),),
         ],
       ),
     );
   }
 
   Widget _buildPreviewHeader(bool isMobile) {
-  return Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      border: Border.all(color: Colors.grey[300]!),
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Container(
-              width: 80,
-              height: 60,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey[300]!),
-                borderRadius: BorderRadius.circular(4),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey[300]!),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                width: 80,
+                height: 60,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[300]!),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: checklist.logoMain != null && checklist.logoMain!.isNotEmpty
+                    ? Image.asset(checklist.logoMain!, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Center(child: Text('LOGO', style: TextStyle(fontSize: 10))))
+                    : const Center(child: Text('LOGO', style: TextStyle(fontSize: 10))),
               ),
-              child: checklist.logoMain != null && checklist.logoMain!.isNotEmpty
-                  ? Image.asset(checklist.logoMain!, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Center(child: Text('LOGO', style: TextStyle(fontSize: 10))))
-                  : const Center(child: Text('LOGO', style: TextStyle(fontSize: 10))),
-            ),
-            Expanded(
-              child: Column(
-                children: [
-                  Text(checklist.checklistTitle ?? '', style: TextStyle(fontSize: isMobile ? 16 : 18, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                  if (checklist.checklistPretext != null && checklist.checklistPretext!.isNotEmpty)
-                    Text(checklist.checklistPretext!, style: const TextStyle(fontSize: 10), textAlign: TextAlign.center)
-                ],
+              Expanded(
+                child: Column(
+                  children: [
+                    Text(checklist.checklistTitle ?? '', style: TextStyle(fontSize: isMobile ? 16 : 18, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                    if (checklist.checklistPretext != null && checklist.checklistPretext!.isNotEmpty)
+                      Text(checklist.checklistPretext!, style: const TextStyle(fontSize: 10), textAlign: TextAlign.center)
+                  ],
+                ),
               ),
-            ),
-            Container(
-              width: 80,
-              height: 60,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey[300]!),
-                borderRadius: BorderRadius.circular(4),
+              Container(
+                width: 80,
+                height: 60,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[300]!),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: checklist.logoSecondary != null && checklist.logoSecondary!.isNotEmpty
+                    ? Image.asset(checklist.logoSecondary!, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Center(child: Text('LOGO2', style: TextStyle(fontSize: 10))))
+                    : const Center(child: Text('LOGO2', style: TextStyle(fontSize: 10))),
               ),
-              child: checklist.logoSecondary != null && checklist.logoSecondary!.isNotEmpty
-                  ? Image.asset(checklist.logoSecondary!, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Center(child: Text('LOGO2', style: TextStyle(fontSize: 10))))
-                  : const Center(child: Text('LOGO2', style: TextStyle(fontSize: 10))),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Dự án: ${checklist.projectName ?? ''}', style: const TextStyle(fontSize: 12)),
-            Text('Khu vực: ${checklist.areaName ?? ''}', style: const TextStyle(fontSize: 12)),
-            Text('Tầng: ${checklist.floorName ?? ''}', style: const TextStyle(fontSize: 12)),
-          ],
-        ),
-      ],
-    ),
-  );
-}
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [Text('Dự án: ${checklist.projectName ?? ''}', style: const TextStyle(fontSize: 12)),
+              Text('Khu vực: ${checklist.areaName ?? ''}', style: const TextStyle(fontSize: 12)),
+              Text('Tầng: ${checklist.floorName ?? ''}', style: const TextStyle(fontSize: 12)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildPreviewTable(BuildContext context, bool isMobile, Map<String, String> staffNameMap) {
     List<DateTime> dateRange = [];
@@ -327,12 +333,24 @@ Text('Loại hoàn thành: ${checklist.checklistCompletionType}',style: TextStyl
               String v = '';
               if (checklist.checklistCompletionType == 'State') {
                 final timeReports = dayReports.where((r) => r.reportTime == t).toList();
+                final sp = timeReports.where((r) => r.reportType == 'sup' && (r.reportTaskList?.contains(it.itemId) ?? false)).firstOrNull;
                 final s = timeReports.where((r) => r.reportType == 'staff' && (r.reportTaskList?.contains(it.itemId) ?? false)).firstOrNull;
-                v = s?.reportNote ?? '';
+                
+                if (sp != null) {
+                  v = 'O';
+                } else if (s != null) {
+                  v = s.reportNote ?? '';
+                }
               } else {
                 final timeReports = dayReports.where((r) => r.reportTime == t).toList();
-                final has = timeReports.any((r) => r.reportType == 'staff' && (r.reportTaskList?.contains(it.itemId) ?? false));
-                v = has ? 'X' : '';
+                final supHas = timeReports.any((r) => r.reportType == 'sup' && (r.reportTaskList?.contains(it.itemId) ?? false));
+                final staffHas = timeReports.any((r) => r.reportType == 'staff' && (r.reportTaskList?.contains(it.itemId) ?? false));
+                
+                if (supHas) {
+                  v = 'O';
+                } else if (staffHas) {
+                  v = 'X';
+                }
               }
               row.add(v);
             }
@@ -361,8 +379,16 @@ Text('Loại hoàn thành: ${checklist.checklistCompletionType}',style: TextStyl
             
             if (checklist.checklistTimeType == 'PeriodicOut') {
               for (final per in timeColumns) {
-                final has = timeReports.any((r) => r.reportTime == per && r.reportType == 'staff');
-                row.add(has ? 'X' : '');
+                final supHas = timeReports.any((r) => r.reportTime == per && r.reportType == 'sup');
+                final staffHas = timeReports.any((r) => r.reportTime == per && r.reportType == 'staff');
+                
+                if (supHas) {
+                  row.add('O');
+                } else if (staffHas) {
+                  row.add('X');
+                } else {
+                  row.add('');
+                }
               }
             } else {
               row.add(t);
@@ -371,11 +397,23 @@ Text('Loại hoàn thành: ${checklist.checklistCompletionType}',style: TextStyl
             for (final it in items) {
               String v = '';
               if (checklist.checklistCompletionType == 'State') {
+                final sp = timeReports.where((r) => r.reportType == 'sup' && (r.reportTaskList?.contains(it.itemId) ?? false)).firstOrNull;
                 final s = timeReports.where((r) => r.reportType == 'staff' && (r.reportTaskList?.contains(it.itemId) ?? false)).firstOrNull;
-                v = s?.reportNote ?? '';
+                
+                if (sp != null) {
+                  v = 'O';
+                } else if (s != null) {
+                  v = s.reportNote ?? '';
+                }
               } else {
-                final has = timeReports.any((r) => r.reportType == 'staff' && (r.reportTaskList?.contains(it.itemId) ?? false));
-                v = has ? 'X' : '';
+                final supHas = timeReports.any((r) => r.reportType == 'sup' && (r.reportTaskList?.contains(it.itemId) ?? false));
+                final staffHas = timeReports.any((r) => r.reportType == 'staff' && (r.reportTaskList?.contains(it.itemId) ?? false));
+                
+                if (supHas) {
+                  v = 'O';
+                } else if (staffHas) {
+                  v = 'X';
+                }
               }
               row.add(v);
             }
@@ -418,8 +456,9 @@ Text('Loại hoàn thành: ${checklist.checklistCompletionType}',style: TextStyl
               i < row.length ? row[i] : '',
               style: TextStyle(
                 fontSize: 11,
-                color: (i < row.length && row[i] == 'X') ? Colors.green[700] : Colors.black,
-                fontWeight: (i < row.length && row[i] == 'X') ? FontWeight.bold : FontWeight.normal,
+                color: (i < row.length && row[i] == 'O') ? Colors.red[700] :
+                       (i < row.length && row[i] == 'X') ? Colors.green[700] : Colors.black,
+                fontWeight: (i < row.length && (row[i] == 'X' || row[i] == 'O')) ? FontWeight.bold : FontWeight.normal,
               ),
               textAlign: TextAlign.center,
             ),

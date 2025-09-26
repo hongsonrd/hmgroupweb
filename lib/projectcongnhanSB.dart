@@ -1063,9 +1063,9 @@ void _updateChartData() {
       reportTypeData['Chất lượng khác']!.add(FlSpot(i.toDouble(), qualityCount));
     }
 
-    final maxY = reportTypeData.values
-        .expand((spots) => spots.map((spot) => spot.y))
-        .fold(0.0, (max, value) => value > max ? value : max) * 1.1;
+final maxY = reportTypeData.values
+    .expand((spots) => spots.map((spot) => spot.y))
+    .fold<double>(0.0, (max, value) => value > max ? value : max) * 1.1;
 
     return Container(
       margin: EdgeInsets.all(16),

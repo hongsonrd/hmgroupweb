@@ -1394,7 +1394,7 @@ bool showAirportButton = airportPermissions.isEmpty || airportPermissions.contai
   return Banner(
     message: 'HM GROUP',
     location: BannerLocation.topEnd,
-    color: const Color.fromARGB(255, 244, 54, 54),
+    color: const Color.fromARGB(255, 0, 71, 171),
     child: Scaffold(
       body: Row(
         children: [
@@ -1430,7 +1430,7 @@ bool showAirportButton = airportPermissions.isEmpty || airportPermissions.contai
                       Container(
                         margin: const EdgeInsets.only(bottom: 15),
                         child: const Text(
-                          '1.2.4',
+                          '1.2.5',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 18,

@@ -15,7 +15,7 @@ import 'user_state.dart';
 import 'checklist_preview_screen.dart';
 import 'checklist_network.dart';
 import 'coinstat.dart';
-import 'dart:io';
+
 class ChecklistSupervisorScreen extends StatefulWidget {
   const ChecklistSupervisorScreen({Key? key}) : super(key: key);
 
@@ -88,113 +88,34 @@ class _ChecklistSupervisorScreenState extends State<ChecklistSupervisorScreen> {
   }
 
   Future<void> _scanAndPrepare() async {
-  setState(() {
-    _loading = true;
-    _status = 'Đang chuẩn bị...';
-  });
-  
-  await Future.delayed(const Duration(milliseconds: 200));
-  
-  String? result;
-  
-  // Check if running on desktop (you might want to use a more sophisticated platform detection)
-  if (Theme.of(context).platform == TargetPlatform.windows ||
-      Theme.of(context).platform == TargetPlatform.macOS ||
-      Theme.of(context).platform == TargetPlatform.linux) {
-    
     setState(() {
-      _status = 'Nhập mã checklist...';
+      _loading = true;
+      _status = 'Khởi động camera...';
     });
     
-    result = await _showChecklistIdInputDialog();
-  } else {
+    await Future.delayed(const Duration(milliseconds: 200));
+    
     setState(() {
       _status = 'Đang mở camera...';
     });
     
-    result = await Navigator.of(context).push<String>(
+    final result = await Navigator.of(context).push<String>(
       MaterialPageRoute(
         builder: (_) => const QRScannerScreen(),
         fullscreenDialog: true,
       ),
     );
+    
+    setState(() {
+      _loading = false;
+      _status = '';
+    });
+    
+    if (result != null && result.isNotEmpty) {
+      await _handleQRScanned(result);
+    }
   }
-  
-  setState(() {
-    _loading = false;
-    _status = '';
-  });
-  
-  if (result != null && result.isNotEmpty) {
-    await _handleQRScanned(result);
-  }
-}
-Future<String?> _showChecklistIdInputDialog() async {
-  final TextEditingController controller = TextEditingController();
-  
-  return showDialog<String>(
-    context: context,
-    barrierDismissible: false,
-    builder: (BuildContext context) {
-      return AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.assignment, color: Colors.indigo[600]),
-            SizedBox(width: 8),
-            Text('Nhập mã Checklist'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Vui lòng nhập mã checklist để tiếp tục:',
-              style: TextStyle(fontSize: 14, color: Colors.grey[700]),
-            ),
-            SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: 'Mã Checklist',
-                hintText: 'Ví dụ: CL001, CL002...',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.qr_code),
-              ),
-              onSubmitted: (value) {
-                if (value.trim().isNotEmpty) {
-                  Navigator.of(context).pop(value.trim());
-                }
-              },
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              'Hủy',
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final value = controller.text.trim();
-              if (value.isNotEmpty) {
-                Navigator.of(context).pop(value);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.indigo[600],
-              foregroundColor: Colors.white,
-            ),
-            child: Text('Xác nhận'),
-          ),
-        ],
-      );
-    },
-  );
-}
+
   Future<void> _handleQRScanned(String checklistId) async {
     setState(() {
       _loading = true;
@@ -707,7 +628,18 @@ class _ChecklistPreviewScreenState extends State<_ChecklistPreviewScreen> {
       context: context,
     );
   }
-
+void _generateExcel() async {
+  await ChecklistPreviewService.generateAndShareExcel(
+    checklist: widget.checklist,
+    items: widget.items,
+    reports: widget.reports,
+    username: 'Current User', 
+    selectedStartDate: DateTime.now().subtract(Duration(days: 7)),
+    selectedEndDate: DateTime.now(),
+    useBlankDate: false,
+    context: context,
+  );
+}
   void _navigateToReportMode() async {
     try {
       final checklistConfig = {
@@ -899,6 +831,7 @@ class _ChecklistPreviewScreenState extends State<_ChecklistPreviewScreen> {
                   'Icons.engineering': Icons.engineering,
                 },
                 onGeneratePDF: _generatePDF,
+                onGenerateExcel: _generateExcel,
               ),
             )
           else

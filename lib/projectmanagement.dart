@@ -2961,7 +2961,7 @@ class _TopicReportDialogState extends State<TopicReportDialog> {
     {'name': 'Ý kiến khách hàng', 'id': 'YKienKH'},
     {'name': 'Phát sinh', 'id': 'PhatSinh'},
     {'name': 'Nhân sự', 'id': 'NhanSu'},
-  //  {'name': 'Chất lượng', 'id': 'ChatLuong'},
+    {'name': 'Thực hiện QR', 'id': 'ThucHienQR'},
     {'name': 'Khác', 'id': 'Khac'},
   ];
 
