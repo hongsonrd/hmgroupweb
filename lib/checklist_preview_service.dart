@@ -68,7 +68,191 @@ class ChecklistPreviewService {
     'Icons.construction': Icons.construction,
     'Icons.engineering': Icons.engineering,
   };
+static Future<String?> _showExportChoiceDialog(BuildContext context) async {
+  return showDialog<String>(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Text('Xuất file'),
+        content: Text('Bạn muốn chia sẻ file hay lưu vào thư mục ứng dụng?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop('share'),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.share, size: 16),
+                SizedBox(width: 4),
+                Text('Chia sẻ'),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop('save'),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.folder, size: 16),
+                SizedBox(width: 4),
+                Text('Lưu vào thư mục'),
+              ],
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
 
+static Future<void> _handleShareFile(File file, String fileName, String text, BuildContext context) async {
+  try {
+    await Share.shareXFiles(
+      [XFile(file.path)],
+      text: text,
+    );
+    
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đã chia sẻ file thành công: $fileName'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  } catch (e) {
+    print('Error sharing file: $e');
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi khi chia sẻ file: $e'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+}
+
+static Future<void> _handleSaveToAppFolder(File sourceFile, String fileName, BuildContext context) async {
+  try {
+    final directory = await getApplicationDocumentsDirectory();
+    final appFolder = Directory('${directory.path}/Checklist_Files');
+    
+    // Create folder if it doesn't exist
+    if (!await appFolder.exists()) {
+      await appFolder.create(recursive: true);
+    }
+    
+    final filePath = '${appFolder.path}/$fileName';
+    final file = await sourceFile.copy(filePath);
+    
+    // Show success dialog with option to open folder
+    if (context.mounted) {
+      await _showSaveSuccessDialog(context, appFolder.path, fileName);
+    }
+    
+  } catch (e) {
+    print('Error saving to app folder: $e');
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi khi lưu file: $e'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+}
+
+static Future<void> _showSaveSuccessDialog(BuildContext context, String folderPath, String fileName) async {
+  return showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green),
+            SizedBox(width: 8),
+            Text('Lưu thành công'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('File checklist đã được lưu:'),
+            SizedBox(height: 8),
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: SelectableText(
+                fileName,
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            SizedBox(height: 8),
+            Text('Ngày tạo: ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year} ${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}'),
+            SizedBox(height: 8),
+            Text('Đường dẫn thư mục:'),
+            SizedBox(height: 4),
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: SelectableText(
+                folderPath,
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Đóng'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              await _openFolder(folderPath);
+            },
+            icon: Icon(Icons.folder_open, size: 16),
+            label: Text('Mở thư mục'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+static Future<void> _openFolder(String folderPath) async {
+  try {
+    if (Platform.isWindows) {
+      await Process.run('explorer', [folderPath]);
+    } else if (Platform.isMacOS) {
+      await Process.run('open', [folderPath]);
+    } else if (Platform.isLinux) {
+      await Process.run('xdg-open', [folderPath]);
+    }
+  } catch (e) {
+    print('Error opening folder: $e');
+  }
+}
   static Future<Map<String, String>> _getStaffNameMap() async {
     try {
       final dbHelper = DBHelper();
@@ -91,85 +275,98 @@ class ChecklistPreviewService {
       return {};
     }
   }
+static Future<void> generateAndSharePDF({
+  required ChecklistListModel checklist,
+  required List<ChecklistItemModel> items,
+  required List<ChecklistReportModel> reports,
+  required String username,
+  DateTime? selectedStartDate,
+  DateTime? selectedEndDate,
+  bool useBlankDate = false,
+  required BuildContext context,
+}) async {
+  try {
+    // Show choice dialog first
+    final choice = await _showExportChoiceDialog(context);
+    if (choice == null) return; // User cancelled
 
-  static Future<void> generateAndSharePDF({
-    required ChecklistListModel checklist,
-    required List<ChecklistItemModel> items,
-    required List<ChecklistReportModel> reports,
-    required String username,
-    DateTime? selectedStartDate,
-    DateTime? selectedEndDate,
-    bool useBlankDate = false,
-    required BuildContext context,
-  }) async {
-    try {
-      final pdf = await _createPDF(
-        checklist: checklist,
-        items: items,
-        reports: reports,
-        username: username,
-        selectedStartDate: selectedStartDate,
-        selectedEndDate: selectedEndDate,
-        useBlankDate: useBlankDate,
+    final pdf = await _createPDF(
+      checklist: checklist,
+      items: items,
+      reports: reports,
+      username: username,
+      selectedStartDate: selectedStartDate,
+      selectedEndDate: selectedEndDate,
+      useBlankDate: useBlankDate,
+    );
+
+    final dir = await getTemporaryDirectory();
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final fileName = 'checklist_${checklist.checklistId}_$timestamp.pdf';
+    final file = File('${dir.path}/$fileName');
+    await file.writeAsBytes(await pdf.save());
+
+    if (choice == 'share') {
+      await _handleShareFile(file, fileName, 'Checklist: ${checklist.checklistTitle}', context);
+    } else {
+      await _handleSaveToAppFolder(file, fileName, context);
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Không thể tạo PDF: $e'), backgroundColor: Colors.red),
       );
-
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/checklist_${checklist.checklistId}.pdf');
-      await file.writeAsBytes(await pdf.save());
-
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text: 'Checklist: ${checklist.checklistTitle}',
-      );
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Không thể tạo PDF: $e'), backgroundColor: Colors.red),
-        );
-      }
     }
   }
+}
 
-  static Future<void> generateAndShareExcel({
-    required ChecklistListModel checklist,
-    required List<ChecklistItemModel> items,
-    required List<ChecklistReportModel> reports,
-    required String username,
-    DateTime? selectedStartDate,
-    DateTime? selectedEndDate,
-    bool useBlankDate = false,
-    required BuildContext context,
-  }) async {
-    try {
-      final excel = await _createExcel(
-        checklist: checklist,
-        items: items,
-        reports: reports,
-        username: username,
-        selectedStartDate: selectedStartDate,
-        selectedEndDate: selectedEndDate,
-        useBlankDate: useBlankDate,
-      );
+static Future<void> generateAndShareExcel({
+  required ChecklistListModel checklist,
+  required List<ChecklistItemModel> items,
+  required List<ChecklistReportModel> reports,
+  required String username,
+  DateTime? selectedStartDate,
+  DateTime? selectedEndDate,
+  bool useBlankDate = false,
+  required BuildContext context,
+}) async {
+  try {
+    // Show choice dialog first
+    final choice = await _showExportChoiceDialog(context);
+    if (choice == null) return; // User cancelled
 
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/checklist_${checklist.checklistId}.xlsx');
-      final bytes = excel.encode();
-      if (bytes != null) {
-        await file.writeAsBytes(bytes);
-        await Share.shareXFiles(
-          [XFile(file.path)],
-          text: 'Checklist Excel: ${checklist.checklistTitle}',
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Không thể tạo Excel: $e'), backgroundColor: Colors.red),
-        );
+    final excel = await _createExcel(
+      checklist: checklist,
+      items: items,
+      reports: reports,
+      username: username,
+      selectedStartDate: selectedStartDate,
+      selectedEndDate: selectedEndDate,
+      useBlankDate: useBlankDate,
+    );
+
+    final dir = await getTemporaryDirectory();
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final fileName = 'checklist_${checklist.checklistId}_$timestamp.xlsx';
+    final file = File('${dir.path}/$fileName');
+    final bytes = excel.encode();
+    if (bytes != null) {
+      await file.writeAsBytes(bytes);
+      
+      if (choice == 'share') {
+        await _handleShareFile(file, fileName, 'Checklist Excel: ${checklist.checklistTitle}', context);
+      } else {
+        await _handleSaveToAppFolder(file, fileName, context);
       }
     }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Không thể tạo Excel: $e'), backgroundColor: Colors.red),
+      );
+    }
   }
-
+}
   static Future<void> shareChecklistQr({
     required String checklistId,
     required BuildContext context,

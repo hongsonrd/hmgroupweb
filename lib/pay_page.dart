@@ -14,6 +14,7 @@ import 'chamcongthanghr.dart';
 import 'chamcongthang.dart';
 import 'pay_policy.dart';
 import 'pay_history.dart';
+import 'pay_historyac.dart';
 
 class PayPage extends StatefulWidget {
   const PayPage({Key? key}) : super(key: key);
@@ -275,6 +276,7 @@ case 'XemCongChuan':
         username: _username,
         userRole: _userPayRole,
         policyData: _luongCheDoData,
+        accountData: _taiKhoanData,
       ),
     ),
   );
@@ -287,6 +289,8 @@ case 'XemCongChuan':
         username: _username,
         userRole: _userPayRole,
         historyData: _luongLichSuData,
+        policyData: _luongCheDoData,
+        standardData: _congChuanData,
       ),
     ),
   );
@@ -295,10 +299,12 @@ case 'LichSuLuongKT':
   Navigator.push(
     context,
     MaterialPageRoute(
-      builder: (context) => PayHistoryScreen(
+      builder: (context) => PayHistoryACScreen(
         username: _username,
         userRole: _userPayRole,
         historyData: _luongLichSuData,
+        policyData: _luongCheDoData,
+        standardData: _congChuanData,
       ),
     ),
   );

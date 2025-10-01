@@ -2,18 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'pay_hredit.dart';
-class PayHistoryScreen extends StatefulWidget {
+import 'pay_acedit.dart';
+class PayHistoryACScreen extends StatefulWidget {
   final String username;
   final String userRole;
   final List<Map<String, dynamic>> historyData;
   final List<Map<String, dynamic>> policyData;
   final List<Map<String, dynamic>> standardData;
-  const PayHistoryScreen({Key? key, required this.username, required this.userRole, required this.historyData, required this.policyData, required this.standardData}) : super(key: key);
+  const PayHistoryACScreen({Key? key, required this.username, required this.userRole, required this.historyData, required this.policyData, required this.standardData}) : super(key: key);
   @override
-  _PayHistoryScreenState createState() => _PayHistoryScreenState();
+  _PayHistoryACScreenState createState() => _PayHistoryACScreenState();
 }
-class _PayHistoryScreenState extends State<PayHistoryScreen> {
+class _PayHistoryACScreenState extends State<PayHistoryACScreen> {
   String _selectedPeriod = '';
   List<String> _periodOptions = [];
   String _selectedDepartment = 'Tất cả';
@@ -220,7 +220,7 @@ class _PayHistoryScreenState extends State<PayHistoryScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => PayHREditScreen(
+            builder: (context) => PayACEditScreen(
               username: widget.username,
               userRole: widget.userRole,
               selectedPeriod: _selectedPeriod,
@@ -551,7 +551,7 @@ class _PayrollCreationScreenState extends State<PayrollCreationScreen> {
     }
   }
   void _showSuccessDialog() {
-    showDialog(context: context, barrierDismissible: false, builder: (context) => AlertDialog(title: const Row(children: [Icon(Icons.check_circle, color: Colors.green, size: 28), SizedBox(width: 8), Text('Thành công')]), content: Column(mainAxisSize: MainAxisSize.min, children: [Text('Đã gửi dữ liệu lương tháng ${widget.selectedMonth} thành công!'), const SizedBox(height: 8), Text('Số bản ghi đã xử lý: ${_selectedRecords.length}')]), actions: [TextButton(onPressed: () {Navigator.pop(context); Navigator.pop(context); Navigator.pop(context);}, child: const Text('Đóng')), ElevatedButton(onPressed: () {Navigator.pop(context); Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => PayHistoryScreen(username: widget.username, userRole: widget.userRole, historyData: _selectedRecords, policyData: [], standardData: [])));}, child: const Text('Xem lịch sử lương'))]));
+    showDialog(context: context, barrierDismissible: false, builder: (context) => AlertDialog(title: const Row(children: [Icon(Icons.check_circle, color: Colors.green, size: 28), SizedBox(width: 8), Text('Thành công')]), content: Column(mainAxisSize: MainAxisSize.min, children: [Text('Đã gửi dữ liệu lương tháng ${widget.selectedMonth} thành công!'), const SizedBox(height: 8), Text('Số bản ghi đã xử lý: ${_selectedRecords.length}')]), actions: [TextButton(onPressed: () {Navigator.pop(context); Navigator.pop(context); Navigator.pop(context);}, child: const Text('Đóng')), ElevatedButton(onPressed: () {Navigator.pop(context); Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => PayHistoryACScreen(username: widget.username, userRole: widget.userRole, historyData: _selectedRecords, policyData: [], standardData: [])));}, child: const Text('Xem lịch sử lương'))]));
   }
   Widget _buildRecordItem(Map<String, dynamic> record, int index) {
     final userId = record['userId'];
