@@ -121,6 +121,7 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
     'isDirectNavigation': true,
     'tab': 1, 
   },
+    {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo sân bay T1 (new)', 'link': 'https://yourworldtravel.vn/drive/dailygat2.html', 'tab': 1},
     {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo giám sát',
     'link': 'giamsat_link',
     'isDirectNavigation': true,
@@ -131,6 +132,7 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
     'isDirectNavigation': true,
     'tab': 1, 
   },
+  {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo chấm công', 'link': 'https://yourworldtravel.vn/drive/dailyattendance.html', 'tab': 1},
 
   {'icon': 'assets/logokt.png', 'important': 'true','name': 'HM Kỹ thuật', 'link': 'https://www.appsheet.com/start/f2040b99-7558-4e2c-9e02-df100c83d8ce', 'tab': 0},
   {'icon': 'assets/zalologo.png', 'name': 'Zalo Hoàn Mỹ', 'link': 'https://zalo.me/2746464448500686217', 'tab': 0},
