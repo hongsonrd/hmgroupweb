@@ -98,9 +98,6 @@ double _calculateWorkDays(int? workerCount, int? usageMinutes) {
 double? _extractAreaM2(String? chiTiet) {
   if (chiTiet == null || chiTiet.trim().isEmpty) return null;
 
-  // Look for a line that (optionally) starts with a bullet, then the label,
-  // optional "(m2|m²)", then ":", then the number.
-  // Works across multiple lines due to multiLine: true
   final reg = RegExp(
     r'(?:^|[\r\n])\s*[*\-\u2022]?\s*Diện\s*tích\s*sử\s*dụng(?:\s*\((?:m2|m²)\))?\s*:\s*([0-9\.,]+)',
     multiLine: true,
@@ -113,25 +110,10 @@ double? _extractAreaM2(String? chiTiet) {
 
   var raw = m.group(1)!.trim();
 
-  // Normalize number to standard "1234.56"
-  // vi-style "1.234,5" -> "1234.5"
-  // en-style "1,234.5" -> "1234.5"
-  if (raw.contains(',') && raw.contains('.')) {
-    // assume comma is decimal sep, dot is thousands
-    raw = raw.replaceAll('.', '').replaceAll(',', '.');
-  } else if (raw.contains(',')) {
-    // "125,5" -> "125.5"
-    raw = raw.replaceAll(',', '.');
-  } else {
-    // Handle "1.234" as thousands if looks like ### group
-    final dotIdx = raw.indexOf('.');
-    if (dotIdx != -1) {
-      final tail = raw.substring(dotIdx + 1);
-      if (tail.length == 3 && RegExp(r'^\d{3}$').hasMatch(tail)) {
-        raw = raw.replaceAll('.', '');
-      }
-    }
-  }
+  // Vietnamese format: dot (.) is decimal separator, comma (,) is thousands separator
+  // Examples: 1030.705, 1094.3, 14.757
+  // Remove any commas (thousands separators), keep dots (decimal separators)
+  raw = raw.replaceAll(',', '');
 
   final v = double.tryParse(raw);
   if (v == null || v.isNaN || v.isInfinite || v < 0) return null;
