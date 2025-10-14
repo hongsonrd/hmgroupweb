@@ -9,7 +9,6 @@ import 'package:confetti/confetti.dart';
 import 'package:video_player/video_player.dart';
 import 'location_provider.dart';
 import 'table_models.dart';
-import 'http_client.dart';
 
 class ChamLaiXeScreen extends StatefulWidget {
   final String username;
@@ -40,7 +39,7 @@ class _ChamLaiXeScreenState extends State<ChamLaiXeScreen> {
   String _selectedDateOption = 'today'; // 'today' or 'yesterday'
   
   Map<String, List<String>> _adminDriversMap = {
-    'hm.tason': ['hm.tason' ,'hm.kimdung','hm.daotan','hm.trangiang'],
+    'hm.tason': ['hm.tason' ,'bpthunghiem','hm.daotan','hm.trangiang'],
     'hm.quanganh': ['hm.anhmanh'],
     'hm.duongloan': ['hm.nguyenson' ,'hm.nguyenthuyet' ,'hm.lelinh'],
     'hm.daotan': ['hm.taquyet' ,'hm.levien' ,'hm.dothanh' ,'hm.buivung' ,'hm.buivan' ,'hm.nguyentru' ,'hm.nguyenluyen' ,'hm.lethuy' ,'hm.nguyentruong' ,'hm.vuongtuyen' ,'hm.phungchien' ,'hm.buituan' ,'hm.xuantrinh' ,'hm.buitoan' ,'hm.buivien' ,'hm.buimanh' ,'hm.nguyenvanan' ,'hm.buiduchai' ,'hm.phambinh'],
@@ -157,7 +156,7 @@ class _ChamLaiXeScreenState extends State<ChamLaiXeScreen> {
     
     // First check if the user already has a record for this date
     final checkUrl = Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongls/${_selectedDriver}/$formattedDate');
-    final checkResponse = await AuthenticatedHttpClient.get(checkUrl);
+    final checkResponse = await http.get(checkUrl);
     
     if (checkResponse.statusCode == 200) {
       final existingData = json.decode(checkResponse.body);
@@ -203,9 +202,6 @@ class _ChamLaiXeScreenState extends State<ChamLaiXeScreen> {
       'TongCongNgay': 1.0,
       'HinhAnhBatDau': '',
       'HinhAnhKetThuc': '',
-      //'GhiChu': _descriptionController.text,
-      //'NguoiTao': widget.username,
-      //'ThoiGianTao': DateFormat('yyyy-MM-dd HH:mm:ss').format(now),
     };
 
     // Debug output
@@ -289,6 +285,117 @@ class _ChamLaiXeScreenState extends State<ChamLaiXeScreen> {
     print('Error submitting attendance: $e');
   }
 }
+
+  Future<void> _submitLeaveRequest(String leaveType, double dayValue) async {
+    if (_selectedDriver == null || _selectedDriver!.isEmpty) {
+      setState(() {
+        _message = 'Vui lòng chọn lái xe/kỹ thuật';
+      });
+      return;
+    }
+
+    // Show confirmation dialog
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Xác nhận'),
+          content: Text(
+            'Bạn có chắc chắn muốn chấm $leaveType cho $_selectedDriver vào ngày ${DateFormat('dd/MM/yyyy').format(_selectedDate)}?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade400,
+              ),
+              child: const Text('Xác nhận'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _message = 'Đang xử lý...';
+    });
+
+    try {
+      final formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
+      
+      // Create the UID for the leave record
+      final uid = '${_selectedDriver}_${_selectedDate.millisecondsSinceEpoch}';
+      
+      // Create leave data
+      final Map<String, dynamic> leaveData = {
+        'UID': uid,
+        'NguoiDung': _selectedDriver,
+        'PhanLoai': 'Nghỉ',
+        'NgayBatDau': formattedDate,
+        'NgayKetThuc': formattedDate,
+        'GhiChu': _descriptionController.text,
+        'TruongHop': leaveType,
+        'NguoiDuyet': widget.username,
+        'TrangThai': 'Đồng ý',
+        'GiaTriNgay': dayValue,
+      };
+
+      print('Submitting leave request for driver: $_selectedDriver');
+      print('Leave data: $leaveData');
+
+      final Uri apiUrl = Uri.parse('https://hmclourdrun1-81200125587.asia-southeast1.run.app/chamcongpheplx');
+      
+      final response = await http.post(
+        apiUrl,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: json.encode(leaveData),
+      );
+      
+      if (response.statusCode == 200) {
+        setState(() {
+          _isLoading = false;
+          _message = 'Chấm $leaveType thành công cho $_selectedDriver';
+          _descriptionController.clear();
+        });
+        
+        // Play success effects
+        _confettiController.play();
+        _playSuccessSound();
+        
+        // Show success notification
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Đã chấm $leaveType cho $_selectedDriver'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } else {
+        setState(() {
+          _isLoading = false;
+          _message = 'Lỗi chấm $leaveType: ${response.statusCode}. ${response.body}';
+        });
+        print('Error response: ${response.body}');
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _message = 'Lỗi: $e';
+      });
+      print('Error submitting leave request: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -536,46 +643,7 @@ class _ChamLaiXeScreenState extends State<ChamLaiXeScreen> {
                     ),
                   ),
                 ),
-                                // Submit button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _isLoading || _availableDrivers.isEmpty ? null : _submitAttendance,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue.shade200,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: _isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : const Text(
-                            'Chấm công',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                  ),
-                ),
                 
-                // Message display
-                if (_message.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 16.0),
-                    child: Text(
-                      _message,
-                      style: TextStyle(
-                        color: _message.contains('thành công') ? Colors.green : Colors.red,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
                 // Description
                 Card(
                   elevation: 3,
@@ -610,6 +678,92 @@ class _ChamLaiXeScreenState extends State<ChamLaiXeScreen> {
                   ),
                 ),
                 
+                // Submit button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _isLoading || _availableDrivers.isEmpty ? null : _submitAttendance,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue.shade200,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Text(
+                            'Chấm công',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                  ),
+                ),
+                
+                const SizedBox(height: 12),
+                
+                // Leave buttons row
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _isLoading || _availableDrivers.isEmpty 
+                            ? null 
+                            : () => _submitLeaveRequest('Nghỉ phép', 1.0),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red.shade400,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Chấm phép',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _isLoading || _availableDrivers.isEmpty 
+                            ? null 
+                            : () => _submitLeaveRequest('Nghỉ phép 1/2 ngày', 0.5),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red.shade400,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Chấm phép 1/2',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                
+                // Message display
+                if (_message.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16.0),
+                    child: Text(
+                      _message,
+                      style: TextStyle(
+                        color: _message.contains('thành công') ? Colors.green : Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                
                 // Information card
                 Card(
                   elevation: 3,
@@ -638,7 +792,7 @@ class _ChamLaiXeScreenState extends State<ChamLaiXeScreen> {
                         ),
                         const SizedBox(height: 8),
                         const Text(
-                          'Hệ thống sẽ tự động chấm công cho lái xe/kỹ thuật từ 8:00 đến 17:00 với 1 công đầy đủ, không tính thời gian đi muộn.',
+                          '• Chấm công: Hệ thống sẽ tự động chấm công từ 8:00 đến 17:00 với 1 công đầy đủ.\n\n• Chấm phép: Đăng ký nghỉ phép 1 ngày (1.0 công).\n\n• Chấm phép 1/2: Đăng ký nghỉ phép nửa ngày (0.5 công).',
                           style: TextStyle(fontSize: 14),
                         ),
                       ],
@@ -679,8 +833,7 @@ class _ChamLaiXeScreenState extends State<ChamLaiXeScreen> {
                   10, -10,
                   0, 0,
                 );
-                return path;
-              },
+                return path;},
             ),
           ),
         ],

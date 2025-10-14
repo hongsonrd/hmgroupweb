@@ -17,6 +17,7 @@ enum PostTier {
   normal,
   popular,
   legendary,
+  legendaryPlus, 
 }
 
 class NewsSection extends StatefulWidget {
@@ -93,13 +94,20 @@ class _NewsSectionState extends State<NewsSection> with AutomaticKeepAliveClient
 
   PostTier _getPostTier(int? likeCount) {
     if (likeCount == null) return PostTier.normal;
-    if (likeCount >= 22) return PostTier.legendary;
-    if (likeCount >= 11) return PostTier.popular;
+    if (likeCount >= 93) return PostTier.legendaryPlus;
+    if (likeCount >= 33) return PostTier.legendary;
+    if (likeCount >= 13) return PostTier.popular;
     return PostTier.normal;
   }
 
   Map<String, Color> _getTierColors(PostTier tier, String? author) {
     switch (tier) {
+      case PostTier.legendaryPlus:
+      return {
+        'avatar': Colors.purple[700]!,
+        'title': Colors.purple[900]!,
+        'accent': Colors.purple[800]!,
+      };
       case PostTier.legendary:
         return {
           'avatar': Colors.amber[400]!,
@@ -116,7 +124,47 @@ class _NewsSectionState extends State<NewsSection> with AutomaticKeepAliveClient
         return _getAuthorColors(author);
     }
   }
-
+Widget _buildLegendaryPlusIcon() {
+  return Container(
+    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [Colors.purple[700]!, Colors.pink[400]!, Colors.purple[900]!],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(8),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.purple.withOpacity(0.5),
+          blurRadius: 8,
+          spreadRadius: 2,
+        ),
+      ],
+    ),
+    child: _buildGoldShimmerEffect(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.diamond,
+            color: Colors.white,
+            size: 9,
+          ),
+          SizedBox(width: 3),
+          Text(
+            'HOÀN MỸ',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 7,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
   Map<String, Color> _getAuthorColors(String? author) {
     switch (author) {
       case 'VP Hoàn Mỹ':
@@ -1580,24 +1628,33 @@ class _NewsSectionState extends State<NewsSection> with AutomaticKeepAliveClient
       ),
     );
   }
-
-  Widget _buildModernNewsCard(NewsModel news, int index) {
-    bool hasVideo = news.hinhAnh != null && _isVideoUrl(news.hinhAnh!);
-    String newsId = news.newsID ?? 'unknown';
-    PostTier postTier = _getPostTier(news.likeCount);
-    Map<String, Color> colors = _getTierColors(postTier, news.tacGia);
-    
-    return Container(
-      margin: EdgeInsets.only(bottom: 12),
-      child: Card(
-        elevation: postTier == PostTier.legendary ? 6 : 3,
-        shape: RoundedRectangleBorder(
+Widget _buildModernNewsCard(NewsModel news, int index) {
+  bool hasVideo = news.hinhAnh != null && _isVideoUrl(news.hinhAnh!);
+  String newsId = news.newsID ?? 'unknown';
+  PostTier postTier = _getPostTier(news.likeCount);
+  Map<String, Color> colors = _getTierColors(postTier, news.tacGia);
+  
+  return Container(
+    margin: EdgeInsets.only(bottom: 12),
+    child: Card(
+      elevation: postTier == PostTier.legendaryPlus ? 8 : (postTier == PostTier.legendary ? 6 : 3),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-        ),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            gradient: postTier == PostTier.legendary 
+          gradient: postTier == PostTier.legendaryPlus
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.purple[50]!,
+                  Colors.pink[50]!,
+                  Colors.white,
+                ],
+              )
+            : postTier == PostTier.legendary 
               ? LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -1607,170 +1664,262 @@ class _NewsSectionState extends State<NewsSection> with AutomaticKeepAliveClient
                   ],
                 )
               : null,
-            border: postTier == PostTier.legendary 
+          border: postTier == PostTier.legendaryPlus
+            ? Border.all(
+                color: Colors.purple.withOpacity(0.5),
+                width: 2,
+              )
+            : postTier == PostTier.legendary 
               ? Border.all(
                   color: Colors.amber.withOpacity(0.3),
                   width: 1.5,
                 )
               : null,
-          ),
-          child: InkWell(
-            onTap: () {
-              _openNewsDetail(news);
-              _playVibrationPattern();
-            },
-            borderRadius: BorderRadius.circular(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildCardHeader(news, postTier, colors),
-                _buildCardContent(news, hasVideo, newsId),
-                _buildCardFooter(news, colors, postTier),
-              ],
-            ),
+        ),
+        child: InkWell(
+          onTap: () {
+            _openNewsDetail(news);
+            _playVibrationPattern();
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildCardHeader(news, postTier, colors),
+              _buildCardContent(news, hasVideo, newsId),
+              _buildCardFooter(news, colors, postTier),
+            ],
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildCardHeader(NewsModel news, PostTier postTier, Map<String, Color> colors) {
-    return Container(
-      padding: EdgeInsets.all(12),
-      child: Row(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: colors['avatar']!,
-                width: 2,
+    ),
+  );
+}
+Widget _buildCardHeader(NewsModel news, PostTier postTier, Map<String, Color> colors) {
+  return Container(
+    padding: EdgeInsets.all(12),
+    child: Row(
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: colors['avatar']!,
+              width: 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: colors['avatar']!.withOpacity(0.3),
+                blurRadius: 6,
+                spreadRadius: 1,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: colors['avatar']!.withOpacity(0.3),
-                  blurRadius: 6,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
-            child: CircleAvatar(
-              backgroundImage: news.logo != null && news.logo!.isNotEmpty 
-                ? CachedNetworkImageProvider(news.logo!) 
-                : AssetImage('assets/logo3.png') as ImageProvider,
-              radius: 15,
-            ),
+            ],
           ),
-          SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  news.tacGia ?? 'Không có tác giả',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 10,
-                    color: colors['accent'],
-                  ),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  news.ngay ?? 'Không có ngày',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 9,
-                  ),
-                ),
-              ],
-            ),
+          child: CircleAvatar(
+            backgroundImage: news.logo != null && news.logo!.isNotEmpty 
+              ? CachedNetworkImageProvider(news.logo!) 
+              : AssetImage('assets/logo3.png') as ImageProvider,
+            radius: 15,
           ),
-          if (postTier == PostTier.legendary)
-            _buildLegendaryIcon()
-          else if (postTier == PostTier.popular)
-            _buildPopularIcon(),
-        ],
-      ),
-    );
-  }
+        ),
+        SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                news.tacGia ?? 'Không có tác giả',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 10,
+                  color: colors['accent'],
+                ),
+              ),
+              SizedBox(height: 2),
+              Text(
+                news.ngay ?? 'Không có ngày',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 9,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (postTier == PostTier.legendaryPlus)
+          _buildLegendaryPlusIcon()
+        else if (postTier == PostTier.legendary)
+          _buildLegendaryIcon()
+        else if (postTier == PostTier.popular)
+          _buildPopularIcon(),
+      ],
+    ),
+  );
+}
 
   Widget _buildCardContent(NewsModel news, bool hasVideo, String newsId) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (news.tieuDe != null)
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12),
-            child: Text(
-              news.tieuDe!,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[800],
-                height: 1.3,
+  PostTier postTier = _getPostTier(news.likeCount);
+  
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      if (news.tieuDe != null)
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            news.tieuDe!,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[800],
+              height: 1.3,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      if (news.tomTat != null && news.tomTat!.isNotEmpty && news.tomTat != '❌')
+        Container(
+          margin: EdgeInsets.fromLTRB(12, 6, 12, 0),
+          padding: EdgeInsets.all(9),
+          decoration: BoxDecoration(
+            color: Colors.blue[50],
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.blue[100]!),
+          ),
+          child: Text(
+            news.tomTat!,
+            style: TextStyle(
+              fontSize: 10,
+              color: Colors.blue[700],
+              fontStyle: FontStyle.italic,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      if (news.hinhAnh != null && news.hinhAnh!.isNotEmpty)
+        Container(
+          margin: EdgeInsets.fromLTRB(12, 9, 12, 0),
+          child: postTier == PostTier.legendaryPlus
+              ? _buildDiamondBorderedMedia(news, hasVideo, newsId)
+              : ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: hasVideo 
+                    ? _buildVideoThumbnail(news.hinhAnh!, newsId)
+                    : CachedNetworkImage(
+                        imageUrl: news.hinhAnh!,
+                        height: 150,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => Container(
+                          height: 150,
+                          color: Colors.grey[100],
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                        errorWidget: (context, url, error) => Container(
+                          height: 150,
+                          color: Colors.grey[200],
+                          child: Center(child: Icon(Icons.image_not_supported, color: Colors.grey)),
+                        ),
+                      ),
+                ),
+        ),
+      if (news.baiViet != null && news.baiViet!.isNotEmpty)
+        Padding(
+          padding: EdgeInsets.fromLTRB(12, 6, 12, 0), 
+          child: Text(
+            news.baiViet!,
+            style: TextStyle(fontSize: 10, height: 1.3),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+    ],
+  );
+}
+Widget _buildDiamondBorderedMedia(NewsModel news, bool hasVideo, String newsId) {
+  return Stack(
+    children: [
+      Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          gradient: LinearGradient(
+            colors: [Colors.purple[700]!, Colors.pink[400]!, Colors.purple[900]!],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.purple.withOpacity(0.4),
+              blurRadius: 12,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        padding: EdgeInsets.all(3),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: hasVideo 
+            ? _buildVideoThumbnail(news.hinhAnh!, newsId)
+            : CachedNetworkImage(
+                imageUrl: news.hinhAnh!,
+                height: 150,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Container(
+                  height: 150,
+                  color: Colors.grey[100],
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                errorWidget: (context, url, error) => Container(
+                  height: 150,
+                  color: Colors.grey[200],
+                  child: Center(child: Icon(Icons.image_not_supported, color: Colors.grey)),
+                ),
               ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        if (news.tomTat != null && news.tomTat!.isNotEmpty && news.tomTat != '❌')
-          Container(
-            margin: EdgeInsets.fromLTRB(12, 6, 12, 0),
-            padding: EdgeInsets.all(9),
-            decoration: BoxDecoration(
-              color: Colors.blue[50],
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: Colors.blue[100]!),
-            ),
-            child: Text(
-              news.tomTat!,
-              style: TextStyle(
-                fontSize: 10,
-                color: Colors.blue[700],
-                fontStyle: FontStyle.italic,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        if (news.hinhAnh != null && news.hinhAnh!.isNotEmpty)
-          Container(
-            margin: EdgeInsets.fromLTRB(12, 9, 12, 0),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: hasVideo 
-                ? _buildVideoThumbnail(news.hinhAnh!, newsId)
-                : CachedNetworkImage(
-                    imageUrl: news.hinhAnh!,
-                    height: 150,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
-                      height: 150,
-                      color: Colors.grey[100],
-                      child: Center(child: CircularProgressIndicator()),
-                    ),
-                    errorWidget: (context, url, error) => Container(
-                      height: 150,
-                      color: Colors.grey[200],
-                      child: Center(child: Icon(Icons.image_not_supported, color: Colors.grey)),
-                    ),
-                  ),
-            ),
-          ),
-        if (news.baiViet != null && news.baiViet!.isNotEmpty)
-          Padding(
-            padding: EdgeInsets.fromLTRB(12, 6, 12, 0), 
-            child: Text(
-              news.baiViet!,
-              style: TextStyle(fontSize: 10, height: 1.3),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-      ],
-    );
-  }Widget _buildVideoThumbnail(String videoUrl, String newsId) {
+        ),
+      ),
+      // Top-left diamond
+      Positioned(
+        top: 0,
+        left: 0,
+        child: Transform.rotate(
+          angle: 0.785398, // 45 degrees in radians
+          child: Icon(Icons.diamond, color: Colors.white, size: 23),
+        ),
+      ),
+      // Top-right diamond
+      Positioned(
+        top: 0,
+        right: 0,
+        child: Transform.rotate(
+          angle: 0.785398,
+          child: Icon(Icons.diamond, color: Colors.white, size: 23),
+        ),
+      ),
+      // Bottom-left diamond
+      Positioned(
+        bottom: 0,
+        left: 0,
+        child: Transform.rotate(
+          angle: 0.785398,
+          child: Icon(Icons.diamond, color: Colors.white, size: 23),
+        ),
+      ),
+      // Bottom-right diamond
+      Positioned(
+        bottom: 0,
+        right: 0,
+        child: Transform.rotate(
+          angle: 0.785398,
+          child: Icon(Icons.diamond, color: Colors.white, size: 23),
+        ),
+      ),
+    ],
+  );
+}
+Widget _buildVideoThumbnail(String videoUrl, String newsId) {
     return Container(
       height: 150,
       color: Colors.black12,

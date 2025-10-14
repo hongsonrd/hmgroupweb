@@ -1652,7 +1652,9 @@ pdf.addPage(
               SizedBox(height: 24),
               _buildResultPercentage(),
               SizedBox(height: 24),
-              _buildMachineUsageSummary(),  // ADD THIS LINE
+              _buildHourlyUsageChart(),  // ADD THIS NEW CHART HERE
+              SizedBox(height: 24),
+              _buildMachineUsageSummary(),
               SizedBox(height: 24),
               _buildProjectList(),
               SizedBox(height: 24),
@@ -1664,7 +1666,292 @@ pdf.addPage(
     ],
   );
 }
+Widget _buildHourlyUsageChart() {
+  // Parse hours and aggregate data
+  final hourlyReportCounts = <int, int>{};
+  final hourlyAreaTotals = <int, double>{};
+  
+  for (final record in _filteredData) {
+    if (record.gio == null || record.gio!.isEmpty) continue;
+    
+    // Extract hour from time string (format: "HH:mm" or "HH:mm:ss")
+    final timeParts = record.gio!.split(':');
+    if (timeParts.isEmpty) continue;
+    
+    final hour = int.tryParse(timeParts[0]);
+    if (hour == null || hour < 0 || hour > 23) continue;
+    
+    // Count reports per hour
+    hourlyReportCounts[hour] = (hourlyReportCounts[hour] ?? 0) + 1;
+    
+    // Sum area per hour
+    final area = _extractAreaM2(record.chiTiet);
+    if (area != null) {
+      hourlyAreaTotals[hour] = (hourlyAreaTotals[hour] ?? 0) + area;
+    }
+  }
+  
+  // Create data for all 24 hours (0-23)
+  final hourEntries = List.generate(24, (hour) {
+    return MapEntry(
+      hour,
+      {
+        'count': hourlyReportCounts[hour] ?? 0,
+        'area': hourlyAreaTotals[hour] ?? 0.0,
+      },
+    );
+  });
+  
+  final maxCount = hourlyReportCounts.values.isEmpty 
+      ? 10.0
+      : hourlyReportCounts.values.reduce((a, b) => a > b ? a : b).toDouble();
+  final maxArea = hourlyAreaTotals.values.isEmpty 
+      ? 100.0
+      : hourlyAreaTotals.values.reduce((a, b) => a > b ? a : b);
+  
+  final numFmt = NumberFormat.decimalPattern('vi_VN');
 
+  return Card(
+    child: Padding(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Tần suất sử dụng theo giờ',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          SizedBox(height: 8),
+          Row(
+            children: [
+              // Legend for report count
+              Container(
+                width: 16,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: Colors.blue,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              SizedBox(width: 4),
+              Text('Số báo cáo', style: TextStyle(fontSize: 12)),
+              SizedBox(width: 16),
+              // Legend for area
+              Container(
+                width: 16,
+                height: 3,
+                color: Colors.orange,
+              ),
+              SizedBox(width: 4),
+              Text('Diện tích (m²)', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+          SizedBox(height: 16),
+          Container(
+            height: 300,
+            child: hourEntries.isEmpty || maxCount == 0
+                ? Center(child: Text('Không có dữ liệu'))
+                : LayoutBuilder(
+                    builder: (context, constraints) {
+                      return Stack(
+                        children: [
+                          // Bar chart for report counts
+                          BarChart(
+                            BarChartData(
+                              alignment: BarChartAlignment.spaceAround,
+                              maxY: maxCount + (maxCount * 0.2),
+                              barTouchData: BarTouchData(
+                                enabled: true,
+                                touchTooltipData: BarTouchTooltipData(
+                                  tooltipBgColor: Colors.blueGrey.withOpacity(0.8),
+                                  getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                                    final hour = group.x.toInt();
+                                    if (hour < 0 || hour >= hourEntries.length) return null;
+                                    final data = hourEntries[hour].value;
+                                    return BarTooltipItem(
+                                      '${hour.toString().padLeft(2, '0')}:00\n'
+                                      'Báo cáo: ${data['count']}\n'
+                                      'Diện tích: ${numFmt.format(data['area'])} m²',
+                                      TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              titlesData: FlTitlesData(
+                                show: true,
+                                bottomTitles: AxisTitles(
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    reservedSize: 30,
+                                    getTitlesWidget: (value, meta) {
+                                      final hour = value.toInt();
+                                      if (hour >= 0 && hour <= 23 && hour % 2 == 0) {
+                                        return Padding(
+                                          padding: EdgeInsets.only(top: 8),
+                                          child: Text(
+                                            '${hour.toString().padLeft(2, '0')}h',
+                                            style: TextStyle(fontSize: 10),
+                                          ),
+                                        );
+                                      }
+                                      return Text('');
+                                    },
+                                  ),
+                                ),
+                                leftTitles: AxisTitles(
+                                  axisNameWidget: Padding(
+                                    padding: EdgeInsets.only(bottom: 4),
+                                    child: Text(
+                                      'Số báo cáo',
+                                      style: TextStyle(fontSize: 11, color: Colors.blue),
+                                    ),
+                                  ),
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    reservedSize: 40,
+                                    getTitlesWidget: (value, meta) {
+                                      return Text(
+                                        value.toInt().toString(),
+                                        style: TextStyle(fontSize: 10, color: Colors.blue),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                rightTitles: AxisTitles(
+                                  axisNameWidget: Padding(
+                                    padding: EdgeInsets.only(bottom: 4),
+                                    child: Text(
+                                      'Diện tích (m²)',
+                                      style: TextStyle(fontSize: 11, color: Colors.orange),
+                                    ),
+                                  ),
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    reservedSize: 60,
+                                    getTitlesWidget: (value, meta) {
+                                      final areaValue = maxArea > 0 ? (value / (maxCount + maxCount * 0.2)) * maxArea : 0;
+                                      return Text(
+                                        numFmt.format(areaValue.toInt()),
+                                        style: TextStyle(fontSize: 9, color: Colors.orange),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                              ),
+                              gridData: FlGridData(
+                                show: true,
+                                drawVerticalLine: true,
+                                horizontalInterval: (maxCount + maxCount * 0.2) / 5,
+                                getDrawingHorizontalLine: (value) {
+                                  return FlLine(
+                                    color: Colors.grey[300],
+                                    strokeWidth: 0.5,
+                                  );
+                                },
+                                getDrawingVerticalLine: (value) {
+                                  return FlLine(
+                                    color: Colors.grey[300],
+                                    strokeWidth: 0.5,
+                                    dashArray: [5, 5],
+                                  );
+                                },
+                              ),
+                              borderData: FlBorderData(
+                                show: true,
+                                border: Border(
+                                  left: BorderSide(color: Colors.blue, width: 2),
+                                  bottom: BorderSide(color: Colors.grey[400]!, width: 1),
+                                  right: BorderSide(color: Colors.orange, width: 2),
+                                ),
+                              ),
+                              barGroups: hourEntries.map((entry) {
+                                final hour = entry.key;
+                                final data = entry.value;
+                                final count = data['count'] as int;
+                                final hasData = count > 0;
+                                
+                                return BarChartGroupData(
+                                  x: hour,
+                                  barRods: [
+                                    BarChartRodData(
+                                      toY: count.toDouble(),
+                                      color: hasData ? Colors.blue : Colors.grey[300],
+                                      width: 12,
+                                      borderRadius: BorderRadius.vertical(
+                                        top: Radius.circular(4),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                          // Custom painter for area line overlay
+                          Positioned.fill(
+                            child: Padding(
+                              padding: EdgeInsets.only(
+                                left: 40,
+                                right: 60,
+                                bottom: 30,
+                                top: 0,
+                              ),
+                              child: CustomPaint(
+                                painter: _AreaLinePainter(
+                                  hourEntries: hourEntries,
+                                  maxCount: maxCount,
+                                  maxArea: maxArea,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+          ),
+          SizedBox(height: 12),
+          // Summary statistics
+          Container(
+            padding: EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Thống kê:',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+                SizedBox(height: 4),
+                if (hourlyReportCounts.isNotEmpty)
+                  Text(
+                    '• Giờ có nhiều báo cáo nhất: ${hourlyReportCounts.entries.reduce((a, b) => a.value > b.value ? a : b).key.toString().padLeft(2, '0')}:00 (${hourlyReportCounts.values.reduce((a, b) => a > b ? a : b)} báo cáo)',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                if (hourlyAreaTotals.isNotEmpty)
+                  Text(
+                    '• Giờ có diện tích lớn nhất: ${hourlyAreaTotals.entries.reduce((a, b) => a.value > b.value ? a : b).key.toString().padLeft(2, '0')}:00 (${numFmt.format(hourlyAreaTotals.values.reduce((a, b) => a > b ? a : b))} m²)',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                Text(
+                  '• Tổng diện tích trong kỳ: ${numFmt.format(hourlyAreaTotals.values.fold<double>(0, (a, b) => a + b))} m²',
+                  style: TextStyle(fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
   Widget _buildReportCountChart() {
   final dateGroups = <String, int>{};
   
@@ -2683,4 +2970,82 @@ IconButton(
      ),
    );
  }
+}
+class _AreaLinePainter extends CustomPainter {
+  final List<MapEntry<int, Map<String, dynamic>>> hourEntries;
+  final double maxCount;
+  final double maxArea;
+
+  _AreaLinePainter({
+    required this.hourEntries,
+    required this.maxCount,
+    required this.maxArea,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (hourEntries.isEmpty || maxArea == 0) return;
+
+    final paint = Paint()
+      ..color = Colors.orange
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final dotPaint = Paint()
+      ..color = Colors.orange
+      ..style = PaintingStyle.fill;
+
+    final dotBorderPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+
+    final path = Path();
+    final maxY = maxCount + (maxCount * 0.2);
+    
+    // Calculate spacing between bars
+    final barSpacing = size.width / 24;
+    
+    bool firstPoint = true;
+    final points = <Offset>[];
+
+    for (int i = 0; i < hourEntries.length; i++) {
+      final entry = hourEntries[i];
+      final area = entry.value['area'] as double;
+      
+      // Scale area to chart height
+      final scaledArea = maxArea > 0 ? (area / maxArea) * maxY : 0.0;
+      
+      // Calculate position
+      final x = (i + 0.5) * barSpacing; // Center of each bar
+      final y = size.height - (scaledArea / maxY * size.height);
+      
+      final point = Offset(x, y);
+      points.add(point);
+
+      if (firstPoint) {
+        path.moveTo(x, y);
+        firstPoint = false;
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+
+    // Draw the line
+    canvas.drawPath(path, paint);
+
+    // Draw dots
+    for (final point in points) {
+      canvas.drawCircle(point, 4, dotBorderPaint);
+      canvas.drawCircle(point, 3, dotPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _AreaLinePainter oldDelegate) {
+    return oldDelegate.hourEntries != hourEntries ||
+        oldDelegate.maxCount != maxCount ||
+        oldDelegate.maxArea != maxArea;
+  }
 }

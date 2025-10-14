@@ -2416,19 +2416,20 @@ bool _validateSubmission() {
     if (_selectedResult == null) {
       errors.add('Vui lòng chọn kết quả');
     }
-
     // Special check for Máy móc and Xe/Giỏ đồ topics - always require image and QR code
-    if (widget.isTopicReport && 
-        (widget.task.task == 'Máy móc' || widget.task.task == 'Xe/Giỏ đồ')) {
-      
-      if (_imageFile == null) {
-        errors.add('Vui lòng chụp ảnh cho báo cáo này');
-      }
-      
-      if (_codeController.text.isEmpty) {
-        errors.add('Vui lòng quét mã QR cho báo cáo này');
-      }
-    }
+    final topicsWithoutImageRequirement = ['Ý kiến khách hàng', 'Nhân sự'];
+
+if (widget.isTopicReport && !topicsWithoutImageRequirement.contains(widget.task.task)) {
+  if (_imageFile == null) {
+    errors.add('Vui lòng chụp ảnh cho báo cáo này');
+  }
+  
+  // Only require QR for specific topics
+  if ((widget.task.task == 'Máy móc' || widget.task.task == 'Xe/Giỏ đồ') && 
+      _codeController.text.isEmpty) {
+    errors.add('Vui lòng quét mã QR cho báo cáo này');
+  }
+}
     // Modified photo requirement logic to include success result for 70% of users
     else if ((_selectedResult == '⚠️' || _selectedResult == '❌' || 
               (_selectedResult == '✔️' && _shouldRequirePhoto)) && 
