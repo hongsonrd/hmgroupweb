@@ -42,8 +42,11 @@ class _HDPageState extends State<HDPage> {
    'Phụ cấp',
    'Ngoại giao',
    'Máy móc',
-   'Lương'
- ];
+   'Lương',
+    'Yêu cầu máy',
+    'Chi tiết máy',
+    'Danh mục máy'
+  ];
 
  @override
  void initState() {
@@ -144,7 +147,7 @@ class _HDPageState extends State<HDPage> {
    setState(() {
      _isSyncing = true;
      _currentSyncStep = 0;
-     _syncStepsCompleted = List.filled(9, false);
+     _syncStepsCompleted = List.filled(12, false);
      _syncFailed = false;
      _syncErrorMessage = '';
      _syncedRecordsCount = 0;
@@ -253,7 +256,7 @@ Future<void> _performSync() async {
     final originalUserState = prefs.getString('current_user');
     print("ORIGINAL USER STATE in _performSync: $originalUserState");
 
-    for (int step = 0; step < 9; step++) {
+    for (int step = 0; step < 12; step++) {
       // Add null check before accessing video controller
       if (!Platform.isWindows && _isVideoInitialized && _videoController != null && !_videoController!.value.isPlaying && mounted) {
         _videoController!.play();
@@ -458,6 +461,17 @@ Future<void> _performSync() async {
        case 8:
          await _syncTableData('hdluong', usernameForSync, 'LinkLuong');
          break;
+     case 9:
+          await _syncTableData('yeucaumay', usernameForSync, 'LinkYeuCauMay');
+          break;
+          
+        case 10:
+          await _syncTableData('yeucaumaychitiet', usernameForSync, 'LinkYeuCauMayChiTiet');
+          break;
+          
+        case 11:
+          await _syncTableData('yeucaudanhmucmay', usernameForSync, 'LinkDanhMucMay');
+          break;    
      }
 
      final finalUserState = prefs.getString('current_user');
@@ -595,7 +609,32 @@ Future<void> _performSync() async {
          await _dbHelper.batchInsertLinkLuongs(models);
          print("Inserted ${models.length} LinkLuong records");
          break;
-         
+         case 'LinkYeuCauMay':
+          await _dbHelper.clearLinkYeuCauMayTable();
+          print("Cleared old LinkYeuCauMay data");
+          
+          final models = dataList.map((item) => LinkYeuCauMayModel.fromMap(item)).toList();
+          await _dbHelper.batchInsertLinkYeuCauMays(models);
+          print("Inserted ${models.length} LinkYeuCauMay records");
+          break;
+          
+        case 'LinkYeuCauMayChiTiet':
+          await _dbHelper.clearLinkYeuCauMayChiTietTable();
+          print("Cleared old LinkYeuCauMayChiTiet data");
+          
+          final models = dataList.map((item) => LinkYeuCauMayChiTietModel.fromMap(item)).toList();
+          await _dbHelper.batchInsertLinkYeuCauMayChiTiets(models);
+          print("Inserted ${models.length} LinkYeuCauMayChiTiet records");
+          break;
+          
+        case 'LinkDanhMucMay':
+          await _dbHelper.clearLinkDanhMucMayTable();
+          print("Cleared old LinkDanhMucMay data");
+          
+          final models = dataList.map((item) => LinkDanhMucMayModel.fromMap(item)).toList();
+          await _dbHelper.batchInsertLinkDanhMucMays(models);
+          print("Inserted ${models.length} LinkDanhMucMay records");
+          break;
        default:
          print("No save method for table: $tableName");
      }
@@ -657,7 +696,7 @@ Future<void> _performSync() async {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(3),
                   child: LinearProgressIndicator(
-                    value: _syncStepsCompleted.where((completed) => completed).length / 9.0,
+                    value: _syncStepsCompleted.where((completed) => completed).length / 12.0,
                     backgroundColor: Colors.grey.withOpacity(0.3),
                     valueColor: AlwaysStoppedAnimation<Color>(
                       _syncFailed ? Colors.red : Colors.blue,
@@ -669,7 +708,7 @@ Future<void> _performSync() async {
               Padding(
                 padding: const EdgeInsets.only(bottom: 16.0),
                 child: Text(
-                  '${_syncStepsCompleted.where((completed) => completed).length}/9 bước hoàn thành',
+                  '${_syncStepsCompleted.where((completed) => completed).length}/12 bước hoàn thành',
                   style: TextStyle(
                     color: Colors.white70,
                     fontSize: 12,

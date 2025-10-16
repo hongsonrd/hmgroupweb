@@ -15,7 +15,7 @@ import 'chamcongthang.dart';
 import 'pay_policy.dart';
 import 'pay_history.dart';
 import 'pay_historyac.dart';
-
+import 'chamcongthangphep.dart';
 class PayPage extends StatefulWidget {
   const PayPage({Key? key}) : super(key: key);
 
@@ -162,6 +162,12 @@ class _PayPageState extends State<PayPage> {
         icon: Icons.timer,
         allowedRoles: ['AC', 'Viewer','Admin'],
         onTap: () => _navigateToPage('LichSuChamCong'),
+      ),
+      PayMenuItem(
+        title: 'Lịch sử phép',
+        icon: Icons.timer,
+        allowedRoles: ['HR','Admin'],
+        onTap: () => _navigateToPage('LichSuPhep'),
       ),
     ];
   }
@@ -318,6 +324,19 @@ case 'LichSuLuongKT':
         userRole: _userPayRole,
         approverUsername: 'hm.tason',
         standardData: _congChuanData,
+      ),
+    ),
+  );
+    return;
+      case 'LichSuPhep':
+      Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => ChamCongThangPhepScreen(
+        username: _username,
+        userRole: _userPayRole,
+        approverUsername: 'hm.tason',
+        accountData: _taiKhoanData,
       ),
     ),
   );

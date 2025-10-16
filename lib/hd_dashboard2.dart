@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'db_helper.dart';
 import 'table_models.dart';
 import 'hd_thang2.dart';
+import 'hd_yeucaumay.dart';
 
 class HDDashboard2 extends StatefulWidget {
   final String currentPeriod;
@@ -427,6 +428,47 @@ class _HDDashboard2State extends State<HDDashboard2> with TickerProviderStateMix
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Container(
+            width: double.infinity,
+            margin: EdgeInsets.only(bottom: 16),
+            child: Column(
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => HDYeuCauMayScreen(
+                          username: widget.username,
+                          userRole: widget.userRole,
+                          currentPeriod: widget.currentPeriod,
+                          nextPeriod: widget.nextPeriod,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: Icon(Icons.precision_manufacturing),
+                  label: Text('Quản lý yêu cầu máy móc'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFF004B23),
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    minimumSize: Size(double.infinity, 48),
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Lưu ý: Chỉ dữ liệu hợp đồng của tháng mới nhất sẽ được xem xét khi làm việc với phần này',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    fontStyle: FontStyle.italic,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
             Text(
               'Thống kê theo kỳ',
               style: TextStyle(

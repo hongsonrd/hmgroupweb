@@ -1001,7 +1001,6 @@ void _showProjectSearchDialog() {
     },
   );
 }
-
 Widget _buildHourlyChart() {
   if (_selectedProject == null || _selectedDate == null) {
     return SizedBox.shrink();
@@ -1013,7 +1012,8 @@ Widget _buildHourlyChart() {
   // Parse hours and aggregate data
   final hourlyReportCounts = <int, int>{};
   final hourlyTopics = <int, Set<String>>{};
-  final hourlyHasNhanSu = <int, bool>{}; // Track hours with "Nhân sự" reports
+  final hourlyHasNhanSu = <int, bool>{};
+  final hourlyHasIssues = <int, bool>{}; // Track hours with issues
   
   // Get relevant records for selected project and date
   final relevantRecords = _processedData.where((record) => 
@@ -1033,6 +1033,11 @@ Widget _buildHourlyChart() {
     
     // Count reports per hour
     hourlyReportCounts[hour] = (hourlyReportCounts[hour] ?? 0) + 1;
+    
+    // Check for issues (KetQua != '✔️')
+    if (record.ketQua != '✔️') {
+      hourlyHasIssues[hour] = true;
+    }
     
     // Collect unique topics (PhanLoai) per hour
     if (record.phanLoai != null && record.phanLoai!.trim().isNotEmpty) {
@@ -1054,6 +1059,7 @@ Widget _buildHourlyChart() {
         'count': hourlyReportCounts[hour] ?? 0,
         'topics': (hourlyTopics[hour] ?? <String>{}).length,
         'hasNhanSu': hourlyHasNhanSu[hour] ?? false,
+        'hasIssues': hourlyHasIssues[hour] ?? false,
       },
     );
   });
@@ -1138,6 +1144,19 @@ Widget _buildHourlyChart() {
             ),
             SizedBox(width: 4),
             Text('Có báo cáo Nhân sự', style: TextStyle(fontSize: 12)),
+            SizedBox(width: 16),
+            // Legend for issues - MORE PROMINENT
+            Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(2),
+                border: Border.all(color: Colors.red, width: 2),
+              ),
+            ),
+            SizedBox(width: 4),
+            Text('Có vấn đề', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.red[700])),
           ],
         ),
         SizedBox(height: 16),
@@ -1147,7 +1166,24 @@ Widget _buildHourlyChart() {
             builder: (context, constraints) {
               return Stack(
                 children: [
-                  // Bar chart for report counts
+                  // FIRST: Draw red backgrounds for hours with issues
+                  Positioned.fill(
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        left: 40,
+                        right: 40,
+                        bottom: 30,
+                        top: 0,
+                      ),
+                      child: CustomPaint(
+                        painter: _IssueBackgroundPainter(
+                          hourEntries: hourEntries,
+                          maxCount: maxCount,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // THEN: Bar chart for report counts
                   BarChart(
                     BarChartData(
                       alignment: BarChartAlignment.spaceAround,
@@ -1161,11 +1197,13 @@ Widget _buildHourlyChart() {
                             if (hour < 0 || hour >= hourEntries.length) return null;
                             final data = hourEntries[hour].value;
                             final hasNhanSu = data['hasNhanSu'] as bool;
+                            final hasIssues = data['hasIssues'] as bool;
                             return BarTooltipItem(
                               '${hour.toString().padLeft(2, '0')}:00\n'
                               'Báo cáo: ${data['count']}\n'
                               'Chủ đề: ${data['topics']}'
-                              '${hasNhanSu ? '\n✓ Có Nhân sự' : ''}',
+                              '${hasNhanSu ? '\n✓ Có Nhân sự' : ''}'
+                              '${hasIssues ? '\n⚠️ CÓ VẤN ĐỀ' : ''}',
                               TextStyle(
                                 color: Colors.white,
                                 fontSize: 12,
@@ -1354,12 +1392,413 @@ Widget _buildHourlyChart() {
                   '• Giờ có báo cáo Nhân sự: ${hourlyHasNhanSu.keys.map((h) => '${h.toString().padLeft(2, '0')}h').join(', ')}',
                   style: TextStyle(fontSize: 11, color: Colors.green[800], fontWeight: FontWeight.bold),
                 ),
+              // Show hours with issues
+              if (hourlyHasIssues.isNotEmpty)
+                Text(
+                  '• Giờ có vấn đề: ${hourlyHasIssues.keys.map((h) => '${h.toString().padLeft(2, '0')}h').join(', ')}',
+                  style: TextStyle(fontSize: 11, color: Colors.red[800], fontWeight: FontWeight.bold),
+                ),
             ],
           ),
         ),
       ],
     ),
   );
+}
+Widget _buildIssuesList() {
+  if (_selectedProject == null || _selectedDate == null) {
+    return SizedBox.shrink();
+  }
+
+  final isDesktop = MediaQuery.of(context).size.width > 1200;
+  final isTablet = MediaQuery.of(context).size.width > 600;
+
+  // Get issues for selected project and date
+  var issueRecords = _processedData.where((record) => 
+    record.boPhan == _selectedProject &&
+    DateFormat('yyyy-MM-dd').format(record.ngay) == _selectedDate &&
+    record.ketQua != '✔️' &&
+    record.ketQua != null
+  ).toList();
+
+  // If no issues for selected project/date, get all issues from selected date
+  final showAllProjects = issueRecords.isEmpty;
+  if (showAllProjects) {
+    issueRecords = _processedData.where((record) => 
+      DateFormat('yyyy-MM-dd').format(record.ngay) == _selectedDate && // Use selected date, not today
+      record.ketQua != '✔️' &&
+      record.ketQua != null
+    ).toList();
+  }
+
+  // Sort by time (newest first)
+  issueRecords.sort((a, b) {
+    final dateCompare = b.ngay.compareTo(a.ngay);
+    if (dateCompare != 0) return dateCompare;
+    final timeA = a.gio ?? '';
+    final timeB = b.gio ?? '';
+    return timeB.compareTo(timeA);
+  });
+
+  // Limit to latest 10 issues
+  if (issueRecords.length > 10) {
+    issueRecords = issueRecords.take(10).toList();
+  }
+
+  if (issueRecords.isEmpty) {
+    return SizedBox.shrink();
+  }
+
+  return Container(
+    margin: EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(8),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.grey.withOpacity(0.1),
+          spreadRadius: 1,
+          blurRadius: 3,
+          offset: Offset(0, 2),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header
+        Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.red[50],
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(8),
+              topRight: Radius.circular(8),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.warning, color: Colors.red[600]),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Danh sách vấn đề',
+                      style: TextStyle(
+                        fontSize: isDesktop ? 18 : 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red[800],
+                      ),
+                    ),
+                  ),
+                  if (showAllProjects)
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.orange[100],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.orange[300]!),
+                      ),
+                      child: Text(
+                        'Tất cả dự án - ${DateFormat('dd/MM/yyyy').format(DateTime.parse(_selectedDate!))}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.orange[800],
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              if (!showAllProjects)
+                Text(
+                  'Các báo cáo có vấn đề trong ${_selectedProject} ngày ${DateFormat('dd/MM/yyyy').format(DateTime.parse(_selectedDate!))}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.red[600],
+                  ),
+                ),
+            ],
+          ),
+        ),
+        // Issues list
+        Container(
+          constraints: BoxConstraints(maxHeight: isDesktop ? 400 : 300),
+          child: ListView.builder(
+            shrinkWrap: true,
+            padding: EdgeInsets.all(16),
+            itemCount: issueRecords.length,
+            itemBuilder: (context, index) {
+              final issue = issueRecords[index];
+              return Card(
+                margin: EdgeInsets.only(bottom: 12),
+                elevation: 2,
+                child: InkWell(
+                  onTap: () => _showIssueDetails(issue),
+                  borderRadius: BorderRadius.circular(4),
+                  child: Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        // Status icon
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: _getStatusColor(issue.ketQua).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: _getStatusColor(issue.ketQua)),
+                          ),
+                          child: Center(
+                            child: Text(
+                              issue.ketQua ?? '?',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        // Issue details
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    issue.nguoiDung ?? 'Unknown',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    '${issue.gio ?? ''}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                  if (showAllProjects) ...[
+                                    SizedBox(width: 8),
+                                    Container(
+                                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue[100],
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        issue.boPhan ?? '',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.blue[800],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                issue.chiTiet ?? 'Không có mô tả',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey[800],
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (issue.viTri?.isNotEmpty == true) ...[
+                                SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      issue.viTri!,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              if (issue.phanLoai?.isNotEmpty == true) ...[
+                                SizedBox(height: 4),
+                                Container(
+                                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange[100],
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    issue.phanLoai!,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.orange[800],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        // Arrow icon
+                        Icon(
+                          Icons.arrow_forward_ios,
+                          size: 16,
+                          color: Colors.grey[400],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    ),
+  );
+}
+void _showIssueDetails(TaskHistoryModel issue) {
+  showDialog(
+    context: context,
+    builder: (context) => Dialog(
+      child: Container(
+        width: MediaQuery.of(context).size.width > 600 ? 500 : MediaQuery.of(context).size.width * 0.9,
+        padding: EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.warning, color: _getStatusColor(issue.ketQua)),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Chi tiết vấn đề',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.close),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            Divider(),
+            _buildDetailRow('Người báo cáo', issue.nguoiDung ?? '-'),
+            _buildDetailRow('Thời gian', '${DateFormat('dd/MM/yyyy').format(issue.ngay)} ${issue.gio ?? ''}'),
+            _buildDetailRow('Dự án', issue.boPhan ?? '-'),
+            _buildDetailRow('Vị trí', issue.viTri ?? '-'),
+            _buildDetailRow('Kết quả', _formatKetQua(issue.ketQua)),
+            _buildDetailRow('Phân loại', issue.phanLoai ?? '-'),
+            if (issue.chiTiet?.isNotEmpty == true)
+              _buildDetailRow('Chi tiết', issue.chiTiet!),
+            if (issue.chiTiet2?.isNotEmpty == true)
+              _buildDetailRow('Lịch trình', issue.chiTiet2!),
+            if (issue.giaiPhap?.isNotEmpty == true)
+              _buildDetailRow('Khu vực', issue.giaiPhap!),
+            if (issue.hinhAnh?.isNotEmpty == true) ...[
+              SizedBox(height: 12),
+              Text('Hình ảnh:', style: TextStyle(fontWeight: FontWeight.bold)),
+              SizedBox(height: 8),
+              GestureDetector(
+                onTap: () => _showFullImage(issue.hinhAnh!),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: CachedNetworkImage(
+                    imageUrl: issue.hinhAnh!,
+                    height: 150,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      height: 150,
+                      color: Colors.grey[200],
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      height: 150,
+                      color: Colors.grey[200],
+                      child: Icon(Icons.broken_image, color: Colors.grey[400]),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _buildDetailRow(String label, String value) {
+  return Padding(
+    padding: EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 120,
+          child: Text(
+            '$label:',
+            style: TextStyle(
+              fontWeight: FontWeight.w500,
+              color: Colors.grey[600],
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              color: Colors.grey[800],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+String _formatKetQua(String? ketQua) {
+  if (ketQua == null) return '';
+  switch (ketQua) {
+    case '✔️':
+      return '✔️ Đạt';
+    case '❌':
+      return '❌ Không làm';
+    case '⚠️':
+      return '⚠️ Chưa tốt';
+    default:
+      return ketQua;
+  }
+}
+
+Color _getStatusColor(String? ketQua) {
+  if (ketQua == null) return Colors.grey;
+  switch (ketQua) {
+    case '✔️':
+      return Colors.green;
+    case '❌':
+      return Colors.red;
+    case '⚠️':
+      return Colors.orange;
+    default:
+      return Colors.grey;
+  }
 }
 Future<void> _exportExcel() async {
   if (_isLoading) return;
@@ -2269,6 +2708,7 @@ void _showProjectScheduleDialog() {
              child: Column(
                children: [
                  _buildHourlyChart(),
+                 _buildIssuesList(),
                  _buildTaskScheduleInfo(), 
                  _buildWorkersTable(),
                ],
@@ -4226,5 +4666,65 @@ class _AreaLinePainter extends CustomPainter {
     return oldDelegate.hourEntries != hourEntries ||
         oldDelegate.maxCount != maxCount ||
         oldDelegate.maxArea != maxArea;
+  }
+}
+class _IssueBackgroundPainter extends CustomPainter {
+  final List<MapEntry<int, Map<String, dynamic>>> hourEntries;
+  final double maxCount;
+
+  _IssueBackgroundPainter({
+    required this.hourEntries,
+    required this.maxCount,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final maxY = maxCount + (maxCount * 0.2);
+    final barWidth = size.width / 24;
+    
+    for (int i = 0; i < hourEntries.length; i++) {
+      final entry = hourEntries[i];
+      final hasIssues = entry.value['hasIssues'] as bool;
+      
+      if (hasIssues) {
+        final paint = Paint()
+          ..color = Colors.red.withOpacity(0.15)
+          ..style = PaintingStyle.fill;
+        
+        // Calculate the center position for each bar
+        final centerX = (i + 0.5) * barWidth;
+        
+        // Draw vertical red stripe centered on the bar
+        final rect = Rect.fromLTWH(
+          centerX - (barWidth * 0.4), // 40% to the left of center
+          0,
+          barWidth * 0.8, // 80% of bar width
+          size.height,
+        );
+        
+        // Draw the red background
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(rect, Radius.circular(4)),
+          paint,
+        );
+        
+        // Add a stronger red border
+        final borderPaint = Paint()
+          ..color = Colors.red.withOpacity(0.3)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5;
+          
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(rect, Radius.circular(4)),
+          borderPaint,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _IssueBackgroundPainter oldDelegate) {
+    return oldDelegate.hourEntries != hourEntries ||
+        oldDelegate.maxCount != maxCount;
   }
 }

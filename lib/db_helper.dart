@@ -39,13 +39,13 @@ class DBHelper {
     }
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool hasReset = prefs.getBool('db_reset_v30') ?? false;
+    bool hasReset = prefs.getBool('db_reset_v31') ?? false;
     
     if (!hasReset) {
-      print('Forcing database reset for version 30...');
+      print('Forcing database reset for version 31...');
       try {
         await deleteDatabase(path);
-        await prefs.setBool('db_reset_v30', true);
+        await prefs.setBool('db_reset_v31', true);
         print('Database reset successful');
       } catch (e) {
         print('Error during database reset: $e');
@@ -57,7 +57,7 @@ class DBHelper {
     final db = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 30,
+        version: 31,
         onCreate: (Database db, int version) async {
           print('Creating database tables...');
           await db.execute(DatabaseTables.createInteractionTable);
@@ -77,9 +77,6 @@ class DBHelper {
           await db.execute(DatabaseTables.createOrderDinhMucTable);
           await db.execute(DatabaseTables.createChamCongCNTable);
           await db.execute(DatabaseTables.createHinhAnhZaloTable);
-          await db.execute(DatabaseTables.createHDDuTruTable); 
-          await db.execute(DatabaseTables.createHDChiTietYCMMTable); 
-          await db.execute(DatabaseTables.createHDYeuCauMMTable); 
           await db.execute(DatabaseTables.createChamCongTable); 
           await db.execute(DatabaseTables.createChamCongGioTable); 
           await db.execute(DatabaseTables.createChamCongLSTable);  
@@ -118,10 +115,13 @@ class DBHelper {
             await db.execute(DatabaseTables.createLinkNgoaiGiaoTable);
             await db.execute(DatabaseTables.createLinkMayMocTable);
             await db.execute(DatabaseTables.createLinkLuongTable);
+                        await db.execute(DatabaseTables.createLinkYeuCauMayTable);
+            await db.execute(DatabaseTables.createLinkYeuCauMayChiTietTable);
+            await db.execute(DatabaseTables.createLinkDanhMucMayTable);
           print('Database tables created successfully');
         },
         onUpgrade: (Database db, int oldVersion, int newVersion) async {
-          if (oldVersion < 30) {
+          if (oldVersion < 31) {
 
           }
         },
@@ -142,8 +142,280 @@ class DBHelper {
     rethrow;
   }
 }
-//ADDON 3:
+//YeuCauMay:
+/// Inserts a LinkYeuCauMay record.
+Future<int> insertLinkYeuCauMay(LinkYeuCauMayModel model) async {
+  final db = await database;
+  return db.insert(
+    DatabaseTables.linkYeuCauMayTable,
+    model.toMap(),
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
+}
+Future<List<LinkDanhMucMayModel>> getAllLinkDanhMucMays() async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query('LinkDanhMucMay');
+  
+  return List.generate(maps.length, (i) {
+    return LinkDanhMucMayModel.fromMap(maps[i]);
+  });
+}
+/// Gets a LinkYeuCauMay by yeuCauId.
+Future<LinkYeuCauMayModel?> getLinkYeuCauMayById(String yeuCauId) async {
+  final db = await database;
+  final rows = await db.query(
+    DatabaseTables.linkYeuCauMayTable,
+    where: 'yeuCauId = ?',
+    whereArgs: [yeuCauId],
+    limit: 1,
+  );
+  if (rows.isNotEmpty) return LinkYeuCauMayModel.fromMap(rows.first);
+  return null;
+}
 
+/// Gets all LinkYeuCauMay.
+Future<List<LinkYeuCauMayModel>> getAllLinkYeuCauMay() async {
+  final db = await database;
+  final rows = await db.query(DatabaseTables.linkYeuCauMayTable);
+  return rows.map((m) => LinkYeuCauMayModel.fromMap(m)).toList();
+}
+
+/// Updates a LinkYeuCauMay.
+Future<int> updateLinkYeuCauMay(LinkYeuCauMayModel model) async {
+  final db = await database;
+  return db.update(
+    DatabaseTables.linkYeuCauMayTable,
+    model.toMap(),
+    where: 'yeuCauId = ?',
+    whereArgs: [model.yeuCauId],
+  );
+}
+
+/// Deletes a LinkYeuCauMay by id.
+Future<int> deleteLinkYeuCauMay(String yeuCauId) async {
+  final db = await database;
+  return db.delete(
+    DatabaseTables.linkYeuCauMayTable,
+    where: 'yeuCauId = ?',
+    whereArgs: [yeuCauId],
+  );
+}
+Future<void> batchInsertLinkYeuCauMays(List<LinkYeuCauMayModel> models) async {
+  final db = await database;
+  final batch = db.batch();
+  
+  for (var model in models) {
+    batch.insert('LinkYeuCauMay', model.toMap());
+  }
+  
+  await batch.commit(noResult: true);
+}
+
+Future<void> batchInsertLinkYeuCauMayChiTiets(List<LinkYeuCauMayChiTietModel> models) async {
+  final db = await database;
+  final batch = db.batch();
+  
+  for (var model in models) {
+    batch.insert('LinkYeuCauMayChiTiet', model.toMap());
+  }
+  
+  await batch.commit(noResult: true);
+}
+
+Future<void> batchInsertLinkDanhMucMays(List<LinkDanhMucMayModel> models) async {
+  final db = await database;
+  final batch = db.batch();
+  
+  for (var model in models) {
+    batch.insert('LinkDanhMucMay', model.toMap());
+  }
+  
+  await batch.commit(noResult: true);
+}
+/// Clears LinkYeuCauMay table.
+Future<void> clearLinkYeuCauMayTable() async {
+  final db = await database;
+  await db.delete(DatabaseTables.linkYeuCauMayTable);
+}
+
+/// Count LinkYeuCauMay.
+Future<int> getLinkYeuCauMayCount() async {
+  final db = await database;
+  final r = await db.rawQuery('SELECT COUNT(*) AS c FROM ${DatabaseTables.linkYeuCauMayTable}');
+  return Sqflite.firstIntValue(r) ?? 0;
+}
+
+/// Search by fields (tenHopDong / diaChi / phanLoai / trangThai / hopDongId).
+Future<List<LinkYeuCauMayModel>> searchLinkYeuCauMay(String term) async {
+  final db = await database;
+  final rows = await db.query(
+    DatabaseTables.linkYeuCauMayTable,
+    where: 'tenHopDong LIKE ? OR diaChi LIKE ? OR phanLoai LIKE ? OR trangThai LIKE ? OR hopDongId LIKE ?',
+    whereArgs: List.filled(5, '%$term%'),
+  );
+  return rows.map((m) => LinkYeuCauMayModel.fromMap(m)).toList();
+}
+/// Insert a LinkYeuCauMayChiTiet.
+Future<int> insertLinkYeuCauMayChiTiet(LinkYeuCauMayChiTietModel model) async {
+  final db = await database;
+  return db.insert(
+    DatabaseTables.linkYeuCauMayChiTietTable,
+    model.toMap(),
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
+}
+
+/// Get a LinkYeuCauMayChiTiet by chiTietId.
+Future<LinkYeuCauMayChiTietModel?> getLinkYeuCauMayChiTietById(String chiTietId) async {
+  final db = await database;
+  final rows = await db.query(
+    DatabaseTables.linkYeuCauMayChiTietTable,
+    where: 'chiTietId = ?',
+    whereArgs: [chiTietId],
+    limit: 1,
+  );
+  if (rows.isNotEmpty) return LinkYeuCauMayChiTietModel.fromMap(rows.first);
+  return null;
+}
+
+/// Get all details for a yeuCauId (common use).
+Future<List<LinkYeuCauMayChiTietModel>> getChiTietByYeuCauId(String yeuCauId) async {
+  final db = await database;
+  final rows = await db.query(
+    DatabaseTables.linkYeuCauMayChiTietTable,
+    where: 'yeuCauId = ?',
+    whereArgs: [yeuCauId],
+  );
+  return rows.map((m) => LinkYeuCauMayChiTietModel.fromMap(m)).toList();
+}
+
+/// Get all LinkYeuCauMayChiTiet.
+Future<List<LinkYeuCauMayChiTietModel>> getAllLinkYeuCauMayChiTiet() async {
+  final db = await database;
+  final rows = await db.query(DatabaseTables.linkYeuCauMayChiTietTable);
+  return rows.map((m) => LinkYeuCauMayChiTietModel.fromMap(m)).toList();
+}
+
+/// Update LinkYeuCauMayChiTiet.
+Future<int> updateLinkYeuCauMayChiTiet(LinkYeuCauMayChiTietModel model) async {
+  final db = await database;
+  return db.update(
+    DatabaseTables.linkYeuCauMayChiTietTable,
+    model.toMap(),
+    where: 'chiTietId = ?',
+    whereArgs: [model.chiTietId],
+  );
+}
+
+/// Delete LinkYeuCauMayChiTiet by id.
+Future<int> deleteLinkYeuCauMayChiTiet(String chiTietId) async {
+  final db = await database;
+  return db.delete(
+    DatabaseTables.linkYeuCauMayChiTietTable,
+    where: 'chiTietId = ?',
+    whereArgs: [chiTietId],
+  );
+}
+
+/// Clear table.
+Future<void> clearLinkYeuCauMayChiTietTable() async {
+  final db = await database;
+  await db.delete(DatabaseTables.linkYeuCauMayChiTietTable);
+}
+
+/// Count.
+Future<int> getLinkYeuCauMayChiTietCount() async {
+  final db = await database;
+  final r = await db.rawQuery('SELECT COUNT(*) AS c FROM ${DatabaseTables.linkYeuCauMayChiTietTable}');
+  return Sqflite.firstIntValue(r) ?? 0;
+}
+
+/// Search by loaiMay / maMay / hangMay / tinhTrangXuLy.
+Future<List<LinkYeuCauMayChiTietModel>> searchLinkYeuCauMayChiTiet(String term) async {
+  final db = await database;
+  final rows = await db.query(
+    DatabaseTables.linkYeuCauMayChiTietTable,
+    where: 'loaiMay LIKE ? OR maMay LIKE ? OR hangMay LIKE ? OR tinhTrangXuLy LIKE ?',
+    whereArgs: List.filled(4, '%$term%'),
+  );
+  return rows.map((m) => LinkYeuCauMayChiTietModel.fromMap(m)).toList();
+}
+/// Insert LinkDanhMucMay.
+Future<int> insertLinkDanhMucMay(LinkDanhMucMayModel model) async {
+  final db = await database;
+  return db.insert(
+    DatabaseTables.linkDanhMucMayTable,
+    model.toMap(),
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
+}
+
+/// Get LinkDanhMucMay by id.
+Future<LinkDanhMucMayModel?> getLinkDanhMucMayById(String danhMucId) async {
+  final db = await database;
+  final rows = await db.query(
+    DatabaseTables.linkDanhMucMayTable,
+    where: 'danhMucId = ?',
+    whereArgs: [danhMucId],
+    limit: 1,
+  );
+  if (rows.isNotEmpty) return LinkDanhMucMayModel.fromMap(rows.first);
+  return null;
+}
+
+/// Get all LinkDanhMucMay.
+Future<List<LinkDanhMucMayModel>> getAllLinkDanhMucMay() async {
+  final db = await database;
+  final rows = await db.query(DatabaseTables.linkDanhMucMayTable);
+  return rows.map((m) => LinkDanhMucMayModel.fromMap(m)).toList();
+}
+
+/// Update LinkDanhMucMay.
+Future<int> updateLinkDanhMucMay(LinkDanhMucMayModel model) async {
+  final db = await database;
+  return db.update(
+    DatabaseTables.linkDanhMucMayTable,
+    model.toMap(),
+    where: 'danhMucId = ?',
+    whereArgs: [model.danhMucId],
+  );
+}
+
+/// Delete LinkDanhMucMay by id.
+Future<int> deleteLinkDanhMucMay(String danhMucId) async {
+  final db = await database;
+  return db.delete(
+    DatabaseTables.linkDanhMucMayTable,
+    where: 'danhMucId = ?',
+    whereArgs: [danhMucId],
+  );
+}
+
+/// Clear table.
+Future<void> clearLinkDanhMucMayTable() async {
+  final db = await database;
+  await db.delete(DatabaseTables.linkDanhMucMayTable);
+}
+
+/// Count.
+Future<int> getLinkDanhMucMayCount() async {
+  final db = await database;
+  final r = await db.rawQuery('SELECT COUNT(*) AS c FROM ${DatabaseTables.linkDanhMucMayTable}');
+  return Sqflite.firstIntValue(r) ?? 0;
+}
+
+/// Search by loaiMay / maMay / hangMay.
+Future<List<LinkDanhMucMayModel>> searchLinkDanhMucMay(String term) async {
+  final db = await database;
+  final rows = await db.query(
+    DatabaseTables.linkDanhMucMayTable,
+    where: 'loaiMay LIKE ? OR maMay LIKE ? OR hangMay LIKE ?',
+    whereArgs: List.filled(3, '%$term%'),
+  );
+  return rows.map((m) => LinkDanhMucMayModel.fromMap(m)).toList();
+}
+
+//ADDON 3:
 Future<void> clearDSHangTable() async {
   final db = await database;
   await db.delete('dshang');
@@ -4533,197 +4805,6 @@ Future<void> batchInsertChamCongCNThang(List<ChamCongCNThangModel> items) async 
     }
     await batch.commit(noResult: true);
   });
-}
-// ==================== HDChiTietYCMM CRUD Operations ====================
-Future<void> insertHDChiTietYCMM(HDChiTietYCMMModel hdChiTietYCMM) async {
- await insert(DatabaseTables.hdChiTietYCMMTable, hdChiTietYCMM.toMap());
-}
-
-Future<List<HDChiTietYCMMModel>> getAllHDChiTietYCMM() async {
- final maps = await query(DatabaseTables.hdChiTietYCMMTable);
- return maps.map((map) => HDChiTietYCMMModel.fromMap(map)).toList();
-}
-
-Future<HDChiTietYCMMModel?> getHDChiTietYCMMByUID(String uid) async {
- final maps = await query(
-   DatabaseTables.hdChiTietYCMMTable,
-   where: 'UID = ?',
-   whereArgs: [uid],
- );
- if (maps.isEmpty) return null;
- return HDChiTietYCMMModel.fromMap(maps.first);
-}
-
-Future<List<HDChiTietYCMMModel>> getHDChiTietYCMMBySoPhieuID(String soPhieuID) async {
- final maps = await query(
-   DatabaseTables.hdChiTietYCMMTable,
-   where: 'SoPhieuID = ?',
-   whereArgs: [soPhieuID],
- );
- return maps.map((map) => HDChiTietYCMMModel.fromMap(map)).toList();
-}
-
-Future<int> updateHDChiTietYCMM(String uid, Map<String, dynamic> updates) async {
- return await update(
-   DatabaseTables.hdChiTietYCMMTable,
-   updates,
-   where: 'UID = ?',
-   whereArgs: [uid],
- );
-}
-
-Future<int> deleteHDChiTietYCMM(String uid) async {
- return await delete(
-   DatabaseTables.hdChiTietYCMMTable,
-   where: 'UID = ?',
-   whereArgs: [uid],
- );
-}
-
-Future<void> batchInsertHDChiTietYCMM(List<HDChiTietYCMMModel> items) async {
- final db = await database;
- await db.transaction((txn) async {
-   final batch = txn.batch();
-   for (var item in items) {
-     batch.insert(
-       DatabaseTables.hdChiTietYCMMTable, 
-       item.toMap(),
-       conflictAlgorithm: ConflictAlgorithm.replace
-     );
-   }
-   await batch.commit(noResult: true);
- });
-}
-
-// ==================== HDDuTru CRUD Operations ====================
-Future<void> insertHDDuTru(HDDuTruModel hdDuTru) async {
- await insert(DatabaseTables.hdDuTruTable, hdDuTru.toMap());
-}
-
-Future<List<HDDuTruModel>> getAllHDDuTru() async {
- final maps = await query(DatabaseTables.hdDuTruTable);
- return maps.map((map) => HDDuTruModel.fromMap(map)).toList();
-}
-
-Future<HDDuTruModel?> getHDDuTruBySoPhieuID(String soPhieuID) async {
- final maps = await query(
-   DatabaseTables.hdDuTruTable,
-   where: 'SoPhieuID = ?',
-   whereArgs: [soPhieuID],
- );
- if (maps.isEmpty) return null;
- return HDDuTruModel.fromMap(maps.first);
-}
-
-Future<List<HDDuTruModel>> getHDDuTruByNguoiDung(String nguoiDung) async {
- final maps = await query(
-   DatabaseTables.hdDuTruTable,
-   where: 'NguoiDung = ?',
-   whereArgs: [nguoiDung],
- );
- return maps.map((map) => HDDuTruModel.fromMap(map)).toList();
-}
-
-Future<int> updateHDDuTru(String soPhieuID, Map<String, dynamic> updates) async {
- return await update(
-   DatabaseTables.hdDuTruTable,
-   updates,
-   where: 'SoPhieuID = ?',
-   whereArgs: [soPhieuID],
- );
-}
-
-Future<int> deleteHDDuTru(String soPhieuID) async {
- return await delete(
-   DatabaseTables.hdDuTruTable,
-   where: 'SoPhieuID = ?',
-   whereArgs: [soPhieuID],
- );
-}
-
-Future<void> batchInsertHDDuTru(List<HDDuTruModel> items) async {
- final db = await database;
- await db.transaction((txn) async {
-   final batch = txn.batch();
-   for (var item in items) {
-     batch.insert(
-       DatabaseTables.hdDuTruTable, 
-       item.toMap(),
-       conflictAlgorithm: ConflictAlgorithm.replace
-     );
-   }
-   await batch.commit(noResult: true);
- });
-}
-
-// ==================== HDYeuCauMM CRUD Operations ====================
-Future<void> insertHDYeuCauMM(HDYeuCauMMModel hdYeuCauMM) async {
- await insert(DatabaseTables.hdYeuCauMMTable, hdYeuCauMM.toMap());
-}
-
-Future<List<HDYeuCauMMModel>> getAllHDYeuCauMM() async {
- final maps = await query(DatabaseTables.hdYeuCauMMTable);
- return maps.map((map) => HDYeuCauMMModel.fromMap(map)).toList();
-}
-
-Future<HDYeuCauMMModel?> getHDYeuCauMMBySoPhieuUID(String soPhieuUID) async {
- final maps = await query(
-   DatabaseTables.hdYeuCauMMTable,
-   where: 'SoPhieuUID = ?',
-   whereArgs: [soPhieuUID],
- );
- if (maps.isEmpty) return null;
- return HDYeuCauMMModel.fromMap(maps.first);
-}
-
-Future<List<HDYeuCauMMModel>> getHDYeuCauMMByDuTruID(String duTruID) async {
- final maps = await query(
-   DatabaseTables.hdYeuCauMMTable,
-   where: 'DuTruID = ?',
-   whereArgs: [duTruID],
- );
- return maps.map((map) => HDYeuCauMMModel.fromMap(map)).toList();
-}
-
-Future<List<HDYeuCauMMModel>> getHDYeuCauMMByNguoiDung(String nguoiDung) async {
- final maps = await query(
-   DatabaseTables.hdYeuCauMMTable,
-   where: 'NguoiDung = ?',
-   whereArgs: [nguoiDung],
- );
- return maps.map((map) => HDYeuCauMMModel.fromMap(map)).toList();
-}
-
-Future<int> updateHDYeuCauMM(String soPhieuUID, Map<String, dynamic> updates) async {
- return await update(
-   DatabaseTables.hdYeuCauMMTable,
-   updates,
-   where: 'SoPhieuUID = ?',
-   whereArgs: [soPhieuUID],
- );
-}
-
-Future<int> deleteHDYeuCauMM(String soPhieuUID) async {
- return await delete(
-   DatabaseTables.hdYeuCauMMTable,
-   where: 'SoPhieuUID = ?',
-   whereArgs: [soPhieuUID],
- );
-}
-
-Future<void> batchInsertHDYeuCauMM(List<HDYeuCauMMModel> items) async {
- final db = await database;
- await db.transaction((txn) async {
-   final batch = txn.batch();
-   for (var item in items) {
-     batch.insert(
-       DatabaseTables.hdYeuCauMMTable, 
-       item.toMap(),
-       conflictAlgorithm: ConflictAlgorithm.replace
-     );
-   }
-   await batch.commit(noResult: true);
- });
 }
 
 // ==================== ChamCong CRUD Operations ====================
