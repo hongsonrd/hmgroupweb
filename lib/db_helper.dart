@@ -39,13 +39,13 @@ class DBHelper {
     }
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool hasReset = prefs.getBool('db_reset_v31') ?? false;
+    bool hasReset = prefs.getBool('db_reset_v32') ?? false;
     
     if (!hasReset) {
-      print('Forcing database reset for version 31...');
+      print('Forcing database reset for version 32...');
       try {
         await deleteDatabase(path);
-        await prefs.setBool('db_reset_v31', true);
+        await prefs.setBool('db_reset_v32', true);
         print('Database reset successful');
       } catch (e) {
         print('Error during database reset: $e');
@@ -57,7 +57,7 @@ class DBHelper {
     final db = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 31,
+        version: 32,
         onCreate: (Database db, int version) async {
           print('Creating database tables...');
           await db.execute(DatabaseTables.createInteractionTable);
@@ -82,7 +82,7 @@ class DBHelper {
           await db.execute(DatabaseTables.createChamCongLSTable);  
           await db.execute(DatabaseTables.createChamCongCNThangTable); 
           await db.execute(DatabaseTables.createChamCongVangNghiTcaTable); 
-          await ChecklistInitializer.initializeChecklistTable(db);
+          //await ChecklistInitializer.initializeChecklistTable(db);
           await db.execute(DatabaseTables.createMapListTable);
           await db.execute(DatabaseTables.createMapFloorTable);
           await db.execute(DatabaseTables.createMapZoneTable);
@@ -121,7 +121,7 @@ class DBHelper {
           print('Database tables created successfully');
         },
         onUpgrade: (Database db, int oldVersion, int newVersion) async {
-          if (oldVersion < 31) {
+          if (oldVersion < 32) {
 
           }
         },

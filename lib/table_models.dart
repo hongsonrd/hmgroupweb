@@ -3,70 +3,7 @@ import 'dart:typed_data';
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 import 'multifile.dart';
-class ChecklistInitializer {
-  static const String tableKey = 'checklist_data';
-  static const int batchSize = 500;
-  static Future<void> initializeChecklistTable(Database db) async {
-    try {
-      final count = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM ${DatabaseTables.checklistTable}'));
-      if (count == 0) {
-        final Uint8List excelData = await MultiFileAccessUtility.getFileContent(tableKey);
-        final excel = Excel.decodeBytes(excelData);
-        final sheet = excel.tables[excel.tables.keys.first];
-        if (sheet == null) throw Exception('No sheet found in Excel file');
-        final headers = _getHeaders(sheet);
-        List<Map<String, dynamic>> batch = [];
-        for (var rowIndex = 1; rowIndex < sheet.maxRows; rowIndex++) {
-          final row = sheet.row(rowIndex);
-          if (_isEmptyRow(row)) continue;
-          final rowData = _processRow(headers, row);
-          if (!rowData.containsKey('TASKID') || rowData['TASKID'] == null) {
-            rowData['TASKID'] = const Uuid().v4();
-          }
-          batch.add(rowData);
-          if (batch.length >= batchSize) {
-            await _insertBatch(db, batch);
-            batch = [];
-          }
-        }
-        if (batch.isNotEmpty) {
-          await _insertBatch(db, batch);
-        }
-      }
-    } catch (e) {
-      rethrow;
-    }
-  }
-  static List<String> _getHeaders(Sheet sheet) {
-    final headerRow = sheet.row(0);
-    return headerRow.where((cell) => cell?.value != null).map((cell) => cell!.value.toString().trim().toUpperCase()).toList();
-  }
-  static bool _isEmptyRow(List<Data?> row) {
-    return row.every((cell) => cell?.value == null);
-  }
-  static Map<String, dynamic> _processRow(List<String> headers, List<Data?> row) {
-    final Map<String, dynamic> rowData = {};
-    for (var i = 0; i < headers.length && i < row.length; i++) {
-      final value = row[i]?.value;
-      if (value != null) {
-        if (value is double && headers[i] == 'NGAYBC') {
-          final dateTime = DateTime(1899, 12, 30).add(Duration(days: value.toInt()));
-          rowData[headers[i]] = dateTime.toIso8601String();
-        } else {
-          rowData[headers[i]] = value.toString();
-        }
-      }
-    }
-    return rowData;
-  }
-  static Future<void> _insertBatch(Database db, List<Map<String, dynamic>> batch) async {
-    await db.transaction((txn) async {
-      for (final row in batch) {
-        await txn.insert(DatabaseTables.checklistTable, row, conflictAlgorithm: ConflictAlgorithm.replace);
-      }
-    });
-  }
-}
+
 class ProjectListModel {
   final String boPhan;
   final String maBP;
