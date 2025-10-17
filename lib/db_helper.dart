@@ -143,6 +143,41 @@ class DBHelper {
   }
 }
 //YeuCauMay:
+Future<void> updateLinkYeuCauMay(LinkYeuCauMayModel request) async {
+  final db = await database;
+  await db.update(
+    'LinkYeuCauMay',
+    request.toMap(),
+    where: 'yeuCauId = ?',
+    whereArgs: [request.yeuCauId],
+  );
+}
+
+Future<List<LinkYeuCauMayChiTietModel>> getAllLinkYeuCauMayChiTiets() async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query('LinkYeuCauMayChiTiet');
+  return List.generate(maps.length, (i) => LinkYeuCauMayChiTietModel.fromMap(maps[i]));
+}
+Future<void> insertLinkYeuCauMayChiTiet(LinkYeuCauMayChiTietModel chiTiet) async {
+  final db = await database;
+  await db.insert('LinkYeuCauMayChiTiet', chiTiet.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+}
+Future<List<LinkYeuCauMayModel>> getAllLinkYeuCauMays() async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query('LinkYeuCauMay');
+  return List.generate(maps.length, (i) => LinkYeuCauMayModel.fromMap(maps[i]));
+}
+
+Future<List<LinkHopDongModel>> getLinkHopDongsByUser(String username) async {
+  final db = await database;
+  final List<Map<String, dynamic>> maps = await db.query(
+    'LinkHopDong',
+    where: 'nguoiTao = ?',
+    whereArgs: [username],
+    orderBy: 'thang DESC',
+  );
+  return List.generate(maps.length, (i) => LinkHopDongModel.fromMap(maps[i]));
+}
 /// Inserts a LinkYeuCauMay record.
 Future<int> insertLinkYeuCauMay(LinkYeuCauMayModel model) async {
   final db = await database;
@@ -178,17 +213,6 @@ Future<List<LinkYeuCauMayModel>> getAllLinkYeuCauMay() async {
   final db = await database;
   final rows = await db.query(DatabaseTables.linkYeuCauMayTable);
   return rows.map((m) => LinkYeuCauMayModel.fromMap(m)).toList();
-}
-
-/// Updates a LinkYeuCauMay.
-Future<int> updateLinkYeuCauMay(LinkYeuCauMayModel model) async {
-  final db = await database;
-  return db.update(
-    DatabaseTables.linkYeuCauMayTable,
-    model.toMap(),
-    where: 'yeuCauId = ?',
-    whereArgs: [model.yeuCauId],
-  );
 }
 
 /// Deletes a LinkYeuCauMay by id.
@@ -254,15 +278,6 @@ Future<List<LinkYeuCauMayModel>> searchLinkYeuCauMay(String term) async {
     whereArgs: List.filled(5, '%$term%'),
   );
   return rows.map((m) => LinkYeuCauMayModel.fromMap(m)).toList();
-}
-/// Insert a LinkYeuCauMayChiTiet.
-Future<int> insertLinkYeuCauMayChiTiet(LinkYeuCauMayChiTietModel model) async {
-  final db = await database;
-  return db.insert(
-    DatabaseTables.linkYeuCauMayChiTietTable,
-    model.toMap(),
-    conflictAlgorithm: ConflictAlgorithm.replace,
-  );
 }
 
 /// Get a LinkYeuCauMayChiTiet by chiTietId.

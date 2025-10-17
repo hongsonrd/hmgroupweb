@@ -3,11 +3,14 @@ import 'dart:math';
 import 'db_helper.dart';
 import 'table_models.dart';
 import 'hd_yeucaumayquanly.dart';
+import 'hd_yeucaumaymoi.dart';
+
 class HDYeuCauMayScreen extends StatefulWidget {
   final String username;
   final String userRole;
   final String currentPeriod;
   final String nextPeriod;
+
   const HDYeuCauMayScreen({
     Key? key,
     required this.username,
@@ -15,20 +18,42 @@ class HDYeuCauMayScreen extends StatefulWidget {
     required this.currentPeriod,
     required this.nextPeriod,
   }) : super(key: key);
+
   @override
   _HDYeuCauMayScreenState createState() => _HDYeuCauMayScreenState();
 }
+
 class _HDYeuCauMayScreenState extends State<HDYeuCauMayScreen> {
   final DBHelper _dbHelper = DBHelper();
   final TextEditingController _searchController = TextEditingController();
+  
   List<LinkDanhMucMayModel> _allDanhMucMay = [];
   List<LinkDanhMucMayModel> _filteredDanhMucMay = [];
+  List<LinkYeuCauMayModel> _allRequests = [];
+  
   List<String> _uniqueHangMay = ['Tất cả'];
   List<String> _uniqueLoaiMay = ['Tất cả'];
   String _selectedHangMay = 'Tất cả';
   String _selectedLoaiMay = 'Tất cả';
   bool _isLoading = true;
   int _totalRecords = 0;
+
+  // Dashboard stats
+  int _totalRequests = 0;
+  int _draftRequests = 0;
+  int _pendingManagerApproval = 0;
+  int _pendingFinanceApproval = 0;
+  int _approvedRequests = 0;
+  int _rejectedRequests = 0;
+  
+  // Approval permissions
+  final List<String> _managerApprovers = ['hm.tason', 'hm.tranminh'];
+  final List<String> _financeApprovers = ['hm.tason', 'hm.luukinh'];
+  
+  bool _isManagerApprover = false;
+  bool _isFinanceApprover = false;
+  int _needsMyApproval = 0;
+
   final List<IconData> _machineIcons = [
     Icons.precision_manufacturing,
     Icons.build,
@@ -51,6 +76,7 @@ class _HDYeuCauMayScreenState extends State<HDYeuCauMayScreen> {
     Icons.settings_power,
     Icons.build_circle,
   ];
+
   final List<Color> _iconColors = [
     Color(0xFF1E88E5),
     Color(0xFF43A047),
@@ -63,26 +89,37 @@ class _HDYeuCauMayScreenState extends State<HDYeuCauMayScreen> {
     Color(0xFF3949AB),
     Color(0xFF00897B),
   ];
+
   final Random _random = Random();
   final Map<String, IconData> _iconCache = {};
   final Map<String, Color> _colorCache = {};
+
   @override
   void initState() {
     super.initState();
+    _checkApprovalPermissions();
     _loadData();
     _searchController.addListener(_filterData);
   }
+
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
+
+  void _checkApprovalPermissions() {
+    _isManagerApprover = _managerApprovers.contains(widget.username.toLowerCase());
+    _isFinanceApprover = _financeApprovers.contains(widget.username.toLowerCase());
+  }
+
   IconData _getIconForItem(String itemId) {
     if (!_iconCache.containsKey(itemId)) {
       _iconCache[itemId] = _machineIcons[_random.nextInt(_machineIcons.length)];
     }
     return _iconCache[itemId]!;
   }
+
   Color _getColorForLoaiMay(String? loaiMay) {
     if (loaiMay == null) return Colors.grey;
     if (!_colorCache.containsKey(loaiMay)) {
@@ -90,14 +127,22 @@ class _HDYeuCauMayScreenState extends State<HDYeuCauMayScreen> {
     }
     return _colorCache[loaiMay]!;
   }
+
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
     });
+
     try {
+      // Load machine catalog
       final danhMucMayData = await _dbHelper.getAllLinkDanhMucMays();
+      
+      // Load requests for dashboard
+      final requestsData = await _dbHelper.getAllLinkYeuCauMays();
+      
       final uniqueHangMaySet = <String>{};
       final uniqueLoaiMaySet = <String>{};
+
       for (var item in danhMucMayData) {
         if (item.hangMay != null && item.hangMay!.isNotEmpty) {
           uniqueHangMaySet.add(item.hangMay!);
@@ -106,9 +151,14 @@ class _HDYeuCauMayScreenState extends State<HDYeuCauMayScreen> {
           uniqueLoaiMaySet.add(item.loaiMay!);
         }
       }
+
+      // Calculate dashboard stats
+      _calculateDashboardStats(requestsData);
+
       setState(() {
         _allDanhMucMay = danhMucMayData;
         _filteredDanhMucMay = danhMucMayData;
+        _allRequests = requestsData;
         _totalRecords = danhMucMayData.length;
         _uniqueHangMay = ['Tất cả', ...uniqueHangMaySet.toList()..sort()];
         _uniqueLoaiMay = ['Tất cả', ...uniqueLoaiMaySet.toList()..sort()];
@@ -127,6 +177,40 @@ class _HDYeuCauMayScreenState extends State<HDYeuCauMayScreen> {
       );
     }
   }
+
+  void _calculateDashboardStats(List<LinkYeuCauMayModel> requests) {
+    _totalRequests = requests.length;
+    _draftRequests = 0;
+    _pendingManagerApproval = 0;
+    _pendingFinanceApproval = 0;
+    _approvedRequests = 0;
+    _rejectedRequests = 0;
+    _needsMyApproval = 0;
+
+    for (var request in requests) {
+      switch (request.trangThai) {
+        case 'Nháp':
+          _draftRequests++;
+          break;
+        case 'Gửi':
+          _pendingManagerApproval++;
+          if (_isManagerApprover) _needsMyApproval++;
+          break;
+        case 'TPKD Duyệt':
+          _pendingFinanceApproval++;
+          if (_isFinanceApprover) _needsMyApproval++;
+          break;
+        case 'TPKD Từ chối':
+        case 'Kế toán từ chối':
+          _rejectedRequests++;
+          break;
+        case 'Kế toán duyệt':
+          _approvedRequests++;
+          break;
+      }
+    }
+  }
+
   void _filterData() {
     final searchText = _searchController.text.toLowerCase();
     setState(() {
@@ -135,14 +219,105 @@ class _HDYeuCauMayScreenState extends State<HDYeuCauMayScreen> {
             (item.loaiMay?.toLowerCase().contains(searchText) ?? false) ||
             (item.maMay?.toLowerCase().contains(searchText) ?? false) ||
             (item.hangMay?.toLowerCase().contains(searchText) ?? false);
+
         final matchesHangMay = _selectedHangMay == 'Tất cả' ||
             item.hangMay == _selectedHangMay;
+
         final matchesLoaiMay = _selectedLoaiMay == 'Tất cả' ||
             item.loaiMay == _selectedLoaiMay;
+
         return matchesSearch && matchesHangMay && matchesLoaiMay;
       }).toList();
     });
   }
+
+  Widget _buildDashboardCard(String title, int count, Color color, IconData icon) {
+    return Expanded(
+      child: Card(
+        elevation: 2,
+        child: Container(
+          padding: EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                color.withOpacity(0.1),
+                Colors.white,
+              ],
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color, size: 28),
+              SizedBox(height: 8),
+              Text(
+                count.toString(),
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey[700],
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildApprovalNotification() {
+    if (!_isManagerApprover && !_isFinanceApprover) {
+      return SizedBox.shrink();
+    }
+
+    if (_needsMyApproval == 0) {
+      return SizedBox.shrink();
+    }
+
+    String approvalType = _isManagerApprover ? 'TPKD' : 'Kế toán';
+
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Color(0xFFFFF3E0),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Color(0xFFFF6F00), width: 1.5),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.notification_important, color: Color(0xFFFF6F00)),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Bạn có $_needsMyApproval yêu cầu cần duyệt ($approvalType)',
+              style: TextStyle(
+                color: Color(0xFFE65100),
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          Icon(Icons.arrow_forward_ios, size: 16, color: Color(0xFFFF6F00)),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -173,6 +348,90 @@ class _HDYeuCauMayScreenState extends State<HDYeuCauMayScreen> {
       ),
       body: Column(
         children: [
+          // Dashboard Stats Section
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFF42A5F5).withOpacity(0.05),
+                  Colors.white,
+                ],
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Tổng quan yêu cầu máy móc',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1976D2),
+                  ),
+                ),
+                SizedBox(height: 12),
+                Row(
+                  children: [
+                    _buildDashboardCard(
+                      'Tổng số',
+                      _totalRequests,
+                      Color(0xFF1976D2),
+                      Icons.summarize,
+                    ),
+                    SizedBox(width: 8),
+                    _buildDashboardCard(
+                      'Nháp',
+                      _draftRequests,
+                      Color(0xFF757575),
+                      Icons.edit_note,
+                    ),
+                    SizedBox(width: 8),
+                    _buildDashboardCard(
+                      'Chờ TPKD',
+                      _pendingManagerApproval,
+                      Color(0xFFFF9800),
+                      Icons.pending_actions,
+                    ),
+                    SizedBox(width: 8),
+                    _buildDashboardCard(
+                      'Chờ KT',
+                      _pendingFinanceApproval,
+                      Color(0xFFFFA726),
+                      Icons.account_balance,
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8),
+                Row(
+                  children: [
+                    _buildDashboardCard(
+                      'Đã duyệt',
+                      _approvedRequests,
+                      Color(0xFF4CAF50),
+                      Icons.check_circle,
+                    ),
+                    SizedBox(width: 8),
+                    _buildDashboardCard(
+                      'Từ chối',
+                      _rejectedRequests,
+                      Color(0xFFE53935),
+                      Icons.cancel,
+                    ),
+                    Expanded(child: SizedBox()),
+                    Expanded(child: SizedBox()),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Approval Notification Bar
+          _buildApprovalNotification(),
+
+          // Action Buttons Section
           Container(
             padding: EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -201,6 +460,32 @@ class _HDYeuCauMayScreenState extends State<HDYeuCauMayScreen> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
+                          builder: (context) => HDYeuCauMayMoiScreen(
+                            username: widget.username,
+                            userRole: widget.userRole,
+                            currentPeriod: widget.currentPeriod,
+                            nextPeriod: widget.nextPeriod,
+                          ),
+                        ),
+                      ).then((_) => _loadData()); // Refresh after creating
+                    },
+                    icon: Icon(Icons.add_circle),
+                    label: Text('Tạo yêu cầu mới'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFF4CAF50),
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      elevation: 3,
+                    ),
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
                           builder: (context) => HDYeuCauMayQuanLyScreen(
                             username: widget.username,
                             userRole: widget.userRole,
@@ -208,7 +493,7 @@ class _HDYeuCauMayScreenState extends State<HDYeuCauMayScreen> {
                             nextPeriod: widget.nextPeriod,
                           ),
                         ),
-                      );
+                      ).then((_) => _loadData()); // Refresh after managing
                     },
                     icon: Icon(Icons.manage_accounts),
                     label: Text('Quản lý yêu cầu'),
@@ -223,6 +508,8 @@ class _HDYeuCauMayScreenState extends State<HDYeuCauMayScreen> {
               ],
             ),
           ),
+
+          // Search and Filter Section
           Container(
             padding: EdgeInsets.all(16),
             child: Column(
@@ -336,6 +623,8 @@ class _HDYeuCauMayScreenState extends State<HDYeuCauMayScreen> {
               ],
             ),
           ),
+
+          // Machine List
           Expanded(
             child: _isLoading
                 ? Center(child: CircularProgressIndicator())
