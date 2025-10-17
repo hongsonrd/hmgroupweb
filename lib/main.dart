@@ -92,8 +92,271 @@ void showWebView2InstallDialog(BuildContext context) {
     },
   );
 }
-
-void main() async {
+Future<void> runDiagnosticMode() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  final report = StringBuffer();
+  report.writeln('=== HM GROUP DIAGNOSTIC REPORT ===');
+  report.writeln('Timestamp: ${DateTime.now()}');
+  report.writeln('App Version: 1.2.9');
+  report.writeln('');
+  
+  // System info
+  report.writeln('[SYSTEM INFO]');
+  report.writeln('Platform: ${Platform.operatingSystem}');
+  report.writeln('Version: ${Platform.operatingSystemVersion}');
+  report.writeln('Locale: ${Platform.localeName}');
+  report.writeln('Executable: ${Platform.resolvedExecutable}');
+  report.writeln('Path length: ${Platform.resolvedExecutable.length} characters');
+  report.writeln('');
+  
+  // Architecture
+  report.writeln('[ARCHITECTURE]');
+  try {
+    final result = await Process.run('wmic', ['OS', 'get', 'OSArchitecture']);
+    if (result.exitCode == 0) {
+      report.writeln('Architecture: ${result.stdout.toString().trim()}');
+      report.writeln('Status: ✓');
+    }
+  } catch (e) {
+    report.writeln('Error: $e');
+    report.writeln('Status: ✗');
+  }
+  report.writeln('');
+  
+  // VC++ Redistributable check
+  report.writeln('[VC++ REDISTRIBUTABLE]');
+  try {
+    final result = await Process.run('reg', [
+      'query',
+      'HKLM\\SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\X64',
+      '/v',
+      'Version'
+    ]);
+    if (result.exitCode == 0) {
+      report.writeln('VC++ Redistributable: Installed ✓');
+      report.writeln('Details: ${result.stdout}');
+    } else {
+      report.writeln('VC++ Redistributable: NOT FOUND ✗');
+      report.writeln('This may cause issues!');
+    }
+  } catch (e) {
+    report.writeln('Error checking: $e');
+    report.writeln('Status: ✗');
+  }
+  report.writeln('');
+  
+  // Controlled Folder Access
+  report.writeln('[CONTROLLED FOLDER ACCESS]');
+  try {
+    final result = await Process.run('powershell', [
+      '-Command',
+      'Get-MpPreference | Select-Object -ExpandProperty EnableControlledFolderAccess'
+    ]);
+    final status = result.stdout.toString().trim();
+    if (status == '0') {
+      report.writeln('Status: Disabled ✓');
+    } else if (status == '1' || status == '2') {
+      report.writeln('Status: ENABLED ✗ (This is blocking the app!)');
+      report.writeln('ACTION REQUIRED: Add HMGroup.exe to allowed apps in Windows Security');
+    } else {
+      report.writeln('Status: Unknown');
+    }
+  } catch (e) {
+    report.writeln('Error checking: $e');
+  }
+  report.writeln('');
+  
+  // SmartScreen / Zone Identifier
+  report.writeln('[SMARTSCREEN / DOWNLOAD BLOCK]');
+  try {
+    final result = await Process.run('powershell', [
+      '-Command',
+      'Get-Content "${Platform.resolvedExecutable}" -Stream Zone.Identifier -ErrorAction SilentlyContinue'
+    ]);
+    if (result.exitCode == 0 && result.stdout.toString().isNotEmpty) {
+      report.writeln('Status: File marked as downloaded from internet ✗');
+      report.writeln('This may cause security restrictions!');
+      report.writeln('Details: ${result.stdout}');
+    } else {
+      report.writeln('Status: Not marked ✓');
+    }
+  } catch (e) {
+    report.writeln('Status: Not marked ✓');
+  }
+  report.writeln('');
+  
+  // Temp directory test
+  report.writeln('[TEMP DIRECTORY]');
+  try {
+    final tempDir = await getTemporaryDirectory();
+    report.writeln('Path: ${tempDir.path}');
+    
+    final testFile = File('${tempDir.path}/hm_test_${DateTime.now().millisecondsSinceEpoch}.tmp');
+    await testFile.writeAsString('test data');
+    
+    if (await testFile.exists()) {
+      report.writeln('Write test: SUCCESS ✓');
+      await testFile.delete();
+      report.writeln('Delete test: SUCCESS ✓');
+    } else {
+      report.writeln('Write test: FAILED ✗');
+    }
+  } catch (e) {
+    report.writeln('Temp directory test: FAILED ✗');
+    report.writeln('Error: $e');
+  }
+  report.writeln('');
+  
+  // SQLite FFI test
+  report.writeln('[SQLITE FFI]');
+  try {
+    if (Platform.isWindows) {
+      sqfliteFfiInit();
+      databaseFactory = databaseFactoryFfi;
+      report.writeln('FFI Initialization: SUCCESS ✓');
+      
+      // Try to create a test database
+      final dbHelper = DBHelper();
+      await dbHelper.database;
+      report.writeln('Database creation: SUCCESS ✓');
+    }
+  } catch (e) {
+    report.writeln('SQLite initialization: FAILED ✗');
+    report.writeln('Error: $e');
+    report.writeln('This is likely the main issue!');
+  }
+  report.writeln('');
+  
+  // MediaKit test
+  report.writeln('[MEDIA KIT]');
+  try {
+    MediaKit.ensureInitialized();
+    report.writeln('Initialization: SUCCESS ✓');
+  } catch (e) {
+    report.writeln('MediaKit initialization: FAILED ✗');
+    report.writeln('Error: $e');
+    report.writeln('(This is non-critical - video background only)');
+  }
+  report.writeln('');
+  
+  // Assets test
+  report.writeln('[ASSETS TEST]');
+  final criticalAssets = [
+    'assets/logo.png',
+    'assets/iconAI.png',
+    'assets/appbackgrid.png',
+    'assets/hotellogo.png',
+  ];
+  
+  int successCount = 0;
+  int failCount = 0;
+  
+  for (final asset in criticalAssets) {
+    try {
+      final data = await rootBundle.load(asset);
+      report.writeln('✓ $asset (${data.lengthInBytes} bytes)');
+      successCount++;
+    } catch (e) {
+      report.writeln('✗ $asset - FAILED');
+      report.writeln('  Error: $e');
+      failCount++;
+    }
+  }
+  
+  report.writeln('');
+  report.writeln('Assets Summary: $successCount OK, $failCount Failed');
+  
+  if (failCount > 0) {
+    report.writeln('ACTION REQUIRED: Re-extract the application files!');
+  }
+  report.writeln('');
+  
+  // WebView2 check
+  report.writeln('[WEBVIEW2 RUNTIME]');
+  try {
+    final result = await Process.run('reg', [
+      'query',
+      'HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+      '/ve'
+    ]);
+    if (result.exitCode == 0) {
+      report.writeln('WebView2 Runtime: Installed ✓');
+    } else {
+      report.writeln('WebView2 Runtime: NOT FOUND ✗');
+      report.writeln('ACTION REQUIRED: Install WebView2 Runtime');
+    }
+  } catch (e) {
+    report.writeln('Error checking: $e');
+  }
+  report.writeln('');
+  
+  // Disk space check
+  report.writeln('[DISK SPACE]');
+  try {
+    final appDrive = Platform.resolvedExecutable.substring(0, 2);
+    final result = await Process.run('wmic', [
+      'logicaldisk',
+      'where',
+      'DeviceID="$appDrive"',
+      'get',
+      'FreeSpace,Size'
+    ]);
+    report.writeln('Drive $appDrive:');
+    report.writeln(result.stdout);
+  } catch (e) {
+    report.writeln('Error checking: $e');
+  }
+  report.writeln('');
+  
+  report.writeln('=== END OF DIAGNOSTIC REPORT ===');
+  report.writeln('');
+  report.writeln('NEXT STEPS:');
+  report.writeln('1. Save this report');
+  report.writeln('2. Look for any ✗ marks above');
+  report.writeln('3. Follow the "ACTION REQUIRED" instructions');
+  report.writeln('4. Send this report to support if issues persist');
+  
+  // Save report to file
+  String reportPath = '';
+  try {
+    final tempDir = await getTemporaryDirectory();
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final reportFile = File('${tempDir.path}/HMGroup_Diagnostic_$timestamp.txt');
+    await reportFile.writeAsString(report.toString());
+    reportPath = reportFile.path;
+    
+    print('\n' + '='*60);
+    print(report.toString());
+    print('='*60);
+    print('\n✓ Diagnostic report saved to: $reportPath');
+    
+    // Try to open in notepad
+    try {
+      await Process.start('notepad.exe', [reportPath], mode: ProcessStartMode.detached);
+      print('✓ Opening report in Notepad...');
+    } catch (e) {
+      print('Could not open Notepad: $e');
+    }
+    
+  } catch (e) {
+    print('\n' + '='*60);
+    print(report.toString());
+    print('='*60);
+    print('\n✗ Could not save report to file: $e');
+  }
+  
+  // Keep console open
+  print('\nPress Enter to exit...');
+  stdin.readLineSync();
+  
+  exit(0);
+}
+void main(List<String> args) async {
+  if (args.contains('--diagnostic') || args.contains('-d')) {
+    await runDiagnosticMode();
+    return;
+  }
   try {
     WidgetsFlutterBinding.ensureInitialized();
     MediaKit.ensureInitialized();
