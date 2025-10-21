@@ -4153,38 +4153,38 @@ class _ProjectScheduleDialogState extends State<ProjectScheduleDialog> {
   }
 
   String _formatWeekdays(String weekdays) {
-    if (weekdays.trim().isEmpty) return 'Tất cả các ngày';
-    
-    final days = weekdays.split(',').map((d) => d.trim()).toList();
-    final dayNames = <String>[];
-    
-    for (final day in days) {
-      switch (day) {
-        case '0':
-          dayNames.add('CN');
-          break;
-        case '1':
-          dayNames.add('T2');
-          break;
-        case '2':
-          dayNames.add('T3');
-          break;
-        case '3':
-          dayNames.add('T4');
-          break;
-        case '4':
-          dayNames.add('T5');
-          break;
-        case '5':
-          dayNames.add('T6');
-          break;
-        case '6':
-          dayNames.add('T7');
-          break;
-      }
+  if (weekdays.trim().isEmpty) return 'Tất cả các ngày';
+  
+  final days = weekdays.split(',').map((d) => d.trim()).toList();
+  final dayNames = <String>[];
+  
+  for (final day in days) {
+    switch (day) {
+      case '1':
+        dayNames.add('CN');
+        break;
+      case '2':
+        dayNames.add('T2');
+        break;
+      case '3':
+        dayNames.add('T3');
+        break;
+      case '4':
+        dayNames.add('T4');
+        break;
+      case '5':
+        dayNames.add('T5');
+        break;
+      case '6':
+        dayNames.add('T6');
+        break;
+      case '7':
+        dayNames.add('T7');
+        break;
     }
-    return dayNames.join(', ');
   }
+  return dayNames.join(', ');
+}
 
   Color _getPositionColor(int index) {
     final colors = [

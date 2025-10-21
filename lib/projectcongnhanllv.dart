@@ -182,7 +182,13 @@ class TaskScheduleManager {
     DateTime date,
     List<QRLookupModel> qrLookups,
   ) {
-    final weekday = date.weekday % 7; // Convert to 0=Sunday, 1=Monday, etc.
+    int getDayNumber(DateTime date) {
+    // DateTime.weekday: 1=Monday, 2=Tuesday, ..., 7=Sunday
+    // Your system: 1=Sunday, 2=Monday, 3=Tuesday, ..., 7=Saturday
+    return date.weekday == 7 ? 1 : date.weekday + 1;
+  }
+  
+  final weekday = getDayNumber(date); 
     
     return allTasks.where((task) {
       // Get the actual project name from the task's username
