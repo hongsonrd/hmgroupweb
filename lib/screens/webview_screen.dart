@@ -27,6 +27,7 @@ import '../projectgiamsat.dart';
 import 'daily_report_screen.dart';
 import '../checklist_manager.dart';
 import '../pay_page.dart';
+import '../chat_ai.dart';
 import '../checklist_supervisor.dart';
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
@@ -555,6 +556,25 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
                 },
                 icon: Icon(Icons.local_library, color: Colors.white, size: 18),
                 label: Text('Khách hàng', style: TextStyle(color: Colors.white, fontSize: 14.0)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: buttonColor,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(width: 16),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => ChatAIScreen()),
+                  );
+                },
+                icon: Icon(Icons.api, color: Colors.white, size: 18),
+                label: Text('AI Chat', style: TextStyle(color: Colors.white, fontSize: 14.0)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: buttonColor,
                   shape: RoundedRectangleBorder(
