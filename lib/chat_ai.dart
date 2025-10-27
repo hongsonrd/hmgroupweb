@@ -37,7 +37,6 @@ class _ChatAIScreenState extends State<ChatAIScreen> with SingleTickerProviderSt
   
   final ImagePicker _imagePicker = ImagePicker();
   File? _selectedImage;
-  File? _selectedFile;
   
   bool _isStreaming = false;
   String _currentStreamingMessage = '';
@@ -62,11 +61,11 @@ class _ChatAIScreenState extends State<ChatAIScreen> with SingleTickerProviderSt
   
   final Map<String, List<Map<String, dynamic>>> _models = {
     'fast': [
-      {'value': 'flash-2.5-lite', 'name': 'Cá kiếm', 'cost': 16, 'rating': 3, 'systemPrompt': 'Ưu tiên tiếng việt,tìm kiếm nguồn từ google nếu cần,bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam,đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan:'},
+      {'value': 'flash-2.5-lite', 'name': 'Cá kiếm', 'cost': 16, 'rating': 3, 'systemPrompt': 'Ưu tiên tiếng việt,tìm kiếm nguồn từ google nếu cần,bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam,đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh:'},
     ],
     'precise': [
-      {'value': 'flash-2.5', 'name': 'Cá mập trắng', 'cost': 100, 'rating': 4, 'systemPrompt': 'Ưu tiên tiếng việt,dùng bảng cho so sánh chỉ khi cần thiết,tìm kiếm nguồn từ google nếu cần,bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam,đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.trả lời nhanh,thỉnh thoáng dùng emoji để trang trí phù hợp:'},
-      {'value': 'flash-2.5-pro', 'name': 'Cá voi sát thủ', 'cost': 302, 'rating': 4, 'systemPrompt': 'Ưu tiên tiếng việt,dùng bảng cho so sánh chỉ khi cần thiết,tìm kiếm nguồn từ google nếu cần,bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam,đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh,thỉnh thoáng dùng emoji để trang trí phù hợp:'},
+      {'value': 'flash-2.5', 'name': 'Cá mập trắng', 'cost': 100, 'rating': 4, 'systemPrompt': 'Ưu tiên tiếng việt,dùng bảng cho so sánh chỉ khi cần thiết,tìm kiếm nguồn từ google nếu cần,bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam,đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.trả lời nhanh,thỉnh thoáng dùng emoji để trang trí phù hợp.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh:'},
+      {'value': 'flash-2.5-pro', 'name': 'Cá voi sát thủ', 'cost': 302, 'rating': 4, 'systemPrompt': 'Ưu tiên tiếng việt,dùng bảng cho so sánh chỉ khi cần thiết,tìm kiếm nguồn từ google nếu cần,bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam,đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh,thỉnh thoáng dùng emoji để trang trí phù hợp.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh:'},
     ],
     'image': [
       {'value': 'imagen-4', 'name': 'Cá heo', 'cost': 1500, 'rating': 3, 'systemPrompt': 'Không chỉ tạo ảnh với chữ, phải tạo hình ảnh thiết kế:'},
@@ -77,10 +76,6 @@ class _ChatAIScreenState extends State<ChatAIScreen> with SingleTickerProviderSt
 
   final List<Map<String, String>> _imageRatios = [
     {'value': '1:1', 'label': '1:1 Vuông'},
-    {'value': '16:9', 'label': '16:9 Ngang'},
-    {'value': '9:16', 'label': '9:16 Dọc'},
-    {'value': '4:3', 'label': '4:3 Cổ điển'},
-    {'value': '3:4', 'label': '3:4 Cao'},
   ];
 
   Color get _primaryColor => _mode == 'image' ? Colors.green : Colors.blue;
@@ -604,42 +599,9 @@ Future<void> _saveVideoToDevice(String videoUrl) async {
     }
   }
 
-  Future<void> _pickFile() async {
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pdf', 'txt', 'rtf', 'mp4', 'mpeg', 'webm', 'mov', 'flac', 'aac', 'mp3', 'm4a', 'ogg', 'wav'],
-        allowMultiple: false,
-      );
-
-      if (result != null) {
-        File file = File(result.files.single.path!);
-        int fileSizeInBytes = await file.length();
-        double fileSizeInMB = fileSizeInBytes / (1024 * 1024);
-        
-        if (fileSizeInMB > 20) {
-          _showError('Kích thước file vượt quá 20MB');
-          return;
-        }
-        
-        setState(() {
-          _selectedFile = file;
-        });
-      }
-    } catch (e) {
-      _showError('Không thể chọn file: $e');
-    }
-  }
-
   void _removeImage() {
     setState(() {
       _selectedImage = null;
-    });
-  }
-
-  void _removeFile() {
-    setState(() {
-      _selectedFile = null;
     });
   }
 
@@ -2582,56 +2544,44 @@ Widget _buildStreamingMessage() {
               ),
               child: Row(
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: Image.file(
-                      _selectedImage!,
-                      height: 60,
-                      width: 60,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text('Đã chọn ảnh', style: TextStyle(fontSize: 14)),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: _removeImage,
-                  ),
-                ],
-              ),
-            ),
-          if (_selectedFile != null)
-            Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: _primaryColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Icon(Icons.insert_drive_file, color: _primaryColor, size: 30),
-                  ),
+                  _selectedImage!.path.toLowerCase().endsWith('.jpg') ||
+                  _selectedImage!.path.toLowerCase().endsWith('.jpeg') ||
+                  _selectedImage!.path.toLowerCase().endsWith('.png') ||
+                  _selectedImage!.path.toLowerCase().endsWith('.bmp')
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: Image.file(
+                          _selectedImage!,
+                          height: 60,
+                          width: 60,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    : Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: _primaryColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Icon(Icons.insert_drive_file, color: _primaryColor, size: 30),
+                      ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      _selectedFile!.path.split('/').last,
+                      _selectedImage!.path.toLowerCase().endsWith('.jpg') ||
+                      _selectedImage!.path.toLowerCase().endsWith('.jpeg') ||
+                      _selectedImage!.path.toLowerCase().endsWith('.png') ||
+                      _selectedImage!.path.toLowerCase().endsWith('.bmp')
+                        ? 'Đã chọn ảnh'
+                        : _selectedImage!.path.split('/').last,
                       style: const TextStyle(fontSize: 14),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close),
-                    onPressed: _removeFile,
+                    onPressed: _removeImage,
                   ),
                 ],
               ),
@@ -2661,7 +2611,29 @@ Widget _buildStreamingMessage() {
               const SizedBox(width: 8),
               IconButton(
                 icon: Icon(_mode == 'image' ? Icons.image : Icons.attach_file),
-                onPressed: _isStreaming ? null : (_mode == 'image' ? _pickImage : _pickFile),
+                onPressed: _isStreaming ? null : (_mode == 'image' ? _pickImage : () async {
+                  try {
+                    FilePickerResult? result = await FilePicker.platform.pickFiles(
+                      type: FileType.custom,
+                      allowedExtensions: ['jpg','jpeg','png','bmp','pdf', 'txt', 'rtf', 'mp4', 'mpeg', 'webm', 'mov', 'flac', 'aac', 'mp3', 'm4a', 'ogg', 'wav'],
+                      allowMultiple: false,
+                    );
+                    if (result != null) {
+                      File file = File(result.files.single.path!);
+                      int fileSizeInBytes = await file.length();
+                      double fileSizeInMB = fileSizeInBytes / (1024 * 1024);
+                      if (fileSizeInMB > 20) {
+                        _showError('Kích thước file vượt quá 20MB');
+                        return;
+                      }
+                      setState(() {
+                        _selectedImage = file;
+                      });
+                    }
+                  } catch (e) {
+                    _showError('Không thể chọn file: $e');
+                  }
+                }),
                 color: _primaryColor,
               ),
               const SizedBox(width: 8),
