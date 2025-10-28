@@ -16,7 +16,7 @@ import 'dart:math';
 import 'dart:io';
 import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
-import 'chat_ai_case.dart';
+import 'chat_ai_graph.dart';
 
 enum AvatarState { hello, thinking, speaking, congrat, listening, idle }
 
@@ -52,31 +52,26 @@ class _ChatAIScreenState extends State<ChatAIScreen> with SingleTickerProviderSt
   late AnimationController _gradientController;
   late Animation<double> _gradientAnimation;
   
-  String? _selectedCaseType;
-  DateTime _selectedCaseDate = DateTime.now();
-  CaseFileData? _caseFileData;
-  bool _isCaseFileLoading = false;
-  
   AvatarState _avatarState = AvatarState.hello;
   Timer? _congratTimer;
   Timer? _speakingEndTimer;
   
   final Map<AvatarState, List<String>> _avatarVideos = {
-    AvatarState.hello: ['hello.mp4','hello-smile.mp4'],
-    AvatarState.thinking: ['thinking.mp4','thinking-deep.mp4','thinking-focus.mp4'],
+    AvatarState.hello: ['hello.mp4'],
+    AvatarState.thinking: ['thinking.mp4'],
     AvatarState.speaking: ['speaking.mp4'],
-    AvatarState.congrat: ['congrat.mp4','congrat-jump.mp4','congrat-hand.mp4'],
-    AvatarState.listening: ['listening.mp4','listening-smile.mp4'],
-    AvatarState.idle: ['idle.mp4','idle-turn.mp4','idle-smile.mp4'],
+    AvatarState.congrat: ['congrat.mp4'],
+    AvatarState.listening: ['listening.mp4'],
+    AvatarState.idle: ['idle.mp4'],
   };
   
   final Map<String, List<Map<String, dynamic>>> _models = {
-  'fast': [
-      {'value': 'flash-2.5-lite', 'name': 'Cá kiếm', 'cost': 25, 'rating': 3, 'systemPrompt': 'Ưu tiên tiếng việt,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,Sau đây là câu hỏi của người dùng:'},
+    'fast': [
+      {'value': 'flash-2.5-lite', 'name': 'Cá kiếm', 'cost': 25, 'rating': 3, 'systemPrompt': 'Ưu tiên tiếng việt'},
     ],
     'precise': [
-      {'value': 'flash-2.5', 'name': 'Cá mập trắng', 'cost': 100, 'rating': 4, 'systemPrompt': 'Ưu tiên tiếng việt,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,Sau đây là câu hỏi của người dùng:'},
-      {'value': 'flash-2.5-pro', 'name': 'Cá voi sát thủ', 'cost': 302, 'rating': 5, 'systemPrompt': 'Ưu tiên tiếng việt,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,Sau đây là câu hỏi của người dùng:'},
+      {'value': 'flash-2.5', 'name': 'Cá mập trắng', 'cost': 100, 'rating': 4, 'systemPrompt': 'Ưu tiên tiếng việt'},
+      {'value': 'flash-2.5-pro', 'name': 'Cá voi sát thủ', 'cost': 302, 'rating': 5, 'systemPrompt': 'Ưu tiên tiếng việt'},
     ],
     'image': [
       {'value': 'imagen-4', 'name': 'Cá heo', 'cost': 1900, 'rating': 3, 'systemPrompt': 'Không chỉ tạo ảnh với chữ, phải tạo hình ảnh thiết kế:'},
@@ -812,11 +807,7 @@ Future<void> _sendMessage() async {
   }
   final messageText = _messageController.text.trim();
   if (messageText.isEmpty && _selectedImage == null) {
-    if (_selectedCaseType != null && _caseFileData != null) {
-      _messageController.text = 'Phân tích dữ liệu $_selectedCaseType';
-    } else {
-      return;
-    }
+    return;
   }
   if (_creditBalance != null && !_creditBalance!.canUse) {
     _showError('Bạn đã hết credit cho tháng này. Vui lòng chờ đến tháng sau.');
@@ -825,11 +816,10 @@ Future<void> _sendMessage() async {
   if (_currentSession == null) {
     _createNewSession();
   }
-  final finalMessageText = _messageController.text.trim();
   final userMessage = ChatMessage(
     id: const Uuid().v4(),
     role: 'user',
-    content: finalMessageText,
+    content: messageText,
     imagePath: _selectedImage?.path,
     timestamp: DateTime.now(),
   );
@@ -845,9 +835,9 @@ Future<void> _sendMessage() async {
   _setAvatarState(AvatarState.thinking);
   
   if (_currentSession!.messages.length == 1) {
-    _currentSession!.title = finalMessageText.length > 30 
-        ? '${finalMessageText.substring(0, 30)}...' 
-        : finalMessageText;
+    _currentSession!.title = messageText.length > 30 
+        ? '${messageText.substring(0, 30)}...' 
+        : messageText;
   }
   _messageController.clear();
   final imageFile = _selectedImage;
@@ -858,10 +848,7 @@ Future<void> _sendMessage() async {
       'POST',
       Uri.parse('$_apiBaseUrl/aichat'),
     );
-    String systemPrompt = _getSystemPrompt(_selectedModel);
-    if (_selectedCaseType != null) {
-      systemPrompt = CaseFileManager.getCustomPrompt(_selectedCaseType!);
-    }
+    final systemPrompt = _getSystemPrompt(_selectedModel);
     String contextString = '';
     final recentMessages = _currentSession!.messages.length > 7
         ? _currentSession!.messages.sublist(_currentSession!.messages.length - 7, _currentSession!.messages.length - 1)
@@ -875,35 +862,20 @@ Future<void> _sendMessage() async {
       contextString += '\nTin nhắn hiện tại:\n';
     }
     final fullQuery = systemPrompt.isNotEmpty 
-        ? '$systemPrompt$contextString$finalMessageText' 
-        : '$contextString$finalMessageText';
+        ? '$systemPrompt$contextString$messageText' 
+        : '$contextString$messageText';
     request.fields['userid'] = _username;
     request.fields['model'] = _selectedModel;
     request.fields['mode'] = _mode;
     request.fields['query'] = fullQuery;
     request.fields['history'] = json.encode(_currentSession!.history);
-    if (_caseFileData != null && _selectedCaseType != null) {
-      final tempDir = await getTemporaryDirectory();
-      final fileName = 'case_${DateTime.now().millisecondsSinceEpoch}.${_caseFileData!.fileType}';
-      final tempFile = File('${tempDir.path}/$fileName');
-      
-      if (_caseFileData!.isPdf) {
-        final bytes = base64Decode(_caseFileData!.content);
-        await tempFile.writeAsBytes(bytes);
-      } else {
-        await tempFile.writeAsString(_caseFileData!.content);
-      }
-      
-      request.files.add(
-        await http.MultipartFile.fromPath('image', tempFile.path),
-      );
-    } else if (imageFile != null) {
+    if (_mode == 'image') {
+      request.fields['ratio'] = _imageRatio;
+    }
+    if (imageFile != null) {
       request.files.add(
         await http.MultipartFile.fromPath('image', imageFile.path),
       );
-    }
-    if (_mode == 'image') {
-      request.fields['ratio'] = _imageRatio;
     }
     final streamedResponse = await request.send().timeout(
       const Duration(seconds: 45),
@@ -1104,12 +1076,6 @@ Future<void> _sendMessage() async {
                   _currentSession!.lastUpdated = DateTime.now();
                   _saveSessions();
                   _scrollToBottom();
-                  
-                  setState(() {
-                    _selectedCaseType = null;
-                    _caseFileData = null;
-                    _selectedCaseDate = DateTime.now();
-                  });
                   break;
                 case 'credit_info':
                   setState(() {
@@ -1252,48 +1218,6 @@ Future<void> _sendMessage() async {
         backgroundColor: Colors.green,
       ),
     );
-  }
-  
-  Future<void> _loadCaseFile() async {
-    if (_selectedCaseType == null) return;
-    setState(() {
-      _isCaseFileLoading = true;
-      _caseFileData = null;
-    });
-    try {
-      final fileData = await CaseFileManager.fetchCaseFile(_selectedCaseType!, _selectedCaseDate);
-      setState(() {
-        _caseFileData = fileData;
-        _isCaseFileLoading = false;
-      });
-      if (fileData == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Không tìm thấy file dữ liệu cho ngày này'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Đã tải dữ liệu thành công (${fileData.fileType.toUpperCase()})'),
-            duration: const Duration(seconds: 2),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      setState(() {
-        _caseFileData = null;
-        _isCaseFileLoading = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Lỗi tải file: $e'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
   }
   @override
   Widget build(BuildContext context) {
@@ -1858,6 +1782,25 @@ Widget _buildMessageBubble(ChatMessage message) {
                           ),
                         ),
                         const SizedBox(height: 8),
+                      ],
+                      if (!isUser) ...[
+                        Builder(
+                          builder: (context) {
+                            final chartData = extractChartFromText(message.content);
+                            if (chartData != null) {
+                              return ChartThumbnail(
+                                chartData: chartData,
+                                onTap: () {
+                                  showDialog(
+                                    context: context,
+                                    builder: (context) => ChartPopup(chartData: chartData),
+                                  );
+                                },
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
                       ],
                       if (!shouldHideContent && parsedContent != null) ...[
                         if (parsedContent['beforeTable'].toString().isNotEmpty)
@@ -2548,7 +2491,7 @@ Widget _buildStreamingMessage() {
   }
   Widget _buildInputArea() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.blueGrey[800],
         boxShadow: [
@@ -2560,119 +2503,28 @@ Widget _buildStreamingMessage() {
         ],
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: Container(
-                  height: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.blueGrey[700],
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedCaseType,
-                      hint: const Text('Loại dữ liệu', style: TextStyle(color: Colors.white70, fontSize: 13)),
-                      isExpanded: true,
-                      isDense: true,
-                      dropdownColor: Colors.blueGrey[700],
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
-                      items: CaseFileManager.getCaseTypes().map((type) {
-                        return DropdownMenuItem(value: type, child: Text(type, style: const TextStyle(fontSize: 13)));
-                      }).toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedCaseType = val;
-                          _caseFileData = null;
-                        });
-                        if (val != null) _loadCaseFile();
-                      },
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                flex: 2,
-                child: GestureDetector(
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: _selectedCaseDate,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime(2030),
-                      builder: (context, child) {
-                        return Theme(
-                          data: ThemeData.dark().copyWith(
-                            colorScheme: ColorScheme.dark(
-                              primary: _primaryColor,
-                              onPrimary: Colors.white,
-                              surface: Colors.blueGrey[700]!,
-                              onSurface: Colors.white,
-                            ),
-                          ),
-                          child: child!,
-                        );
-                      },
-                    );
-                    if (date != null) {
-                      setState(() {
-                        _selectedCaseDate = date;
-                        _caseFileData = null;
-                      });
-                      if (_selectedCaseType != null) _loadCaseFile();
-                    }
-                  },
-                  child: Container(
-                    height: 36,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.blueGrey[700],
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          DateFormat('dd/MM/yy').format(_selectedCaseDate),
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
-                        ),
-                        const Icon(Icons.calendar_today, color: Colors.white70, size: 14),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
           if (_selectedImage != null)
             Container(
-              margin: const EdgeInsets.only(bottom: 4),
-              padding: const EdgeInsets.all(6),
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: Colors.blueGrey[700],
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 children: [
                   _buildFilePreview(_selectedImage!),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       _selectedImage!.path.split('/').last,
-                      style: const TextStyle(fontSize: 12, color: Colors.white),
+                      style: const TextStyle(fontSize: 14, color: Colors.white),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white, size: 18),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
+                    icon: const Icon(Icons.close, color: Colors.white),
                     onPressed: _removeImage,
                   ),
                 ],
@@ -2680,94 +2532,29 @@ Widget _buildStreamingMessage() {
             ),
           Row(
             children: [
-              if (_selectedCaseType != null && _caseFileData != null)
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.orange,
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    icon: _isStreaming
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : const Icon(Icons.send_rounded),
-                    onPressed: _isStreaming ? null : _sendMessage,
-                    color: Colors.white,
-                    tooltip: 'Gửi với dữ liệu $_selectedCaseType',
-                  ),
-                )
-              else
-                Container(
-                  decoration: BoxDecoration(
-                    color: _primaryColor,
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    icon: _isStreaming
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : const Icon(Icons.send),
-                    onPressed: _isStreaming ? null : _sendMessage,
-                    color: Colors.white,
-                  ),
+              Container(
+                decoration: BoxDecoration(
+                  color: _primaryColor,
+                  shape: BoxShape.circle,
                 ),
-              const SizedBox(width: 4),
-              if (_selectedCaseType != null && _isCaseFileLoading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 4),
-                  child: SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
+                child: IconButton(
+                  icon: _isStreaming
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Icon(Icons.send),
+                  onPressed: _isStreaming ? null : _sendMessage,
+                  color: Colors.white,
                 ),
-              if (_selectedCaseType != null && _caseFileData != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.orange, width: 1),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.description, color: Colors.orange, size: 12),
-                      const SizedBox(width: 3),
-                      Text(
-                        _selectedCaseType!,
-                        style: const TextStyle(color: Colors.orange, fontSize: 10),
-                      ),
-                      const SizedBox(width: 3),
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedCaseType = null;
-                            _caseFileData = null;
-                            _selectedCaseDate = DateTime.now();
-                          });
-                        },
-                        child: const Icon(Icons.close, color: Colors.orange, size: 12),
-                      ),
-                    ],
-                  ),
-                ),
-              const SizedBox(width: 4),
+              ),
+              const SizedBox(width: 8),
               IconButton(
-                icon: Icon(_mode == 'image' ? Icons.image : Icons.attach_file, color: Colors.white, size: 20),
-                padding: const EdgeInsets.all(8),
+                icon: Icon(_mode == 'image' ? Icons.image : Icons.attach_file, color: Colors.white),
                 onPressed: _isStreaming ? null : (_mode == 'image' ? _pickImage : () async {
                   try {
                     FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -2792,34 +2579,33 @@ Widget _buildStreamingMessage() {
                   }
                 }),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 8),
               Expanded(
                 child: TextField(
                   controller: _messageController,
                   enabled: !_isStreaming,
-                  minLines: 1,
-                  maxLines: 3,
+                  minLines: 2,
+                  maxLines: null,
                   textInputAction: TextInputAction.newline,
-                  style: const TextStyle(color: Colors.amber, fontSize: 14),
-                  cursorColor: Colors.lightGreenAccent, 
+                  style: const TextStyle(color: Colors.white),
                   decoration: InputDecoration(
-                    hintText: _mode == 'text' ? 'Tin nhắn...' : 'Mô tả ảnh...',
-                    hintStyle: TextStyle(color: Colors.blueGrey[300], fontSize: 13),
+                    hintText: _mode == 'text' ? 'Nhập tin nhắn... (Enter 2 lần để gửi)' : 'Mô tả hình ảnh cần tạo...',
+                    hintStyle: TextStyle(color: Colors.blueGrey[400]),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(24),
                       borderSide: BorderSide.none,
                     ),
                     filled: true,
                     fillColor: Colors.blueGrey[700],
                     contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
+                      horizontal: 20,
+                      vertical: 12,
                     ),
                   ),
                   onSubmitted: (_) => _sendMessage(),
                 ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 8),
               _AvatarVideoPlayer(
                 state: _avatarState,
                 videos: _avatarVideos,
@@ -3378,10 +3164,10 @@ class _AvatarVideoPlayerState extends State<_AvatarVideoPlayer> with SingleTicke
   final Map<AvatarState, List<String>> _bubbleTexts = {
     AvatarState.hello: ['Xin chào!', 'Bạn muốn hỏi gì?', 'Chào bạn!', 'Tôi có thể giúp gì?'],
     AvatarState.listening: ['Bạn có thể thêm ảnh', 'Có thể đính kèm file', 'Thêm file nếu muốn'],
-    AvatarState.thinking: ['🤔...'],
-    AvatarState.speaking: ['💭...','📢...'],
-    AvatarState.congrat: ['❤️','💙','💚','💛'],
-    AvatarState.idle: ['Bạn có thể chuyển sang chế độ tạo ảnh', 'Tôi có thể giúp bạn tạo video!', 'Bạn muốn biết gì nào?'],
+    AvatarState.thinking: ['...'],
+    AvatarState.speaking: ['...'],
+    AvatarState.congrat: [],
+    AvatarState.idle: [],
   };
 
   @override
@@ -3453,17 +3239,17 @@ class _AvatarVideoPlayerState extends State<_AvatarVideoPlayer> with SingleTicke
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final size = (screenWidth * 0.14).clamp(64.0, 154.0);
+    final size = (screenWidth * 0.14).clamp(64.0, 140.0);
     
     return SizedBox(
-      width: size * 1.8,
+      width: size * 2,
       height: size,
       child: Stack(
         alignment: Alignment.centerRight,
         children: [
           if (_currentBubbleText.isNotEmpty)
             Positioned(
-              left: 10,
+              left: 0,
               bottom: size * 0.33,
               child: Container(
                 constraints: BoxConstraints(maxWidth: size * 1.5),

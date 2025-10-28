@@ -174,6 +174,7 @@ class _HDYeuCauMayMoiScreenState extends State<HDYeuCauMayMoiScreen> {
     try {
       final yeuCauId = _isEditMode ? _editingYeuCauId! : Uuid().v4();
       final now = DateTime.now();
+      final isRejected = widget.existingRequest?.trangThai == 'TPKD Từ chối' || widget.existingRequest?.trangThai == 'Kế toán từ chối';
       final request = LinkYeuCauMayModel(
         yeuCauId: yeuCauId, 
         nguoiTao: widget.existingRequest?.nguoiTao ?? widget.username, 
@@ -184,7 +185,7 @@ class _HDYeuCauMayMoiScreenState extends State<HDYeuCauMayMoiScreen> {
         tenHopDong: _selectedContract!.tenHopDong, 
         diaChi: _diaChiController.text.trim(), 
         moTa: _moTaController.text.trim(), 
-        trangThai: isDraft ? 'Nháp' : (_isEditMode ? widget.existingRequest!.trangThai : 'Gửi'),
+        trangThai: isDraft ? 'Nháp' : (isRejected ? 'Gửi' : (_isEditMode ? widget.existingRequest!.trangThai : 'Gửi')),
         nguoiGuiCapNhat: widget.existingRequest?.nguoiGuiCapNhat,
         duyetKdCapNhat: widget.existingRequest?.duyetKdCapNhat,
         duyetKtCapNhat: widget.existingRequest?.duyetKtCapNhat

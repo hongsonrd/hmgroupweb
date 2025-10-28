@@ -10,3 +10,67 @@
       {'value': 'veo-3.0-fast', 'name': 'Cá đuối', 'cost': 4800, 'rating': 4, 'systemPrompt': 'Tạo video dọc 9:16, 6s trừ khi user yêu cầu khác sau đây:'},
       {'value': 'veo-3.0', 'name': 'Cá voi xanh', 'cost': 7000, 'rating': 5, 'systemPrompt': 'Tạo video ngang 9:16, 6s trừ khi user yêu cầu khác sau đây:'},
     ],
+
+Ưu tiên tiếng việt,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,Sau đây là câu hỏi của người dùng:
+
+    'Báo cáo tài chính': CaseFileConfig(
+      caseType: 'financial',
+      urlPrefix: 'https://yourworldtravel.vn/drive/test',
+      periodType: 'daily',
+      customPrompt: 'Phân tích báo cáo dưới đấy với vai trò quản lý.',
+    ),
+    
+    AvatarState.hello: ['hello.mp4','hello-smile.mp4'],
+    AvatarState.thinking: ['thinking.mp4','thinking-deep.mp4','thinking-focus.mp4'],
+    AvatarState.speaking: ['speaking.mp4'],
+    AvatarState.congrat: ['congrat.mp4','congrat-jump.mp4','congrat-hand.mp4'],
+    AvatarState.listening: ['listening.mp4','listening-smile.mp4'],
+    AvatarState.idle: ['idle.mp4','idle-turn.mp4','idle-smile.mp4'],
+
+    {
+  "chartType": "line",
+  "title": "So sánh Doanh thu và Chi phí",
+  "unitY": "VNĐ",
+  "xLabel": "Tháng",
+  "yLabel": "Giá trị",
+  "xAxisLabels": ["T1", "T6", "T12"],
+  "lines": [
+    {
+      "id": "revenue",
+      "name": "Doanh thu",
+      "color": "#28A745",
+      "spots": [
+        {"x": 0, "y": 1500000},
+        {"x": 1, "y": 2500000},
+        {"x": 2, "y": 3500000}
+      ],
+      "chartOptions": {
+        "isCurved": true,
+        "lineWidth": 2,
+        "showAreaUnderLine": false
+      }
+    },
+    {
+      "id": "expenses",
+      "name": "Chi phí",
+      "color": "#DC3545",
+      "spots": [
+        {"x": 0, "y": 800000},
+        {"x": 1, "y": 1350000},
+        {"x": 2, "y": 1900000}
+      ],
+      "chartOptions": {
+        "isCurved": false,
+        "lineWidth": 2,
+        "showAreaUnderLine": true,
+        "areaColor": "#DC354540"
+      }
+    }
+  ],
+  "axisLimits": {
+    "minX": 0,
+    "maxX": 2,
+    "minY": 0,
+    "maxY": 4000000
+  }
+}
