@@ -143,9 +143,18 @@ class DBHelper {
   }
 }
 //YeuCauMay:
-Future<void> updateLinkYeuCauMay(LinkYeuCauMayModel request) async {
+Future<List<LinkYeuCauMayChiTietModel>> getLinkYeuCauMayChiTietsByYeuCauId(String yeuCauId) async {
   final db = await database;
-  await db.update(
+  final List<Map<String, dynamic>> maps = await db.query(
+    'LinkYeuCauMayChiTiet',
+    where: 'yeuCauId = ?',
+    whereArgs: [yeuCauId],
+  );
+  return List.generate(maps.length, (i) => LinkYeuCauMayChiTietModel.fromMap(maps[i]));
+}
+Future<int> updateLinkYeuCauMay(LinkYeuCauMayModel request) async {
+  final db = await database;
+  return await db.update(
     'LinkYeuCauMay',
     request.toMap(),
     where: 'yeuCauId = ?',
@@ -325,8 +334,8 @@ Future<int> updateLinkYeuCauMayChiTiet(LinkYeuCauMayChiTietModel model) async {
 /// Delete LinkYeuCauMayChiTiet by id.
 Future<int> deleteLinkYeuCauMayChiTiet(String chiTietId) async {
   final db = await database;
-  return db.delete(
-    DatabaseTables.linkYeuCauMayChiTietTable,
+  return await db.delete(
+    'LinkYeuCauMayChiTiet',
     where: 'chiTietId = ?',
     whereArgs: [chiTietId],
   );

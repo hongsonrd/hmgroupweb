@@ -45,10 +45,13 @@ class _HDYeuCauMayMoiScreenState extends State<HDYeuCauMayMoiScreen> {
   Map<String, String> _hangMayByMaMay = {};
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isEditMode = false;
+  String? _editingYeuCauId;
 
   @override
   void initState() {
     super.initState();
+    _isEditMode = widget.existingRequest != null;
     _loadData();
   }
 
@@ -99,8 +102,12 @@ class _HDYeuCauMayMoiScreenState extends State<HDYeuCauMayMoiScreen> {
         _hangMayByMaMay = hangMayByMaMay;
         _isLoading = false;
       });
+
+      if (_isEditMode && widget.existingRequest != null) {
+        _loadExistingData();
+      }
       
-      if (latestContracts.isEmpty && mounted) {
+      if (latestContracts.isEmpty && !_isEditMode && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Không tìm thấy hợp đồng nào. Vui lòng tạo hợp đồng trước.'), backgroundColor: Colors.orange, duration: Duration(seconds: 4)));
       }
     } catch (e) {
@@ -112,13 +119,31 @@ class _HDYeuCauMayMoiScreenState extends State<HDYeuCauMayMoiScreen> {
     }
   }
 
+  void _loadExistingData() {
+    final existing = widget.existingRequest!;
+    _editingYeuCauId = existing.yeuCauId;
+    _diaChiController.text = existing.diaChi ?? '';
+    _moTaController.text = existing.moTa ?? '';
+    
+    final matchingContract = _allContracts.where((c) => c.uid == existing.hopDongId).firstOrNull;
+    if (matchingContract != null) {
+      setState(() {
+        _selectedContract = matchingContract;
+      });
+    }
+    
+    if (widget.existingDetails != null && widget.existingDetails!.isNotEmpty) {
+      setState(() {
+        _chiTietList = List.from(widget.existingDetails!);
+      });
+    }
+  }
+
   void _onContractSelected(LinkHopDongModel? contract) {
     setState(() {
       _selectedContract = contract;
-      if (contract != null) {
+      if (contract != null && !_isEditMode) {
         _diaChiController.text = contract.diaChi ?? '';
-      } else {
-        _diaChiController.clear();
       }
     });
   }
@@ -147,9 +172,24 @@ class _HDYeuCauMayMoiScreenState extends State<HDYeuCauMayMoiScreen> {
     }
     setState(() { _isSaving = true; });
     try {
-      final yeuCauId = Uuid().v4();
+      final yeuCauId = _isEditMode ? _editingYeuCauId! : Uuid().v4();
       final now = DateTime.now();
-      final request = LinkYeuCauMayModel(yeuCauId: yeuCauId, nguoiTao: widget.username, ngay: now, gio: '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}', hopDongId: _selectedContract!.uid, phanLoai: _selectedContract!.loaiHinh, tenHopDong: _selectedContract!.tenHopDong, diaChi: _diaChiController.text.trim(), moTa: _moTaController.text.trim(), trangThai: isDraft ? 'Nháp' : 'Gửi');
+      final request = LinkYeuCauMayModel(
+        yeuCauId: yeuCauId, 
+        nguoiTao: widget.existingRequest?.nguoiTao ?? widget.username, 
+        ngay: widget.existingRequest?.ngay ?? now, 
+        gio: widget.existingRequest?.gio ?? '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}', 
+        hopDongId: _selectedContract!.uid, 
+        phanLoai: _selectedContract!.loaiHinh, 
+        tenHopDong: _selectedContract!.tenHopDong, 
+        diaChi: _diaChiController.text.trim(), 
+        moTa: _moTaController.text.trim(), 
+        trangThai: isDraft ? 'Nháp' : (_isEditMode ? widget.existingRequest!.trangThai : 'Gửi'),
+        nguoiGuiCapNhat: widget.existingRequest?.nguoiGuiCapNhat,
+        duyetKdCapNhat: widget.existingRequest?.duyetKdCapNhat,
+        duyetKtCapNhat: widget.existingRequest?.duyetKtCapNhat
+      );
+      
       final chiTietListWithYeuCauId = _chiTietList.map((chiTiet) => LinkYeuCauMayChiTietModel(chiTietId: chiTiet.chiTietId, yeuCauId: yeuCauId, loaiMay: chiTiet.loaiMay, maMay: chiTiet.maMay, hangMay: chiTiet.hangMay, tanSuatSuDung: chiTiet.tanSuatSuDung, donGia: chiTiet.donGia, tinhTrang: chiTiet.tinhTrang, soThangKhauHao: chiTiet.soThangKhauHao, soLuong: chiTiet.soLuong, thanhTienThang: chiTiet.thanhTienThang, ghiChu: chiTiet.ghiChu)).toList();
       
       final apiResult = await _sendToAPI(request, chiTietListWithYeuCauId);
@@ -158,7 +198,18 @@ class _HDYeuCauMayMoiScreenState extends State<HDYeuCauMayMoiScreen> {
         throw Exception(apiResult['message']);
       }
       
-      await _dbHelper.insertLinkYeuCauMay(request);
+      if (_isEditMode) {
+        await _dbHelper.updateLinkYeuCauMay(request);
+        final existingDetails = await _dbHelper.getLinkYeuCauMayChiTietsByYeuCauId(yeuCauId);
+        for (var detail in existingDetails) {
+          if (detail.chiTietId != null) {
+            await _dbHelper.deleteLinkYeuCauMayChiTiet(detail.chiTietId!);
+          }
+        }
+      } else {
+        await _dbHelper.insertLinkYeuCauMay(request);
+      }
+      
       for (var chiTiet in chiTietListWithYeuCauId) {
         await _dbHelper.insertLinkYeuCauMayChiTiet(chiTiet);
       }
@@ -170,7 +221,7 @@ class _HDYeuCauMayMoiScreenState extends State<HDYeuCauMayMoiScreen> {
         barrierDismissible: false,
         builder: (context) => AlertDialog(
           title: Row(children: [Icon(Icons.check_circle, color: Colors.green, size: 32), SizedBox(width: 12), Text('Thành công')]),
-          content: Text('${isDraft ? 'Đã lưu nháp' : 'Đã gửi yêu cầu'} thành công!\n\nVui lòng đồng bộ dữ liệu từ màn hình chính để cập nhật thông tin mới nhất.'),
+          content: Text('${_isEditMode ? 'Đã cập nhật' : (isDraft ? 'Đã lưu nháp' : 'Đã gửi yêu cầu')} thành công!\n\nVui lòng đồng bộ dữ liệu từ màn hình chính để cập nhật thông tin mới nhất.'),
           actions: [
             TextButton(
               onPressed: () {
@@ -242,191 +293,253 @@ Widget build(BuildContext context) {
     },
     child: Scaffold(
       appBar: AppBar(
-        title: Text('Tạo yêu cầu máy móc mới'),
+        title: Text(_isEditMode ? 'Chỉnh sửa yêu cầu máy móc' : 'Tạo yêu cầu máy móc mới'),
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
+              colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
             ),
           ),
         ),
         foregroundColor: Colors.white,
       ),
       body: _isLoading
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Đang tải dữ liệu...'),
-                ],
-              ),
-            )
-          : _latestContracts.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+        ? Center(child: CircularProgressIndicator())
+        : Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                Expanded(
+                  child: ListView(
+                    padding: EdgeInsets.all(16),
                     children: [
-                      Icon(Icons.assignment_outlined, size: 64, color: Colors.grey),
-                      SizedBox(height: 16),
-                      Text(
-                        'Không có hợp đồng nào',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Vui lòng tạo hợp đồng trước khi tạo yêu cầu',
-                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                        textAlign: TextAlign.center,
-                      ),
-                      SizedBox(height: 24),
-                      ElevatedButton.icon(
-                        onPressed: () => Navigator.pop(context),
-                        icon: Icon(Icons.arrow_back),
-                        label: Text('Quay lại'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(0xFF1976D2),
-                          foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: ListView(
+                      Card(
+                        elevation: 2,
+                        child: Padding(
                           padding: EdgeInsets.all(16),
-                          children: [
-                            _buildContractCard(),
-                            SizedBox(height: 16),
-                            _buildRequestDetailsCard(),
-                            SizedBox(height: 16),
-                            _buildMachineDetailsSection(),
-                            SizedBox(height: 16),
-                            Card(
-                              color: Color(0xFFFFF3E0),
-                              child: Padding(
-                                padding: EdgeInsets.all(12),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.info_outline, color: Color(0xFFFF6F00)),
-                                    SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        'Vui lòng thêm chi tiết máy móc trước khi gửi yêu cầu.',
-                                        style: TextStyle(fontSize: 13, color: Color(0xFFE65100)),
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.description, color: Color(0xFF1976D2)),
+                                  SizedBox(width: 8),
+                                  Text('Thông tin yêu cầu', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
+                                ],
                               ),
-                            ),
-                            SizedBox(height: 16),
-                            _buildUserInfo(),
-                          ],
+                              Divider(height: 24),
+                              DropdownButtonFormField<LinkHopDongModel>(
+                                value: _selectedContract,
+                                decoration: InputDecoration(
+                                  labelText: 'Chọn hợp đồng *',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                  prefixIcon: Icon(Icons.assignment),
+                                ),
+                                items: _latestContracts.map((contract) => DropdownMenuItem(
+                                  value: contract,
+                                  child: Text('${contract.tenHopDong} - ${contract.loaiHinh}'),
+                                )).toList(),
+                                onChanged: _onContractSelected,
+                                validator: (value) => value == null ? 'Vui lòng chọn hợp đồng' : null,
+                              ),
+                              SizedBox(height: 16),
+                              TextFormField(
+                                controller: _diaChiController,
+                                decoration: InputDecoration(
+                                  labelText: 'Địa chỉ *',
+                                  hintText: 'Nhập địa chỉ',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                  prefixIcon: Icon(Icons.location_on),
+                                ),
+                                validator: (value) => value == null || value.trim().isEmpty ? 'Vui lòng nhập địa chỉ' : null,
+                              ),
+                              SizedBox(height: 16),
+                              TextFormField(
+                                controller: _moTaController,
+                                decoration: InputDecoration(
+                                  labelText: 'Mô tả',
+                                  hintText: 'Nhập mô tả chi tiết (nếu có)',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                  prefixIcon: Icon(Icons.notes),
+                                ),
+                                maxLines: 4,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      Container(
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.3),
-                              spreadRadius: 1,
-                              blurRadius: 5,
-                              offset: Offset(0, -3),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: (_isSaving || _selectedContract == null)
-                                    ? null
-                                    : () => _saveRequest(true),
-                                icon: Icon(Icons.save_outlined),
-                                label: Text('Lưu nháp'),
-                                style: OutlinedButton.styleFrom(
-                                  padding: EdgeInsets.symmetric(vertical: 14),
-                                  side: BorderSide(color: Color(0xFF1976D2), width: 1.5),
-                                  foregroundColor: Color(0xFF1976D2),
+                      SizedBox(height: 16),
+                      Card(
+                        elevation: 2,
+                        child: Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.construction, color: Color(0xFF4CAF50)),
+                                  SizedBox(width: 8),
+                                  Text('Danh sách máy móc', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF4CAF50))),
+                                  Spacer(),
+                                  Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Color(0xFF4CAF50),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text('${_chiTietList.length}', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                              Divider(height: 24),
+                              if (_chiTietList.isEmpty)
+                                Container(
+                                  padding: EdgeInsets.all(32),
+                                  child: Column(
+                                    children: [
+                                      Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey[400]),
+                                      SizedBox(height: 16),
+                                      Text('Chưa có máy móc nào', style: TextStyle(fontSize: 16, color: Colors.grey[600])),
+                                      SizedBox(height: 8),
+                                      Text('Nhấn nút "Thêm máy móc" để bắt đầu', style: TextStyle(fontSize: 14, color: Colors.grey[500])),
+                                    ],
+                                  ),
+                                )
+                              else
+                                ListView.separated(
+                                  shrinkWrap: true,
+                                  physics: NeverScrollableScrollPhysics(),
+                                  itemCount: _chiTietList.length,
+                                  separatorBuilder: (context, index) => Divider(height: 24),
+                                  itemBuilder: (context, index) {
+                                    final chiTiet = _chiTietList[index];
+                                    return Container(
+                                      padding: EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[50],
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.grey[300]!),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Container(
+                                                width: 32,
+                                                height: 32,
+                                                decoration: BoxDecoration(
+                                                  color: Color(0xFF4CAF50),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Center(child: Text('${index + 1}', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                                              ),
+                                              SizedBox(width: 12),
+                                              Expanded(child: Text(chiTiet.loaiMay ?? 'N/A', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                                              IconButton(
+                                                icon: Icon(Icons.edit, color: Colors.blue),
+                                                onPressed: () => _editChiTiet(index),
+                                              ),
+                                              IconButton(
+                                                icon: Icon(Icons.delete, color: Colors.red),
+                                                onPressed: () => _deleteChiTiet(index),
+                                              ),
+                                            ],
+                                          ),
+                                          SizedBox(height: 8),
+                                          _buildChiTietInfo('Mã máy', chiTiet.maMay ?? 'N/A'),
+                                          _buildChiTietInfo('Hãng', chiTiet.hangMay ?? 'N/A'),
+                                          _buildChiTietInfo('Đơn giá', '${chiTiet.donGia ?? 0} VNĐ'),
+                                          _buildChiTietInfo('Số lượng', '${chiTiet.soLuong ?? 0}'),
+                                          _buildChiTietInfo('Thành tiền/tháng', '${chiTiet.thanhTienThang ?? 0} VNĐ'),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              SizedBox(height: 16),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: _addChiTiet,
+                                  icon: Icon(Icons.add_circle_outline),
+                                  label: Text('Thêm máy móc'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Color(0xFF4CAF50),
+                                    foregroundColor: Colors.white,
+                                    padding: EdgeInsets.symmetric(vertical: 14),
+                                  ),
                                 ),
                               ),
-                            ),
-                            SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: (_isSaving || _selectedContract == null)
-                                    ? null
-                                    : () => _saveRequest(false),
-                                icon: _isSaving
-                                    ? SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                        ),
-                                      )
-                                    : Icon(Icons.send),
-                                label: Text(_isSaving ? 'Đang gửi...' : 'Gửi yêu cầu'),
-                                style: ElevatedButton.styleFrom(
-                                  padding: EdgeInsets.symmetric(vertical: 14),
-                                  backgroundColor: Color(0xFF4CAF50),
-                                  foregroundColor: Colors.white,
-                                  elevation: 3,
-                                ),
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
+                Container(
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.3),
+                        spreadRadius: 1,
+                        blurRadius: 5,
+                        offset: Offset(0, -2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _isSaving ? null : () => _saveRequest(true),
+                          icon: Icon(Icons.save_outlined),
+                          label: Text('Lưu nháp'),
+                          style: OutlinedButton.styleFrom(
+                            padding: EdgeInsets.symmetric(vertical: 14),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _isSaving ? null : () => _saveRequest(false),
+                          icon: _isSaving ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Icon(Icons.send),
+                          label: Text(_isEditMode ? 'Cập nhật' : 'Gửi yêu cầu'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Color(0xFF1976D2),
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(vertical: 14),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
     ),
   );
 }
 
-  Widget _buildContractCard() {
-    return Card(elevation: 2, child: Padding(padding: EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Icon(Icons.assignment, color: Color(0xFF1976D2), size: 24), SizedBox(width: 8), Text('Chọn hợp đồng', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1976D2)))]), SizedBox(height: 16), DropdownButtonFormField<LinkHopDongModel>(value: _selectedContract, decoration: InputDecoration(labelText: 'Hợp đồng *', hintText: 'Chọn hợp đồng', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), prefixIcon: Icon(Icons.description, color: Color(0xFF1976D2))), isExpanded: true, items: _latestContracts.map((contract) => DropdownMenuItem<LinkHopDongModel>(value: contract, child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [Text(contract.tenHopDong ?? 'N/A', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14), overflow: TextOverflow.ellipsis), Text('Loại: ${contract.loaiHinh ?? 'N/A'}', style: TextStyle(fontSize: 12, color: Colors.grey[600]))]))).toList(), onChanged: _isSaving ? null : _onContractSelected, validator: (value) => value == null ? 'Vui lòng chọn hợp đồng' : null), if (_selectedContract != null) ...[SizedBox(height: 16), Container(padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Color(0xFFE3F2FD), borderRadius: BorderRadius.circular(8), border: Border.all(color: Color(0xFF90CAF9))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [_buildInfoRow('Mã HĐ:', _selectedContract!.uid ?? 'N/A'), SizedBox(height: 8), _buildInfoRow('Tên HĐ:', _selectedContract!.tenHopDong ?? 'N/A'), SizedBox(height: 8), _buildInfoRow('Loại hình:', _selectedContract!.loaiHinh ?? 'N/A'), SizedBox(height: 8), _buildInfoRow('Tháng:', _selectedContract!.thang ?? 'N/A')]))]])));
-  }
-
-  Widget _buildRequestDetailsCard() {
-    return Card(elevation: 2, child: Padding(padding: EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Icon(Icons.edit_note, color: Color(0xFF1976D2), size: 24), SizedBox(width: 8), Text('Chi tiết yêu cầu', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1976D2)))]), SizedBox(height: 16), TextFormField(controller: _diaChiController, decoration: InputDecoration(labelText: 'Địa chỉ công trường *', hintText: 'Nhập địa chỉ công trường', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), prefixIcon: Icon(Icons.location_on, color: Color(0xFF1976D2)), helperText: 'Bạn có thể chỉnh sửa địa chỉ nếu cần'), maxLines: 2, enabled: !_isSaving && _selectedContract != null, validator: (value) => value == null || value.trim().isEmpty ? 'Vui lòng nhập địa chỉ' : null), SizedBox(height: 16), TextFormField(controller: _moTaController, decoration: InputDecoration(labelText: 'Mô tả yêu cầu', hintText: 'Nhập mô tả chi tiết về yêu cầu máy móc', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), prefixIcon: Icon(Icons.notes, color: Color(0xFF1976D2))), maxLines: 4, enabled: !_isSaving)])));
-  }
-
-  Widget _buildMachineDetailsSection() {
-    return Card(elevation: 2, child: Padding(padding: EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Icon(Icons.precision_manufacturing, color: Color(0xFF1976D2), size: 24), SizedBox(width: 8), Expanded(child: Text('Chi tiết máy móc', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1976D2)))), ElevatedButton.icon(onPressed: _isSaving ? null : _addChiTiet, icon: Icon(Icons.add, size: 20), label: Text('Thêm máy'), style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF4CAF50), foregroundColor: Colors.white, padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)))]), SizedBox(height: 16), if (_chiTietList.isEmpty) Container(padding: EdgeInsets.all(24), decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey[300]!)), child: Center(child: Column(children: [Icon(Icons.construction, size: 48, color: Colors.grey), SizedBox(height: 12), Text('Chưa có máy móc nào', style: TextStyle(fontSize: 16, color: Colors.grey[600])), SizedBox(height: 8), Text('Nhấn "Thêm máy" để bắt đầu', style: TextStyle(fontSize: 14, color: Colors.grey[500]))]))) else ListView.separated(shrinkWrap: true, physics: NeverScrollableScrollPhysics(), itemCount: _chiTietList.length, separatorBuilder: (context, index) => SizedBox(height: 8), itemBuilder: (context, index) => _buildChiTietCard(_chiTietList[index], index))])));
-  }
-
-  Widget _buildChiTietCard(LinkYeuCauMayChiTietModel chiTiet, int index) {
-    return Card(elevation: 1, color: Colors.grey[50], child: Padding(padding: EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Container(padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Color(0xFF1976D2), borderRadius: BorderRadius.circular(4)), child: Text('#${index + 1}', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))), SizedBox(width: 12), Expanded(child: Text(chiTiet.loaiMay ?? 'N/A', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))), IconButton(icon: Icon(Icons.edit, color: Colors.blue), onPressed: _isSaving ? null : () => _editChiTiet(index), tooltip: 'Chỉnh sửa'), IconButton(icon: Icon(Icons.delete, color: Colors.red), onPressed: _isSaving ? null : () => _deleteChiTiet(index), tooltip: 'Xóa')]), Divider(), _buildChiTietInfoRow('Mã máy:', chiTiet.maMay ?? 'N/A'), _buildChiTietInfoRow('Hãng máy:', chiTiet.hangMay ?? 'N/A'), _buildChiTietInfoRow('Tần suất:', chiTiet.tanSuatSuDung ?? 'N/A'), _buildChiTietInfoRow('Đơn giá:', '${chiTiet.donGia?.toString() ?? '0'} VNĐ'), _buildChiTietInfoRow('Tình trạng:', '${((chiTiet.tinhTrang ?? 0) * 100).toStringAsFixed(0)}%'), _buildChiTietInfoRow('Số tháng khấu hao:', chiTiet.soThangKhauHao?.toString() ?? '0'), _buildChiTietInfoRow('Số lượng:', chiTiet.soLuong?.toString() ?? '0'), _buildChiTietInfoRow('Thành tiền/tháng:', '${chiTiet.thanhTienThang?.toString() ?? '0'} VNĐ', isHighlight: true), if (chiTiet.ghiChu != null && chiTiet.ghiChu!.isNotEmpty) _buildChiTietInfoRow('Ghi chú:', chiTiet.ghiChu!)])));
-  }
-
-  Widget _buildChiTietInfoRow(String label, String value, {bool isHighlight = false}) {
-    return Padding(padding: EdgeInsets.symmetric(vertical: 4), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [SizedBox(width: 140, child: Text(label, style: TextStyle(fontSize: 13, color: Colors.grey[700]))), Expanded(child: Text(value, style: TextStyle(fontSize: 13, fontWeight: isHighlight ? FontWeight.bold : FontWeight.normal, color: isHighlight ? Color(0xFF1976D2) : Colors.black87)))]));
-  }
-
-  Widget _buildUserInfo() {
-    return Container(padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey[300]!)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Icon(Icons.person, size: 16, color: Colors.grey[600]), SizedBox(width: 8), Text('Người tạo: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey[700])), Text(widget.username, style: TextStyle(fontSize: 13, color: Colors.grey[800]))]), SizedBox(height: 8), Row(children: [Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]), SizedBox(width: 8), Text('Thời gian: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey[700])), Text('${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year} ${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}', style: TextStyle(fontSize: 13, color: Colors.grey[800]))])]));
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [SizedBox(width: 80, child: Text(label, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1565C0)))), Expanded(child: Text(value, style: TextStyle(fontSize: 13, color: Color(0xFF0D47A1))))]);
+  Widget _buildChiTietInfo(String label, String value) {
+    return Padding(
+      padding: EdgeInsets.only(top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 120, child: Text('$label:', style: TextStyle(fontSize: 13, color: Colors.grey[700]))),
+          Expanded(child: Text(value, style: TextStyle(fontSize: 13, color: Colors.black87))),
+        ],
+      ),
+    );
   }
 }
 

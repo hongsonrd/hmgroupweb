@@ -48,7 +48,7 @@ class _HDYeuCauMayScreenState extends State<HDYeuCauMayScreen> {
   
   // Approval permissions
   final List<String> _managerApprovers = ['hm.tason', 'hm.tranminh'];
-  final List<String> _financeApprovers = ['hm.tason', 'hm.luukinh'];
+  final List<String> _financeApprovers = ['hm.tason', 'hm.nguyenyen'];
   
   bool _isManagerApprover = false;
   bool _isFinanceApprover = false;
