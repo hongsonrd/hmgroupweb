@@ -4549,6 +4549,79 @@ class LinkDanhMucMayModel {
     );
   }
 }
+class LichCNkhuVucModel {
+  final String uid;
+  String? khuVuc;
+  LichCNkhuVucModel({required this.uid, this.khuVuc});
+  Map<String, dynamic> toMap() => {'uid': uid, 'khuVuc': khuVuc};
+  factory LichCNkhuVucModel.fromMap(Map<String, dynamic> map) {
+    return LichCNkhuVucModel(uid: map['uid'], khuVuc: map['khuVuc']);
+  }
+}
+
+class LichCNhangMucModel {
+  final String uid;
+  String? doiTuong;
+  LichCNhangMucModel({required this.uid, this.doiTuong});
+  Map<String, dynamic> toMap() => {'uid': uid, 'doiTuong': doiTuong};
+  factory LichCNhangMucModel.fromMap(Map<String, dynamic> map) {
+    return LichCNhangMucModel(uid: map['uid'], doiTuong: map['doiTuong']);
+  }
+}
+
+class LichCNkyThuatModel {
+  final String uid;
+  String? congViec;
+  LichCNkyThuatModel({required this.uid, this.congViec});
+  Map<String, dynamic> toMap() => {'uid': uid, 'congViec': congViec};
+  factory LichCNkyThuatModel.fromMap(Map<String, dynamic> map) {
+    return LichCNkyThuatModel(uid: map['uid'], congViec: map['congViec']);
+  }
+}
+
+class LichCNtinhChatModel {
+  final String uid;
+  String? tinhChat;
+  LichCNtinhChatModel({required this.uid, this.tinhChat});
+  Map<String, dynamic> toMap() => {'uid': uid, 'tinhChat': tinhChat};
+  factory LichCNtinhChatModel.fromMap(Map<String, dynamic> map) {
+    return LichCNtinhChatModel(uid: map['uid'], tinhChat: map['tinhChat']);
+  }
+}
+
+class LichCNtangToaModel {
+  final String uid;
+  String? boPhan;
+  String? tenGoi;
+  String? phanLoai;
+  LichCNtangToaModel({required this.uid, this.boPhan, this.tenGoi, this.phanLoai});
+  Map<String, dynamic> toMap() => {'uid': uid, 'boPhan': boPhan, 'tenGoi': tenGoi, 'phanLoai': phanLoai};
+  factory LichCNtangToaModel.fromMap(Map<String, dynamic> map) {
+    return LichCNtangToaModel(uid: map['uid'], boPhan: map['boPhan'], tenGoi: map['tenGoi'], phanLoai: map['phanLoai']);
+  }
+}
+
+class LichCNchiTietModel {
+  final String uid;
+  String? nguoiDung;
+  String? ngay;
+  String? gio;
+  String? lichId;
+  String? boPhan;
+  String? viTri;
+  String? thap;
+  String? tang;
+  int? soPhut;
+  String? khuVuc;
+  String? doiTuong;
+  String? congViec;
+  String? tinhChat;
+  LichCNchiTietModel({required this.uid, this.nguoiDung, this.ngay, this.gio, this.lichId, this.boPhan, this.viTri, this.thap, this.tang, this.soPhut, this.khuVuc, this.doiTuong, this.congViec, this.tinhChat});
+  Map<String, dynamic> toMap() => {'uid': uid, 'nguoiDung': nguoiDung, 'ngay': ngay, 'gio': gio, 'lichId': lichId, 'boPhan': boPhan, 'viTri': viTri, 'thap': thap, 'tang': tang, 'soPhut': soPhut, 'khuVuc': khuVuc, 'doiTuong': doiTuong, 'congViec': congViec, 'tinhChat': tinhChat};
+  factory LichCNchiTietModel.fromMap(Map<String, dynamic> map) {
+    return LichCNchiTietModel(uid: map['uid'], nguoiDung: map['nguoiDung'], ngay: map['ngay'], gio: map['gio'], lichId: map['lichId'], boPhan: map['boPhan'], viTri: map['viTri'], thap: map['thap'], tang: map['tang'], soPhut: map['soPhut'], khuVuc: map['khuVuc'], doiTuong: map['doiTuong'], congViec: map['congViec'], tinhChat: map['tinhChat']);
+  }
+}
 // Database Tables
 class DatabaseTables {
   // Table Names
@@ -4615,6 +4688,68 @@ static const String mapListTable = 'Map_List';
   static const String linkYeuCauMayTable = 'LinkYeuCauMay';
    static const String linkYeuCauMayChiTietTable = 'LinkYeuCauMayChiTiet';
     static const String linkDanhMucMayTable = 'LinkDanhMucMay';
+    static const String lichCNkhuVucTable = 'LichCNkhuVuc';
+static const String lichCNhangMucTable = 'LichCNhangMuc';
+static const String lichCNkyThuatTable = 'LichCNkyThuat';
+static const String lichCNtinhChatTable = 'LichCNtinhChat';
+static const String lichCNtangToaTable = 'LichCNtangToa';
+static const String lichCNchiTietTable = 'LichCNchiTiet';
+
+static const String createLichCNkhuVucTable = '''
+  CREATE TABLE $lichCNkhuVucTable (
+    uid VARCHAR(100) PRIMARY KEY,
+    khuVuc VARCHAR(100)
+  )
+''';
+
+static const String createLichCNhangMucTable = '''
+  CREATE TABLE $lichCNhangMucTable (
+    uid VARCHAR(100) PRIMARY KEY,
+    doiTuong VARCHAR(100)
+  )
+''';
+
+static const String createLichCNkyThuatTable = '''
+  CREATE TABLE $lichCNkyThuatTable (
+    uid VARCHAR(100) PRIMARY KEY,
+    congViec VARCHAR(100)
+  )
+''';
+
+static const String createLichCNtinhChatTable = '''
+  CREATE TABLE $lichCNtinhChatTable (
+    uid VARCHAR(100) PRIMARY KEY,
+    tinhChat VARCHAR(100)
+  )
+''';
+
+static const String createLichCNtangToaTable = '''
+  CREATE TABLE $lichCNtangToaTable (
+    uid VARCHAR(100) PRIMARY KEY,
+    boPhan VARCHAR(100),
+    tenGoi VARCHAR(100),
+    phanLoai VARCHAR(100)
+  )
+''';
+
+static const String createLichCNchiTietTable = '''
+  CREATE TABLE $lichCNchiTietTable (
+    uid VARCHAR(100) PRIMARY KEY,
+    nguoiDung VARCHAR(100),
+    ngay DATE,
+    gio TIME,
+    lichId VARCHAR(100),
+    boPhan VARCHAR(255),
+    viTri VARCHAR(100),
+    thap VARCHAR(100),
+    tang VARCHAR(100),
+    soPhut INT,
+    khuVuc VARCHAR(100),
+    doiTuong VARCHAR(100),
+    congViec VARCHAR(100),
+    tinhChat VARCHAR(100)
+  )
+''';
   static const String createLinkYeuCauMayTable = '''
     CREATE TABLE $linkYeuCauMayTable (
       yeuCauId VARCHAR(100) PRIMARY KEY,

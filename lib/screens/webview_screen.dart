@@ -461,11 +461,13 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
   Widget _buildVideoSection() {
     return Container(
       width: double.infinity,
+      height: 350,
       color: Colors.black,
       child: _videoInitialized
-          ? AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Video(controller: _videoController),
+          ? Video(
+              controller: _videoController,
+              controls: NoVideoControls,
+              fit: BoxFit.cover,
             )
           : Container(
               height: 200,

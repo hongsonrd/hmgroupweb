@@ -39,13 +39,13 @@ class DBHelper {
     }
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool hasReset = prefs.getBool('db_reset_v32') ?? false;
+    bool hasReset = prefs.getBool('db_reset_v33') ?? false;
     
     if (!hasReset) {
-      print('Forcing database reset for version 32...');
+      print('Forcing database reset for version 33...');
       try {
         await deleteDatabase(path);
-        await prefs.setBool('db_reset_v32', true);
+        await prefs.setBool('db_reset_v33', true);
         print('Database reset successful');
       } catch (e) {
         print('Error during database reset: $e');
@@ -57,7 +57,7 @@ class DBHelper {
     final db = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 32,
+        version: 33,
         onCreate: (Database db, int version) async {
           print('Creating database tables...');
           await db.execute(DatabaseTables.createInteractionTable);
@@ -118,10 +118,16 @@ class DBHelper {
                         await db.execute(DatabaseTables.createLinkYeuCauMayTable);
             await db.execute(DatabaseTables.createLinkYeuCauMayChiTietTable);
             await db.execute(DatabaseTables.createLinkDanhMucMayTable);
+            await db.execute(DatabaseTables.createLichCNkhuVucTable);
+await db.execute(DatabaseTables.createLichCNhangMucTable);
+await db.execute(DatabaseTables.createLichCNkyThuatTable);
+await db.execute(DatabaseTables.createLichCNtinhChatTable);
+await db.execute(DatabaseTables.createLichCNtangToaTable);
+await db.execute(DatabaseTables.createLichCNchiTietTable);
           print('Database tables created successfully');
         },
         onUpgrade: (Database db, int oldVersion, int newVersion) async {
-          if (oldVersion < 32) {
+          if (oldVersion < 33) {
 
           }
         },
@@ -142,6 +148,157 @@ class DBHelper {
     rethrow;
   }
 }
+//LLV:
+Future<List<LichCNkhuVucModel>> getAllLichCNkhuVuc() async {
+  final db = await database;
+  final rows = await db.query(DatabaseTables.lichCNkhuVucTable);
+  return rows.map((m) => LichCNkhuVucModel.fromMap(m)).toList();
+}
+
+Future<int> deleteLichCNkhuVuc(String uid) async {
+  final db = await database;
+  return db.delete(DatabaseTables.lichCNkhuVucTable, where: 'uid = ?', whereArgs: [uid]);
+}
+
+Future<void> batchInsertLichCNkhuVucs(List<LichCNkhuVucModel> models) async {
+  final db = await database;
+  final batch = db.batch();
+  for (var model in models) {
+    batch.insert('LichCNkhuVuc', model.toMap());
+  }
+  await batch.commit(noResult: true);
+}
+
+Future<void> clearLichCNkhuVucTable() async {
+  final db = await database;
+  await db.delete(DatabaseTables.lichCNkhuVucTable);
+}
+
+Future<List<LichCNhangMucModel>> getAllLichCNhangMuc() async {
+  final db = await database;
+  final rows = await db.query(DatabaseTables.lichCNhangMucTable);
+  return rows.map((m) => LichCNhangMucModel.fromMap(m)).toList();
+}
+
+Future<int> deleteLichCNhangMuc(String uid) async {
+  final db = await database;
+  return db.delete(DatabaseTables.lichCNhangMucTable, where: 'uid = ?', whereArgs: [uid]);
+}
+
+Future<void> batchInsertLichCNhangMucs(List<LichCNhangMucModel> models) async {
+  final db = await database;
+  final batch = db.batch();
+  for (var model in models) {
+    batch.insert('LichCNhangMuc', model.toMap());
+  }
+  await batch.commit(noResult: true);
+}
+
+Future<void> clearLichCNhangMucTable() async {
+  final db = await database;
+  await db.delete(DatabaseTables.lichCNhangMucTable);
+}
+
+Future<List<LichCNkyThuatModel>> getAllLichCNkyThuat() async {
+  final db = await database;
+  final rows = await db.query(DatabaseTables.lichCNkyThuatTable);
+  return rows.map((m) => LichCNkyThuatModel.fromMap(m)).toList();
+}
+
+Future<int> deleteLichCNkyThuat(String uid) async {
+  final db = await database;
+  return db.delete(DatabaseTables.lichCNkyThuatTable, where: 'uid = ?', whereArgs: [uid]);
+}
+
+Future<void> batchInsertLichCNkyThuats(List<LichCNkyThuatModel> models) async {
+  final db = await database;
+  final batch = db.batch();
+  for (var model in models) {
+    batch.insert('LichCNkyThuat', model.toMap());
+  }
+  await batch.commit(noResult: true);
+}
+
+Future<void> clearLichCNkyThuatTable() async {
+  final db = await database;
+  await db.delete(DatabaseTables.lichCNkyThuatTable);
+}
+
+Future<List<LichCNtinhChatModel>> getAllLichCNtinhChat() async {
+  final db = await database;
+  final rows = await db.query(DatabaseTables.lichCNtinhChatTable);
+  return rows.map((m) => LichCNtinhChatModel.fromMap(m)).toList();
+}
+
+Future<int> deleteLichCNtinhChat(String uid) async {
+  final db = await database;
+  return db.delete(DatabaseTables.lichCNtinhChatTable, where: 'uid = ?', whereArgs: [uid]);
+}
+
+Future<void> batchInsertLichCNtinhChats(List<LichCNtinhChatModel> models) async {
+  final db = await database;
+  final batch = db.batch();
+  for (var model in models) {
+    batch.insert('LichCNtinhChat', model.toMap());
+  }
+  await batch.commit(noResult: true);
+}
+
+Future<void> clearLichCNtinhChatTable() async {
+  final db = await database;
+  await db.delete(DatabaseTables.lichCNtinhChatTable);
+}
+
+Future<List<LichCNtangToaModel>> getAllLichCNtangToa() async {
+  final db = await database;
+  final rows = await db.query(DatabaseTables.lichCNtangToaTable);
+  return rows.map((m) => LichCNtangToaModel.fromMap(m)).toList();
+}
+
+Future<int> deleteLichCNtangToa(String uid) async {
+  final db = await database;
+  return db.delete(DatabaseTables.lichCNtangToaTable, where: 'uid = ?', whereArgs: [uid]);
+}
+
+Future<void> batchInsertLichCNtangToas(List<LichCNtangToaModel> models) async {
+  final db = await database;
+  final batch = db.batch();
+  for (var model in models) {
+    batch.insert('LichCNtangToa', model.toMap());
+  }
+  await batch.commit(noResult: true);
+}
+
+Future<void> clearLichCNtangToaTable() async {
+  final db = await database;
+  await db.delete(DatabaseTables.lichCNtangToaTable);
+}
+
+Future<List<LichCNchiTietModel>> getAllLichCNchiTiet() async {
+  final db = await database;
+  final rows = await db.query(DatabaseTables.lichCNchiTietTable);
+  return rows.map((m) => LichCNchiTietModel.fromMap(m)).toList();
+}
+
+Future<int> deleteLichCNchiTiet(String uid) async {
+  final db = await database;
+  return db.delete(DatabaseTables.lichCNchiTietTable, where: 'uid = ?', whereArgs: [uid]);
+}
+
+Future<void> batchInsertLichCNchiTiets(List<LichCNchiTietModel> models) async {
+  final db = await database;
+  final batch = db.batch();
+  for (var model in models) {
+    batch.insert('LichCNchiTiet', model.toMap());
+  }
+  await batch.commit(noResult: true);
+}
+
+Future<void> clearLichCNchiTietTable() async {
+  final db = await database;
+  await db.delete(DatabaseTables.lichCNchiTietTable);
+}
+
 //YeuCauMay:
 Future<List<LinkYeuCauMayChiTietModel>> getLinkYeuCauMayChiTietsByYeuCauId(String yeuCauId) async {
   final db = await database;

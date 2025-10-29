@@ -17,7 +17,8 @@ import 'dart:io';
 import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 import 'chat_ai_case.dart';
-
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 enum AvatarState { hello, thinking, speaking, congrat, listening, idle }
 
 class ChatAIScreen extends StatefulWidget {
@@ -1299,53 +1300,7 @@ Future<void> _sendMessage() async {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF1A1F2E),
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(kToolbarHeight),
-        child: AnimatedBuilder(
-          animation: _gradientAnimation,
-          builder: (context, child) {
-            return Container(
-              decoration: _isStreaming ? BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: _mode == 'image' 
- ? [
-  Color.lerp(const Color(0xFF323A32), const Color(0xFF9A4E32), _gradientAnimation.value)!,
-  Color.lerp(const Color(0xFF9A4E32), const Color(0xFF323A32), _gradientAnimation.value)!,
-] : [
-  Color.lerp(const Color(0xFF1B1B1B), const Color(0xFF8B6A3F), _gradientAnimation.value)!,
-  Color.lerp(const Color(0xFF8B6A3F), const Color(0xFF1B1B1B), _gradientAnimation.value)!,
-],
-            stops: [0.0, 1.0],
-                ),
-              ) : BoxDecoration(color: _primaryColor),
-              child: AppBar(
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                leading: IconButton(
-                  icon: const Icon(Icons.menu, color: Colors.white),
-                  onPressed: () {
-                    setState(() {
-                      _sidebarVisible = !_sidebarVisible;
-                    });
-                  },
-                ),
-                title: Row(
-                  children: [
-                    Icon(_mode == 'text' ? Icons.chat : Icons.image, color: Colors.white),
-                    const SizedBox(width: 8),
-                    Text(
-                      _mode == 'text' ? 'Trò chuyện AI' : 'Tạo hình ảnh AI',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ),
+
       body: Row(
         children: [
           if (_sidebarVisible)
@@ -1548,6 +1503,53 @@ child: ElevatedButton.icon(
             ),
           ),
         ],
+      ),
+            appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: AnimatedBuilder(
+          animation: _gradientAnimation,
+          builder: (context, child) {
+            return Container(
+              decoration: _isStreaming ? BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: _mode == 'image' 
+ ? [
+  Color.lerp(const Color(0xFF323A32), const Color(0xFF9A4E32), _gradientAnimation.value)!,
+  Color.lerp(const Color(0xFF9A4E32), const Color(0xFF323A32), _gradientAnimation.value)!,
+] : [
+  Color.lerp(const Color(0xFF1B1B1B), const Color(0xFF8B6A3F), _gradientAnimation.value)!,
+  Color.lerp(const Color(0xFF8B6A3F), const Color(0xFF1B1B1B), _gradientAnimation.value)!,
+],
+            stops: [0.0, 1.0],
+                ),
+              ) : BoxDecoration(color: _primaryColor),
+              child: AppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                leading: IconButton(
+                  icon: const Icon(Icons.menu, color: Colors.white),
+                  onPressed: () {
+                    setState(() {
+                      _sidebarVisible = !_sidebarVisible;
+                    });
+                  },
+                ),
+                title: Row(
+                  children: [
+                    Icon(_mode == 'text' ? Icons.chat : Icons.image, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Text(
+                      _mode == 'text' ? 'Trò chuyện AI' : 'Tạo hình ảnh AI',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -2562,94 +2564,6 @@ Widget _buildStreamingMessage() {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: Container(
-                  height: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.blueGrey[700],
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedCaseType,
-                      hint: const Text('Loại dữ liệu', style: TextStyle(color: Colors.white70, fontSize: 13)),
-                      isExpanded: true,
-                      isDense: true,
-                      dropdownColor: Colors.blueGrey[700],
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
-                      items: CaseFileManager.getCaseTypes().map((type) {
-                        return DropdownMenuItem(value: type, child: Text(type, style: const TextStyle(fontSize: 13)));
-                      }).toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedCaseType = val;
-                          _caseFileData = null;
-                        });
-                        if (val != null) _loadCaseFile();
-                      },
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                flex: 2,
-                child: GestureDetector(
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: _selectedCaseDate,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime(2030),
-                      builder: (context, child) {
-                        return Theme(
-                          data: ThemeData.dark().copyWith(
-                            colorScheme: ColorScheme.dark(
-                              primary: _primaryColor,
-                              onPrimary: Colors.white,
-                              surface: Colors.blueGrey[700]!,
-                              onSurface: Colors.white,
-                            ),
-                          ),
-                          child: child!,
-                        );
-                      },
-                    );
-                    if (date != null) {
-                      setState(() {
-                        _selectedCaseDate = date;
-                        _caseFileData = null;
-                      });
-                      if (_selectedCaseType != null) _loadCaseFile();
-                    }
-                  },
-                  child: Container(
-                    height: 36,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.blueGrey[700],
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          DateFormat('dd/MM/yy').format(_selectedCaseDate),
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
-                        ),
-                        const Icon(Icons.calendar_today, color: Colors.white70, size: 14),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
           if (_selectedImage != null)
             Container(
               margin: const EdgeInsets.only(bottom: 4),
@@ -2823,6 +2737,93 @@ Widget _buildStreamingMessage() {
               _AvatarVideoPlayer(
                 state: _avatarState,
                 videos: _avatarVideos,
+              ),
+            ],
+          ),
+                    Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: Container(
+                  height: 36,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.blueGrey[700],
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _selectedCaseType,
+                      hint: const Text('Loại dữ liệu', style: TextStyle(color: Colors.amber, fontSize: 13)),
+                      isExpanded: true,
+                      isDense: true,
+                      dropdownColor: Colors.blueGrey[700],
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      items: CaseFileManager.getCaseTypes().map((type) {
+                        return DropdownMenuItem(value: type, child: Text(type, style: const TextStyle(fontSize: 13)));
+                      }).toList(),
+                      onChanged: (val) {
+                        setState(() {
+                          _selectedCaseType = val;
+                          _caseFileData = null;
+                        });
+                        if (val != null) _loadCaseFile();
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                flex: 2,
+                child: GestureDetector(
+                  onTap: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: _selectedCaseDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2030),
+                      builder: (context, child) {
+                        return Theme(
+                          data: ThemeData.dark().copyWith(
+                            colorScheme: ColorScheme.dark(
+                              primary: _primaryColor,
+                              onPrimary: Colors.white,
+                              surface: Colors.blueGrey[700]!,
+                              onSurface: Colors.white,
+                            ),
+                          ),
+                          child: child!,
+                        );
+                      },
+                    );
+                    if (date != null) {
+                      setState(() {
+                        _selectedCaseDate = date;
+                        _caseFileData = null;
+                      });
+                      if (_selectedCaseType != null) _loadCaseFile();
+                    }
+                  },
+                  child: Container(
+                    height: 36,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.blueGrey[700],
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          DateFormat('dd/MM/yy').format(_selectedCaseDate),
+                          style: const TextStyle(color: Colors.amber, fontSize: 13),
+                        ),
+                        const Icon(Icons.calendar_today, color: Colors.white70, size: 14),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -3368,19 +3369,20 @@ class _AvatarVideoPlayer extends StatefulWidget {
 }
 
 class _AvatarVideoPlayerState extends State<_AvatarVideoPlayer> with SingleTickerProviderStateMixin {
-  VideoPlayerController? _controller;
+  Player? _player;
+  VideoController? _videoController;
   AvatarState? _currentState;
   String? _currentVideo;
   String _currentBubbleText = '';
   late AnimationController _dotAnimationController;
   late Animation<int> _dotAnimation;
-  
+
   final Map<AvatarState, List<String>> _bubbleTexts = {
     AvatarState.hello: ['Xin chào!', 'Bạn muốn hỏi gì?', 'Chào bạn!', 'Tôi có thể giúp gì?'],
     AvatarState.listening: ['Bạn có thể thêm ảnh', 'Có thể đính kèm file', 'Thêm file nếu muốn'],
     AvatarState.thinking: ['🤔...'],
-    AvatarState.speaking: ['💭...','📢...'],
-    AvatarState.congrat: ['❤️','💙','💚','💛'],
+    AvatarState.speaking: ['💭...', '📢...'],
+    AvatarState.congrat: ['❤️', '💙', '💚', '💛'],
     AvatarState.idle: ['Bạn có thể chuyển sang chế độ tạo ảnh', 'Tôi có thể giúp bạn tạo video!', 'Bạn muốn biết gì nào?'],
   };
 
@@ -3403,49 +3405,48 @@ class _AvatarVideoPlayerState extends State<_AvatarVideoPlayer> with SingleTicke
       _updateBubbleText();
     }
   }
-  
+
   void _updateBubbleText() {
     final texts = _bubbleTexts[widget.state] ?? [];
-    if (texts.isNotEmpty) {
-      setState(() {
-        _currentBubbleText = texts[Random().nextInt(texts.length)];
-      });
-    } else {
-      setState(() {
-        _currentBubbleText = '';
-      });
-    }
+    setState(() {
+      _currentBubbleText = texts.isNotEmpty ? texts[Random().nextInt(texts.length)] : '';
+    });
   }
 
   Future<void> _initializeVideo() async {
     final videos = widget.videos[widget.state] ?? widget.videos[AvatarState.idle]!;
     final randomVideo = videos[Random().nextInt(videos.length)];
-    
+
     if (_currentVideo == randomVideo && _currentState == widget.state) return;
-    
+
     _currentState = widget.state;
     _currentVideo = randomVideo;
     _updateBubbleText();
-    
-    await _controller?.dispose();
-    
-    _controller = VideoPlayerController.asset('assets/aivideo/$randomVideo');
-    
+
+    await _player?.dispose();
+
+    final player = Player();
+    final controller = VideoController(player);
+
+    setState(() {
+      _player = player;
+      _videoController = controller;
+    });
+
     try {
-      await _controller!.initialize();
-      if (mounted) {
-        setState(() {});
-        _controller!.setLooping(true);
-        _controller!.play();
-      }
+      await player.open(
+        Media('asset://assets/aivideo/$randomVideo'),
+        play: true,
+      );
+      player.setPlaylistMode(PlaylistMode.loop);
     } catch (e) {
-      print('Error initializing video: $e');
+      print('Error initializing media_kit video: $e');
     }
   }
 
   @override
   void dispose() {
-    _controller?.dispose();
+    _player?.dispose();
     _dotAnimationController.dispose();
     super.dispose();
   }
@@ -3454,7 +3455,7 @@ class _AvatarVideoPlayerState extends State<_AvatarVideoPlayer> with SingleTicke
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final size = (screenWidth * 0.14).clamp(64.0, 154.0);
-    
+
     return SizedBox(
       width: size * 1.8,
       height: size,
@@ -3515,13 +3516,11 @@ class _AvatarVideoPlayerState extends State<_AvatarVideoPlayer> with SingleTicke
                 ],
               ),
               child: ClipOval(
-                child: _controller?.value.isInitialized == true
-                    ? VideoPlayer(_controller!)
+                child: _videoController != null
+                    ? Video(controller: _videoController!)
                     : Container(
                         color: Colors.grey.shade800,
-                        child: const Center(
-                          child: CircularProgressIndicator(),
-                        ),
+                        child: const Center(child: CircularProgressIndicator()),
                       ),
               ),
             ),
