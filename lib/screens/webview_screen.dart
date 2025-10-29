@@ -3,7 +3,8 @@ import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:video_player/video_player.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 import 'dart:io';
 import 'dart:async';
 import 'package:intl/intl.dart';
@@ -29,6 +30,8 @@ import '../checklist_manager.dart';
 import '../pay_page.dart';
 import '../chat_ai.dart';
 import '../checklist_supervisor.dart';
+import '../projectlichlamviec.dart';
+
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
   @override
@@ -39,15 +42,12 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
   @override
   bool get wantKeepAlive => true;
 
-  // Video Player State
-  late VideoPlayerController _videoController;
+  late Player _player;
+  late VideoController _videoController;
   bool _videoInitialized = false;
   String _username = '';
-
-  // Tab Controller
   late TabController _tabController;
   
-  // Colors from the original GridViewScreen
   final Color appBarTop = Color(0xFF024965);
   final Color appBarBottom = Color(0xFF03a6cf);
   final Color videoOverlayTop = Color(0xFF03a6cf);
@@ -89,6 +89,11 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
     'isDirectNavigation': true,
     'tab': 0, 
   },
+            {'icon': 'assets/linklogo.png', 'important': 'true', 'name': 'Lịch làm việc KD',
+    'link': 'llvkd_link',
+    'isDirectNavigation': true,
+    'tab': 0, 
+  },
   {'icon': 'assets/zaloviplogo.png','important': 'true', 'name': 'OA Kinh Doanh', 'link': 'https://zalo.me/g/rzccet697', 'tab': 0},
   {'icon': 'assets/zaloviplogo.png','important': 'true', 'name': 'OA QLDV', 'link': 'https://zalo.me/g/xbcalx122', 'tab': 0},
   {'icon': 'assets/logoonline.png', 'name': 'Đào tạo online', 'link': 'https://yourworldtravel.vn/api/index3.html', 'tab': 0},
@@ -100,14 +105,12 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
   'isDirectNavigation': true,
   'tab': 1, 
 },
-  //{'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Robot tự động', 'link': 'https://yourworldtravel.vn/drive/dailyrobot.html', 'tab': 1},
   {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Lịch chuyến bay', 'link': 'https://yourworldtravel.vn/drive/dailyrobot2.html', 'tab': 1},
   {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo máy móc',
   'link': 'maymoc_link',
   'isDirectNavigation': true,
   'tab': 1, 
 },
-
   {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo công nhân',
     'link': 'congnhan_link',
     'isDirectNavigation': true,
@@ -135,7 +138,6 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
     'tab': 1, 
   },
   {'icon': 'assets/dblogo.png', 'important': 'true', 'name': 'Báo cáo chấm công', 'link': 'https://yourworldtravel.vn/drive/dailyattendance.html', 'tab': 1},
-
   {'icon': 'assets/logokt.png', 'important': 'true','name': 'HM Kỹ thuật', 'link': 'https://www.appsheet.com/start/f2040b99-7558-4e2c-9e02-df100c83d8ce', 'tab': 0},
   {'icon': 'assets/zalologo.png', 'name': 'Zalo Hoàn Mỹ', 'link': 'https://zalo.me/2746464448500686217', 'tab': 0},
   {'icon': 'assets/fblogo.png','important': 'true', 'name': 'Facebook Hoàn Mỹ', 'link': 'https://www.facebook.com/Hoanmykleanco', 'tab': 0},
@@ -153,28 +155,25 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
     _tabController = TabController(length: 2, vsync: this);
   }
 
-  void _initializeVideo() {
-  if (Platform.isWindows) {
-    setState(() {
-      _videoInitialized = false;
-    });
-    return;
-  }
-  _videoController = VideoPlayerController.asset('assets/appvideogroup.mp4')
-    ..initialize().then((_) {
-      _videoController.setLooping(true);
-      _videoController.setVolume(0.0);
-      _videoController.play();
+  void _initializeVideo() async {
+    try {
+      _player = Player();
+      _videoController = VideoController(_player);
+      
+      await _player.open(Media('asset:///assets/appvideogroup.mp4'));
+      await _player.setPlaylistMode(PlaylistMode.loop);
+      await _player.setVolume(0.0);
+      
       setState(() {
         _videoInitialized = true;
       });
-    }).catchError((error) {
-       print("Error initializing video: $error");
-       setState(() {
-          _videoInitialized = false; 
-       });
-    });
-}
+    } catch (error) {
+      print("Error initializing video: $error");
+      setState(() {
+        _videoInitialized = false;
+      });
+    }
+  }
 
   Future<void> _loadUserInfo() async {
     try {
@@ -190,15 +189,12 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
 
   @override
   void dispose() {
-    if (!Platform.isWindows) {
-    _videoController.dispose();
-  }
+    _player.dispose();
     _tabController.dispose();
     super.dispose();
   }
 
   Future<void> _handleUrlOpen(String url, String title) async {
-    // Special case for HM Time - navigate to ChamCongScreen
     if (title == 'HM Time') {
       final userState = Provider.of<UserState>(context, listen: false);
       final userData = userState.currentUser;
@@ -218,7 +214,6 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
       return;
     }
     
-    // Special case for HM Hotel - navigate to hs_page.dart
     if (title == 'HM Hotel') {
       final userState = Provider.of<UserState>(context, listen: false);
       final userData = userState.currentUser;
@@ -231,11 +226,21 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
       return;
     }
 
-    // Special case for HM GoClean - navigate to ProjectManagement4
     if (title == 'HM GoClean') {
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (context) => ProjectManagement4(),
+        ),
+      );
+      return;
+    }
+        if (title == 'Lịch làm việc KD') {
+                final userState = Provider.of<UserState>(context, listen: false);
+      final userData = userState.currentUser;
+      final username = userData?['username'] ?? '';
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => ProjectLichLamViec(username: username),
         ),
       );
       return;
@@ -260,7 +265,6 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
       return;
     }
 
-    // Special case for Báo cáo hàng ngày - navigate to DailyReportScreen
     if (title == 'Báo cáo hàng ngày') {
       Navigator.of(context).push(
         MaterialPageRoute(
@@ -358,7 +362,6 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
       return;
     }
 
-    // External URL handling with desktop_webview_window
     final Uri uri = Uri.parse(url);
     
     final browserDomains = [
@@ -414,13 +417,8 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
     if (currentUsername == null) return [];
 
     return gridData.where((item) {
-      // Filter by tab index
       if ((item['tab'] ?? 0) != tabIndex) return false;
-
-      // If no userAccess is specified, show to everyone on this tab
       if (!item.containsKey('userAccess')) return true;
-
-      // If userAccess is specified, check if current user has access
       List<String> allowedUsers = (item['userAccess'] as List).cast<String>();
       return allowedUsers.contains(currentUsername.toLowerCase());
     }).toList();
@@ -461,36 +459,22 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
   }
 
   Widget _buildVideoSection() {
-  return Container(
-    width: double.infinity,
-    color: Colors.black,
-    child: Platform.isWindows
-        ? // Show image on Windows
-          Container(
-            height: 350, 
-            decoration: BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage('assets/viddream.png'),
-                fit: BoxFit.cover,
+    return Container(
+      width: double.infinity,
+      color: Colors.black,
+      child: _videoInitialized
+          ? AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Video(controller: _videoController),
+            )
+          : Container(
+              height: 200,
+              child: Center(
+                child: CircularProgressIndicator(color: Colors.white),
               ),
             ),
-          )
-        : // Show video on other platforms
-          _videoInitialized && _videoController.value.isInitialized
-            ? AspectRatio(
-                aspectRatio: _videoController.value.aspectRatio,
-                child: VideoPlayer(_videoController),
-              )
-            : Container(
-                height: 200,
-                child: Center(
-                  child: _videoInitialized == false 
-                    ? Text('⚡', style: TextStyle(color: Colors.white)) 
-                    : CircularProgressIndicator(color: Colors.white),
-                ),
-              ),
-  );
-}
+    );
+  }
   
   Widget _buildWelcomeSection() {
   return Container(
@@ -500,7 +484,7 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [videoOverlayTop, videoOverlayMiddle, videoOverlayBottom],
-        stops: [0.0, 0.15, 0.4], // Adjusted stops to make the bottom color extend more
+        stops: [0.0, 0.15, 0.4],
       ),
     ),
     padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -623,7 +607,6 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
         ),
         trailing: Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[400]),
         onTap: () {
-          // Handle tap with proper URL opening implementation
           _handleUrlOpen(itemData['link']!, itemData['name']!);
         },
       ),
@@ -644,26 +627,20 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
         return Scaffold(
           body: Stack(
             children: [
-              // Main content with Row layout (split screen)
               Row(
                 children: [
-                  // Left side - GridViewScreen style layout (70%)
                   Expanded(
                     flex: 70,
                     child: isLandscape || isDesktop
                       ? _buildHorizontalLayout(isLoggedIn, username)
                       : _buildVerticalLayout(isLoggedIn, username),
                   ),
-                  
-                  // Right side - NewsSection (30%)
                   Expanded(
                     flex: 30,
                     child: NewsSection(),
                   ),
                 ],
               ),
-              
-              // Floating icon
               FloatingDraggableIcon(
                 key: FloatingDraggableIcon.globalKey,
               ),
@@ -674,12 +651,10 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
     );
   }
 
-  // New method for horizontal/desktop layout (2 columns)
   Widget _buildHorizontalLayout(bool isLoggedIn, String username) {
   return Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      // Column 1 (40%): AppBar + Video + Welcome section
       Expanded(
         flex: 60,
         child: Column(
@@ -687,7 +662,6 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
             _buildAppBar(),
             Expanded(
               child: Container(
-                // Add this container with decoration to extend the gradient
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
@@ -701,7 +675,6 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
                     children: [
                       _buildVideoSection(),
                       _buildWelcomeSection(),
-                      // Add some extra space at the bottom with the same background color
                       Container(
                         height: 100,
                         color: videoOverlayBottom,
@@ -714,8 +687,6 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
           ],
         ),
       ),
-      
-      // Column 2 (40%): Tab view with both tabs
       Expanded(
         flex: 40,
         child: Container(
@@ -744,7 +715,6 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
                 child: TabBarView(
                   controller: _tabController,
                   children: [
-                      // Tab 1 content
                       isLoggedIn
                         ? ListView.separated(
                             padding: EdgeInsets.zero,
@@ -764,8 +734,6 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
                               style: TextStyle(color: Colors.black87),
                             ),
                           ),
-                      
-                      // Tab 2 content
                       isLoggedIn
                         ? ListView.separated(
                             padding: EdgeInsets.zero,
@@ -796,7 +764,6 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
     );
   }
 
-  // Vertical layout for mobile
   Widget _buildVerticalLayout(bool isLoggedIn, String username) {
   return SafeArea(
     child: CustomScrollView(
@@ -818,19 +785,18 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
           ),
         ),
         SliverToBoxAdapter(child: _buildVideoSection()),
-        // Updated welcome section with minimum height to fill the screen
         SliverToBoxAdapter(
           child: Container(
             width: double.infinity,
             constraints: BoxConstraints(
-              minHeight: MediaQuery.of(context).size.height * 0.3, // Ensure it takes at least 30% of screen height
+              minHeight: MediaQuery.of(context).size.height * 0.3,
             ),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [videoOverlayTop, videoOverlayMiddle, videoOverlayBottom],
-                stops: [0.0, 0.15, 0.4], // Adjusted stops to make the bottom color dominant
+                stops: [0.0, 0.15, 0.4],
               ),
             ),
             child: Column(
@@ -918,12 +884,9 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
             ),
           ),
         ),
-        // The rest of your code remains the same
         SliverFillRemaining(
-          // Set hasScrollBody to false to prevent scrolling conflicts
           hasScrollBody: true,
           child: Container(
-            // This container extends the gradient background
             decoration: BoxDecoration(
              gradient: LinearGradient(
                begin: Alignment.topCenter,
@@ -934,7 +897,6 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
            child: TabBarView(
              controller: _tabController,
              children: [
-               // Tab 1 content - wrap in Container with white background
                Container(
                  decoration: BoxDecoration(
                    color: Colors.white.withOpacity(0.9),
@@ -963,8 +925,6 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
                        ),
                      ),
                ),
-               
-               // Tab 2 content - wrap in Container with white background
                Container(
                  decoration: BoxDecoration(
                    color: Colors.white.withOpacity(0.9),
@@ -1001,4 +961,4 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
    ),
  );
 }
-} 
+}
