@@ -16,8 +16,9 @@ import 'dart:math';
 import 'dart:io';
 import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
-import 'chat_ai_graph.dart';
-
+import 'chat_ai_case.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 enum AvatarState { hello, thinking, speaking, congrat, listening, idle }
 
 class ChatAIScreen extends StatefulWidget {
@@ -52,31 +53,36 @@ class _ChatAIScreenState extends State<ChatAIScreen> with SingleTickerProviderSt
   late AnimationController _gradientController;
   late Animation<double> _gradientAnimation;
   
+  String? _selectedCaseType;
+  DateTime _selectedCaseDate = DateTime.now();
+  CaseFileData? _caseFileData;
+  bool _isCaseFileLoading = false;
+  
   AvatarState _avatarState = AvatarState.hello;
   Timer? _congratTimer;
   Timer? _speakingEndTimer;
   
   final Map<AvatarState, List<String>> _avatarVideos = {
-    AvatarState.hello: ['hello.mp4'],
-    AvatarState.thinking: ['thinking.mp4'],
+    AvatarState.hello: ['hello.mp4','hello-smile.mp4'],
+    AvatarState.thinking: ['thinking.mp4','thinking-deep.mp4','thinking-focus.mp4'],
     AvatarState.speaking: ['speaking.mp4'],
-    AvatarState.congrat: ['congrat.mp4'],
-    AvatarState.listening: ['listening.mp4'],
-    AvatarState.idle: ['idle.mp4'],
+    AvatarState.congrat: ['congrat.mp4','congrat-jump.mp4','congrat-hand.mp4'],
+    AvatarState.listening: ['listening.mp4','listening-smile.mp4'],
+    AvatarState.idle: ['idle.mp4','idle-turn.mp4','idle-smile.mp4'],
   };
   
   final Map<String, List<Map<String, dynamic>>> _models = {
-    'fast': [
-      {'value': 'flash-2.5-lite', 'name': 'Cá kiếm', 'cost': 25, 'rating': 3, 'systemPrompt': 'Ưu tiên tiếng việt'},
+  'fast': [
+      {'value': 'flash-2.5-lite', 'name': 'Cá kiếm', 'cost': 25, 'rating': 3, 'systemPrompt': 'Test:'},
     ],
     'precise': [
-      {'value': 'flash-2.5', 'name': 'Cá mập trắng', 'cost': 100, 'rating': 4, 'systemPrompt': 'Ưu tiên tiếng việt'},
-      {'value': 'flash-2.5-pro', 'name': 'Cá voi sát thủ', 'cost': 302, 'rating': 5, 'systemPrompt': 'Ưu tiên tiếng việt'},
+      {'value': 'flash-2.5', 'name': 'Cá mập trắng', 'cost': 100, 'rating': 4, 'systemPrompt': 'Test:'},
+      {'value': 'flash-2.5-pro', 'name': 'Cá voi sát thủ', 'cost': 302, 'rating': 5, 'systemPrompt': 'Test:'},
     ],
     'image': [
-      {'value': 'imagen-4', 'name': 'Cá heo', 'cost': 1900, 'rating': 3, 'systemPrompt': 'Không chỉ tạo ảnh với chữ, phải tạo hình ảnh thiết kế:'},
-      {'value': 'veo-3.0-fast', 'name': 'Cá đuối', 'cost': 5000, 'rating': 4, 'systemPrompt': 'Tạo video dọc 9:16, 6s trừ khi user yêu cầu khác sau đây:'},
-      {'value': 'veo-3.0', 'name': 'Cá voi xanh', 'cost': 7500, 'rating': 5, 'systemPrompt': 'Tạo video ngang 9:16, 6s trừ khi user yêu cầu khác sau đây:'},
+      {'value': 'imagen-4', 'name': 'Cá heo', 'cost': 1900, 'rating': 3, 'systemPrompt': 'Test:'},
+      {'value': 'veo-3.0-fast', 'name': 'Cá đuối', 'cost': 5000, 'rating': 4, 'systemPrompt': 'Test:'},
+      {'value': 'veo-3.0', 'name': 'Cá voi xanh', 'cost': 7500, 'rating': 5, 'systemPrompt': 'Test:'},
     ],
   };
   final List<Map<String, String>> _imageRatios = [
@@ -166,7 +172,7 @@ void _onTextChanged() {
       final response = await http.get(
         Uri.parse('$_apiBaseUrl/aichat/credit/$_username'),
         headers: {'Content-Type': 'application/json'},
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 60));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         setState(() {
@@ -807,7 +813,11 @@ Future<void> _sendMessage() async {
   }
   final messageText = _messageController.text.trim();
   if (messageText.isEmpty && _selectedImage == null) {
-    return;
+    if (_selectedCaseType != null && _caseFileData != null) {
+      _messageController.text = 'Phân tích dữ liệu $_selectedCaseType';
+    } else {
+      return;
+    }
   }
   if (_creditBalance != null && !_creditBalance!.canUse) {
     _showError('Bạn đã hết credit cho tháng này. Vui lòng chờ đến tháng sau.');
@@ -816,10 +826,11 @@ Future<void> _sendMessage() async {
   if (_currentSession == null) {
     _createNewSession();
   }
+  final finalMessageText = _messageController.text.trim();
   final userMessage = ChatMessage(
     id: const Uuid().v4(),
     role: 'user',
-    content: messageText,
+    content: finalMessageText,
     imagePath: _selectedImage?.path,
     timestamp: DateTime.now(),
   );
@@ -835,9 +846,9 @@ Future<void> _sendMessage() async {
   _setAvatarState(AvatarState.thinking);
   
   if (_currentSession!.messages.length == 1) {
-    _currentSession!.title = messageText.length > 30 
-        ? '${messageText.substring(0, 30)}...' 
-        : messageText;
+    _currentSession!.title = finalMessageText.length > 30 
+        ? '${finalMessageText.substring(0, 30)}...' 
+        : finalMessageText;
   }
   _messageController.clear();
   final imageFile = _selectedImage;
@@ -848,7 +859,10 @@ Future<void> _sendMessage() async {
       'POST',
       Uri.parse('$_apiBaseUrl/aichat'),
     );
-    final systemPrompt = _getSystemPrompt(_selectedModel);
+    String systemPrompt = _getSystemPrompt(_selectedModel);
+    if (_selectedCaseType != null) {
+      systemPrompt = CaseFileManager.getCustomPrompt(_selectedCaseType!);
+    }
     String contextString = '';
     final recentMessages = _currentSession!.messages.length > 7
         ? _currentSession!.messages.sublist(_currentSession!.messages.length - 7, _currentSession!.messages.length - 1)
@@ -862,23 +876,38 @@ Future<void> _sendMessage() async {
       contextString += '\nTin nhắn hiện tại:\n';
     }
     final fullQuery = systemPrompt.isNotEmpty 
-        ? '$systemPrompt$contextString$messageText' 
-        : '$contextString$messageText';
+        ? '$systemPrompt$contextString$finalMessageText' 
+        : '$contextString$finalMessageText';
     request.fields['userid'] = _username;
     request.fields['model'] = _selectedModel;
     request.fields['mode'] = _mode;
     request.fields['query'] = fullQuery;
     request.fields['history'] = json.encode(_currentSession!.history);
-    if (_mode == 'image') {
-      request.fields['ratio'] = _imageRatio;
-    }
-    if (imageFile != null) {
+    if (_caseFileData != null && _selectedCaseType != null) {
+      final tempDir = await getTemporaryDirectory();
+      final fileName = 'case_${DateTime.now().millisecondsSinceEpoch}.${_caseFileData!.fileType}';
+      final tempFile = File('${tempDir.path}/$fileName');
+      
+      if (_caseFileData!.isPdf) {
+        final bytes = base64Decode(_caseFileData!.content);
+        await tempFile.writeAsBytes(bytes);
+      } else {
+        await tempFile.writeAsString(_caseFileData!.content);
+      }
+      
+      request.files.add(
+        await http.MultipartFile.fromPath('image', tempFile.path),
+      );
+    } else if (imageFile != null) {
       request.files.add(
         await http.MultipartFile.fromPath('image', imageFile.path),
       );
     }
+    if (_mode == 'image') {
+      request.fields['ratio'] = _imageRatio;
+    }
     final streamedResponse = await request.send().timeout(
-      const Duration(seconds: 45),
+      const Duration(seconds: 60),
       onTimeout: () {
         throw TimeoutException('Hết thời gian chờ');
       },
@@ -1076,6 +1105,12 @@ Future<void> _sendMessage() async {
                   _currentSession!.lastUpdated = DateTime.now();
                   _saveSessions();
                   _scrollToBottom();
+                  
+                  setState(() {
+                    _selectedCaseType = null;
+                    _caseFileData = null;
+                    _selectedCaseDate = DateTime.now();
+                  });
                   break;
                 case 'credit_info':
                   setState(() {
@@ -1219,57 +1254,53 @@ Future<void> _sendMessage() async {
       ),
     );
   }
+  
+  Future<void> _loadCaseFile() async {
+    if (_selectedCaseType == null) return;
+    setState(() {
+      _isCaseFileLoading = true;
+      _caseFileData = null;
+    });
+    try {
+      final fileData = await CaseFileManager.fetchCaseFile(_selectedCaseType!, _selectedCaseDate);
+      setState(() {
+        _caseFileData = fileData;
+        _isCaseFileLoading = false;
+      });
+      if (fileData == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Không tìm thấy file dữ liệu cho ngày này'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Đã chuẩn bị dữ liệu thành công, bấm GỬI để bắt đầu phân tích'),
+            duration: const Duration(seconds: 2),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _caseFileData = null;
+        _isCaseFileLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi tải file: $e'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF1A1F2E),
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(kToolbarHeight),
-        child: AnimatedBuilder(
-          animation: _gradientAnimation,
-          builder: (context, child) {
-            return Container(
-              decoration: _isStreaming ? BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: _mode == 'image' 
- ? [
-  Color.lerp(const Color(0xFF323A32), const Color(0xFF9A4E32), _gradientAnimation.value)!,
-  Color.lerp(const Color(0xFF9A4E32), const Color(0xFF323A32), _gradientAnimation.value)!,
-] : [
-  Color.lerp(const Color(0xFF1B1B1B), const Color(0xFF8B6A3F), _gradientAnimation.value)!,
-  Color.lerp(const Color(0xFF8B6A3F), const Color(0xFF1B1B1B), _gradientAnimation.value)!,
-],
-            stops: [0.0, 1.0],
-                ),
-              ) : BoxDecoration(color: _primaryColor),
-              child: AppBar(
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                leading: IconButton(
-                  icon: const Icon(Icons.menu, color: Colors.white),
-                  onPressed: () {
-                    setState(() {
-                      _sidebarVisible = !_sidebarVisible;
-                    });
-                  },
-                ),
-                title: Row(
-                  children: [
-                    Icon(_mode == 'text' ? Icons.chat : Icons.image, color: Colors.white),
-                    const SizedBox(width: 8),
-                    Text(
-                      _mode == 'text' ? 'Trò chuyện AI' : 'Tạo hình ảnh AI',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ),
+
       body: Row(
         children: [
           if (_sidebarVisible)
@@ -1472,6 +1503,53 @@ child: ElevatedButton.icon(
             ),
           ),
         ],
+      ),
+            appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: AnimatedBuilder(
+          animation: _gradientAnimation,
+          builder: (context, child) {
+            return Container(
+              decoration: _isStreaming ? BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: _mode == 'image' 
+ ? [
+  Color.lerp(const Color(0xFF323A32), const Color(0xFF9A4E32), _gradientAnimation.value)!,
+  Color.lerp(const Color(0xFF9A4E32), const Color(0xFF323A32), _gradientAnimation.value)!,
+] : [
+  Color.lerp(const Color(0xFF1B1B1B), const Color(0xFF8B6A3F), _gradientAnimation.value)!,
+  Color.lerp(const Color(0xFF8B6A3F), const Color(0xFF1B1B1B), _gradientAnimation.value)!,
+],
+            stops: [0.0, 1.0],
+                ),
+              ) : BoxDecoration(color: _primaryColor),
+              child: AppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                leading: IconButton(
+                  icon: const Icon(Icons.menu, color: Colors.white),
+                  onPressed: () {
+                    setState(() {
+                      _sidebarVisible = !_sidebarVisible;
+                    });
+                  },
+                ),
+                title: Row(
+                  children: [
+                    Icon(_mode == 'text' ? Icons.chat : Icons.image, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Text(
+                      _mode == 'text' ? 'Trò chuyện AI' : 'Tạo hình ảnh AI',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -1782,25 +1860,6 @@ Widget _buildMessageBubble(ChatMessage message) {
                           ),
                         ),
                         const SizedBox(height: 8),
-                      ],
-                      if (!isUser) ...[
-                        Builder(
-                          builder: (context) {
-                            final chartData = extractChartFromText(message.content);
-                            if (chartData != null) {
-                              return ChartThumbnail(
-                                chartData: chartData,
-                                onTap: () {
-                                  showDialog(
-                                    context: context,
-                                    builder: (context) => ChartPopup(chartData: chartData),
-                                  );
-                                },
-                              );
-                            }
-                            return const SizedBox.shrink();
-                          },
-                        ),
                       ],
                       if (!shouldHideContent && parsedContent != null) ...[
                         if (parsedContent['beforeTable'].toString().isNotEmpty)
@@ -2491,7 +2550,7 @@ Widget _buildStreamingMessage() {
   }
   Widget _buildInputArea() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.blueGrey[800],
         boxShadow: [
@@ -2503,28 +2562,31 @@ Widget _buildStreamingMessage() {
         ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           if (_selectedImage != null)
             Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(8),
+              margin: const EdgeInsets.only(bottom: 4),
+              padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 color: Colors.blueGrey[700],
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(6),
               ),
               child: Row(
                 children: [
                   _buildFilePreview(_selectedImage!),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       _selectedImage!.path.split('/').last,
-                      style: const TextStyle(fontSize: 14, color: Colors.white),
+                      style: const TextStyle(fontSize: 12, color: Colors.white),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white),
+                    icon: const Icon(Icons.close, color: Colors.white, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                     onPressed: _removeImage,
                   ),
                 ],
@@ -2532,29 +2594,94 @@ Widget _buildStreamingMessage() {
             ),
           Row(
             children: [
-              Container(
-                decoration: BoxDecoration(
-                  color: _primaryColor,
-                  shape: BoxShape.circle,
+              if (_selectedCaseType != null && _caseFileData != null)
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.orange,
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: _isStreaming
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Icon(Icons.send_rounded),
+                    onPressed: _isStreaming ? null : _sendMessage,
+                    color: Colors.white,
+                    tooltip: 'Gửi với dữ liệu $_selectedCaseType',
+                  ),
+                )
+              else
+                Container(
+                  decoration: BoxDecoration(
+                    color: _primaryColor,
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: _isStreaming
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Icon(Icons.send),
+                    onPressed: _isStreaming ? null : _sendMessage,
+                    color: Colors.white,
+                  ),
                 ),
-                child: IconButton(
-                  icon: _isStreaming
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        )
-                      : const Icon(Icons.send),
-                  onPressed: _isStreaming ? null : _sendMessage,
-                  color: Colors.white,
+              const SizedBox(width: 4),
+              if (_selectedCaseType != null && _isCaseFileLoading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4),
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
+              if (_selectedCaseType != null && _caseFileData != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.orange, width: 1),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.description, color: Colors.orange, size: 12),
+                      const SizedBox(width: 3),
+                      Text(
+                        _selectedCaseType!,
+                        style: const TextStyle(color: Colors.orange, fontSize: 10),
+                      ),
+                      const SizedBox(width: 3),
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _selectedCaseType = null;
+                            _caseFileData = null;
+                            _selectedCaseDate = DateTime.now();
+                          });
+                        },
+                        child: const Icon(Icons.close, color: Colors.orange, size: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(width: 4),
               IconButton(
-                icon: Icon(_mode == 'image' ? Icons.image : Icons.attach_file, color: Colors.white),
+                icon: Icon(_mode == 'image' ? Icons.image : Icons.attach_file, color: Colors.white, size: 20),
+                padding: const EdgeInsets.all(8),
                 onPressed: _isStreaming ? null : (_mode == 'image' ? _pickImage : () async {
                   try {
                     FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -2579,36 +2706,124 @@ Widget _buildStreamingMessage() {
                   }
                 }),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
               Expanded(
                 child: TextField(
                   controller: _messageController,
                   enabled: !_isStreaming,
-                  minLines: 2,
-                  maxLines: null,
+                  minLines: 1,
+                  maxLines: 3,
                   textInputAction: TextInputAction.newline,
-                  style: const TextStyle(color: Colors.white),
+                  style: const TextStyle(color: Colors.amber, fontSize: 14),
+                  cursorColor: Colors.lightGreenAccent, 
                   decoration: InputDecoration(
-                    hintText: _mode == 'text' ? 'Nhập tin nhắn... (Enter 2 lần để gửi)' : 'Mô tả hình ảnh cần tạo...',
-                    hintStyle: TextStyle(color: Colors.blueGrey[400]),
+                    hintText: _mode == 'text' ? 'Tin nhắn...' : 'Mô tả ảnh...',
+                    hintStyle: TextStyle(color: Colors.blueGrey[300], fontSize: 13),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(20),
                       borderSide: BorderSide.none,
                     ),
                     filled: true,
                     fillColor: Colors.blueGrey[700],
                     contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
+                      horizontal: 14,
+                      vertical: 10,
                     ),
                   ),
                   onSubmitted: (_) => _sendMessage(),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
               _AvatarVideoPlayer(
                 state: _avatarState,
                 videos: _avatarVideos,
+              ),
+            ],
+          ),
+                    Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: Container(
+                  height: 36,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.blueGrey[700],
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _selectedCaseType,
+                      hint: const Text('Loại dữ liệu', style: TextStyle(color: Colors.amber, fontSize: 13)),
+                      isExpanded: true,
+                      isDense: true,
+                      dropdownColor: Colors.blueGrey[700],
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      items: CaseFileManager.getCaseTypes().map((type) {
+                        return DropdownMenuItem(value: type, child: Text(type, style: const TextStyle(fontSize: 13)));
+                      }).toList(),
+                      onChanged: (val) {
+                        setState(() {
+                          _selectedCaseType = val;
+                          _caseFileData = null;
+                        });
+                        if (val != null) _loadCaseFile();
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                flex: 2,
+                child: GestureDetector(
+                  onTap: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: _selectedCaseDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2030),
+                      builder: (context, child) {
+                        return Theme(
+                          data: ThemeData.dark().copyWith(
+                            colorScheme: ColorScheme.dark(
+                              primary: _primaryColor,
+                              onPrimary: Colors.white,
+                              surface: Colors.blueGrey[700]!,
+                              onSurface: Colors.white,
+                            ),
+                          ),
+                          child: child!,
+                        );
+                      },
+                    );
+                    if (date != null) {
+                      setState(() {
+                        _selectedCaseDate = date;
+                        _caseFileData = null;
+                      });
+                      if (_selectedCaseType != null) _loadCaseFile();
+                    }
+                  },
+                  child: Container(
+                    height: 36,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.blueGrey[700],
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          DateFormat('dd/MM/yy').format(_selectedCaseDate),
+                          style: const TextStyle(color: Colors.amber, fontSize: 13),
+                        ),
+                        const Icon(Icons.calendar_today, color: Colors.white70, size: 14),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -3154,20 +3369,21 @@ class _AvatarVideoPlayer extends StatefulWidget {
 }
 
 class _AvatarVideoPlayerState extends State<_AvatarVideoPlayer> with SingleTickerProviderStateMixin {
-  VideoPlayerController? _controller;
+  Player? _player;
+  VideoController? _videoController;
   AvatarState? _currentState;
   String? _currentVideo;
   String _currentBubbleText = '';
   late AnimationController _dotAnimationController;
   late Animation<int> _dotAnimation;
-  
+
   final Map<AvatarState, List<String>> _bubbleTexts = {
     AvatarState.hello: ['Xin chào!', 'Bạn muốn hỏi gì?', 'Chào bạn!', 'Tôi có thể giúp gì?'],
     AvatarState.listening: ['Bạn có thể thêm ảnh', 'Có thể đính kèm file', 'Thêm file nếu muốn'],
-    AvatarState.thinking: ['...'],
-    AvatarState.speaking: ['...'],
-    AvatarState.congrat: [],
-    AvatarState.idle: [],
+    AvatarState.thinking: ['🤔...'],
+    AvatarState.speaking: ['💭...', '📢...'],
+    AvatarState.congrat: ['❤️', '💙', '💚', '💛'],
+    AvatarState.idle: ['Bạn có thể chuyển sang chế độ tạo ảnh', 'Tôi có thể giúp bạn tạo video!', 'Bạn muốn biết gì nào?'],
   };
 
   @override
@@ -3189,49 +3405,48 @@ class _AvatarVideoPlayerState extends State<_AvatarVideoPlayer> with SingleTicke
       _updateBubbleText();
     }
   }
-  
+
   void _updateBubbleText() {
     final texts = _bubbleTexts[widget.state] ?? [];
-    if (texts.isNotEmpty) {
-      setState(() {
-        _currentBubbleText = texts[Random().nextInt(texts.length)];
-      });
-    } else {
-      setState(() {
-        _currentBubbleText = '';
-      });
-    }
+    setState(() {
+      _currentBubbleText = texts.isNotEmpty ? texts[Random().nextInt(texts.length)] : '';
+    });
   }
 
   Future<void> _initializeVideo() async {
     final videos = widget.videos[widget.state] ?? widget.videos[AvatarState.idle]!;
     final randomVideo = videos[Random().nextInt(videos.length)];
-    
+
     if (_currentVideo == randomVideo && _currentState == widget.state) return;
-    
+
     _currentState = widget.state;
     _currentVideo = randomVideo;
     _updateBubbleText();
-    
-    await _controller?.dispose();
-    
-    _controller = VideoPlayerController.asset('assets/aivideo/$randomVideo');
-    
+
+    await _player?.dispose();
+
+    final player = Player();
+    final controller = VideoController(player);
+
+    setState(() {
+      _player = player;
+      _videoController = controller;
+    });
+
     try {
-      await _controller!.initialize();
-      if (mounted) {
-        setState(() {});
-        _controller!.setLooping(true);
-        _controller!.play();
-      }
+      await player.open(
+        Media('asset://assets/aivideo/$randomVideo'),
+        play: true,
+      );
+      player.setPlaylistMode(PlaylistMode.loop);
     } catch (e) {
-      print('Error initializing video: $e');
+      print('Error initializing media_kit video: $e');
     }
   }
 
   @override
   void dispose() {
-    _controller?.dispose();
+    _player?.dispose();
     _dotAnimationController.dispose();
     super.dispose();
   }
@@ -3239,17 +3454,17 @@ class _AvatarVideoPlayerState extends State<_AvatarVideoPlayer> with SingleTicke
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final size = (screenWidth * 0.14).clamp(64.0, 140.0);
-    
+    final size = (screenWidth * 0.14).clamp(64.0, 154.0);
+
     return SizedBox(
-      width: size * 2,
+      width: size * 1.8,
       height: size,
       child: Stack(
         alignment: Alignment.centerRight,
         children: [
           if (_currentBubbleText.isNotEmpty)
             Positioned(
-              left: 0,
+              left: 10,
               bottom: size * 0.33,
               child: Container(
                 constraints: BoxConstraints(maxWidth: size * 1.5),
@@ -3301,13 +3516,11 @@ class _AvatarVideoPlayerState extends State<_AvatarVideoPlayer> with SingleTicke
                 ],
               ),
               child: ClipOval(
-                child: _controller?.value.isInitialized == true
-                    ? VideoPlayer(_controller!)
+                child: _videoController != null
+                    ? Video(controller: _videoController!)
                     : Container(
                         color: Colors.grey.shade800,
-                        child: const Center(
-                          child: CircularProgressIndicator(),
-                        ),
+                        child: const Center(child: CircularProgressIndicator()),
                       ),
               ),
             ),

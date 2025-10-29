@@ -43,6 +43,12 @@ class CaseFileManager {
       periodType: 'daily',
       customPrompt: 'Phân tích báo cáo với vai trò quản lý chất lượng dịch vụ,làm rõ điểm tốt,chưa tốt,vấn đề,đề xuất phương án xử lý,theo dõi.Đặc thù làm việc tại đây 24/24,nhân viên vệ sinh ca từ 9g sáng hôm nay tới 9g sáng hôm sau,giám sát từ 7:30 sáng hôm nay tới 7:30 sáng hôm sau,văn phòng trụ sở& kỹ thuật robot từ 8g-17g,phạm vi được chia ra bởi kiểm soát an nình gọi là khu vực Cách ly (CL) nghĩa là khu vực sau kiểm tra an ninh,Công cộng (CC) là khu vực ngoài kiểm tra an ninh.Khu vực nhà ga gồm 4 toà:A,B,C,E.A&B là 2 cánh đều có thang máy nối với nhau thông qua C khối trung tâm thang máy/thang cuốn.Toà E là cánh mới, nối với B thông qua cầu đi bộ,có thang máy riêng)',
     ),
+    'TEST 3: Báo cáo tổng quan theo ngày': CaseFileConfig(
+      caseType: 'financial',
+      urlPrefix: 'https://yourworldtravel.vn/drive/tongquanngay',
+      periodType: 'daily',
+      customPrompt: 'Phân tích báo cáo với vai trò quản lý chất lượng dịch vụ,làm rõ điểm tốt,chưa tốt,vấn đề,đề xuất phương án xử lý,theo dõi',
+    ),
   };
 
   static List<String> getCaseTypes() {

@@ -19,6 +19,7 @@ import 'package:video_player/video_player.dart';
 import 'chat_ai_case.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 enum AvatarState { hello, thinking, speaking, congrat, listening, idle }
 
 class ChatAIScreen extends StatefulWidget {
@@ -27,6 +28,11 @@ class ChatAIScreen extends StatefulWidget {
   State<ChatAIScreen> createState() => _ChatAIScreenState();
 }
 class _ChatAIScreenState extends State<ChatAIScreen> with SingleTickerProviderStateMixin {
+  static const String _ttsLanguage = 'vi-VN';
+  static const double _ttsDefaultRate = 0.6;
+  static const double _ttsDefaultPitch = 0.86;
+  static const int _ttsMaxDurationSeconds = 30;
+  
   String _username = '';
   final String _apiBaseUrl = 'https://hmbeacon-81200125587.asia-east2.run.app';
   List<ChatSession> _sessions = [];
@@ -62,6 +68,10 @@ class _ChatAIScreenState extends State<ChatAIScreen> with SingleTickerProviderSt
   Timer? _congratTimer;
   Timer? _speakingEndTimer;
   
+  late FlutterTts _flutterTts;
+  bool _isSpeaking = false;
+  double _ttsVolume = 0.9;
+  
   final Map<AvatarState, List<String>> _avatarVideos = {
     AvatarState.hello: ['hello.mp4','hello-smile.mp4'],
     AvatarState.thinking: ['thinking.mp4','thinking-deep.mp4','thinking-focus.mp4'],
@@ -73,16 +83,16 @@ class _ChatAIScreenState extends State<ChatAIScreen> with SingleTickerProviderSt
   
   final Map<String, List<Map<String, dynamic>>> _models = {
   'fast': [
-      {'value': 'flash-2.5-lite', 'name': 'Cá kiếm', 'cost': 25, 'rating': 3, 'systemPrompt': 'Ưu tiên tiếng việt,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,Sau đây là câu hỏi của người dùng:'},
+      {'value': 'flash-2.5-lite', 'name': 'Cá kiếm', 'cost': 25, 'rating': 3, 'systemPrompt': 'Test:'},
     ],
     'precise': [
-      {'value': 'flash-2.5', 'name': 'Cá mập trắng', 'cost': 100, 'rating': 4, 'systemPrompt': 'Ưu tiên tiếng việt,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,Sau đây là câu hỏi của người dùng:'},
-      {'value': 'flash-2.5-pro', 'name': 'Cá voi sát thủ', 'cost': 302, 'rating': 5, 'systemPrompt': 'Ưu tiên tiếng việt,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,Sau đây là câu hỏi của người dùng:'},
+      {'value': 'flash-2.5', 'name': 'Cá mập trắng', 'cost': 100, 'rating': 4, 'systemPrompt': 'Test:'},
+      {'value': 'flash-2.5-pro', 'name': 'Cá voi sát thủ', 'cost': 302, 'rating': 5, 'systemPrompt': 'Test:'},
     ],
     'image': [
-      {'value': 'imagen-4', 'name': 'Cá heo', 'cost': 1900, 'rating': 3, 'systemPrompt': 'Không chỉ tạo ảnh với chữ, phải tạo hình ảnh thiết kế:'},
-      {'value': 'veo-3.0-fast', 'name': 'Cá đuối', 'cost': 5000, 'rating': 4, 'systemPrompt': 'Tạo video dọc 9:16, 6s trừ khi user yêu cầu khác sau đây:'},
-      {'value': 'veo-3.0', 'name': 'Cá voi xanh', 'cost': 7500, 'rating': 5, 'systemPrompt': 'Tạo video ngang 9:16, 6s trừ khi user yêu cầu khác sau đây:'},
+      {'value': 'imagen-4', 'name': 'Cá heo', 'cost': 1900, 'rating': 3, 'systemPrompt': 'Test:'},
+      {'value': 'veo-3.0-fast', 'name': 'Cá đuối', 'cost': 5000, 'rating': 4, 'systemPrompt': 'Test:'},
+      {'value': 'veo-3.0', 'name': 'Cá voi xanh', 'cost': 7500, 'rating': 5, 'systemPrompt': 'Test:'},
     ],
   };
   final List<Map<String, String>> _imageRatios = [
@@ -104,7 +114,45 @@ class _ChatAIScreenState extends State<ChatAIScreen> with SingleTickerProviderSt
     final avatarEmojis = ['🐙', '🦑', '🦐', '🦞', '🦀', '🪼', '🐡', '🐠', '🐟', '🐬', '🐳', '🐋', '🦈'];
     _userAvatarEmoji = avatarEmojis[Random().nextInt(avatarEmojis.length)];
     _messageController.addListener(_onTextChanged);
+    _initTts();
   }
+  
+  Future<void> _initTts() async {
+    _flutterTts = FlutterTts();
+    await _flutterTts.setLanguage(_ttsLanguage);
+    await _flutterTts.setSpeechRate(_ttsDefaultRate);
+    await _flutterTts.setPitch(_ttsDefaultPitch);
+    await _flutterTts.setVolume(_ttsVolume);
+    _flutterTts.setCompletionHandler(() {
+      setState(() => _isSpeaking = false);
+    });
+  }
+  
+  Future<void> _speakText(String text) async {
+    if (text.isEmpty) return;
+    await _flutterTts.stop();
+    String cleanText = text.replaceAll('*', '').replaceAll('/', '').replaceAll('|', '').replaceAll('#', '').replaceAll('-', ' ').trim();
+    if (cleanText.isEmpty) return;
+    final words = cleanText.split(' ');
+    final estimatedDuration = (words.length / 2.5).ceil();
+    if (estimatedDuration > _ttsMaxDurationSeconds) {
+      final maxWords = (_ttsMaxDurationSeconds * 2.5).floor();
+      cleanText = words.take(maxWords).join(' ');
+    }
+    setState(() => _isSpeaking = true);
+    await _flutterTts.speak(cleanText);
+  }
+  
+  Future<void> _stopSpeaking() async {
+    await _flutterTts.stop();
+    setState(() => _isSpeaking = false);
+  }
+  
+  Future<void> _updateTtsVolume(double volume) async {
+    setState(() => _ttsVolume = volume);
+    await _flutterTts.setVolume(volume);
+  }
+  
   @override
   void dispose() {
     _messageController.removeListener(_onTextChanged);
@@ -114,6 +162,7 @@ class _ChatAIScreenState extends State<ChatAIScreen> with SingleTickerProviderSt
     _gradientController.dispose();
     _congratTimer?.cancel();
     _speakingEndTimer?.cancel();
+    _flutterTts.stop();
     super.dispose();
   }
   
@@ -172,7 +221,7 @@ void _onTextChanged() {
       final response = await http.get(
         Uri.parse('$_apiBaseUrl/aichat/credit/$_username'),
         headers: {'Content-Type': 'application/json'},
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 60));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         setState(() {
@@ -864,8 +913,8 @@ Future<void> _sendMessage() async {
       systemPrompt = CaseFileManager.getCustomPrompt(_selectedCaseType!);
     }
     String contextString = '';
-    final recentMessages = _currentSession!.messages.length > 7
-        ? _currentSession!.messages.sublist(_currentSession!.messages.length - 7, _currentSession!.messages.length - 1)
+    final recentMessages = _currentSession!.messages.length > 17
+        ? _currentSession!.messages.sublist(_currentSession!.messages.length - 17, _currentSession!.messages.length - 1)
         : _currentSession!.messages.sublist(0, _currentSession!.messages.length - 1);
     if (recentMessages.isNotEmpty) {
       contextString = '\n\nĐoạn hội thoại trước:\n';
@@ -907,7 +956,7 @@ Future<void> _sendMessage() async {
       request.fields['ratio'] = _imageRatio;
     }
     final streamedResponse = await request.send().timeout(
-      const Duration(seconds: 45),
+      const Duration(seconds: 60),
       onTimeout: () {
         throw TimeoutException('Hết thời gian chờ');
       },
@@ -1085,6 +1134,8 @@ Future<void> _sendMessage() async {
                     _currentStreamingImage = null;
                     _currentStreamingVideo = null;
                   });
+                  
+                  _speakText(messageContent);
                   
                   _speakingEndTimer = Timer(const Duration(seconds: 2), () {
                     if (mounted) {
@@ -1277,7 +1328,7 @@ Future<void> _sendMessage() async {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Đã tải dữ liệu thành công (${fileData.fileType.toUpperCase()})'),
+            content: Text('Đã chuẩn bị dữ liệu thành công, bấm GỬI để bắt đầu phân tích'),
             duration: const Duration(seconds: 2),
             backgroundColor: Colors.green,
           ),
@@ -2825,6 +2876,43 @@ Widget _buildStreamingMessage() {
                   ),
                 ),
               ),
+              const SizedBox(width: 6),
+Expanded(
+  flex: 1,
+  child: Container(
+    height: 36,
+    padding: const EdgeInsets.symmetric(horizontal: 8),
+    decoration: BoxDecoration(
+      color: Colors.blueGrey[700],
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: Row(
+      children: [
+        Icon(
+          _isSpeaking ? Icons.volume_up : Icons.volume_down,
+          color: Colors.white70,
+          size: 24,
+        ),
+        SizedBox(
+          width: 210,
+          child: Slider(
+            value: _ttsVolume,
+            min: 0.0,
+            max: 1.05,
+            onChanged: _updateTtsVolume,
+            activeColor: _primaryColor,
+            inactiveColor: Colors.amber,
+          ),
+        ),
+        if (_isSpeaking)
+          GestureDetector(
+            onTap: _stopSpeaking,
+            child: const Icon(Icons.stop, color: Colors.red, size: 16),
+          ),
+      ],
+    ),
+  ),
+)
             ],
           ),
         ],

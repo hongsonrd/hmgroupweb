@@ -89,7 +89,7 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
     'isDirectNavigation': true,
     'tab': 0, 
   },
-            {'icon': 'assets/linklogo.png', 'important': 'true', 'name': 'Lịch làm việc KD',
+            {'icon': 'assets/timelogo.png', 'important': 'true', 'name': 'Lịch làm việc KD',
     'link': 'llvkd_link',
     'isDirectNavigation': true,
     'tab': 0, 
