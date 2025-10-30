@@ -542,44 +542,6 @@ int _getPositionsCount() {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row(
-          //   children: [
-          //     Text('Chọn dự án', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey[800])),
-          //     SizedBox(width: 12),
-          //     Expanded(
-          //       child: DropdownButtonFormField<String>(
-          //         value: _selectedProject,
-          //         hint: Text('Chọn dự án'),
-          //         isExpanded: true,
-          //         items: _filteredProjectNames.map((project) => DropdownMenuItem(value: project, child: Text(project, overflow: TextOverflow.ellipsis))).toList(),
-          //         onChanged: (value) {
-          //           if (value != null) {
-          //             setState(() {
-          //               _selectedProject = value;
-          //               _updateToaAndTangSelections();
-          //             });
-          //             _computeProjectData(value);
-          //           }
-          //         },
-          //         decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
-          //       ),
-          //     ),
-          //     SizedBox(width: 12),
-          //     SizedBox(
-          //       width: 200,
-          //       child: TextField(
-          //         controller: _searchController,
-          //         decoration: InputDecoration(
-          //           hintText: 'Tìm dự án',
-          //           prefixIcon: Icon(Icons.search, size: 20),
-          //           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          //           contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          //         ),
-          //       ),
-          //     ),
-          //   ],
-          // ),
-          // SizedBox(height: 12),
           Row(
             children: [
 ElevatedButton.icon(
@@ -594,8 +556,6 @@ ElevatedButton.icon(
 ),
               if (_selectedProject != null) ...[
                 SizedBox(width: 12),
-                //Text('Tòa:', style: TextStyle(fontWeight: FontWeight.w500)),
-                //SizedBox(width: 8),
                 Container(
                   width: 150,
                                       decoration: BoxDecoration(
@@ -611,8 +571,6 @@ ElevatedButton.icon(
                   ),
                 ),
                 SizedBox(width: 12),
-                //Text('Tầng:', style: TextStyle(fontWeight: FontWeight.w500)),
-                //SizedBox(width: 8),
                 Container(
                   width: 150,
                     decoration: BoxDecoration(
@@ -900,24 +858,112 @@ ElevatedButton.icon(
             ],
           ),
           SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              if (hasDetail)
-                OutlinedButton.icon(
-                  onPressed: () => _showDetailDialog(detailFromChiTiet),
-                  icon: Icon(Icons.visibility, size: 16),
-                  label: Text('Chi tiết'),
-                  style: OutlinedButton.styleFrom(foregroundColor: Colors.blue, side: BorderSide(color: Colors.blue)),
-                ),
-              SizedBox(width: 8),
-              ElevatedButton.icon(
-                onPressed: () => _showApplyDialog(task, hasDetail ? detailFromChiTiet : null),
-                icon: Icon(Icons.save, size: 16),
-                label: Text(hasDetail ? 'Cập nhật' : 'Áp dụng'),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan, foregroundColor: Colors.white),
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final totalWidth = constraints.maxWidth;
+              return Row(
+                children: [
+                  if (hasDetail) ...[
+                    SizedBox(
+                      width: totalWidth * 0.25,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.purple[50],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.purple[200]!),
+                        ),
+                        child: Text(
+                          '${detailFromChiTiet.thap ?? ''} - ${detailFromChiTiet.tang ?? ''}',
+                          style: TextStyle(fontSize: 10, color: Colors.purple[900]),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 4),
+                    SizedBox(
+                      width: totalWidth * 0.12,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.blue[50],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.blue[200]!),
+                        ),
+                        child: Text(
+                          _khuVucs.firstWhere((e) => e.uid == detailFromChiTiet.khuVuc, orElse: () => LichCNkhuVucModel(uid: '')).khuVuc ?? '',
+                          style: TextStyle(fontSize: 10, color: Colors.blue[900]),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 4),
+                    SizedBox(
+                      width: totalWidth * 0.12,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.green[50],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.green[200]!),
+                        ),
+                        child: Text(
+                          detailFromChiTiet.doiTuong?.split(',').length.toString() ?? '0',
+                          style: TextStyle(fontSize: 10, color: Colors.green[900]),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 4),
+                    SizedBox(
+                      width: totalWidth * 0.12,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.orange[50],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.orange[200]!),
+                        ),
+                        child: Text(
+                          detailFromChiTiet.congViec?.split(',').length.toString() ?? '0',
+                          style: TextStyle(fontSize: 10, color: Colors.orange[900]),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 4),
+                  ],
+                  Spacer(),
+                  SizedBox(
+                    width: totalWidth * 0.15,
+                    child: hasDetail
+                        ? OutlinedButton(
+                            onPressed: () => _showDetailDialog(detailFromChiTiet),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.blue,
+                              side: BorderSide(color: Colors.blue),
+                              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            ),
+                            child: Text('Chi tiết', style: TextStyle(fontSize: 11)),
+                          )
+                        : SizedBox.shrink(),
+                  ),
+                  SizedBox(width: 4),
+                  SizedBox(
+                    width: totalWidth * 0.15,
+                    child: ElevatedButton(
+                      onPressed: () => _showApplyDialog(task, hasDetail ? detailFromChiTiet : null),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.cyan,
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      ),
+                      child: Text(hasDetail ? 'Cập nhật' : 'Áp dụng', style: TextStyle(fontSize: 11)),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),

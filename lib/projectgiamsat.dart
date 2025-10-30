@@ -2064,6 +2064,17 @@ Widget _buildWorkersTable() {
                           backgroundColor: Colors.purple[600],
                           foregroundColor: Colors.white,
                         ),
+                      ),                       SizedBox(width: 12),
+                                            ElevatedButton.icon(
+                        onPressed: (_isLoading || _selectedProject == null || _taskSchedules.isEmpty) 
+                            ? null 
+                            : () => _showProjectScheduleDialog(),
+                        icon: Icon(Icons.schedule, size: 18),
+                        label: Text('KPI'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.teal[600],
+                          foregroundColor: Colors.white,
+                        ),
                       ),
                     ],
                   ),

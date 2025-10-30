@@ -20,6 +20,7 @@ import 'chat_ai_case.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'chat_ai_custom.dart';
 enum AvatarState { hello, thinking, speaking, congrat, listening, idle }
 
 class ChatAIScreen extends StatefulWidget {
@@ -32,7 +33,8 @@ class _ChatAIScreenState extends State<ChatAIScreen> with SingleTickerProviderSt
   static const double _ttsDefaultRate = 0.6;
   static const double _ttsDefaultPitch = 0.86;
   static const int _ttsMaxDurationSeconds = 30;
-  
+  List<AIProfessional> _customProfessionals = [];
+String? _selectedProfessionalId;
   String _username = '';
   final String _apiBaseUrl = 'https://hmbeacon-81200125587.asia-east2.run.app';
   List<ChatSession> _sessions = [];
@@ -83,16 +85,21 @@ class _ChatAIScreenState extends State<ChatAIScreen> with SingleTickerProviderSt
   
   final Map<String, List<Map<String, dynamic>>> _models = {
   'fast': [
-      {'value': 'flash-2.5-lite', 'name': 'Cá kiếm', 'cost': 25, 'rating': 3, 'systemPrompt': 'Ưu tiên tiếng việt,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,Sau đây là câu hỏi của người dùng:'},
+      {'value': 'qwen3-80b', 'name': '🇨🇳Bạch tuộc', 'cost': 19, 'rating': 4, 'systemPrompt': 'Ưu tiên tiếng việt,gọi người dùng là quý anh/chị,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,sau khi trả lời gợi ý các lựa chọn chủ đề, câu hỏi người dùng có thể nghỉ tới.Sau đây là câu hỏi của người dùng:'},
+      {'value': 'claude-haiku-4-5', 'name': '🇮🇱Tôm càng xanh', 'cost': 21, 'rating': 4, 'systemPrompt': 'Ưu tiên tiếng việt,gọi người dùng là quý anh/chị,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,sau khi trả lời gợi ý các lựa chọn chủ đề, câu hỏi người dùng có thể nghỉ tới.Sau đây là câu hỏi của người dùng:'},
+      //{'value': 'deepseek-v3', 'name': '💠Cua nhện', 'cost': 23, 'rating': 4, 'systemPrompt': 'Ưu tiên tiếng việt,gọi người dùng là quý anh/chị,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,sau khi trả lời gợi ý các lựa chọn chủ đề, câu hỏi người dùng có thể nghỉ tới.Sau đây là câu hỏi của người dùng:'},
+      {'value': 'flash-2.5-lite', 'name': '🇺🇸Cá kiếm', 'cost': 25, 'rating': 3, 'systemPrompt': 'Ưu tiên tiếng việt,gọi người dùng là quý anh/chị,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,sau khi trả lời gợi ý các lựa chọn chủ đề, câu hỏi người dùng có thể nghỉ tới.Sau đây là câu hỏi của người dùng:'},
     ],
     'precise': [
-      {'value': 'flash-2.5', 'name': 'Cá mập trắng', 'cost': 100, 'rating': 4, 'systemPrompt': 'Ưu tiên tiếng việt,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,Sau đây là câu hỏi của người dùng:'},
-      {'value': 'flash-2.5-pro', 'name': 'Cá voi sát thủ', 'cost': 302, 'rating': 5, 'systemPrompt': 'Ưu tiên tiếng việt,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,Sau đây là câu hỏi của người dùng:'},
+      {'value': 'flash-2.5', 'name': '🇺🇸Cá mập trắng', 'cost': 100, 'rating': 4, 'systemPrompt': 'Ưu tiên tiếng việt,gọi người dùng là quý anh/chị,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,sau khi trả lời gợi ý các lựa chọn chủ đề, câu hỏi người dùng có thể nghỉ tới.Sau đây là câu hỏi của người dùng:'},
+      //{'value': 'deepseek-r1', 'name': '💠Cua hoàng đế', 'cost': 95, 'rating': 4, 'systemPrompt': 'Ưu tiên tiếng việt,gọi người dùng là quý anh/chị,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,sau khi trả lời gợi ý các lựa chọn chủ đề, câu hỏi người dùng có thể nghỉ tới.Sau đây là câu hỏi của người dùng:'},
+      {'value': 'claude-sonnet-4-5', 'name': '🇮🇱Tôm hùm sao', 'cost': 250, 'rating': 6, 'systemPrompt': 'Ưu tiên tiếng việt,gọi người dùng là quý anh/chị,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,sau khi trả lời gợi ý các lựa chọn chủ đề, câu hỏi người dùng có thể nghỉ tới.Sau đây là câu hỏi của người dùng:'},
+      {'value': 'flash-2.5-pro', 'name': '🇺🇸Cá voi sát thủ', 'cost': 302, 'rating': 4, 'systemPrompt': 'Ưu tiên tiếng việt,gọi người dùng là quý anh/chị,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,sau khi trả lời gợi ý các lựa chọn chủ đề, câu hỏi người dùng có thể nghỉ tới.Sau đây là câu hỏi của người dùng:'},
     ],
     'image': [
-      {'value': 'imagen-4', 'name': 'Cá heo', 'cost': 1900, 'rating': 3, 'systemPrompt': 'Không chỉ tạo ảnh với chữ, phải tạo hình ảnh thiết kế:'},
-      {'value': 'veo-3.0-fast', 'name': 'Cá đuối', 'cost': 5000, 'rating': 4, 'systemPrompt': 'Tạo video dọc 9:16, 6s trừ khi user yêu cầu khác sau đây:'},
-      {'value': 'veo-3.0', 'name': 'Cá voi xanh', 'cost': 7500, 'rating': 5, 'systemPrompt': 'Tạo video ngang 9:16, 6s trừ khi user yêu cầu khác sau đây:'},
+      {'value': 'imagen-4', 'name': '🇺🇸Cá heo', 'cost': 1900, 'rating': 3, 'systemPrompt': 'Không chỉ tạo ảnh với chữ, phải tạo hình ảnh thiết kế:'},
+      {'value': 'veo-3.0-fast', 'name': '🇺🇸Cá đuối', 'cost': 5000, 'rating': 4, 'systemPrompt': 'Tạo video dọc 9:16, 6s trừ khi user yêu cầu khác sau đây:'},
+      {'value': 'veo-3.0', 'name': '🇺🇸Cá voi xanh', 'cost': 7500, 'rating': 5, 'systemPrompt': 'Tạo video ngang 9:16, 6s trừ khi user yêu cầu khác sau đây:'},
     ],
   };
   final List<Map<String, String>> _imageRatios = [
@@ -115,8 +122,14 @@ class _ChatAIScreenState extends State<ChatAIScreen> with SingleTickerProviderSt
     _userAvatarEmoji = avatarEmojis[Random().nextInt(avatarEmojis.length)];
     _messageController.addListener(_onTextChanged);
     _initTts();
+    _loadCustomProfessionals();
   }
-  
+  Future<void> _loadCustomProfessionals() async {
+  final professionals = await AIProfessionalManager.loadProfessionals(_username);
+  setState(() {
+    _customProfessionals = professionals;
+  });
+}
   Future<void> _initTts() async {
     _flutterTts = FlutterTts();
     await _flutterTts.setLanguage(_ttsLanguage);
@@ -642,7 +655,7 @@ Future<void> _saveVideoToDevice(String videoUrl) async {
       if (_mode == 'image') {
         _selectedModel = 'imagen-4';
       } else {
-        _selectedModel = 'flash-2.5';
+        _selectedModel = 'flash-2.5-lite';
       }
     });
   }
@@ -703,7 +716,7 @@ Future<void> _saveVideoToDevice(String videoUrl) async {
                       onPressed: () {
                         setState(() {
                           _mode = 'text';
-                          _selectedModel = 'flash-2.5';
+                          _selectedModel = 'flash-2.5-lite';
                         });
                         Navigator.pop(context);
                       },
@@ -739,6 +752,7 @@ Future<void> _saveVideoToDevice(String videoUrl) async {
               ),
               const SizedBox(height: 20),
               const Text('Các mô hình khả dụng:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              const Text('Toàn bộ model hệ Cá dùng ổn định, model hệ Tôm chưa xử lý được .pdf lớn, model hệ Bạch tuộc chưa xử lý được ảnh', style: TextStyle(fontSize: 12, color: Colors.red)),
               const SizedBox(height: 10),
               ..._getAvailableModels().map((model) {
                 final isSelected = _selectedModel == model['value'];
@@ -789,7 +803,7 @@ Future<void> _saveVideoToDevice(String videoUrl) async {
                                       const SizedBox(width: 8),
                                       ...List.generate(
                                         model['rating'],
-                                        (index) => const Icon(Icons.star, size: 12, color: Colors.amber),
+                                        (index) => const Icon(Icons.star, size: 12, color: Colors.orange),
                                       ),
                                     ],
                                   ),
@@ -908,9 +922,17 @@ Future<void> _sendMessage() async {
       'POST',
       Uri.parse('$_apiBaseUrl/aichat'),
     );
-    String systemPrompt = _getSystemPrompt(_selectedModel);
-    if (_selectedCaseType != null) {
+    String systemPrompt = '';
+    if (_selectedProfessionalId != null) {
+      final professional = _customProfessionals.firstWhere(
+        (p) => p.id == _selectedProfessionalId,
+        orElse: () => _customProfessionals.first,
+      );
+      systemPrompt = professional.generateSystemPrompt();
+    } else if (_selectedCaseType != null) {
       systemPrompt = CaseFileManager.getCustomPrompt(_selectedCaseType!);
+    } else {
+      systemPrompt = _getSystemPrompt(_selectedModel);
     }
     String contextString = '';
     final recentMessages = _currentSession!.messages.length > 17
@@ -1103,13 +1125,9 @@ Future<void> _sendMessage() async {
                           if (videos.isNotEmpty) {
                             videoUrl = videos[0].toString();
                             if (videoUrl!.startsWith('gs://')) {
-                              videoUrl = videoUrl.replaceFirst(
-                                'gs://',
-                                'https://storage.googleapis.com/',
-                              );
+                              videoUrl = videoUrl.replaceFirst('gs://', 'https://storage.googleapis.com/');
                             }
-                            messageContent = messageContent.substring(0, startIndex) + 
-                            messageContent.substring(endIndex);
+                            messageContent = messageContent.substring(0, startIndex) + messageContent.substring(endIndex);
                             messageContent = messageContent.trim();
                           }
                         }
@@ -1178,7 +1196,7 @@ Future<void> _sendMessage() async {
                   setState(() {
                     _isStreaming = false;
                     _currentStreamingMessage = '';
-                    _currentStreamingImage = null; 
+                    _currentStreamingImage = null;
                   });
                   _setAvatarState(AvatarState.idle);
                   break;
@@ -1445,6 +1463,36 @@ padding: const EdgeInsets.only(top: 16, left: 16, right: 16, bottom: 0),
                     ],
                   ),
                 ),
+             const SizedBox(height: 4),
+Padding(
+  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+  child: ElevatedButton.icon(
+    onPressed: () async {
+      final result = await showDialog<List<AIProfessional>>(
+        context: context,
+        builder: (context) => CustomAIDialog(
+          username: _username,
+          primaryColor: _primaryColor,
+        ),
+      );
+      if (result != null) {
+        setState(() {
+          _customProfessionals = result;
+        });
+      }
+    },
+    icon: const Icon(Icons.psychology, size: 18),
+    label: const Text('Tạo AI của tôi'),
+    style: ElevatedButton.styleFrom(
+      backgroundColor: Colors.deepPurple,
+      foregroundColor: Colors.white,
+      minimumSize: const Size(double.infinity, 48),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+    ),
+  ),
+),  
         const SizedBox(height: 4),
         Container(
 padding: const EdgeInsets.only(top: 0, left: 16, right: 16, bottom: 16),
@@ -1592,7 +1640,7 @@ child: ElevatedButton.icon(
                     Icon(_mode == 'text' ? Icons.chat : Icons.image, color: Colors.white),
                     const SizedBox(width: 8),
                     Text(
-                      _mode == 'text' ? 'Trò chuyện AI' : 'Tạo hình ảnh AI',
+                      _mode == 'text' ? 'Trò chuyện với Hà My AI' : 'Tạo hình ảnh/ video cùng AI',
                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                     ),
                   ],
@@ -2047,7 +2095,7 @@ Widget _buildMessageBubble(ChatMessage message) {
   final contentIsVideoJson = displayContent.trim().startsWith('{') && displayContent.contains('"videos"');
   final shouldHideContent = (hasGeneratedImage && (contentIsBase64 || displayContent.trim().isEmpty)) ||
                             (hasGeneratedVideo && (contentIsVideoJson || displayContent.trim().isEmpty));
-  final tableData = !shouldHideContent ? _parseMarkdownTable(displayContent) : null;
+  final parsedContent = !shouldHideContent ? _parseContentWithTable(displayContent) : null;
   return MouseRegion(
     onEnter: (_) => setState(() => _hoveredMessageId = message.id),
     onExit: (_) => setState(() => _hoveredMessageId = null),
@@ -2299,15 +2347,22 @@ Widget _buildMessageBubble(ChatMessage message) {
                         ),
                         const SizedBox(height: 8),
                       ],
-                      if (!shouldHideContent && displayContent.isNotEmpty) ...[
-                        if (tableData != null)
-                          _buildTable(tableData)
-                        else
-                          _buildSelectableFormattedText(
-                            displayContent,
-                            isUser ? Colors.white : Colors.black87,
-                          ),
-                      ],
+                      if (!shouldHideContent && parsedContent != null) ...[
+  if (parsedContent['beforeTable'].toString().isNotEmpty)
+    Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: _buildSelectableFormattedText(parsedContent['beforeTable'], isUser ? Colors.white : Colors.black87),
+    ),
+  if (parsedContent['tableRows'] != null)
+    _buildTable(parsedContent['tableRows']),
+  if (parsedContent['afterTable'].toString().isNotEmpty)
+    Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: _buildSelectableFormattedText(parsedContent['afterTable'], isUser ? Colors.white : Colors.black87),
+    ),
+] else if (!shouldHideContent && displayContent.isNotEmpty) ...[
+  _buildSelectableFormattedText(displayContent, isUser ? Colors.white : Colors.black87),
+],
                       const SizedBox(height: 4),
                       Text(
                         _formatTimestamp(message.timestamp),
@@ -2600,201 +2655,344 @@ Widget _buildStreamingMessage() {
     );
   }
   Widget _buildInputArea() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.blueGrey[800],
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_selectedImage != null)
-            Container(
-              margin: const EdgeInsets.only(bottom: 4),
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.blueGrey[700],
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                children: [
-                  _buildFilePreview(_selectedImage!),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      _selectedImage!.path.split('/').last,
-                      style: const TextStyle(fontSize: 12, color: Colors.white),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    decoration: BoxDecoration(
+      color: Colors.blueGrey[800],
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.05),
+          blurRadius: 4,
+          offset: const Offset(0, -2),
+        ),
+      ],
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_selectedImage != null)
+          Container(
+            margin: const EdgeInsets.only(bottom: 4),
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.blueGrey[700],
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              children: [
+                _buildFilePreview(_selectedImage!),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _selectedImage!.path.split('/').last,
+                    style: const TextStyle(fontSize: 12, color: Colors.white),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white, size: 18),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    onPressed: _removeImage,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white, size: 18),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: _removeImage,
+                ),
+              ],
+            ),
+          ),
+        Row(
+          children: [
+            if (_selectedCaseType != null && _caseFileData != null)
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.orange,
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  icon: _isStreaming
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Icon(Icons.send_rounded),
+                  onPressed: _isStreaming ? null : _sendMessage,
+                  color: Colors.white,
+                  tooltip: 'Gửi với dữ liệu $_selectedCaseType',
+                ),
+              )
+            else
+              Container(
+                decoration: BoxDecoration(
+                  color: _primaryColor,
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  icon: _isStreaming
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Icon(Icons.send),
+                  onPressed: _isStreaming ? null : _sendMessage,
+                  color: Colors.white,
+                ),
+              ),
+            const SizedBox(width: 4),
+            if (_selectedCaseType != null && _isCaseFileLoading)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            if (_selectedCaseType != null && _caseFileData != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.orange, width: 1),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.description, color: Colors.orange, size: 12),
+                    const SizedBox(width: 3),
+                    Text(
+                      _selectedCaseType!,
+                      style: const TextStyle(color: Colors.orange, fontSize: 10),
+                    ),
+                    const SizedBox(width: 3),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedCaseType = null;
+                          _caseFileData = null;
+                          _selectedCaseDate = DateTime.now();
+                        });
+                      },
+                      child: const Icon(Icons.close, color: Colors.orange, size: 12),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(width: 4),
+            IconButton(
+              icon: Icon(_mode == 'image' ? Icons.image : Icons.attach_file, color: Colors.white, size: 20),
+              padding: const EdgeInsets.all(8),
+              onPressed: _isStreaming ? null : (_mode == 'image' ? _pickImage : () async {
+                try {
+                  FilePickerResult? result = await FilePicker.platform.pickFiles(
+                    type: FileType.custom,
+                    allowedExtensions: ['jpg','jpeg','png','bmp','pdf', 'txt', 'mp4', 'mpeg', 'webm', 'mov'],
+                    allowMultiple: false,
+                  );
+                  if (result != null) {
+                    File file = File(result.files.single.path!);
+                    int fileSizeInBytes = await file.length();
+                    double fileSizeInMB = fileSizeInBytes / (1024 * 1024);
+                    if (fileSizeInMB > 35) {
+                      _showError('Kích thước file vượt quá 35MB');
+                      return;
+                    }
+                    setState(() {
+                      _selectedImage = file;
+                    });
+                  }
+                } catch (e) {
+                  _showError('Không thể chọn file: $e');
+                }
+              }),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  TextField(
+                    controller: _messageController,
+                    enabled: !_isStreaming,
+                    minLines: 1,
+                    maxLines: 3,
+                    textInputAction: TextInputAction.newline,
+                    style: const TextStyle(color: Colors.amber, fontSize: 14),
+                    cursorColor: Colors.lightGreenAccent,
+                    decoration: InputDecoration(
+                      hintText: _mode == 'text' ? 'Tin nhắn...' : 'Mô tả ảnh...',
+                      hintStyle: TextStyle(color: Colors.blueGrey[300], fontSize: 13),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: Colors.blueGrey[700],
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                    ),
+                    onSubmitted: (_) => _sendMessage(),
+                  ),
+                  Positioned(
+                    top: -16,
+                    left: 4,
+                    child: Builder(
+                      builder: (context) {
+                        final inputText = _messageController.text;
+                        final inputWords = inputText.trim().isEmpty ? 0 : inputText.trim().split(RegExp(r'\s+')).length;
+                        final inputChars = inputText.length;
+                        
+                        String systemPrompt = _getSystemPrompt(_selectedModel);
+                        if (_selectedCaseType != null) {
+                          systemPrompt = CaseFileManager.getCustomPrompt(_selectedCaseType!);
+                        }
+                        
+                        String contextString = '';
+                        if (_currentSession != null && _currentSession!.messages.isNotEmpty) {
+                          final recentMessages = _currentSession!.messages.length > 17
+                              ? _currentSession!.messages.sublist(_currentSession!.messages.length - 17, _currentSession!.messages.length - 1)
+                              : _currentSession!.messages.sublist(0, max(0, _currentSession!.messages.length - 1));
+                          if (recentMessages.isNotEmpty) {
+                            contextString = '\n\nĐoạn hội thoại trước:\n';
+                            for (var msg in recentMessages) {
+                              final role = msg.role == 'user' ? 'Người dùng' : 'AI';
+                              contextString += '$role: ${msg.content}\n';
+                            }
+                            contextString += '\nTin nhắn hiện tại:\n';
+                          }
+                        }
+                        
+                        final systemWords = systemPrompt.trim().isEmpty ? 0 : systemPrompt.trim().split(RegExp(r'\s+')).length;
+                        final systemChars = systemPrompt.length;
+                        final contextWords = contextString.trim().isEmpty ? 0 : contextString.trim().split(RegExp(r'\s+')).length;
+                        final contextChars = contextString.length;
+                        final totalWords = inputWords + systemWords + contextWords;
+                        final totalChars = inputChars + systemChars + contextChars;
+                        
+                        return Text(
+                          'Input:${inputWords}w/${inputChars}c##System:${systemWords}w/${systemChars}c##Context:${contextWords}w/${contextChars}c##Total:${totalWords}w/${totalChars}c',
+                          style: TextStyle(fontSize: 10, color: Colors.grey[400]),
+                        );
+                      },
+                    ),
                   ),
                 ],
               ),
             ),
-          Row(
-            children: [
-              if (_selectedCaseType != null && _caseFileData != null)
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.orange,
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    icon: _isStreaming
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : const Icon(Icons.send_rounded),
-                    onPressed: _isStreaming ? null : _sendMessage,
-                    color: Colors.white,
-                    tooltip: 'Gửi với dữ liệu $_selectedCaseType',
-                  ),
-                )
-              else
-                Container(
-                  decoration: BoxDecoration(
-                    color: _primaryColor,
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    icon: _isStreaming
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : const Icon(Icons.send),
-                    onPressed: _isStreaming ? null : _sendMessage,
-                    color: Colors.white,
-                  ),
+            const SizedBox(width: 4),
+            _AvatarVideoPlayer(
+              state: _avatarState,
+              videos: _avatarVideos,
+            ),
+          ],
+        ),
+        Row(
+          children: [
+            if (_mode == 'text')
+  Expanded(
+    flex: 2,
+    child: Container(
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.blueGrey[700],
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedProfessionalId,
+          hint: const Text('✨ Chọn AI đẫ tạo', style: TextStyle(color: Colors.amber, fontSize: 13)),
+          isExpanded: true,
+          isDense: true,
+          dropdownColor: Colors.blueGrey[700],
+          style: const TextStyle(color: Colors.white, fontSize: 13),
+          items: _customProfessionals.map((prof) {
+            return DropdownMenuItem(
+              value: prof.id,
+              child: Text(prof.name, style: const TextStyle(fontSize: 13)),
+            );
+          }).toList(),
+          onChanged: (val) {
+            setState(() {
+              _selectedProfessionalId = val;
+            });
+          },
+        ),
+      ),
+    ),
+  ),
+if (_mode == 'text') const SizedBox(width: 6),
+            Expanded(
+              flex: 3,
+              child: Container(
+                height: 36,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  color: Colors.blueGrey[700],
+                  borderRadius: BorderRadius.circular(6),
                 ),
-              const SizedBox(width: 4),
-              if (_selectedCaseType != null && _isCaseFileLoading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 4),
-                  child: SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-              if (_selectedCaseType != null && _caseFileData != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.orange, width: 1),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.description, color: Colors.orange, size: 12),
-                      const SizedBox(width: 3),
-                      Text(
-                        _selectedCaseType!,
-                        style: const TextStyle(color: Colors.orange, fontSize: 10),
-                      ),
-                      const SizedBox(width: 3),
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedCaseType = null;
-                            _caseFileData = null;
-                            _selectedCaseDate = DateTime.now();
-                          });
-                        },
-                        child: const Icon(Icons.close, color: Colors.orange, size: 12),
-                      ),
-                    ],
-                  ),
-                ),
-              const SizedBox(width: 4),
-              IconButton(
-                icon: Icon(_mode == 'image' ? Icons.image : Icons.attach_file, color: Colors.white, size: 20),
-                padding: const EdgeInsets.all(8),
-                onPressed: _isStreaming ? null : (_mode == 'image' ? _pickImage : () async {
-                  try {
-                    FilePickerResult? result = await FilePicker.platform.pickFiles(
-                      type: FileType.custom,
-                      allowedExtensions: ['jpg','jpeg','png','bmp','pdf', 'txt', 'mp4', 'mpeg', 'webm', 'mov'],
-                      allowMultiple: false,
-                    );
-                    if (result != null) {
-                      File file = File(result.files.single.path!);
-                      int fileSizeInBytes = await file.length();
-                      double fileSizeInMB = fileSizeInBytes / (1024 * 1024);
-                      if (fileSizeInMB > 35) {
-                        _showError('Kích thước file vượt quá 35MB');
-                        return;
-                      }
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedCaseType,
+                    hint: const Text('Loại dữ liệu', style: TextStyle(color: Colors.amber, fontSize: 13)),
+                    isExpanded: true,
+                    isDense: true,
+                    dropdownColor: Colors.blueGrey[700],
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    items: CaseFileManager.getCaseTypes().map((type) {
+                      return DropdownMenuItem(value: type, child: Text(type, style: const TextStyle(fontSize: 13)));
+                    }).toList(),
+                    onChanged: (val) {
                       setState(() {
-                        _selectedImage = file;
+                        _selectedCaseType = val;
+                        _caseFileData = null;
                       });
-                    }
-                  } catch (e) {
-                    _showError('Không thể chọn file: $e');
-                  }
-                }),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: TextField(
-                  controller: _messageController,
-                  enabled: !_isStreaming,
-                  minLines: 1,
-                  maxLines: 3,
-                  textInputAction: TextInputAction.newline,
-                  style: const TextStyle(color: Colors.amber, fontSize: 14),
-                  cursorColor: Colors.lightGreenAccent, 
-                  decoration: InputDecoration(
-                    hintText: _mode == 'text' ? 'Tin nhắn...' : 'Mô tả ảnh...',
-                    hintStyle: TextStyle(color: Colors.blueGrey[300], fontSize: 13),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide.none,
-                    ),
-                    filled: true,
-                    fillColor: Colors.blueGrey[700],
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
+                      if (val != null) _loadCaseFile();
+                    },
                   ),
-                  onSubmitted: (_) => _sendMessage(),
                 ),
               ),
-              const SizedBox(width: 4),
-              _AvatarVideoPlayer(
-                state: _avatarState,
-                videos: _avatarVideos,
-              ),
-            ],
-          ),
-                    Row(
-            children: [
-              Expanded(
-                flex: 3,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              flex: 2,
+              child: GestureDetector(
+                onTap: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: _selectedCaseDate,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2030),
+                    builder: (context, child) {
+                      return Theme(
+                        data: ThemeData.dark().copyWith(
+                          colorScheme: ColorScheme.dark(
+                            primary: _primaryColor,
+                            onPrimary: Colors.white,
+                            surface: Colors.blueGrey[700]!,
+                            onSurface: Colors.white,
+                          ),
+                        ),
+                        child: child!,
+                      );
+                    },
+                  );
+                  if (date != null) {
+                    setState(() {
+                      _selectedCaseDate = date;
+                      _caseFileData = null;
+                    });
+                    if (_selectedCaseType != null) _loadCaseFile();
+                  }
+                },
                 child: Container(
                   height: 36,
                   padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -2802,123 +3000,62 @@ Widget _buildStreamingMessage() {
                     color: Colors.blueGrey[700],
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedCaseType,
-                      hint: const Text('Loại dữ liệu', style: TextStyle(color: Colors.amber, fontSize: 13)),
-                      isExpanded: true,
-                      isDense: true,
-                      dropdownColor: Colors.blueGrey[700],
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
-                      items: CaseFileManager.getCaseTypes().map((type) {
-                        return DropdownMenuItem(value: type, child: Text(type, style: const TextStyle(fontSize: 13)));
-                      }).toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedCaseType = val;
-                          _caseFileData = null;
-                        });
-                        if (val != null) _loadCaseFile();
-                      },
-                    ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        DateFormat('dd/MM/yy').format(_selectedCaseDate),
+                        style: const TextStyle(color: Colors.amber, fontSize: 13),
+                      ),
+                      const Icon(Icons.calendar_today, color: Colors.white70, size: 14),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                flex: 2,
-                child: GestureDetector(
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: _selectedCaseDate,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime(2030),
-                      builder: (context, child) {
-                        return Theme(
-                          data: ThemeData.dark().copyWith(
-                            colorScheme: ColorScheme.dark(
-                              primary: _primaryColor,
-                              onPrimary: Colors.white,
-                              surface: Colors.blueGrey[700]!,
-                              onSurface: Colors.white,
-                            ),
-                          ),
-                          child: child!,
-                        );
-                      },
-                    );
-                    if (date != null) {
-                      setState(() {
-                        _selectedCaseDate = date;
-                        _caseFileData = null;
-                      });
-                      if (_selectedCaseType != null) _loadCaseFile();
-                    }
-                  },
-                  child: Container(
-                    height: 36,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.blueGrey[700],
-                      borderRadius: BorderRadius.circular(6),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              flex: 2,
+              child: Container(
+                height: 36,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  color: Colors.blueGrey[700],
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _isSpeaking ? Icons.volume_up : Icons.volume_down,
+                      color: Colors.white70,
+                      size: 24,
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          DateFormat('dd/MM/yy').format(_selectedCaseDate),
-                          style: const TextStyle(color: Colors.amber, fontSize: 13),
-                        ),
-                        const Icon(Icons.calendar_today, color: Colors.white70, size: 14),
-                      ],
+                    SizedBox(
+                      width: 210,
+                      child: Slider(
+                        value: _ttsVolume,
+                        min: 0.0,
+                        max: 1.05,
+                        onChanged: _updateTtsVolume,
+                        activeColor: _primaryColor,
+                        inactiveColor: Colors.amber,
+                      ),
                     ),
-                  ),
+                    if (_isSpeaking)
+                      GestureDetector(
+                        onTap: _stopSpeaking,
+                        child: const Icon(Icons.stop, color: Colors.red, size: 16),
+                      ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 6),
-Expanded(
-  flex: 1,
-  child: Container(
-    height: 36,
-    padding: const EdgeInsets.symmetric(horizontal: 8),
-    decoration: BoxDecoration(
-      color: Colors.blueGrey[700],
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: Row(
-      children: [
-        Icon(
-          _isSpeaking ? Icons.volume_up : Icons.volume_down,
-          color: Colors.white70,
-          size: 24,
+            )
+          ],
         ),
-        SizedBox(
-          width: 210,
-          child: Slider(
-            value: _ttsVolume,
-            min: 0.0,
-            max: 1.05,
-            onChanged: _updateTtsVolume,
-            activeColor: _primaryColor,
-            inactiveColor: Colors.amber,
-          ),
-        ),
-        if (_isSpeaking)
-          GestureDetector(
-            onTap: _stopSpeaking,
-            child: const Icon(Icons.stop, color: Colors.red, size: 16),
-          ),
       ],
     ),
-  ),
-)
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  );
+}
   Widget _buildCreditBalanceWidget() {
     if (_creditBalance == null) {
       return const SizedBox.shrink();
