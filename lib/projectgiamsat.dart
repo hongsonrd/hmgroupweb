@@ -14,7 +14,7 @@ import 'db_helper.dart';
 import 'table_models.dart';
 import 'projectcongnhanexcelgs.dart';
 import 'projectcongnhanllvgs.dart';
-//import 'projectcongnhanbio.dart';
+import 'projectgiamsatkpi.dart';
 import 'dart:math';
 class ProjectGiamSat extends StatefulWidget {
   final String username;
@@ -1900,7 +1900,37 @@ Future<void> _exportEvaluationOnly() async {
     });
   }
 }
-
+Future<void> _navigateToKPI() async {
+  final prefs = await SharedPreferences.getInstance();
+  
+  //final hasSchedules = _hasTaskSchedulesSynced;
+  //final hasHistory = _allData.isNotEmpty;
+  final hasNames = prefs.containsKey('stafflistvp_data');
+  if (!hasNames) {
+  //if (!hasSchedules || !hasHistory || !hasNames) {
+    final missing = <String>[];
+    //if (!hasSchedules) missing.add('Lịch làm việc');
+    //if (!hasHistory) missing.add('Lịch sử báo cáo');
+    if (!hasNames) missing.add('Danh sách tên nhân viên');
+    
+    _showError('Vui lòng đồng bộ: ${missing.join(', ')}');
+    return;
+  }
+  
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (context) => ProjectGiamSatKPI(
+        username: widget.username,
+        taskHistoryData: _processedData.map((r) => {
+          'NguoiDung': r.nguoiDung,
+          'Ngay': DateFormat('yyyy-MM-dd').format(r.ngay),
+          'BoPhan': r.boPhan,
+        }).toList(),
+        projectOptions: _projectOptions,
+      ),
+    ),
+  );
+}
 Widget _buildWorkersTable() {
   if (_selectedProject == null || _selectedDate == null) {
     return Container(
@@ -2065,17 +2095,17 @@ Widget _buildWorkersTable() {
                           foregroundColor: Colors.white,
                         ),
                       ),                       SizedBox(width: 12),
-                                            ElevatedButton.icon(
-                        onPressed: (_isLoading || _selectedProject == null || _taskSchedules.isEmpty) 
-                            ? null 
-                            : () => _showProjectScheduleDialog(),
-                        icon: Icon(Icons.schedule, size: 18),
-                        label: Text('KPI'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.teal[600],
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
+                       ElevatedButton.icon(
+  onPressed: (_isLoading || _selectedProject == null) 
+      ? null 
+      : () => _navigateToKPI(),
+  icon: Icon(Icons.assessment, size: 18),
+  label: Text('KPI'),
+  style: ElevatedButton.styleFrom(
+    backgroundColor: Colors.teal[600],
+    foregroundColor: Colors.white,
+  ),
+),
                     ],
                   ),
                 ),

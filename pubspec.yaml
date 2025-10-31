@@ -68,7 +68,8 @@ dependencies:
   timeline_tile: ^2.0.0
   dio: ^5.3.2 
   table_sticky_headers: ^2.0.0
-  
+  pdfx: ^2.6.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

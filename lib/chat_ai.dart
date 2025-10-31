@@ -21,6 +21,9 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'chat_ai_custom.dart';
+import 'chat_ai_convert.dart';
+import 'package:http_parser/http_parser.dart';
+
 enum AvatarState { hello, thinking, speaking, congrat, listening, idle }
 
 class ChatAIScreen extends StatefulWidget {
@@ -44,7 +47,6 @@ String? _selectedProfessionalId;
   final ScrollController _chatScrollController = ScrollController();
   final ScrollController _sessionScrollController = ScrollController();
   final ImagePicker _imagePicker = ImagePicker();
-  File? _selectedImage;
   bool _isStreaming = false;
   String _currentStreamingMessage = '';
   String? _currentStreamingImage;
@@ -73,7 +75,8 @@ String? _selectedProfessionalId;
   late FlutterTts _flutterTts;
   bool _isSpeaking = false;
   double _ttsVolume = 0.9;
-  
+    List<File> _selectedFiles = [];
+  static const int _maxFiles = 10;
   final Map<AvatarState, List<String>> _avatarVideos = {
     AvatarState.hello: ['hello.mp4','hello-smile.mp4'],
     AvatarState.thinking: ['thinking.mp4','thinking-deep.mp4','thinking-focus.mp4'],
@@ -89,6 +92,7 @@ String? _selectedProfessionalId;
       {'value': 'claude-haiku-4-5', 'name': '🇮🇱Tôm càng xanh', 'cost': 21, 'rating': 4, 'systemPrompt': 'Ưu tiên tiếng việt,gọi người dùng là quý anh/chị,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,sau khi trả lời gợi ý các lựa chọn chủ đề, câu hỏi người dùng có thể nghỉ tới.Sau đây là câu hỏi của người dùng:'},
       //{'value': 'deepseek-v3', 'name': '💠Cua nhện', 'cost': 23, 'rating': 4, 'systemPrompt': 'Ưu tiên tiếng việt,gọi người dùng là quý anh/chị,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,sau khi trả lời gợi ý các lựa chọn chủ đề, câu hỏi người dùng có thể nghỉ tới.Sau đây là câu hỏi của người dùng:'},
       {'value': 'flash-2.5-lite', 'name': '🇺🇸Cá kiếm', 'cost': 25, 'rating': 3, 'systemPrompt': 'Ưu tiên tiếng việt,gọi người dùng là quý anh/chị,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,sau khi trả lời gợi ý các lựa chọn chủ đề, câu hỏi người dùng có thể nghỉ tới.Sau đây là câu hỏi của người dùng:'},
+      {'value': 'mistral-medium-3', 'name': '🇫🇷Sao biển', 'cost': 33, 'rating': 3, 'systemPrompt': 'Ưu tiên tiếng việt,gọi người dùng là quý anh/chị,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,sau khi trả lời gợi ý các lựa chọn chủ đề, câu hỏi người dùng có thể nghỉ tới.Sau đây là câu hỏi của người dùng:'},
     ],
     'precise': [
       {'value': 'flash-2.5', 'name': '🇺🇸Cá mập trắng', 'cost': 100, 'rating': 4, 'systemPrompt': 'Ưu tiên tiếng việt,gọi người dùng là quý anh/chị,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,sau khi trả lời gợi ý các lựa chọn chủ đề, câu hỏi người dùng có thể nghỉ tới.Sau đây là câu hỏi của người dùng:'},
@@ -98,8 +102,8 @@ String? _selectedProfessionalId;
     ],
     'image': [
       {'value': 'imagen-4', 'name': '🇺🇸Cá heo', 'cost': 1900, 'rating': 3, 'systemPrompt': 'Không chỉ tạo ảnh với chữ, phải tạo hình ảnh thiết kế:'},
-      {'value': 'veo-3.0-fast', 'name': '🇺🇸Cá đuối', 'cost': 5000, 'rating': 4, 'systemPrompt': 'Tạo video dọc 9:16, 6s trừ khi user yêu cầu khác sau đây:'},
-      {'value': 'veo-3.0', 'name': '🇺🇸Cá voi xanh', 'cost': 7500, 'rating': 5, 'systemPrompt': 'Tạo video ngang 9:16, 6s trừ khi user yêu cầu khác sau đây:'},
+      {'value': 'veo-3.0-fast', 'name': '🇺🇸Cá đuối', 'cost': 5000, 'rating': 5, 'systemPrompt': 'Tạo video dọc 9:16, 6s, 720p trừ khi user yêu cầu khác sau đây:'},
+      {'value': 'veo-3.0', 'name': '🇺🇸Cá voi xanh', 'cost': 7500, 'rating': 6, 'systemPrompt': 'Tạo video ngang 9:16, 6s, 1080p trừ khi user yêu cầu khác sau đây:'},
     ],
   };
   final List<Map<String, String>> _imageRatios = [
@@ -140,7 +144,43 @@ String? _selectedProfessionalId;
       setState(() => _isSpeaking = false);
     });
   }
-  
+  Future<void> _pickFiles() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['jpg','jpeg','png','bmp','pdf','txt','doc','docx','xls', 'csv','xlsx','rtf','mp4','mpeg','webm','mov'],
+        allowMultiple: true,
+      );
+      
+      if (result != null) {
+        List<File> newFiles = result.paths.map((path) => File(path!)).toList();
+        
+        if (_selectedFiles.length + newFiles.length > _maxFiles) {
+          _showError('Chỉ được đính kèm tối đa $_maxFiles files');
+          newFiles = newFiles.take(_maxFiles - _selectedFiles.length).toList();
+        }
+        
+        for (var file in newFiles) {
+          int fileSizeInBytes = await file.length();
+          double fileSizeInMB = fileSizeInBytes / (1024 * 1024);
+          if (fileSizeInMB > 35) {
+            _showError('File ${file.path.split('/').last} vượt quá 35MB');
+            continue;
+          }
+          _selectedFiles.add(file);
+        }
+        
+        setState(() {});
+      }
+    } catch (e) {
+      _showError('Không thể chọn file: $e');
+    }
+  }
+  void _removeFile(int index) {
+    setState(() {
+      _selectedFiles.removeAt(index);
+    });
+  }
   Future<void> _speakText(String text) async {
     if (text.isEmpty) return;
     await _flutterTts.stop();
@@ -480,13 +520,15 @@ Future<void> _openFolder(String folderPath) async {
     }
   }
 }
-void _showVideoPopup(String videoUrl) {
+void _showVideoPopup(String videoPath) {
   showDialog(
     context: context,
     builder: (context) => VideoPlayerDialog(
-      videoUrl: videoUrl,
+      videoUrl: videoPath,
       primaryColor: _primaryColor,
-      onSave: () => _saveVideoToDevice(videoUrl),
+      onSave: () => videoPath.startsWith('http') 
+          ? _saveVideoToDevice(videoPath) 
+          : _showError('File đã có sẵn trên thiết bị'),
     ),
   );
 }
@@ -627,28 +669,6 @@ Future<void> _saveVideoToDevice(String videoUrl) async {
     });
     _saveSessions();
   }
-  Future<void> _pickImage() async {
-    try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1920,
-        maxHeight: 1920,
-        imageQuality: 85,
-      );
-      if (image != null) {
-        setState(() {
-          _selectedImage = File(image.path);
-        });
-      }
-    } catch (e) {
-      _showError('Không thể chọn ảnh: $e');
-    }
-  }
-  void _removeImage() {
-    setState(() {
-      _selectedImage = null;
-    });
-  }
   void _toggleMode() {
     setState(() {
       _mode = _mode == 'text' ? 'image' : 'text';
@@ -751,8 +771,8 @@ Future<void> _saveVideoToDevice(String videoUrl) async {
                 ],
               ),
               const SizedBox(height: 20),
-              const Text('Các mô hình khả dụng:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-              const Text('Toàn bộ model hệ Cá dùng ổn định, model hệ Tôm chưa xử lý được .pdf lớn, model hệ Bạch tuộc chưa xử lý được ảnh', style: TextStyle(fontSize: 12, color: Colors.red)),
+ const Text('Các mô hình khả dụng:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              const Text('Toàn bộ model hệ Cá, Sao biển dùng ổn định, model hệ Tôm chưa xử lý được .pdf lớn, model hệ Bạch tuộc chưa xử lý được ảnh', style: TextStyle(fontSize: 12, color: Colors.red)),
               const SizedBox(height: 10),
               ..._getAvailableModels().map((model) {
                 final isSelected = _selectedModel == model['value'];
@@ -869,34 +889,47 @@ Future<void> _saveVideoToDevice(String videoUrl) async {
       ),
     );
   }
+  String _getBaseName(File file) {
+  final path = file.path;
+  final name = path.split('/').last;
+  final lastDot = name.lastIndexOf('.');
+  return lastDot > 0 ? name.substring(0, lastDot) : name;
+}
 Future<void> _sendMessage() async {
   if (_username.isEmpty) {
     _showError('Chưa đăng nhập');
     return;
   }
+  
   final messageText = _messageController.text.trim();
-  if (messageText.isEmpty && _selectedImage == null) {
+  if (messageText.isEmpty && _selectedFiles.isEmpty) {
     if (_selectedCaseType != null && _caseFileData != null) {
       _messageController.text = 'Phân tích dữ liệu $_selectedCaseType';
     } else {
       return;
     }
   }
+
   if (_creditBalance != null && !_creditBalance!.canUse) {
     _showError('Bạn đã hết credit cho tháng này. Vui lòng chờ đến tháng sau.');
     return;
   }
+
   if (_currentSession == null) {
     _createNewSession();
   }
+
   final finalMessageText = _messageController.text.trim();
+  final attachedFiles = List<File>.from(_selectedFiles);
+  
   final userMessage = ChatMessage(
     id: const Uuid().v4(),
     role: 'user',
     content: finalMessageText,
-    imagePath: _selectedImage?.path,
+    attachedFiles: attachedFiles.map((f) => f.path).toList(),
     timestamp: DateTime.now(),
   );
+
   setState(() {
     _messages.add(userMessage);
     _currentSession!.messages.add(userMessage);
@@ -913,15 +946,16 @@ Future<void> _sendMessage() async {
         ? '${finalMessageText.substring(0, 30)}...' 
         : finalMessageText;
   }
+
   _messageController.clear();
-  final imageFile = _selectedImage;
-  _selectedImage = null;
+  final filesToSend = List<File>.from(_selectedFiles);
+  _selectedFiles.clear();
+  
   _scrollToBottom();
+
   try {
-    final request = http.MultipartRequest(
-      'POST',
-      Uri.parse('$_apiBaseUrl/aichat'),
-    );
+    final request = http.MultipartRequest('POST', Uri.parse('$_apiBaseUrl/aichat'));
+    
     String systemPrompt = '';
     if (_selectedProfessionalId != null) {
       final professional = _customProfessionals.firstWhere(
@@ -934,10 +968,12 @@ Future<void> _sendMessage() async {
     } else {
       systemPrompt = _getSystemPrompt(_selectedModel);
     }
+
     String contextString = '';
     final recentMessages = _currentSession!.messages.length > 17
         ? _currentSession!.messages.sublist(_currentSession!.messages.length - 17, _currentSession!.messages.length - 1)
         : _currentSession!.messages.sublist(0, _currentSession!.messages.length - 1);
+    
     if (recentMessages.isNotEmpty) {
       contextString = '\n\nĐoạn hội thoại trước:\n';
       for (var msg in recentMessages) {
@@ -946,14 +982,17 @@ Future<void> _sendMessage() async {
       }
       contextString += '\nTin nhắn hiện tại:\n';
     }
+
     final fullQuery = systemPrompt.isNotEmpty 
         ? '$systemPrompt$contextString$finalMessageText' 
         : '$contextString$finalMessageText';
+
     request.fields['userid'] = _username;
     request.fields['model'] = _selectedModel;
     request.fields['mode'] = _mode;
     request.fields['query'] = fullQuery;
     request.fields['history'] = json.encode(_currentSession!.history);
+
     if (_caseFileData != null && _selectedCaseType != null) {
       final tempDir = await getTemporaryDirectory();
       final fileName = 'case_${DateTime.now().millisecondsSinceEpoch}.${_caseFileData!.fileType}';
@@ -966,54 +1005,118 @@ Future<void> _sendMessage() async {
         await tempFile.writeAsString(_caseFileData!.content);
       }
       
-      request.files.add(
-        await http.MultipartFile.fromPath('image', tempFile.path),
-      );
-    } else if (imageFile != null) {
-      request.files.add(
-        await http.MultipartFile.fromPath('image', imageFile.path),
-      );
+      request.files.add(await http.MultipartFile.fromPath('image', tempFile.path));
+    } else if (filesToSend.isNotEmpty) {
+      print('📦 Processing ${filesToSend.length} files for upload...');
+      
+      for (var file in filesToSend) {
+        final ext = file.path.split('.').last.toLowerCase();
+        final fileName = file.path.split('/').last;
+        
+        // Files that MUST be converted to text
+        if (['doc','docx','xls','xlsx', 'csv','rtf'].contains(ext)) {
+          print('🔄 Converting $ext file: $fileName');
+          
+          try {
+            final converted = await DocumentConverter.convertToText(file);
+            
+            if (converted != null && await converted.exists()) {
+              final textContent = await converted.readAsString();
+              print('✅ Extracted ${textContent.length} characters from $fileName');
+              
+              if (textContent.isEmpty) {
+                print('⚠️ Warning: No text extracted from $fileName');
+                _showError('Không thể trích xuất văn bản từ $fileName');
+                continue;
+              }
+              
+              // Send as text/plain with .txt extension
+              request.files.add(await http.MultipartFile.fromPath(
+                'image',
+                converted.path,
+                contentType: MediaType('text', 'plain'),
+              ));
+              
+              print('📤 Sending converted file: ${converted.path}');
+            } else {
+              print('❌ Conversion failed for $fileName');
+              _showError('Không thể chuyển đổi file $fileName');
+              continue;
+            }
+          } catch (e) {
+            print('❌ Error converting $fileName: $e');
+            _showError('Lỗi chuyển đổi $fileName: $e');
+            continue;
+          }
+        } else {
+          // Send allowed files as-is (images, videos, PDFs, txt)
+          print('📤 Sending file as-is: $fileName (${ext})');
+          request.files.add(await http.MultipartFile.fromPath('image', file.path));
+        }
+      }
+      
+      if (request.files.isEmpty) {
+        _showError('Không có file hợp lệ để gửi');
+        setState(() {
+          _isStreaming = false;
+          _currentStreamingMessage = '';
+          _currentStreamingImage = null;
+        });
+        _setAvatarState(AvatarState.idle);
+        return;
+      }
+      
+      print('✅ Ready to send ${request.files.length} files');
     }
+
     if (_mode == 'image') {
       request.fields['ratio'] = _imageRatio;
     }
+
     final streamedResponse = await request.send().timeout(
       const Duration(seconds: 60),
-      onTimeout: () {
-        throw TimeoutException('Hết thời gian chờ');
-      },
+      onTimeout: () => throw TimeoutException('Hết thời gian chờ'),
     );
+
     if (streamedResponse.statusCode == 200) {
       String accumulatedResponse = '';
       String sseBuffer = '';
+      
       await for (var chunk in streamedResponse.stream.transform(utf8.decoder)) {
         sseBuffer += chunk;
         final lines = sseBuffer.split('\n');
+        
         if (!chunk.endsWith('\n')) {
           sseBuffer = lines.removeLast();
         } else {
           sseBuffer = '';
         }
+
         for (var line in lines) {
           if (line.startsWith('data: ')) {
             try {
               final jsonStr = line.substring(6);
               if (jsonStr.isEmpty) continue;
+              
               final data = json.decode(jsonStr);
+              
               switch (data['type']) {
                 case 'text':
                   if (_avatarState != AvatarState.speaking) {
                     _setAvatarState(AvatarState.speaking);
                     _speakingEndTimer?.cancel();
                   }
+                  
                   final content = data['content'];
                   accumulatedResponse += content;
+                  
                   if (accumulatedResponse.contains('{"videos":')) {
                     try {
                       final startIndex = accumulatedResponse.indexOf('{"videos":');
                       int braceCount = 0;
                       int endIndex = startIndex;
                       bool inString = false;
+                      
                       for (int i = startIndex; i < accumulatedResponse.length; i++) {
                         final char = accumulatedResponse[i];
                         if (char == '"' && (i == 0 || accumulatedResponse[i-1] != '\\')) {
@@ -1030,21 +1133,21 @@ Future<void> _sendMessage() async {
                           }
                         }
                       }
+                      
                       if (endIndex > startIndex) {
                         final videoJsonStr = accumulatedResponse.substring(startIndex, endIndex);
                         final videoData = json.decode(videoJsonStr);
+                        
                         if (videoData['videos'] != null && videoData['videos'] is List) {
                           final videos = videoData['videos'] as List;
                           if (videos.isNotEmpty) {
                             String videoUrl = videos[0].toString();
                             if (videoUrl.startsWith('gs://')) {
-                              videoUrl = videoUrl.replaceFirst(
-                                'gs://',
-                                'https://storage.googleapis.com/',
-                              );
+                              videoUrl = videoUrl.replaceFirst('gs://', 'https://storage.googleapis.com/');
                             }
-                            accumulatedResponse = accumulatedResponse.substring(0, startIndex) + 
-                                                 accumulatedResponse.substring(endIndex);
+                            
+                            accumulatedResponse = accumulatedResponse.substring(0, startIndex) + accumulatedResponse.substring(endIndex);
+                            
                             setState(() {
                               _currentStreamingVideo = videoUrl;
                               _currentStreamingMessage = accumulatedResponse.trim();
@@ -1058,17 +1161,20 @@ Future<void> _sendMessage() async {
                       print('Error parsing video JSON: $e');
                     }
                   }
+                  
                   setState(() {
                     _currentStreamingMessage = accumulatedResponse;
                   });
                   _scrollToBottom();
                   break;
+
                 case 'image':
                   setState(() {
-                    _currentStreamingImage = data['content']; 
+                    _currentStreamingImage = data['content'];
                   });
                   _scrollToBottom();
                   break;
+
                 case 'video':
                   String? videoUrl;
                   if (data['content'] is String) {
@@ -1079,12 +1185,11 @@ Future<void> _sendMessage() async {
                       videoUrl = videos[0].toString();
                     }
                   }
+                  
                   if (videoUrl != null && videoUrl.startsWith('gs://')) {
-                    videoUrl = videoUrl.replaceFirst(
-                      'gs://',
-                      'https://storage.googleapis.com/',
-                    );
+                    videoUrl = videoUrl.replaceFirst('gs://', 'https://storage.googleapis.com/');
                   }
+                  
                   if (videoUrl != null) {
                     setState(() {
                       _currentStreamingVideo = videoUrl;
@@ -1092,15 +1197,18 @@ Future<void> _sendMessage() async {
                     _scrollToBottom();
                   }
                   break;
+
                 case 'complete':
                   String messageContent = data['fullResponse'];
                   String? videoUrl = _currentStreamingVideo;
+                  
                   if (messageContent.contains('{"videos":')) {
                     try {
                       final startIndex = messageContent.indexOf('{"videos":');
                       int braceCount = 0;
                       int endIndex = startIndex;
                       bool inString = false;
+                      
                       for (int i = startIndex; i < messageContent.length; i++) {
                         final char = messageContent[i];
                         if (char == '"' && (i == 0 || messageContent[i-1] != '\\')) {
@@ -1117,9 +1225,11 @@ Future<void> _sendMessage() async {
                           }
                         }
                       }
+                      
                       if (endIndex > startIndex) {
                         final videoJsonStr = messageContent.substring(startIndex, endIndex);
                         final videoData = json.decode(videoJsonStr);
+                        
                         if (videoData['videos'] != null && videoData['videos'] is List) {
                           final videos = videoData['videos'] as List;
                           if (videos.isNotEmpty) {
@@ -1136,6 +1246,7 @@ Future<void> _sendMessage() async {
                       print('Failed to parse video JSON in complete: $e');
                     }
                   }
+
                   final aiMessage = ChatMessage(
                     id: const Uuid().v4(),
                     role: 'model',
@@ -1144,6 +1255,7 @@ Future<void> _sendMessage() async {
                     generatedVideoUrl: videoUrl,
                     timestamp: DateTime.now(),
                   );
+
                   setState(() {
                     _messages.add(aiMessage);
                     _currentSession!.messages.add(aiMessage);
@@ -1167,10 +1279,9 @@ Future<void> _sendMessage() async {
                   });
                   
                   if (data['updatedHistory'] != null) {
-                    _currentSession!.history = List<Map<String, dynamic>>.from(
-                      data['updatedHistory']
-                    );
+                    _currentSession!.history = List<Map<String, dynamic>>.from(data['updatedHistory']);
                   }
+                  
                   _currentSession!.lastUpdated = DateTime.now();
                   _saveSessions();
                   _scrollToBottom();
@@ -1181,6 +1292,7 @@ Future<void> _sendMessage() async {
                     _selectedCaseDate = DateTime.now();
                   });
                   break;
+
                 case 'credit_info':
                   setState(() {
                     _creditBalance = CreditBalance(
@@ -1191,6 +1303,7 @@ Future<void> _sendMessage() async {
                     );
                   });
                   break;
+
                 case 'error':
                   _showError('Lỗi AI: ${data['error']}');
                   setState(() {
@@ -1213,7 +1326,7 @@ Future<void> _sendMessage() async {
       setState(() {
         _isStreaming = false;
         _currentStreamingMessage = '';
-        _currentStreamingImage = null; 
+        _currentStreamingImage = null;
       });
       _setAvatarState(AvatarState.idle);
     }
@@ -1222,7 +1335,7 @@ Future<void> _sendMessage() async {
     setState(() {
       _isStreaming = false;
       _currentStreamingMessage = '';
-      _currentStreamingImage = null; 
+      _currentStreamingImage = null;
     });
     _setAvatarState(AvatarState.idle);
   }
@@ -1268,6 +1381,7 @@ Future<void> _sendMessage() async {
         color = Colors.grey;
         break;
       case 'xlsx':
+      case 'csv':
       case 'xls':
         icon = Icons.table_chart;
         color = Colors.green;
@@ -2286,67 +2400,92 @@ Widget _buildMessageBubble(ChatMessage message) {
                         ),
                         const SizedBox(height: 8),
                       ],
-                      if (message.imagePath != null && File(message.imagePath!).existsSync()) ...[
-                        GestureDetector(
-                          onTap: () => _showImagePopup(message.imagePath!, isBase64: false),
-                          child: Stack(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: SizedBox(
-                                  width: 256,
-                                  height: 256,
-                                  child: Image.file(
-                                    File(message.imagePath!),
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              ),
-                              Positioned.fill(
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(8),
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [
-                                        Colors.transparent,
-                                        Colors.black.withOpacity(0.3),
-                                      ],
-                                    ),
-                                  ),
-                                  child: const Align(
-                                    alignment: Alignment.bottomCenter,
-                                    child: Padding(
-                                      padding: EdgeInsets.all(8.0),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Icon(
-                                            Icons.zoom_in,
-                                            color: Colors.white,
-                                            size: 20,
-                                          ),
-                                          SizedBox(width: 4),
-                                          Text(
-                                            'Nhấn để phóng to',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
+                      if (message.attachedFiles != null && message.attachedFiles!.isNotEmpty) ...[
+  Wrap(
+    spacing: 8,
+    runSpacing: 8,
+    children: message.attachedFiles!.map((filePath) {
+      final file = File(filePath);
+      if (!file.existsSync()) return const SizedBox.shrink();
+      
+      final ext = filePath.split('.').last.toLowerCase();
+      final fileName = file.path.split('/').last;
+      final isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
+      final isVideo = ['mp4', 'mpeg', 'webm', 'mov'].contains(ext);
+      
+      return GestureDetector(
+        onTap: () {
+          if (isImage) {
+            _showImagePopup(filePath, isBase64: false);
+          } else if (isVideo) {
+            _showVideoPopup(filePath);
+          }
+        },
+        child: Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade200,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey.shade400),
+          ),
+          child: isImage
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.file(file, fit: BoxFit.cover),
+                )
+              : isVideo
+                  ? Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            color: Colors.black,
+                            child: VideoThumbnail(videoUrl: filePath),
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        Center(
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.6),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.play_arrow,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                        ),
                       ],
+                    )
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          DocumentConverter.getFileIcon(ext),
+                          style: const TextStyle(fontSize: 32),
+                        ),
+                        const SizedBox(height: 4),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            fileName,
+                            style: const TextStyle(fontSize: 9),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
+                    ),
+        ),
+      );
+    }).toList(),
+  ),
+  const SizedBox(height: 8),
+],
                       if (!shouldHideContent && parsedContent != null) ...[
   if (parsedContent['beforeTable'].toString().isNotEmpty)
     Padding(
@@ -2670,42 +2809,71 @@ Widget _buildStreamingMessage() {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (_selectedImage != null)
+        if (_selectedFiles.isNotEmpty)
           Container(
             margin: const EdgeInsets.only(bottom: 4),
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: Colors.blueGrey[700],
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Row(
-              children: [
-                _buildFilePreview(_selectedImage!),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    _selectedImage!.path.split('/').last,
-                    style: const TextStyle(fontSize: 12, color: Colors.white),
-                    overflow: TextOverflow.ellipsis,
+            constraints: const BoxConstraints(maxHeight: 100),
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _selectedFiles.length,
+              itemBuilder: (context, index) {
+                final file = _selectedFiles[index];
+                final ext = file.path.split('.').last.toLowerCase();
+                final fileName = file.path.split('/').last;
+                
+                return Container(
+                  margin: const EdgeInsets.only(right: 4),
+                  width: 70,
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.blueGrey[700],
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: _primaryColor.withOpacity(0.3)),
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white, size: 18),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  onPressed: _removeImage,
-                ),
-              ],
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            DocumentConverter.getFileIcon(ext),
+                            style: const TextStyle(fontSize: 20),
+                          ),
+                          GestureDetector(
+                            onTap: () => _removeFile(index),
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withOpacity(0.8),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.close, color: Colors.white, size: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Expanded(
+                        child: Text(
+                          fileName,
+                          style: const TextStyle(fontSize: 9, color: Colors.white),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 3,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         Row(
           children: [
             if (_selectedCaseType != null && _caseFileData != null)
               Container(
-                decoration: BoxDecoration(
-                  color: Colors.orange,
-                  shape: BoxShape.circle,
-                ),
+                decoration: BoxDecoration(color: Colors.orange, shape: BoxShape.circle),
                 child: IconButton(
                   icon: _isStreaming
                       ? const SizedBox(
@@ -2724,10 +2892,7 @@ Widget _buildStreamingMessage() {
               )
             else
               Container(
-                decoration: BoxDecoration(
-                  color: _primaryColor,
-                  shape: BoxShape.circle,
-                ),
+                decoration: BoxDecoration(color: _primaryColor, shape: BoxShape.circle),
                 child: IconButton(
                   icon: _isStreaming
                       ? const SizedBox(
@@ -2786,31 +2951,13 @@ Widget _buildStreamingMessage() {
               ),
             const SizedBox(width: 4),
             IconButton(
-              icon: Icon(_mode == 'image' ? Icons.image : Icons.attach_file, color: Colors.white, size: 20),
+              icon: Icon(
+                _selectedFiles.length >= _maxFiles ? Icons.block : (_mode == 'image' ? Icons.image : Icons.attach_file),
+                color: _selectedFiles.length >= _maxFiles ? Colors.red : Colors.white,
+                size: 20,
+              ),
               padding: const EdgeInsets.all(8),
-              onPressed: _isStreaming ? null : (_mode == 'image' ? _pickImage : () async {
-                try {
-                  FilePickerResult? result = await FilePicker.platform.pickFiles(
-                    type: FileType.custom,
-                    allowedExtensions: ['jpg','jpeg','png','bmp','pdf', 'txt', 'mp4', 'mpeg', 'webm', 'mov'],
-                    allowMultiple: false,
-                  );
-                  if (result != null) {
-                    File file = File(result.files.single.path!);
-                    int fileSizeInBytes = await file.length();
-                    double fileSizeInMB = fileSizeInBytes / (1024 * 1024);
-                    if (fileSizeInMB > 35) {
-                      _showError('Kích thước file vượt quá 35MB');
-                      return;
-                    }
-                    setState(() {
-                      _selectedImage = file;
-                    });
-                  }
-                } catch (e) {
-                  _showError('Không thể chọn file: $e');
-                }
-              }),
+              onPressed: _isStreaming || _selectedFiles.length >= _maxFiles ? null : _pickFiles,
             ),
             const SizedBox(width: 4),
             Expanded(
@@ -2826,7 +2973,9 @@ Widget _buildStreamingMessage() {
                     style: const TextStyle(color: Colors.amber, fontSize: 14),
                     cursorColor: Colors.lightGreenAccent,
                     decoration: InputDecoration(
-                      hintText: _mode == 'text' ? 'Tin nhắn...' : 'Mô tả ảnh...',
+                      hintText: _selectedFiles.isEmpty 
+                          ? (_mode == 'text' ? 'Tin nhắn...' : 'Mô tả ảnh...') 
+                          : '${_selectedFiles.length}/$_maxFiles files',
                       hintStyle: TextStyle(color: Colors.blueGrey[300], fontSize: 13),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(20),
@@ -2834,10 +2983,7 @@ Widget _buildStreamingMessage() {
                       ),
                       filled: true,
                       fillColor: Colors.blueGrey[700],
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     ),
                     onSubmitted: (_) => _sendMessage(),
                   ),
@@ -2888,48 +3034,45 @@ Widget _buildStreamingMessage() {
               ),
             ),
             const SizedBox(width: 4),
-            _AvatarVideoPlayer(
-              state: _avatarState,
-              videos: _avatarVideos,
-            ),
+            _AvatarVideoPlayer(state: _avatarState, videos: _avatarVideos),
           ],
         ),
         Row(
           children: [
             if (_mode == 'text')
-  Expanded(
-    flex: 2,
-    child: Container(
-      height: 36,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: Colors.blueGrey[700],
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _selectedProfessionalId,
-          hint: const Text('✨ Chọn AI đẫ tạo', style: TextStyle(color: Colors.amber, fontSize: 13)),
-          isExpanded: true,
-          isDense: true,
-          dropdownColor: Colors.blueGrey[700],
-          style: const TextStyle(color: Colors.white, fontSize: 13),
-          items: _customProfessionals.map((prof) {
-            return DropdownMenuItem(
-              value: prof.id,
-              child: Text(prof.name, style: const TextStyle(fontSize: 13)),
-            );
-          }).toList(),
-          onChanged: (val) {
-            setState(() {
-              _selectedProfessionalId = val;
-            });
-          },
-        ),
-      ),
-    ),
-  ),
-if (_mode == 'text') const SizedBox(width: 6),
+              Expanded(
+                flex: 2,
+                child: Container(
+                  height: 36,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.blueGrey[700],
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _selectedProfessionalId,
+                      hint: const Text('✨ Chọn AI đã tạo', style: TextStyle(color: Colors.amber, fontSize: 13)),
+                      isExpanded: true,
+                      isDense: true,
+                      dropdownColor: Colors.blueGrey[700],
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      items: _customProfessionals.map((prof) {
+                        return DropdownMenuItem(
+                          value: prof.id,
+                          child: Text(prof.name, style: const TextStyle(fontSize: 13)),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        setState(() {
+                          _selectedProfessionalId = val;
+                        });
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            if (_mode == 'text') const SizedBox(width: 6),
             Expanded(
               flex: 3,
               child: Container(
@@ -3049,7 +3192,7 @@ if (_mode == 'text') const SizedBox(width: 6),
                   ],
                 ),
               ),
-            )
+            ),
           ],
         ),
       ],
@@ -3232,33 +3375,36 @@ class ChatMessage {
   final String id;
   final String role;
   final String content;
-  final String? imagePath;
+  final List<String>? attachedFiles;
   final String? generatedImageData;
   final String? generatedVideoUrl;
   final DateTime timestamp;
+
   ChatMessage({
     required this.id,
     required this.role,
     required this.content,
-    this.imagePath,
+    this.attachedFiles,
     this.generatedImageData,
     this.generatedVideoUrl,
     required this.timestamp,
   });
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'role': role,
     'content': content,
-    'imagePath': imagePath,
+    'attachedFiles': attachedFiles,
     'generatedImageData': generatedImageData,
     'generatedVideoUrl': generatedVideoUrl,
     'timestamp': timestamp.toIso8601String(),
   };
+
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
     id: json['id'],
     role: json['role'],
     content: json['content'],
-    imagePath: json['imagePath'],
+    attachedFiles: json['attachedFiles'] != null ? List<String>.from(json['attachedFiles']) : null,
     generatedImageData: json['generatedImageData'],
     generatedVideoUrl: json['generatedVideoUrl'],
     timestamp: DateTime.parse(json['timestamp']),
@@ -3270,18 +3416,26 @@ class VideoThumbnail extends StatefulWidget {
   @override
   State<VideoThumbnail> createState() => _VideoThumbnailState();
 }
+
 class _VideoThumbnailState extends State<VideoThumbnail> {
   late VideoPlayerController _controller;
   bool _initialized = false;
   bool _error = false;
+
   @override
   void initState() {
     super.initState();
     _initializeVideo();
   }
+
   Future<void> _initializeVideo() async {
     try {
-      _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+      if (widget.videoUrl.startsWith('http')) {
+        _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+      } else {
+        _controller = VideoPlayerController.file(File(widget.videoUrl));
+      }
+      
       await _controller.initialize();
       if (mounted) {
         setState(() {
@@ -3297,11 +3451,13 @@ class _VideoThumbnailState extends State<VideoThumbnail> {
       }
     }
   }
+
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
   }
+
   @override
   Widget build(BuildContext context) {
     if (_error) {
@@ -3311,25 +3467,27 @@ class _VideoThumbnailState extends State<VideoThumbnail> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.error_outline, color: Colors.white, size: 48),
-              SizedBox(height: 8),
+              Icon(Icons.error_outline, color: Colors.white, size: 24),
+              SizedBox(height: 4),
               Text(
                 'Không thể tải video',
-                style: TextStyle(color: Colors.white),
+                style: TextStyle(color: Colors.white, fontSize: 10),
               ),
             ],
           ),
         ),
       );
     }
+    
     if (!_initialized) {
       return Container(
         color: Colors.grey[800],
         child: const Center(
-          child: CircularProgressIndicator(color: Colors.white),
+          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
         ),
       );
     }
+    
     return FittedBox(
       fit: BoxFit.cover,
       child: SizedBox(
