@@ -2934,6 +2934,10 @@ Future<void> _loadOrderItems(String soPhieu) async {
                                     fontSize: 14,
                                   ),
                                 ),
+                                Text(
+                                        '${item.maHang ?? ''}',
+                                        style: TextStyle(fontSize: 14),
+                                      ),
                               ],
                             ),
                             SizedBox(height: 4),
