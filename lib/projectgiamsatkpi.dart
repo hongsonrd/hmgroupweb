@@ -210,11 +210,23 @@ class _ProjectGiamSatKPIState extends State<ProjectGiamSatKPI> {
   String? _selectedProject;
   
   Map<String, String> _staffNameMap = {};
+  
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
+    _searchController.addListener(() {
+      setState(() => _searchQuery = _searchController.text.toLowerCase());
+    });
     _initializeData();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _initializeData() async {
@@ -579,6 +591,15 @@ class _ProjectGiamSatKPIState extends State<ProjectGiamSatKPI> {
 
     if (_selectedProject != null && _selectedProject != 'Tất cả') {
       attendanceWithProjects = attendanceWithProjects.where((a) => a.mainProject == _selectedProject).toList();
+    }
+
+    if (_searchQuery.isNotEmpty) {
+      attendanceWithProjects = attendanceWithProjects.where((a) {
+        final displayName = _staffNameMap[a.attendance.nguoiDung.toUpperCase()] ?? '';
+        return a.attendance.nguoiDung.toLowerCase().contains(_searchQuery) ||
+               displayName.toLowerCase().contains(_searchQuery) ||
+               a.mainProject.toLowerCase().contains(_searchQuery);
+      }).toList();
     }
 
     return attendanceWithProjects..sort((a, b) => a.attendance.batDau.compareTo(b.attendance.batDau));
@@ -1282,6 +1303,16 @@ class _ProjectGiamSatKPIState extends State<ProjectGiamSatKPI> {
     );
   }
 
+  void _showMonthlyView() {
+    showDialog(
+      context: context,
+      builder: (context) => MonthlyKPIDialog(
+        kpiStats: _kpiStats,
+        staffNameMap: _staffNameMap,
+      ),
+    );
+  }
+
   void _showDebugInfo(KPIStatsModel stats) {
     showDialog(
       context: context,
@@ -1366,6 +1397,14 @@ class _ProjectGiamSatKPIState extends State<ProjectGiamSatKPI> {
           SizedBox(width: 12),
           if (!_isLoading && !_isBatchProcessing && _kpiStats.isNotEmpty)
             ElevatedButton.icon(
+              onPressed: () => _showMonthlyView(),
+              icon: Icon(Icons.calendar_month, size: 18),
+              label: Text('Xem tháng'),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.purple[600], foregroundColor: Colors.white, elevation: 2),
+            ),
+          SizedBox(width: 12),
+          if (!_isLoading && !_isBatchProcessing && _kpiStats.isNotEmpty)
+            ElevatedButton.icon(
               onPressed: () => _exportToExcel(),
               icon: Icon(Icons.table_chart, size: 18),
               label: Text('Xuất Excel'),
@@ -1401,75 +1440,93 @@ class _ProjectGiamSatKPIState extends State<ProjectGiamSatKPI> {
         color: Colors.white,
         boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), spreadRadius: 1, blurRadius: 3, offset: Offset(0, 2))],
       ),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Chọn ngày', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey[700])),
-                SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: _selectedDate,
-                  hint: Text('Chọn ngày'),
-                  items: _dateOptions.map((date) => DropdownMenuItem(value: date, child: Text(DateFormat('dd/MM/yyyy').format(DateTime.parse(date))))).toList(),
-                  onChanged: (value) => setState(() {
-                    _selectedDate = value;
-                    _selectedProject = null;
-                  }),
-                  decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Chọn ngày', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey[700])),
+                    SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: _selectedDate,
+                      hint: Text('Chọn ngày'),
+                      items: _dateOptions.map((date) => DropdownMenuItem(value: date, child: Text(DateFormat('dd/MM/yyyy').format(DateTime.parse(date))))).toList(),
+                      onChanged: (value) => setState(() {
+                        _selectedDate = value;
+                        _selectedProject = null;
+                      }),
+                      decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Dự án', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey[700])),
-                SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: _selectedProject ?? 'Tất cả',
-                  items: projectOptions.map((project) => DropdownMenuItem(value: project, child: Text(project))).toList(),
-                  onChanged: (value) => setState(() => _selectedProject = value),
-                  decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(width: 12),
-          Padding(
-            padding: EdgeInsets.only(top: 32),
-            child: ElevatedButton.icon(
-              onPressed: _selectedDate == null || _isLoading ? null : _syncDailyReports,
-              icon: Icon(Icons.sync, size: 18),
-              label: Text(hasDailyReport ? 'Đã đồng bộ' : 'Đồng bộ dữ liệu'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: hasDailyReport ? Colors.grey[600] : Colors.blue[600],
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               ),
-            ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Dự án', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey[700])),
+                    SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: _selectedProject ?? 'Tất cả',
+                      items: projectOptions.map((project) => DropdownMenuItem(value: project, child: Text(project))).toList(),
+                      onChanged: (value) => setState(() => _selectedProject = value),
+                      decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: 12),
+              Padding(
+                padding: EdgeInsets.only(top: 32),
+                child: ElevatedButton.icon(
+                  onPressed: _selectedDate == null || _isLoading ? null : _syncDailyReports,
+                  icon: Icon(Icons.sync, size: 18),
+                  label: Text(hasDailyReport ? 'Đã đồng bộ' : 'Đồng bộ dữ liệu'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: hasDailyReport ? Colors.grey[600] : Colors.blue[600],
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  ),
+                ),
+              ),
+              SizedBox(width: 16),
+              Padding(
+                padding: EdgeInsets.only(top: 32),
+                child: ElevatedButton.icon(
+                  onPressed: hasDailyReport ? _calculateKPI : null,
+                  icon: Icon(Icons.calculate, size: 18),
+                  label: Text('Bắt đầu tính toán'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green[600], foregroundColor: Colors.white, padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16)),
+                ),
+              ),
+              SizedBox(width: 12),
+              Padding(
+                padding: EdgeInsets.only(top: 32),
+                child: ElevatedButton.icon(
+                  onPressed: _kpiPlanData.isEmpty ? null : () => _showKPIPlanDialog(),
+                  icon: Icon(Icons.table_chart, size: 18),
+                  label: Text('Danh mục KPI'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.purple[600], foregroundColor: Colors.white, padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16)),
+                ),
+              ),
+            ],
           ),
-          SizedBox(width: 16),
-          Padding(
-            padding: EdgeInsets.only(top: 32),
-            child: ElevatedButton.icon(
-              onPressed: hasDailyReport ? _calculateKPI : null,
-              icon: Icon(Icons.calculate, size: 18),
-              label: Text('Bắt đầu tính toán'),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green[600], foregroundColor: Colors.white, padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16)),
-            ),
-          ),
-          SizedBox(width: 12),
-          Padding(
-            padding: EdgeInsets.only(top: 32),
-            child: ElevatedButton.icon(
-              onPressed: _kpiPlanData.isEmpty ? null : () => _showKPIPlanDialog(),
-              icon: Icon(Icons.table_chart, size: 18),
-              label: Text('Danh mục KPI'),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.purple[600], foregroundColor: Colors.white, padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16)),
+          SizedBox(height: 16),
+          TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Tìm kiếm theo tên, mã nhân viên hoặc dự án...',
+              prefixIcon: Icon(Icons.search),
+              suffixIcon: _searchQuery.isNotEmpty ? IconButton(
+                icon: Icon(Icons.clear),
+                onPressed: () => _searchController.clear(),
+              ) : null,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             ),
           ),
         ],
@@ -1667,6 +1724,173 @@ class _ProjectGiamSatKPIState extends State<ProjectGiamSatKPI> {
   }
 }
 
+class MonthlyKPIDialog extends StatefulWidget {
+  final Map<String, KPIStatsModel> kpiStats;
+  final Map<String, String> staffNameMap;
+
+  const MonthlyKPIDialog({Key? key, required this.kpiStats, required this.staffNameMap}) : super(key: key);
+
+  @override
+  _MonthlyKPIDialogState createState() => _MonthlyKPIDialogState();
+}
+
+class _MonthlyKPIDialogState extends State<MonthlyKPIDialog> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      setState(() => _searchQuery = _searchController.text.toLowerCase());
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Map<String, Map<String, double>> _prepareMonthlyData() {
+    final Map<String, Map<String, double>> staffData = {};
+    
+    for (final stat in widget.kpiStats.values) {
+      staffData.putIfAbsent(stat.nguoiDung, () => {})[stat.date] = stat.totalPercent;
+    }
+
+    return staffData;
+  }
+
+  List<String> _getAvailableDates() {
+    final Set<String> dates = {};
+    for (final stat in widget.kpiStats.values) {
+      dates.add(stat.date);
+    }
+    final sortedDates = dates.toList()..sort((a, b) => b.compareTo(a));
+    return sortedDates.take(31).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final monthlyData = _prepareMonthlyData();
+    final availableDates = _getAvailableDates();
+    
+    var filteredStaff = monthlyData.keys.toList();
+    if (_searchQuery.isNotEmpty) {
+      filteredStaff = filteredStaff.where((staff) {
+        final displayName = widget.staffNameMap[staff.toUpperCase()] ?? '';
+        return staff.toLowerCase().contains(_searchQuery) ||
+               displayName.toLowerCase().contains(_searchQuery);
+      }).toList();
+    }
+    filteredStaff.sort();
+
+    return Dialog(
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.95,
+        height: MediaQuery.of(context).size.height * 0.95,
+        child: Column(
+          children: [
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(color: Colors.purple[600]),
+              child: Row(
+                children: [
+                  Icon(Icons.calendar_month, color: Colors.white),
+                  SizedBox(width: 8),
+                  Text('Xem điểm KPI theo tháng', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                  Spacer(),
+                  IconButton(
+                    icon: Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.all(16),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Tìm kiếm theo tên hoặc mã nhân viên...',
+                  prefixIcon: Icon(Icons.search),
+                  suffixIcon: _searchQuery.isNotEmpty ? IconButton(
+                    icon: Icon(Icons.clear),
+                    onPressed: () => _searchController.clear(),
+                  ) : null,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SingleChildScrollView(
+                  child: DataTable(
+                    border: TableBorder.all(color: Colors.grey[300]!),
+                    headingRowColor: MaterialStateColor.resolveWith((states) => Colors.purple[50]!),
+                    columnSpacing: 12,
+                    headingTextStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+                    dataTextStyle: TextStyle(fontSize: 9),
+                    columns: [
+                      DataColumn(label: Container(width: 80, child: Text('Mã NV'))),
+                      DataColumn(label: Container(width: 140, child: Text('Tên'))),
+                      ...availableDates.map((date) => DataColumn(
+                        label: Container(
+                          width: 50,
+                          child: Text(
+                            DateFormat('dd/MM').format(DateTime.parse(date)),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      )),
+                    ],
+                    rows: filteredStaff.map((staff) {
+                      final displayName = widget.staffNameMap[staff.toUpperCase()] ?? '❓❓❓';
+                      return DataRow(
+                        cells: [
+                          DataCell(Container(width: 80, child: Text(staff))),
+                          DataCell(Container(width: 140, child: Text(displayName, overflow: TextOverflow.ellipsis))),
+                          ...availableDates.map((date) {
+                            final percent = monthlyData[staff]?[date];
+                            return DataCell(Container(
+                              width: 50,
+                              child: percent != null
+                                  ? Container(
+                                      padding: EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: percent >= 80 ? Colors.green[100] : percent >= 60 ? Colors.orange[100] : Colors.red[100],
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        '${percent.toStringAsFixed(0)}%',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 9,
+                                          color: percent >= 80 ? Colors.green[800] : percent >= 60 ? Colors.orange[800] : Colors.red[800],
+                                        ),
+                                      ),
+                                    )
+                                  : Text('-', textAlign: TextAlign.center),
+                            ));
+                          }),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class KPICalculationDialog extends StatefulWidget {
   final List<AttendanceWithProject> attendanceList;
   final String selectedDate;
@@ -1790,8 +2014,7 @@ class _KPICalculationDialogState extends State<KPICalculationDialog> {
     }
 
     if (latestTime == null) {
-      log.writeln('[Biến động NS] Không có báo cáo → 0 điểm');
-      return 0.0;
+      log.writeln('[Biến động NS] Không có báo cáo → 0 điểm');return 0.0;
     }
 
     final timeParts = latestTime.split(':');
@@ -2524,6 +2747,38 @@ class KPIExcelExporter {
         for (int colIndex = 0; colIndex < rowData.length; colIndex++) {
           sheet.cell(CellIndex.indexByColumnRow(columnIndex: colIndex, rowIndex: rowIndex + 1)).value = rowData[colIndex];
         }
+      }
+    }
+
+    final summarySheet = excel['Tong_hop_phần_tram'];
+    summarySheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0)).value = 'Mã NV';
+    summarySheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 0)).value = 'Tên';
+    
+    final availableDates = sortedDates.take(31).toList();
+    for (int i = 0; i < availableDates.length; i++) {
+      final date = availableDates[i];
+      final dateFormatted = DateFormat('dd/MM').format(DateTime.parse(date));
+      summarySheet.cell(CellIndex.indexByColumnRow(columnIndex: i + 2, rowIndex: 0)).value = dateFormatted;
+    }
+
+    final staffData = <String, Map<String, double>>{};
+    for (final stats in kpiStats.values) {
+      staffData.putIfAbsent(stats.nguoiDung, () => {})[stats.date] = stats.totalPercent;
+    }
+
+    final sortedStaff = staffData.keys.toList()..sort();
+    for (int staffIndex = 0; staffIndex < sortedStaff.length; staffIndex++) {
+      final staff = sortedStaff[staffIndex];
+      final displayName = staffNameMap[staff.toUpperCase()] ?? staff;
+      
+      summarySheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: staffIndex + 1)).value = staff;
+      summarySheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: staffIndex + 1)).value = displayName;
+      
+      for (int dateIndex = 0; dateIndex < availableDates.length; dateIndex++) {
+        final date = availableDates[dateIndex];
+        final percent = staffData[staff]?[date];
+        summarySheet.cell(CellIndex.indexByColumnRow(columnIndex: dateIndex + 2, rowIndex: staffIndex + 1)).value = 
+            percent != null ? '${percent.toStringAsFixed(0)}%' : '-';
       }
     }
 
