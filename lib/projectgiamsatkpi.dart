@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:excel/excel.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 class AttendanceModel {
   final DateTime ngay;
@@ -129,22 +134,24 @@ class KPIStatsModel {
   final double chatLuongOnDinh;
   final double baoCaoDayDu;
   final String debugInfo;
+  final bool robotKpiZero;
   
   double get totalPoints => bienDongNhanSu + robotControl + quanLyQR + quanLyMayMoc + quanLyChecklist + baoCaoHinhAnh + chatLuongOnDinh + baoCaoDayDu;
-  double get totalPercent => (totalPoints / 35.0) * 100;
+  double get maxPoints => robotKpiZero ? 30.0 : 35.0;
+  double get totalPercent => (totalPoints / maxPoints) * 100;
 
   KPIStatsModel({
     required this.nguoiDung, required this.date, required this.mainProject, required this.supervisorPosition,
     required this.bienDongNhanSu, required this.robotControl, required this.quanLyQR, required this.quanLyMayMoc,
     required this.quanLyChecklist, required this.baoCaoHinhAnh, required this.chatLuongOnDinh, required this.baoCaoDayDu,
-    required this.debugInfo,
+    required this.debugInfo, this.robotKpiZero = false,
   });
 
   Map<String, dynamic> toJson() => {
     'nguoiDung': nguoiDung, 'date': date, 'mainProject': mainProject, 'supervisorPosition': supervisorPosition,
     'bienDongNhanSu': bienDongNhanSu, 'robotControl': robotControl, 'quanLyQR': quanLyQR, 'quanLyMayMoc': quanLyMayMoc,
     'quanLyChecklist': quanLyChecklist, 'baoCaoHinhAnh': baoCaoHinhAnh, 'chatLuongOnDinh': chatLuongOnDinh,
-    'baoCaoDayDu': baoCaoDayDu, 'debugInfo': debugInfo,
+    'baoCaoDayDu': baoCaoDayDu, 'debugInfo': debugInfo, 'robotKpiZero': robotKpiZero,
   };
 
   factory KPIStatsModel.fromJson(Map<String, dynamic> json) => KPIStatsModel(
@@ -161,6 +168,7 @@ class KPIStatsModel {
     chatLuongOnDinh: (json['chatLuongOnDinh'] as num?)?.toDouble() ?? 0.0,
     baoCaoDayDu: (json['baoCaoDayDu'] as num?)?.toDouble() ?? 0.0,
     debugInfo: json['debugInfo'] ?? '',
+    robotKpiZero: json['robotKpiZero'] ?? false,
   );
 }
 
@@ -187,6 +195,8 @@ class _ProjectGiamSatKPIState extends State<ProjectGiamSatKPI> {
   
   bool _isLoading = false;
   String _syncStatus = '';
+  bool _isBatchProcessing = false;
+  bool _cancelBatchProcess = false;
   
   List<AttendanceModel> _attendanceData = [];
   List<KPIPlanModel> _kpiPlanData = [];
@@ -197,6 +207,7 @@ class _ProjectGiamSatKPIState extends State<ProjectGiamSatKPI> {
   
   List<String> _dateOptions = [];
   String? _selectedDate;
+  String? _selectedProject;
   
   Map<String, String> _staffNameMap = {};
 
@@ -557,14 +568,38 @@ class _ProjectGiamSatKPIState extends State<ProjectGiamSatKPI> {
     if (_selectedDate == null) return [];
     
     final selectedDateTime = DateTime.parse(_selectedDate!);
-    final filtered = _attendanceData.where((attendance) => 
+    var filtered = _attendanceData.where((attendance) => 
       DateFormat('yyyy-MM-dd').format(attendance.ngay) == _selectedDate
     ).toList();
     
-    return filtered.map((attendance) => AttendanceWithProject(
+    var attendanceWithProjects = filtered.map((attendance) => AttendanceWithProject(
       attendance: attendance,
       mainProject: _getMainProject(attendance.nguoiDung, selectedDateTime),
-    )).toList()..sort((a, b) => a.attendance.batDau.compareTo(b.attendance.batDau));
+    )).toList();
+
+    if (_selectedProject != null && _selectedProject != 'Tất cả') {
+      attendanceWithProjects = attendanceWithProjects.where((a) => a.mainProject == _selectedProject).toList();
+    }
+
+    return attendanceWithProjects..sort((a, b) => a.attendance.batDau.compareTo(b.attendance.batDau));
+  }
+
+  List<String> _getProjectOptions() {
+    if (_selectedDate == null) return ['Tất cả'];
+    
+    final selectedDateTime = DateTime.parse(_selectedDate!);
+    final projects = <String>{'Tất cả'};
+    
+    for (final attendance in _attendanceData) {
+      if (DateFormat('yyyy-MM-dd').format(attendance.ngay) == _selectedDate) {
+        final project = _getMainProject(attendance.nguoiDung, selectedDateTime);
+        if (project != 'Không xác định') {
+          projects.add(project);
+        }
+      }
+    }
+    
+    return projects.toList()..sort();
   }
 
   Future<void> _calculateKPI() async {
@@ -603,6 +638,627 @@ class _ProjectGiamSatKPIState extends State<ProjectGiamSatKPI> {
           });
           _saveKPIStats();
         },
+      ),
+    );
+  }
+
+  Future<void> _showBatchProcessDialog() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.orange[700], size: 28),
+            SizedBox(width: 12),
+            Text('Cảnh báo'),
+          ],
+        ),
+        content: Container(
+          width: 500,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Xử lý hàng loạt là quá trình tiêu tốn tài nguyên và thời gian rất nhiều.',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              SizedBox(height: 16),
+              Text('Quy trình sẽ:'),
+              SizedBox(height: 8),
+              Text('• Đồng bộ dữ liệu chấm công'),
+              Text('• Xử lý tất cả các ngày từ ngày gần nhất đến ngày đầu tháng'),
+              Text('• Đồng bộ và tính toán KPI cho mỗi ngày'),
+              SizedBox(height: 16),
+              Text(
+                'Bạn có chắc chắn muốn tiếp tục?',
+                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red[700]),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Hủy'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[200]),
+            child: Text('Tiếp tục'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    await _showCountdownDialog();
+  }
+
+  Future<void> _showCountdownDialog() async {
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _CountdownDialog(
+        onStart: () => _startBatchProcessing(),
+      ),
+    );
+  }
+
+  Future<void> _startBatchProcessing() async {
+    setState(() {
+      _isBatchProcessing = true;
+      _cancelBatchProcess = false;
+      _syncStatus = 'Đang bắt đầu xử lý hàng loạt...';
+    });
+
+    try {
+      await _syncAttendance();
+      
+      if (_cancelBatchProcess) {
+        _showError('Đã hủy xử lý hàng loạt');
+        return;
+      }
+
+      if (_dateOptions.isEmpty) {
+        _showError('Không có dữ liệu chấm công');
+        return;
+      }
+
+      final latestDate = DateTime.parse(_dateOptions.first);
+      final now = DateTime.now();
+      
+      DateTime startDate;
+      if (latestDate.day >= 15) {
+        startDate = DateTime(now.year, now.month, 1);
+      } else {
+        final prevMonth = DateTime(now.year, now.month - 1, 1);
+        startDate = prevMonth;
+      }
+
+      final datesToProcess = <String>[];
+      for (final dateStr in _dateOptions) {
+        final date = DateTime.parse(dateStr);
+        if (!date.isBefore(startDate)) {
+          datesToProcess.add(dateStr);
+        }
+      }
+
+      datesToProcess.sort((a, b) => b.compareTo(a));
+
+      for (int i = 0; i < datesToProcess.length; i++) {
+        if (_cancelBatchProcess) {
+          _showError('Đã hủy xử lý hàng loạt');
+          return;
+        }
+
+        final dateStr = datesToProcess[i];
+        setState(() {
+          _selectedDate = dateStr;
+          _syncStatus = 'Đang xử lý ngày ${DateFormat('dd/MM/yyyy').format(DateTime.parse(dateStr))} (${i + 1}/${datesToProcess.length})';
+        });
+
+        await _syncDailyReports();
+        
+        if (_cancelBatchProcess) {
+          _showError('Đã hủy xử lý hàng loạt');
+          return;
+        }
+
+        if (_dailyReports.containsKey(dateStr)) {
+          await _calculateKPIBatch(dateStr);
+        }
+
+        await Future.delayed(Duration(milliseconds: 500));
+      }
+
+      _showSuccess('Hoàn thành xử lý hàng loạt - ${datesToProcess.length} ngày');
+    } catch (e) {
+      _showError('Lỗi xử lý hàng loạt: ${e.toString()}');
+    } finally {
+      setState(() {
+        _isBatchProcessing = false;
+        _syncStatus = '';
+      });
+    }
+  }
+
+  Future<void> _calculateKPIBatch(String dateStr) async {
+    final selectedDateTime = DateTime.parse(dateStr);
+    final filtered = _attendanceData.where((attendance) => 
+      DateFormat('yyyy-MM-dd').format(attendance.ngay) == dateStr
+    ).toList();
+    
+    final filteredAttendance = filtered.map((attendance) => AttendanceWithProject(
+      attendance: attendance,
+      mainProject: _getMainProject(attendance.nguoiDung, selectedDateTime),
+    )).toList();
+
+    if (filteredAttendance.isEmpty) return;
+
+    final calculatedStats = <KPIStatsModel>[];
+
+    for (final item in filteredAttendance) {
+      final debugLog = StringBuffer();
+      
+      final supervisorPosition = _getSupervisorPositionBatch(item.attendance.nguoiDung, dateStr);
+      debugLog.writeln('Vị trí giám sát: $supervisorPosition');
+      
+      final robotKpiPlan = _getRobotKpiPlanBatch(item.mainProject);
+      final robotKpiZero = robotKpiPlan.giaTri == 0;
+      
+      final bienDongNhanSu = _calculateBienDongNhanSuBatch(item.attendance.nguoiDung, item.mainProject, item.attendance, dateStr, debugLog);
+      final robotControl = _calculateRobotControlBatch(item.attendance.nguoiDung, item.mainProject, dateStr, debugLog);
+      final quanLyQR = _calculateQuanLyQRBatch(item.attendance.nguoiDung, item.mainProject, dateStr, debugLog);
+      final quanLyMayMoc = _calculateQuanLyMayMocBatch(item.attendance.nguoiDung, item.mainProject, dateStr, debugLog);
+      final quanLyChecklist = _calculateQuanLyChecklistBatch(item.attendance.nguoiDung, item.mainProject, dateStr, debugLog);
+      final baoCaoHinhAnh = _calculateBaoCaoHinhAnhBatch(item.attendance.nguoiDung, dateStr, debugLog);
+      final chatLuongOnDinh = _calculateChatLuongOnDinhBatch(item.attendance.nguoiDung, dateStr, debugLog);
+      final baoCaoDayDu = _calculateBaoCaoDayDuBatch(item.attendance.nguoiDung, item.mainProject, supervisorPosition, dateStr, debugLog);
+
+      calculatedStats.add(KPIStatsModel(
+        nguoiDung: item.attendance.nguoiDung,
+        date: dateStr,
+        mainProject: item.mainProject,
+        supervisorPosition: supervisorPosition,
+        bienDongNhanSu: bienDongNhanSu,
+        robotControl: robotControl,
+        quanLyQR: quanLyQR,
+        quanLyMayMoc: quanLyMayMoc,
+        quanLyChecklist: quanLyChecklist,
+        baoCaoHinhAnh: baoCaoHinhAnh,
+        chatLuongOnDinh: chatLuongOnDinh,
+        baoCaoDayDu: baoCaoDayDu,
+        debugInfo: debugLog.toString(),
+        robotKpiZero: robotKpiZero,
+      ));
+    }
+
+    setState(() {
+      for (final stat in calculatedStats) {
+        final key = '${stat.nguoiDung}_${stat.date}';
+        _kpiStats[key] = stat;
+      }
+    });
+    await _saveKPIStats();
+  }
+
+  String _getSupervisorPositionBatch(String nguoiDung, String dateStr) {
+    final reports = _dailyReports[dateStr] ?? [];
+    final positionCounts = <String, int>{};
+    
+    for (final record in reports) {
+      if (record.nguoiDung == nguoiDung && record.viTri.isNotEmpty) {
+        positionCounts[record.viTri] = (positionCounts[record.viTri] ?? 0) + 1;
+      }
+    }
+    
+    if (positionCounts.isEmpty) return '';
+    return positionCounts.entries.reduce((a, b) => a.value > b.value ? a : b).key;
+  }
+
+  KPIPlanModel _getRobotKpiPlanBatch(String project) {
+    return _kpiPlanData.firstWhere(
+      (p) => p.boPhan == project && p.phanLoai == 'Robot',
+      orElse: () => _kpiPlanData.firstWhere(
+        (p) => p.boPhan == 'Mặc định' && p.phanLoai == 'Robot',
+        orElse: () => KPIPlanModel(uid: '', ngay: DateTime.now(), boPhan: '', phanLoai: '', giaTri: 0),
+      ),
+    );
+  }
+
+  double _calculateBienDongNhanSuBatch(String nguoiDung, String project, AttendanceModel attendance, String dateStr, StringBuffer log) {
+    String? latestTime;
+    final reports = _dailyReports[dateStr] ?? [];
+    final supervisorReports = reports.where((r) => r.nguoiDung.toLowerCase().startsWith('hm')).toList();
+    
+    for (final record in supervisorReports) {
+      if (record.nguoiDung == nguoiDung && record.boPhan == project && record.phanLoai == 'Nhân sự' && record.chiTiet.length >= 2) {
+        final time = record.gio;
+        if (time.isNotEmpty && (latestTime == null || time.compareTo(latestTime) > 0)) {
+          latestTime = time;
+        }
+      }
+    }
+
+    if (latestTime == null) {
+      log.writeln('[Biến động NS] Không có báo cáo → 0 điểm');
+      return 0.0;
+    }
+
+    final timeParts = latestTime.split(':');
+    if (timeParts.isEmpty) {
+      log.writeln('[Biến động NS] Giờ không hợp lệ → 0 điểm');
+      return 0.0;
+    }
+
+    final checkinParts = attendance.batDau.split(':');
+    final checkinHour = int.tryParse(checkinParts[0]) ?? 0;
+    final checkinMinute = int.tryParse(checkinParts.length > 1 ? checkinParts[1] : '0') ?? 0;
+    final checkinTotalMinutes = checkinHour * 60 + checkinMinute;
+    final isLateCheckin = checkinTotalMinutes >= 720;
+
+    final hour = int.tryParse(timeParts[0]) ?? 0;
+    final threshold = isLateCheckin ? 13 : 9;
+    final score = hour < threshold ? 5.0 : 3.0;
+    log.writeln('[Biến động NS] Vào: ${attendance.batDau}, Ngưỡng: ${threshold}h, Báo cáo cuối: $latestTime → $score điểm');
+    return score;
+  }
+
+  double _calculateRobotControlBatch(String nguoiDung, String project, String dateStr, StringBuffer log) {
+    KPIPlanModel? plan = _getRobotKpiPlanBatch(project);
+
+    if (plan.giaTri == 0) {
+      log.writeln('[Robot] KPI = 0 → 0 điểm, max điểm = 30');
+      return 0.0;
+    }
+
+    double totalArea = 0.0;
+    final reports = _dailyReports[dateStr] ?? [];
+    final supervisorReports = reports.where((r) => r.nguoiDung.toLowerCase().startsWith('hm')).toList();
+    
+    for (final record in supervisorReports) {
+      if (record.nguoiDung == nguoiDung && record.boPhan == project && record.phanLoai == 'Robot' && record.chiTiet.isNotEmpty) {
+        final regex = RegExp(r'Diện tích sử dụng \(m2\):\s*([\d.]+)');
+        final match = regex.firstMatch(record.chiTiet);
+        
+        if (match != null) {
+          final areaStr = match.group(1);
+          final area = double.tryParse(areaStr ?? '0') ?? 0.0;
+          totalArea += area.roundToDouble();
+        }
+      }
+    }
+    
+    final percentage = (totalArea / plan.giaTri) * 100;
+    double score;
+    if (percentage >= 95) {
+      score = 5.0;
+    } else if (percentage < 50) {
+      score = 0.0;
+    } else {
+      score = 2.5 + ((percentage - 50) / 45) * 2.5;
+    }
+    
+    log.writeln('[Robot] Diện tích: $totalArea / ${plan.giaTri} = ${percentage.toStringAsFixed(1)}% → $score điểm');
+    return score;
+  }
+
+  double _calculateQuanLyQRBatch(String nguoiDung, String project, String dateStr, StringBuffer log) {
+    KPIPlanModel? plan = _kpiPlanData.firstWhere(
+      (p) => p.boPhan == project && p.phanLoai == 'QR',
+      orElse: () => _kpiPlanData.firstWhere(
+        (p) => p.boPhan == 'Mặc định' && p.phanLoai == 'QR',
+        orElse: () => KPIPlanModel(uid: '', ngay: DateTime.now(), boPhan: '', phanLoai: '', giaTri: 0),
+      ),
+    );
+
+    if (plan.giaTri == 0) {
+      log.writeln('[QR] KPI = 0 → 5 điểm tự động');
+      return 5.0;
+    }
+
+    final uniqueViTri = <String>{};
+    final reports = _dailyReports[dateStr] ?? [];
+    
+    for (final record in reports) {
+      if (!record.nguoiDung.toLowerCase().startsWith('hm') &&
+          record.boPhan == project &&
+          (record.phanLoai == 'Kiểm tra chất lượng' || record.phanLoai == 'Vào vị trí') &&
+          record.viTri.isNotEmpty) {
+        uniqueViTri.add(record.viTri);
+      }
+    }
+
+    final count = uniqueViTri.length;
+    final percentage = (count / plan.giaTri) * 100;
+    
+    double score;
+    if (percentage >= 100) {
+      score = 5.0;
+    } else if (percentage < 50) {
+      score = 0.0;
+    } else {
+      score = 2.5 + ((percentage - 50) / 50) * 2.5;
+    }
+    
+    log.writeln('[QR] Vị trí unique: $count / ${plan.giaTri} = ${percentage.toStringAsFixed(1)}% → $score điểm');
+    return score;
+  }
+
+  double _calculateQuanLyMayMocBatch(String nguoiDung, String project, String dateStr, StringBuffer log) {
+    KPIPlanModel? plan = _kpiPlanData.firstWhere(
+      (p) => p.boPhan == project && p.phanLoai == 'Máy móc',
+      orElse: () => _kpiPlanData.firstWhere(
+        (p) => p.boPhan == 'Mặc định' && p.phanLoai == 'Máy móc',
+        orElse: () => KPIPlanModel(uid: '', ngay: DateTime.now(), boPhan: '', phanLoai: '', giaTri: 0),
+      ),
+    );
+
+    if (plan.giaTri == 0) {
+      log.writeln('[Máy móc] KPI = 0 → 5 điểm tự động');
+      return 5.0;
+    }
+
+    final uniqueViTri = <String>{};
+    final reports = _dailyReports[dateStr] ?? [];
+    
+    for (final record in reports) {
+      if (!record.nguoiDung.toLowerCase().startsWith('hm') &&
+          record.boPhan == project &&
+          record.phanLoai == 'Máy móc' &&
+          record.viTri.isNotEmpty) {
+        uniqueViTri.add(record.viTri);
+      }
+    }
+
+    final count = uniqueViTri.length;
+    final percentage = (count / plan.giaTri) * 100;
+    
+    double score;
+    if (percentage >= 100) {
+      score = 5.0;
+    } else if (percentage < 50) {
+      score = 0.0;
+    } else {
+      score = 2.5 + ((percentage - 50) / 50) * 2.5;
+    }
+    
+    log.writeln('[Máy móc] Vị trí unique: $count / ${plan.giaTri} = ${percentage.toStringAsFixed(1)}% → $score điểm');
+    return score;
+  }
+
+  double _calculateQuanLyChecklistBatch(String nguoiDung, String project, String dateStr, StringBuffer log) {
+    KPIPlanModel? plan = _kpiPlanData.firstWhere(
+      (p) => p.boPhan == project && p.phanLoai == 'Checklist',
+      orElse: () => _kpiPlanData.firstWhere(
+        (p) => p.boPhan == 'Mặc định' && p.phanLoai == 'Checklist',
+        orElse: () => KPIPlanModel(uid: '', ngay: DateTime.now(), boPhan: '', phanLoai: '', giaTri: 0),
+      ),
+    );
+
+    if (plan.giaTri == 0) {
+      log.writeln('[Checklist] KPI = 0 → 5 điểm tự động');
+      return 5.0;
+    }
+
+    final checklists = _checklistData[dateStr] ?? [];
+    final checklistForProject = checklists.firstWhere(
+      (c) => c.projectName == project,
+      orElse: () => ChecklistDataModel(projectName: '', checklistCount: 0),
+    );
+
+    final count = checklistForProject.checklistCount;
+    final percentage = (count / plan.giaTri) * 100;
+    
+    double score;
+    if (percentage >= 100) {
+      score = 5.0;
+    } else if (percentage < 50) {
+      score = 0.0;
+    } else {
+      score = 2.5 + ((percentage - 50) / 50) * 2.5;
+    }
+    
+    log.writeln('[Checklist] Số lượng: $count / ${plan.giaTri} = ${percentage.toStringAsFixed(1)}% → $score điểm');
+    return score;
+  }
+
+  double _calculateBaoCaoHinhAnhBatch(String nguoiDung, String dateStr, StringBuffer log) {
+    int imageCount = 0;
+    final reports = _dailyReports[dateStr] ?? [];
+    
+    for (final record in reports) {
+      if (record.nguoiDung == nguoiDung && record.hinhAnh.isNotEmpty) {
+        imageCount++;
+      }
+    }
+
+    double score;
+    if (imageCount >= 20) {
+      score = 4.0;
+    } else if (imageCount == 0) {
+      score = 0.0;
+    } else {
+      score = (imageCount / 20) * 4.0;
+    }
+    
+    log.writeln('[Báo cáo hình ảnh] Số ảnh: $imageCount / 20 → $score điểm');
+    return score;
+  }
+
+  double _calculateChatLuongOnDinhBatch(String nguoiDung, String dateStr, StringBuffer log) {
+    int totalReports = 0;
+    int goodReports = 0;
+    final reports = _dailyReports[dateStr] ?? [];
+    
+    for (final record in reports) {
+      if (record.nguoiDung == nguoiDung) {
+        totalReports++;
+        if (record.ketQua == '✔️') {
+          goodReports++;
+        }
+      }
+    }
+
+    if (totalReports == 0) {
+      log.writeln('[Chất lượng ổn định] Không có báo cáo → 0 điểm');
+      return 0.0;
+    }
+
+    final goodRatio = goodReports / totalReports;
+    double score;
+    if (goodRatio >= 0.95) {
+      score = 1.0;
+    } else if (goodRatio <= 0.0) {
+      score = 0.0;
+    } else {
+      score = (goodRatio / 0.95) * 1.0;
+    }
+    
+    log.writeln('[Chất lượng ổn định] Tốt: $goodReports / $totalReports = ${(goodRatio * 100).toStringAsFixed(1)}% → $score điểm');
+    return score;
+  }
+
+  double _calculateBaoCaoDayDuBatch(String nguoiDung, String project, String supervisorPosition, String dateStr, StringBuffer log) {
+    if (supervisorPosition.isEmpty) {
+      log.writeln('[Báo cáo đầy đủ] Không xác định vị trí GS → 0 điểm');
+      return 0.0;
+    }
+
+    final schedules = _scheduleData[dateStr] ?? [];
+    final schedule = schedules.firstWhere(
+      (s) => s.boPhan == project && s.giamSat == supervisorPosition,
+      orElse: () => ScheduleKPIModel(boPhan: '', giamSat: '', soViec: 0),
+    );
+
+    if (schedule.soViec == 0) {
+      log.writeln('[Báo cáo đầy đủ] Không có công việc trong lịch → 5 điểm');
+      return 5.0;
+    }
+
+    int reportCount = 0;
+    final reports = _dailyReports[dateStr] ?? [];
+    
+    for (final record in reports) {
+      if (record.nguoiDung == nguoiDung && record.phanLoai == 'Kiểm tra chất lượng') {
+        reportCount++;
+      }
+    }
+
+    final percentage = reportCount / schedule.soViec;
+    
+    double score;
+    if (percentage >= 0.95) {
+      score = 5.0;
+    } else if (percentage < 0.5) {
+      score = 0.0;
+    } else {
+      score = 2.5 + ((percentage - 0.5) / 0.45) * 2.5;
+    }
+    
+    log.writeln('[Báo cáo đầy đủ] Báo cáo: $reportCount / ${schedule.soViec} = ${(percentage * 100).toStringAsFixed(1)}% → $score điểm');
+    return score;
+  }
+
+  Future<void> _exportToExcel() async {
+    if (_kpiStats.isEmpty) {
+      _showError('Chưa có dữ liệu KPI để xuất');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _syncStatus = 'Đang tạo file Excel...';
+    });
+
+    try {
+      final filePath = await KPIExcelExporter.exportExcel(
+        kpiStats: _kpiStats,
+        staffNameMap: _staffNameMap,
+      );
+
+      setState(() {
+        _isLoading = false;
+        _syncStatus = '';
+      });
+
+      _showExcelExportDialog(filePath);
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _syncStatus = '';
+      });
+      _showError('Lỗi xuất Excel: ${e.toString()}');
+    }
+  }
+
+  void _showExcelExportDialog(String filePath) {
+    final file = File(filePath);
+    final directory = file.parent;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green, size: 28),
+            SizedBox(width: 12),
+            Text('Xuất Excel thành công'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('File đã được lưu tại:'),
+            SizedBox(height: 8),
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                filePath,
+                style: TextStyle(fontSize: 12, fontFamily: 'monospace'),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () async {
+              Navigator.pop(context);
+              await KPIExcelExporter.openFolder(directory.path);
+            },
+            icon: Icon(Icons.folder_open),
+            label: Text('Mở thư mục'),
+          ),
+          TextButton.icon(
+            onPressed: () async {
+              Navigator.pop(context);
+              await KPIExcelExporter.openFile(filePath);
+            },
+            icon: Icon(Icons.file_open),
+            label: Text('Mở file'),
+          ),
+          if (Platform.isAndroid || Platform.isIOS)
+            TextButton.icon(
+              onPressed: () async {
+                Navigator.pop(context);
+                await Share.shareXFiles([XFile(filePath)], text: 'KPI Report');
+              },
+              icon: Icon(Icons.share),
+              label: Text('Chia sẻ'),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Đóng'),
+          ),
+        ],
       ),
     );
   }
@@ -684,7 +1340,15 @@ class _ProjectGiamSatKPIState extends State<ProjectGiamSatKPI> {
           SizedBox(width: 16),
           Text('Đánh giá KPI', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black87)),
           Spacer(),
-          if (!_isLoading)
+          if (!_isLoading && !_isBatchProcessing)
+            ElevatedButton.icon(
+              onPressed: () => _showBatchProcessDialog(),
+              icon: Icon(Icons.auto_awesome, size: 18),
+              label: Text('Xử lý hàng loạt'),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple[600], foregroundColor: Colors.white, elevation: 2),
+            ),
+          SizedBox(width: 12),
+          if (!_isLoading && !_isBatchProcessing)
             ElevatedButton.icon(
               onPressed: () => _syncAttendance(),
               icon: Icon(Icons.people_alt, size: 18),
@@ -692,18 +1356,35 @@ class _ProjectGiamSatKPIState extends State<ProjectGiamSatKPI> {
               style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[600], foregroundColor: Colors.white, elevation: 2),
             ),
           SizedBox(width: 12),
-          if (!_isLoading)
+          if (!_isLoading && !_isBatchProcessing)
             ElevatedButton.icon(
               onPressed: () => _syncKPIPlan(),
               icon: Icon(Icons.assessment, size: 18),
               label: Text('Đồng bộ yêu cầu KPI'),
               style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[600], foregroundColor: Colors.white, elevation: 2),
             ),
-          if (_isLoading) ...[
+          SizedBox(width: 12),
+          if (!_isLoading && !_isBatchProcessing && _kpiStats.isNotEmpty)
+            ElevatedButton.icon(
+              onPressed: () => _exportToExcel(),
+              icon: Icon(Icons.table_chart, size: 18),
+              label: Text('Xuất Excel'),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green[600], foregroundColor: Colors.white, elevation: 2),
+            ),
+          if (_isLoading || _isBatchProcessing) ...[
             SizedBox(width: 12),
             SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.black87))),
             SizedBox(width: 8),
             Text(_syncStatus, style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w500)),
+            if (_isBatchProcessing) ...[
+              SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: () => setState(() => _cancelBatchProcess = true),
+                icon: Icon(Icons.cancel, size: 18),
+                label: Text('Hủy'),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red[600], foregroundColor: Colors.white),
+              ),
+            ],
           ],
         ],
       ),
@@ -712,6 +1393,7 @@ class _ProjectGiamSatKPIState extends State<ProjectGiamSatKPI> {
 
   Widget _buildFilters() {
     final hasDailyReport = _selectedDate != null && _dailyReports.containsKey(_selectedDate);
+    final projectOptions = _getProjectOptions();
     
     return Container(
       padding: EdgeInsets.all(16),
@@ -731,7 +1413,26 @@ class _ProjectGiamSatKPIState extends State<ProjectGiamSatKPI> {
                   value: _selectedDate,
                   hint: Text('Chọn ngày'),
                   items: _dateOptions.map((date) => DropdownMenuItem(value: date, child: Text(DateFormat('dd/MM/yyyy').format(DateTime.parse(date))))).toList(),
-                  onChanged: (value) => setState(() => _selectedDate = value),
+                  onChanged: (value) => setState(() {
+                    _selectedDate = value;
+                    _selectedProject = null;
+                  }),
+                  decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Dự án', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey[700])),
+                SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: _selectedProject ?? 'Tất cả',
+                  items: projectOptions.map((project) => DropdownMenuItem(value: project, child: Text(project))).toList(),
+                  onChanged: (value) => setState(() => _selectedProject = value),
                   decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
                 ),
               ],
@@ -802,7 +1503,7 @@ class _ProjectGiamSatKPIState extends State<ProjectGiamSatKPI> {
             children: [
               Icon(Icons.person_off, size: 64, color: Colors.grey[400]),
               SizedBox(height: 16),
-              Text('Không có dữ liệu chấm công cho ngày đã chọn', style: TextStyle(fontSize: 16, color: Colors.grey[600]), textAlign: TextAlign.center),
+              Text('Không có dữ liệu chấm công cho bộ lọc đã chọn', style: TextStyle(fontSize: 16, color: Colors.grey[600]), textAlign: TextAlign.center),
             ],
           ),
         ),
@@ -1017,7 +1718,10 @@ class _KPICalculationDialogState extends State<KPICalculationDialog> {
       final supervisorPosition = _getSupervisorPosition(item.attendance.nguoiDung);
       debugLog.writeln('Vị trí giám sát: $supervisorPosition');
       
-      final bienDongNhanSu = _calculateBienDongNhanSu(item.attendance.nguoiDung, item.mainProject, debugLog);
+      final robotKpiPlan = _getRobotKpiPlan(item.mainProject);
+      final robotKpiZero = robotKpiPlan.giaTri == 0;
+      
+      final bienDongNhanSu = _calculateBienDongNhanSu(item.attendance.nguoiDung, item.mainProject, item.attendance, debugLog);
       final robotControl = _calculateRobotControl(item.attendance.nguoiDung, item.mainProject, debugLog);
       final quanLyQR = _calculateQuanLyQR(item.attendance.nguoiDung, item.mainProject, debugLog);
       final quanLyMayMoc = _calculateQuanLyMayMoc(item.attendance.nguoiDung, item.mainProject, debugLog);
@@ -1040,6 +1744,7 @@ class _KPICalculationDialogState extends State<KPICalculationDialog> {
         chatLuongOnDinh: chatLuongOnDinh,
         baoCaoDayDu: baoCaoDayDu,
         debugInfo: debugLog.toString(),
+        robotKpiZero: robotKpiZero,
       ));
     }
 
@@ -1060,7 +1765,17 @@ class _KPICalculationDialogState extends State<KPICalculationDialog> {
     return positionCounts.entries.reduce((a, b) => a.value > b.value ? a : b).key;
   }
 
-  double _calculateBienDongNhanSu(String nguoiDung, String project, StringBuffer log) {
+  KPIPlanModel _getRobotKpiPlan(String project) {
+    return widget.kpiPlanData.firstWhere(
+      (p) => p.boPhan == project && p.phanLoai == 'Robot',
+      orElse: () => widget.kpiPlanData.firstWhere(
+        (p) => p.boPhan == 'Mặc định' && p.phanLoai == 'Robot',
+        orElse: () => KPIPlanModel(uid: '', ngay: DateTime.now(), boPhan: '', phanLoai: '', giaTri: 0),
+      ),
+    );
+  }
+
+  double _calculateBienDongNhanSu(String nguoiDung, String project, AttendanceModel attendance, StringBuffer log) {
     String? latestTime;
     
     final supervisorReports = widget.dailyReports.where((r) => r.nguoiDung.toLowerCase().startsWith('hm')).toList();
@@ -1085,24 +1800,25 @@ class _KPICalculationDialogState extends State<KPICalculationDialog> {
       return 0.0;
     }
 
+    final checkinParts = attendance.batDau.split(':');
+    final checkinHour = int.tryParse(checkinParts[0]) ?? 0;
+    final checkinMinute = int.tryParse(checkinParts.length > 1 ? checkinParts[1] : '0') ?? 0;
+    final checkinTotalMinutes = checkinHour * 60 + checkinMinute;
+    final isLateCheckin = checkinTotalMinutes >= 720;
+
     final hour = int.tryParse(timeParts[0]) ?? 0;
-    final score = hour < 9 ? 5.0 : 3.0;
-    log.writeln('[Biến động NS] Giờ báo cáo cuối: $latestTime → $score điểm');
+    final threshold = isLateCheckin ? 13 : 9;
+    final score = hour < threshold ? 5.0 : 3.0;
+    log.writeln('[Biến động NS] Vào: ${attendance.batDau}, Ngưỡng: ${threshold}h, Báo cáo cuối: $latestTime → $score điểm');
     return score;
   }
 
   double _calculateRobotControl(String nguoiDung, String project, StringBuffer log) {
-    KPIPlanModel? plan = widget.kpiPlanData.firstWhere(
-      (p) => p.boPhan == project && p.phanLoai == 'Robot',
-      orElse: () => widget.kpiPlanData.firstWhere(
-        (p) => p.boPhan == 'Mặc định' && p.phanLoai == 'Robot',
-        orElse: () => KPIPlanModel(uid: '', ngay: DateTime.now(), boPhan: '', phanLoai: '', giaTri: 0),
-      ),
-    );
+    KPIPlanModel? plan = _getRobotKpiPlan(project);
 
     if (plan.giaTri == 0) {
-      log.writeln('[Robot] KPI = 0 → 5 điểm tự động');
-      return 5.0;
+      log.writeln('[Robot] KPI = 0 → 0 điểm, max điểm = 30');
+      return 0.0;
     }
 
     double totalArea = 0.0;
@@ -1683,5 +2399,176 @@ class _KPIPlanDialogState extends State<KPIPlanDialog> {
         ),
       ),
     );
+  }
+}
+
+class _CountdownDialog extends StatefulWidget {
+  final VoidCallback onStart;
+
+  const _CountdownDialog({Key? key, required this.onStart}) : super(key: key);
+
+  @override
+  _CountdownDialogState createState() => _CountdownDialogState();
+}
+
+class _CountdownDialogState extends State<_CountdownDialog> {
+  int _countdown = 5;
+  bool _cancelled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _startCountdown();
+  }
+
+  Future<void> _startCountdown() async {
+    for (int i = 5; i >= 0; i--) {
+      if (_cancelled || !mounted) return;
+      
+      setState(() => _countdown = i);
+      
+      if (i == 0) {
+        Navigator.of(context).pop();
+        widget.onStart();
+        return;
+      }
+      
+      await Future.delayed(Duration(seconds: 1));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Bắt đầu xử lý trong...'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$_countdown',
+            style: TextStyle(fontSize: 72, fontWeight: FontWeight.bold, color: Colors.orange[700]),
+          ),
+          SizedBox(height: 16),
+          Text('Nhấn Hủy để dừng lại'),
+        ],
+      ),
+      actions: [
+        ElevatedButton(
+          onPressed: () {
+            setState(() => _cancelled = true);
+            Navigator.of(context).pop();
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.red[600]),
+          child: Text('Hủy'),
+        ),
+      ],
+    );
+  }
+}
+
+class KPIExcelExporter {
+  static Future<String> exportExcel({
+    required Map<String, KPIStatsModel> kpiStats,
+    required Map<String, String> staffNameMap,
+  }) async {
+    final excel = Excel.createExcel();
+    excel.delete('Sheet1');
+
+    final dateGroups = <String, List<KPIStatsModel>>{};
+    for (final stats in kpiStats.values) {
+      dateGroups.putIfAbsent(stats.date, () => []).add(stats);
+    }
+
+    final sortedDates = dateGroups.keys.toList()..sort((a, b) => b.compareTo(a));
+
+    for (final date in sortedDates) {
+      final dateFormatted = DateFormat('dd-MM-yyyy').format(DateTime.parse(date));
+      final sheetName = dateFormatted.length > 31 ? dateFormatted.substring(0, 31) : dateFormatted;
+      final sheet = excel[sheetName];
+
+      final headers = [
+        'STT', 'Mã NV', 'Tên giám sát', 'Dự án', 'Vị trí GS',
+        'NS', 'Robot', 'QR', 'Máy', 'Checklist', 'Ảnh', 'Chất lượng', 'LLV GS',
+        'Tổng', 'Max', '%'
+      ];
+
+      for (int i = 0; i < headers.length; i++) {
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0)).value = headers[i];
+      }
+
+      final statsList = dateGroups[date]!..sort((a, b) => a.nguoiDung.compareTo(b.nguoiDung));
+
+      for (int rowIndex = 0; rowIndex < statsList.length; rowIndex++) {
+        final stats = statsList[rowIndex];
+        final displayName = staffNameMap[stats.nguoiDung.toUpperCase()] ?? stats.nguoiDung;
+
+        final rowData = [
+          (rowIndex + 1).toString(),
+          stats.nguoiDung,
+          displayName,
+          stats.mainProject,
+          stats.supervisorPosition,
+          stats.bienDongNhanSu.toStringAsFixed(1),
+          stats.robotControl.toStringAsFixed(1),
+          stats.quanLyQR.toStringAsFixed(1),
+          stats.quanLyMayMoc.toStringAsFixed(1),
+          stats.quanLyChecklist.toStringAsFixed(1),
+          stats.baoCaoHinhAnh.toStringAsFixed(1),
+          stats.chatLuongOnDinh.toStringAsFixed(1),
+          stats.baoCaoDayDu.toStringAsFixed(1),
+          stats.totalPoints.toStringAsFixed(1),
+          stats.maxPoints.toStringAsFixed(0),
+          '${stats.totalPercent.toStringAsFixed(0)}%',
+        ];
+
+        for (int colIndex = 0; colIndex < rowData.length; colIndex++) {
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: colIndex, rowIndex: rowIndex + 1)).value = rowData[colIndex];
+        }
+      }
+    }
+
+    final excelBytes = excel.encode()!;
+
+    final dir = await getApplicationDocumentsDirectory();
+    final reportDir = Directory('${dir.path}/BaoCao_KPI');
+    if (!await reportDir.exists()) {
+      await reportDir.create(recursive: true);
+    }
+
+    final now = DateTime.now();
+    final ts = DateFormat('yyyyMMddHHmmss').format(now);
+    final rand = 1000000 + Random().nextInt(9000000);
+    final file = File('${reportDir.path}/${ts}_kpi_$rand.xlsx');
+    await file.writeAsBytes(excelBytes, flush: true);
+
+    return file.path;
+  }
+
+  static Future<void> openFile(String path) async {
+    try {
+      if (Platform.isWindows) {
+        await Process.run('cmd', ['/c', 'start', '', path], runInShell: true);
+      } else if (Platform.isMacOS) {
+        await Process.run('open', [path]);
+      } else if (Platform.isLinux) {
+        await Process.run('xdg-open', [path]);
+      }
+    } catch (e) {
+      print('Error opening file: $e');
+    }
+  }
+
+  static Future<void> openFolder(String folderPath) async {
+    try {
+      if (Platform.isWindows) {
+        await Process.run('explorer', [folderPath]);
+      } else if (Platform.isMacOS) {
+        await Process.run('open', [folderPath]);
+      } else if (Platform.isLinux) {
+        await Process.run('xdg-open', [folderPath]);
+      }
+    } catch (e) {
+      print('Error opening folder: $e');
+    }
   }
 }
