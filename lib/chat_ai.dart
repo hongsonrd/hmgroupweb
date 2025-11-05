@@ -101,9 +101,10 @@ String? _selectedProfessionalId;
       {'value': 'flash-2.5-pro', 'name': '🇺🇸Cá voi sát thủ', 'cost': 401, 'rating': 5, 'systemPrompt': 'Ưu tiên tiếng việt,gọi người dùng là quý anh/chị,Không dùng ngữ cảnh nâng cao hay nói liên quan về vệ sinh công nghiệp nếu người dùng không hỏi,không để lộ ngữ cảnh/chuyên môn cài đặt trực tiếp trong trả lời,dùng bảng cho so sánh chỉ khi cần thiết,có thể dùng emoji để trang trí phù hợp.Bạn là chuyên gia đến từ Hoàn Mỹ Group chuyên làm sạch toà nhà văn phòng,chung cư,nhà máy,bệnh viện,bến xe,sân bay.Bạn có chuyên môn đủ các ngành nghề.Nếu câu hỏi về chủ đề vệ sinh thì mới dùng thêm ngữ cảnh nâng cao. Ngữ cảnh nâng cao bạn là chuyên gia ngành vệ sinh công nghiệp có ứng dụng robot, AI,công nghệ trong dịch vụ,quản lý tập đoàn,chất lượng,hiệu quả,kinh nghiệm hàng đầu tại Việt Nam.Khi đánh giá,sử dụng thang điểm /10 để đảm bảo tính dễ hiểu,trực quan.Đưa ra các lựa chọn,giải quyết nếu hiện trạng chưa đạt tối ưu,chú ý đến mức độ cơ sở vật chất hiện có thường sẽ cũ hơn trên ảnh.Đảm bảo trả lời:Đánh giá,Lỗi,Khắc phục bằng hoá chất/máy móc/phương pháp/công cụ,Cảnh báo nếu là về vấn đề vệ sinh,sau khi trả lời gợi ý các lựa chọn chủ đề, câu hỏi người dùng có thể nghỉ tới.Sau đây là câu hỏi của người dùng:'},
     ],
     'image': [
-      {'value': 'imagen-4', 'name': '🇺🇸Cá heo', 'cost': 600, 'rating': 3, 'systemPrompt': 'Không chỉ tạo ảnh với chữ, phải tạo hình ảnh thiết kế:'},
-      {'value': 'veo-3.0-fast', 'name': '🇺🇸Cá đuối', 'cost': 8500, 'rating': 5, 'systemPrompt': 'Tạo video dọc 9:16, 6s, 720p trừ khi user yêu cầu khác sau đây:'},
-      {'value': 'veo-3.0', 'name': '🇺🇸Cá voi xanh', 'cost': 12500, 'rating': 6, 'systemPrompt': 'Tạo video ngang 9:16, 6s, 1080p trừ khi user yêu cầu khác sau đây:'},
+      {'value': 'imagen-4', 'name': '🇺🇸Cá heo', 'cost': 461, 'rating': 3, 'systemPrompt': 'Không chỉ tạo ảnh với chữ, phải tạo hình ảnh thiết kế:'},
+      {'value': 'flash-2.5-image', 'name': '🇺🇸Cá đuối', 'cost': 1383, 'rating': 4, 'systemPrompt': 'Không chỉ tạo ảnh với chữ, phải tạo hình ảnh thiết kế:'},
+      {'value': 'veo-3.0-fast', 'name': '🇺🇸Cá đuối', 'cost': 24043, 'rating': 5, 'systemPrompt': 'Tạo video dọc 9:16, 6s, 720p trừ khi user yêu cầu khác sau đây:'},
+      {'value': 'veo-3.0', 'name': '🇺🇸Cá voi xanh', 'cost': 64115, 'rating': 6, 'systemPrompt': 'Tạo video ngang 9:16, 6s, 1080p trừ khi user yêu cầu khác sau đây:'},
     ],
   };
   final List<Map<String, String>> _imageRatios = [
@@ -384,13 +385,23 @@ void _showImagePopup(String imageData, {bool isBase64 = true}) {
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: isBase64
-                          ? Image.memory(
-                              base64Decode(imageData.split(',')[1]),
-                              fit: BoxFit.contain,
-                            )
+                          ? _buildFullImageWidget(imageData)
                           : Image.file(
                               File(imageData),
                               fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.error, color: Colors.red, size: 64),
+                                      const SizedBox(height: 16),
+                                      Text('Không thể hiển thị ảnh: $error'),
+                                    ],
+                                  ),
+                                );
+                              },
                             ),
                     ),
                   ),
@@ -403,6 +414,60 @@ void _showImagePopup(String imageData, {bool isBase64 = true}) {
     ),
   );
 }
+
+Widget _buildFullImageWidget(String imageData) {
+  try {
+    Uint8List bytes;
+    
+    if (imageData.startsWith('data:image')) {
+      final parts = imageData.split(',');
+      if (parts.length < 2) {
+        throw Exception('Invalid data URL format');
+      }
+      bytes = base64Decode(parts[1]);
+    } else if (imageData.contains(',')) {
+      final parts = imageData.split(',');
+      bytes = base64Decode(parts[1]);
+    } else {
+      bytes = base64Decode(imageData);
+    }
+    
+    return Image.memory(
+      bytes,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error, color: Colors.red, size: 64),
+              const SizedBox(height: 16),
+              const Text('Không thể hiển thị ảnh'),
+              const SizedBox(height: 8),
+              Text('Chi tiết: $error', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            ],
+          ),
+        );
+      },
+    );
+  } catch (e) {
+    print('Full image decode error: $e');
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.image_not_supported, color: Colors.orange, size: 64),
+          const SizedBox(height: 16),
+          const Text('Định dạng ảnh không hợp lệ'),
+          const SizedBox(height: 8),
+          Text('Chi tiết: $e', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        ],
+      ),
+    );
+  }
+}
 Future<void> _saveImageToDevice(String imageData, bool isBase64) async {
   try {
     final directory = await getApplicationDocumentsDirectory();
@@ -410,19 +475,36 @@ Future<void> _saveImageToDevice(String imageData, bool isBase64) async {
     if (!await reportDir.exists()) {
       await reportDir.create(recursive: true);
     }
+    
     final now = DateTime.now();
     final timestamp = DateFormat('yyyyMMddHHmmss').format(now);
     final random = 1000000 + Random().nextInt(9000000);
     final fileName = '${timestamp}_aiimage_$random.png';
     final filePath = '${reportDir.path}/$fileName';
+    
     if (isBase64) {
-      final bytes = base64Decode(imageData.split(',')[1]);
+      Uint8List bytes;
+      
+      if (imageData.startsWith('data:image')) {
+        final parts = imageData.split(',');
+        if (parts.length < 2) {
+          throw Exception('Invalid data URL format');
+        }
+        bytes = base64Decode(parts[1]);
+      } else if (imageData.contains(',')) {
+        final parts = imageData.split(',');
+        bytes = base64Decode(parts[1]);
+      } else {
+        bytes = base64Decode(imageData);
+      }
+      
       final file = File(filePath);
       await file.writeAsBytes(bytes, flush: true);
     } else {
       final sourceFile = File(imageData);
       await sourceFile.copy(filePath);
     }
+    
     if (mounted) {
       final result = await showDialog<String>(
         context: context,
@@ -457,6 +539,7 @@ Future<void> _saveImageToDevice(String imageData, bool isBase64) async {
           ],
         ),
       );
+      
       if (result == 'share') {
         await Share.shareXFiles([XFile(filePath)], text: 'Hình ảnh AI');
       } else if (result == 'open') {
@@ -1169,11 +1252,13 @@ Future<void> _sendMessage() async {
                   break;
 
                 case 'image':
-                  setState(() {
-                    _currentStreamingImage = data['content'];
-                  });
-                  _scrollToBottom();
-                  break;
+  print('📸 Received image data length: ${data['content']?.toString().length ?? 0}');
+  print('📸 Image data preview: ${data['content']?.toString().substring(0, min(100, data['content']?.toString().length ?? 0))}');
+  setState(() {
+    _currentStreamingImage = data['content'];
+  });
+  _scrollToBottom();
+  break;
 
                 case 'video':
                   String? videoUrl;
@@ -1199,8 +1284,13 @@ Future<void> _sendMessage() async {
                   break;
 
                 case 'complete':
-                  String messageContent = data['fullResponse'];
-                  String? videoUrl = _currentStreamingVideo;
+  String messageContent = data['fullResponse'];
+  String? videoUrl = _currentStreamingVideo;
+  
+  if (_currentStreamingImage != null) {
+    print('💾 Storing image with data length: ${_currentStreamingImage!.length}');
+    print('💾 Image data preview: ${_currentStreamingImage!.substring(0, min(100, _currentStreamingImage!.length))}');
+  }
                   
                   if (messageContent.contains('{"videos":')) {
                     try {
@@ -1900,17 +1990,20 @@ Widget _buildMessageBubble(ChatMessage message) {
   final isHovered = _hoveredMessageId == message.id;
   String? displayVideoUrl = message.generatedVideoUrl;
   String displayContent = message.content;
+  
   if (displayVideoUrl == null && message.content.contains('{"videos":')) {
     final extractedData = _extractVideoFromContent(message.content);
     displayVideoUrl = extractedData['videoUrl'];
     displayContent = extractedData['cleanContent'];
   }
+  
   final hasGeneratedImage = message.generatedImageData != null;
   final hasGeneratedVideo = displayVideoUrl != null;
   final contentIsBase64 = displayContent.toLowerCase().contains('base64') || displayContent.startsWith('data:image');
   final contentIsVideoJson = displayContent.trim().startsWith('{') && displayContent.contains('"videos"');
   final shouldHideContent = (hasGeneratedImage && (contentIsBase64 || displayContent.trim().isEmpty)) || (hasGeneratedVideo && (contentIsVideoJson || displayContent.trim().isEmpty));
   final parsedContent = !shouldHideContent ? _parseContentWithTable(displayContent) : null;
+  
   return MouseRegion(
     onEnter: (_) => setState(() => _hoveredMessageId = message.id),
     onExit: (_) => setState(() => _hoveredMessageId = null),
@@ -1956,28 +2049,7 @@ Widget _buildMessageBubble(ChatMessage message) {
                                 child: SizedBox(
                                   width: 256,
                                   height: 256,
-                                  child: Image.memory(
-                                    base64Decode(message.generatedImageData!.split(',')[1]),
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Container(
-                                        padding: const EdgeInsets.all(8),
-                                        color: Colors.red[100],
-                                        child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            const Icon(Icons.error, color: Colors.red),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              'Không thể hiển thị ảnh',
-                                              style: const TextStyle(fontSize: 12),
-                                              textAlign: TextAlign.center,
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    },
-                                  ),
+                                  child: _buildImageWidget(message.generatedImageData!),
                                 ),
                               ),
                               Positioned.fill(
@@ -1987,10 +2059,7 @@ Widget _buildMessageBubble(ChatMessage message) {
                                     gradient: LinearGradient(
                                       begin: Alignment.topCenter,
                                       end: Alignment.bottomCenter,
-                                      colors: [
-                                        Colors.transparent,
-                                        Colors.black.withOpacity(0.3),
-                                      ],
+                                      colors: [Colors.transparent, Colors.black.withOpacity(0.3)],
                                     ),
                                   ),
                                   child: const Align(
@@ -2197,19 +2266,20 @@ Widget _buildMessageBubble(ChatMessage message) {
   final isHovered = _hoveredMessageId == message.id;
   String? displayVideoUrl = message.generatedVideoUrl;
   String displayContent = message.content;
+  
   if (displayVideoUrl == null && message.content.contains('{"videos":')) {
     final extractedData = _extractVideoFromContent(message.content);
     displayVideoUrl = extractedData['videoUrl'];
     displayContent = extractedData['cleanContent'];
   }
+  
   final hasGeneratedImage = message.generatedImageData != null;
   final hasGeneratedVideo = displayVideoUrl != null;
-  final contentIsBase64 = displayContent.toLowerCase().contains('base64') || 
-                          displayContent.startsWith('data:image');
+  final contentIsBase64 = displayContent.toLowerCase().contains('base64') || displayContent.startsWith('data:image');
   final contentIsVideoJson = displayContent.trim().startsWith('{') && displayContent.contains('"videos"');
-  final shouldHideContent = (hasGeneratedImage && (contentIsBase64 || displayContent.trim().isEmpty)) ||
-                            (hasGeneratedVideo && (contentIsVideoJson || displayContent.trim().isEmpty));
+  final shouldHideContent = (hasGeneratedImage && (contentIsBase64 || displayContent.trim().isEmpty)) || (hasGeneratedVideo && (contentIsVideoJson || displayContent.trim().isEmpty));
   final parsedContent = !shouldHideContent ? _parseContentWithTable(displayContent) : null;
+  
   return MouseRegion(
     onEnter: (_) => setState(() => _hoveredMessageId = message.id),
     onExit: (_) => setState(() => _hoveredMessageId = null),
@@ -2255,28 +2325,7 @@ Widget _buildMessageBubble(ChatMessage message) {
                                 child: SizedBox(
                                   width: 256,
                                   height: 256,
-                                  child: Image.memory(
-                                    base64Decode(message.generatedImageData!.split(',')[1]),
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Container(
-                                        padding: const EdgeInsets.all(8),
-                                        color: Colors.red[100],
-                                        child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            const Icon(Icons.error, color: Colors.red),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              'Không thể hiển thị ảnh',
-                                              style: const TextStyle(fontSize: 12),
-                                              textAlign: TextAlign.center,
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    },
-                                  ),
+                                  child: _buildImageWidget(message.generatedImageData!),
                                 ),
                               ),
                               Positioned.fill(
@@ -2286,10 +2335,7 @@ Widget _buildMessageBubble(ChatMessage message) {
                                     gradient: LinearGradient(
                                       begin: Alignment.topCenter,
                                       end: Alignment.bottomCenter,
-                                      colors: [
-                                        Colors.transparent,
-                                        Colors.black.withOpacity(0.3),
-                                      ],
+                                      colors: [Colors.transparent, Colors.black.withOpacity(0.3)],
                                     ),
                                   ),
                                   child: const Align(
@@ -2299,20 +2345,9 @@ Widget _buildMessageBubble(ChatMessage message) {
                                       child: Row(
                                         mainAxisAlignment: MainAxisAlignment.center,
                                         children: [
-                                          Icon(
-                                            Icons.zoom_in,
-                                            color: Colors.white,
-                                            size: 20,
-                                          ),
+                                          Icon(Icons.zoom_in, color: Colors.white, size: 20),
                                           SizedBox(width: 4),
-                                          Text(
-                                            'Nhấn để phóng to',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
+                                          Text('Nhấn để phóng to', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                                         ],
                                       ),
                                     ),
@@ -2335,9 +2370,7 @@ Widget _buildMessageBubble(ChatMessage message) {
                                   width: 256,
                                   height: 256,
                                   color: Colors.black,
-                                  child: VideoThumbnail(
-                                    videoUrl: displayVideoUrl!,
-                                  ),
+                                  child: VideoThumbnail(videoUrl: displayVideoUrl),
                                 ),
                               ),
                               Positioned.fill(
@@ -2347,10 +2380,7 @@ Widget _buildMessageBubble(ChatMessage message) {
                                     gradient: LinearGradient(
                                       begin: Alignment.topCenter,
                                       end: Alignment.bottomCenter,
-                                      colors: [
-                                        Colors.transparent,
-                                        Colors.black.withOpacity(0.3),
-                                      ],
+                                      colors: [Colors.transparent, Colors.black.withOpacity(0.3)],
                                     ),
                                   ),
                                   child: Center(
@@ -2360,11 +2390,7 @@ Widget _buildMessageBubble(ChatMessage message) {
                                         color: Colors.black.withOpacity(0.6),
                                         shape: BoxShape.circle,
                                       ),
-                                      child: const Icon(
-                                        Icons.play_arrow,
-                                        color: Colors.white,
-                                        size: 48,
-                                      ),
+                                      child: const Icon(Icons.play_arrow, color: Colors.white, size: 48),
                                     ),
                                   ),
                                 ),
@@ -2383,14 +2409,7 @@ Widget _buildMessageBubble(ChatMessage message) {
                                     children: [
                                       Icon(Icons.videocam, color: Colors.white, size: 14),
                                       SizedBox(width: 4),
-                                      Text(
-                                        'Nhấn để phát',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
+                                      Text('Nhấn để phát', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                                     ],
                                   ),
                                 ),
@@ -2401,107 +2420,94 @@ Widget _buildMessageBubble(ChatMessage message) {
                         const SizedBox(height: 8),
                       ],
                       if (message.attachedFiles != null && message.attachedFiles!.isNotEmpty) ...[
-  Wrap(
-    spacing: 8,
-    runSpacing: 8,
-    children: message.attachedFiles!.map((filePath) {
-      final file = File(filePath);
-      if (!file.existsSync()) return const SizedBox.shrink();
-      
-      final ext = filePath.split('.').last.toLowerCase();
-      final fileName = file.path.split('/').last;
-      final isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
-      final isVideo = ['mp4', 'mpeg', 'webm', 'mov'].contains(ext);
-      
-      return GestureDetector(
-        onTap: () {
-          if (isImage) {
-            _showImagePopup(filePath, isBase64: false);
-          } else if (isVideo) {
-            _showVideoPopup(filePath);
-          }
-        },
-        child: Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            color: Colors.grey.shade200,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey.shade400),
-          ),
-          child: isImage
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.file(file, fit: BoxFit.cover),
-                )
-              : isVideo
-                  ? Stack(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            color: Colors.black,
-                            child: VideoThumbnail(videoUrl: filePath),
-                          ),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: message.attachedFiles!.map((filePath) {
+                            final file = File(filePath);
+                            if (!file.existsSync()) return const SizedBox.shrink();
+                            
+                            final ext = filePath.split('.').last.toLowerCase();
+                            final fileName = file.path.split('/').last;
+                            final isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
+                            final isVideo = ['mp4', 'mpeg', 'webm', 'mov'].contains(ext);
+                            
+                            return GestureDetector(
+                              onTap: () {
+                                if (isImage) {
+                                  _showImagePopup(filePath, isBase64: false);
+                                } else if (isVideo) {
+                                  _showVideoPopup(filePath);
+                                }
+                              },
+                              child: Container(
+                                width: 80,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade200,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.grey.shade400),
+                                ),
+                                child: isImage
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Image.file(file, fit: BoxFit.cover),
+                                      )
+                                    : isVideo
+                                        ? Stack(
+                                            children: [
+                                              ClipRRect(
+                                                borderRadius: BorderRadius.circular(8),
+                                                child: Container(
+                                                  color: Colors.black,
+                                                  child: VideoThumbnail(videoUrl: filePath),
+                                                ),
+                                              ),
+                                              Center(
+                                                child: Container(
+                                                  padding: const EdgeInsets.all(8),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.black.withOpacity(0.6),
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: const Icon(Icons.play_arrow, color: Colors.white, size: 24),
+                                                ),
+                                              ),
+                                            ],
+                                          )
+                                        : Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Text(DocumentConverter.getFileIcon(ext), style: const TextStyle(fontSize: 32)),
+                                              const SizedBox(height: 4),
+                                              Padding(
+                                                padding: const EdgeInsets.symmetric(horizontal: 4),
+                                                child: Text(fileName, style: const TextStyle(fontSize: 9), maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+                                              ),
+                                            ],
+                                          ),
+                              ),
+                            );
+                          }).toList(),
                         ),
-                        Center(
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.6),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.play_arrow,
-                              color: Colors.white,
-                              size: 24,
-                            ),
-                          ),
-                        ),
+                        const SizedBox(height: 8),
                       ],
-                    )
-                  : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          DocumentConverter.getFileIcon(ext),
-                          style: const TextStyle(fontSize: 32),
-                        ),
-                        const SizedBox(height: 4),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Text(
-                            fileName,
-                            style: const TextStyle(fontSize: 9),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ],
-                    ),
-        ),
-      );
-    }).toList(),
-  ),
-  const SizedBox(height: 8),
-],
                       if (!shouldHideContent && parsedContent != null) ...[
-  if (parsedContent['beforeTable'].toString().isNotEmpty)
-    Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: _buildSelectableFormattedText(parsedContent['beforeTable'], isUser ? Colors.white : Colors.black87),
-    ),
-  if (parsedContent['tableRows'] != null)
-    _buildTable(parsedContent['tableRows']),
-  if (parsedContent['afterTable'].toString().isNotEmpty)
-    Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: _buildSelectableFormattedText(parsedContent['afterTable'], isUser ? Colors.white : Colors.black87),
-    ),
-] else if (!shouldHideContent && displayContent.isNotEmpty) ...[
-  _buildSelectableFormattedText(displayContent, isUser ? Colors.white : Colors.black87),
-],
+                        if (parsedContent['beforeTable'].toString().isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: _buildSelectableFormattedText(parsedContent['beforeTable'], isUser ? Colors.white : Colors.black87),
+                          ),
+                        if (parsedContent['tableRows'] != null)
+                          _buildTable(parsedContent['tableRows']),
+                        if (parsedContent['afterTable'].toString().isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: _buildSelectableFormattedText(parsedContent['afterTable'], isUser ? Colors.white : Colors.black87),
+                          ),
+                      ] else if (!shouldHideContent && displayContent.isNotEmpty) ...[
+                        _buildSelectableFormattedText(displayContent, isUser ? Colors.white : Colors.black87),
+                      ],
                       const SizedBox(height: 4),
                       Text(
                         _formatTimestamp(message.timestamp),
@@ -2525,16 +2531,10 @@ Widget _buildMessageBubble(ChatMessage message) {
                         child: Container(
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
-                            color: isUser 
-                                ? Colors.white.withOpacity(0.2)
-                                : Colors.grey.withOpacity(0.2),
+                            color: isUser ? Colors.white.withOpacity(0.2) : Colors.grey.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Icon(
-                            Icons.copy,
-                            size: 16,
-                            color: isUser ? Colors.white : Colors.black87,
-                          ),
+                          child: Icon(Icons.copy, size: 16, color: isUser ? Colors.white : Colors.black87),
                         ),
                       ),
                     ),
@@ -2546,10 +2546,7 @@ Widget _buildMessageBubble(ChatMessage message) {
             const SizedBox(width: 8),
             CircleAvatar(
               backgroundColor: Colors.tealAccent[100],
-              child: Text(
-                _userAvatarEmoji.isNotEmpty ? _userAvatarEmoji : '🐙',
-                style: const TextStyle(fontSize: 24),
-              ),
+              child: Text(_userAvatarEmoji.isNotEmpty ? _userAvatarEmoji : '🐙', style: const TextStyle(fontSize: 24)),
             ),
           ],
         ],
@@ -2557,6 +2554,7 @@ Widget _buildMessageBubble(ChatMessage message) {
     ),
   );
 }
+
 Widget _buildStreamingMessage() {
   final shouldParseTable = _currentStreamingMessage.contains('|') && (_currentStreamingMessage.endsWith('\n') || _currentStreamingMessage.split('\n').where((l) => l.contains('|')).length > 2);
   final parsedContent = shouldParseTable ? _parseContentWithTable(_currentStreamingMessage) : null;
@@ -2565,6 +2563,7 @@ Widget _buildStreamingMessage() {
   final contentIsBase64 = _currentStreamingMessage.toLowerCase().contains('base64') || _currentStreamingMessage.startsWith('data:image');
   final contentIsVideoJson = _currentStreamingMessage.trim().startsWith('{') && _currentStreamingMessage.contains('"videos"');
   final shouldHideContent = (hasImage && (contentIsBase64 || _currentStreamingMessage.trim().isEmpty)) || (hasVideo && (contentIsVideoJson || _currentStreamingMessage.trim().isEmpty));
+  
   return Padding(
     padding: const EdgeInsets.only(bottom: 16),
     child: Row(
@@ -2602,24 +2601,7 @@ Widget _buildStreamingMessage() {
                           child: SizedBox(
                             width: 256,
                             height: 256,
-                            child: Image.memory(
-                              base64Decode(_currentStreamingImage!.split(',')[1]),
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  padding: const EdgeInsets.all(8),
-                                  color: Colors.red[100],
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const Icon(Icons.error, color: Colors.red),
-                                      const SizedBox(height: 4),
-                                      Text('Không thể hiển thị ảnh', style: const TextStyle(fontSize: 12), textAlign: TextAlign.center),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
+                            child: _buildImageWidget(_currentStreamingImage!),
                           ),
                         ),
                         Positioned.fill(
@@ -2739,6 +2721,61 @@ Widget _buildStreamingMessage() {
       ],
     ),
   );
+}
+
+Widget _buildImageWidget(String imageData) {
+  try {
+    Uint8List bytes;
+    
+    if (imageData.startsWith('data:image')) {
+      final parts = imageData.split(',');
+      if (parts.length < 2) {
+        throw Exception('Invalid data URL format');
+      }
+      bytes = base64Decode(parts[1]);
+    } else if (imageData.contains(',')) {
+      final parts = imageData.split(',');
+      bytes = base64Decode(parts[1]);
+    } else {
+      bytes = base64Decode(imageData);
+    }
+    
+    return Image.memory(
+      bytes,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          padding: const EdgeInsets.all(8),
+          color: Colors.red[100],
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error, color: Colors.red),
+              const SizedBox(height: 4),
+              Text('Không thể hiển thị ảnh', style: const TextStyle(fontSize: 12), textAlign: TextAlign.center),
+            ],
+          ),
+        );
+      },
+    );
+  } catch (e) {
+    print('Image decode error: $e');
+    print('Image data preview: ${imageData.substring(0, min(100, imageData.length))}');
+    return Container(
+      padding: const EdgeInsets.all(8),
+      color: Colors.orange[100],
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.image_not_supported, color: Colors.orange),
+          const SizedBox(height: 4),
+          Text('Định dạng ảnh không hợp lệ', style: const TextStyle(fontSize: 12), textAlign: TextAlign.center),
+          const SizedBox(height: 4),
+          Text('$e', style: const TextStyle(fontSize: 9, color: Colors.grey), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
 }
   Widget _buildFormattedText(String text, Color color) {
     final List<TextSpan> spans = [];
