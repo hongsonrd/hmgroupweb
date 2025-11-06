@@ -463,36 +463,32 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
       width: double.infinity,
       height: 300,
       color: Colors.black,
-      child: Stack(
-        children: [
-          // Video background
-          _videoInitialized
-              ? Video(
-                  controller: _videoController,
-                  controls: NoVideoControls,
-                  fit: BoxFit.cover,
-                )
-              : Container(
-                  height: 300,
-                  child: Center(
-                    child: CircularProgressIndicator(color: Colors.white),
-                  ),
-                ),
-          // Dark overlay
-          Container(
-            color: Colors.black.withOpacity(0.5),
-          ),
-          // Welcome section centered
-          Center(
-            child: _buildWelcomeSection(),
-          ),
-        ],
-      ),
+      child: _videoInitialized
+          ? Video(
+              controller: _videoController,
+              controls: NoVideoControls,
+              fit: BoxFit.cover,
+            )
+          : Container(
+              height: 300,
+              child: Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
+            ),
     );
   }
   
   Widget _buildWelcomeSection() {
   return Container(
+    width: double.infinity,
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [videoOverlayTop, videoOverlayMiddle, videoOverlayBottom],
+        stops: [0.0, 0.15, 0.4],
+      ),
+    ),
     padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
     child: Column(
       children: [
@@ -591,29 +587,6 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
     ),
   );
 }
-
-  Widget _buildChatAISection() {
-    return Container(
-      height: 500,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: Offset(0, 5),
-          ),
-        ],
-      ),
-      margin: EdgeInsets.all(16),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: ChatAIScreen(),
-      ),
-    );
-  }
   
   Widget _buildListItem(Map<String, dynamic> itemData, int index, String username) {
     return Container(
@@ -703,7 +676,7 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
                   child: Column(
                     children: [
                       _buildVideoSection(),
-                      _buildChatAISection(),
+                      _buildWelcomeSection(),
                       Container(
                         height: 100,
                         color: videoOverlayBottom,
