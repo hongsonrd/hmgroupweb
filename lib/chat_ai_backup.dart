@@ -11,7 +11,9 @@ import 'package:intl/intl.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:uuid/uuid.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:intl/intl.dart';
 import 'dart:math';
+import 'dart:io';
 import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 import 'chat_ai_case.dart';
@@ -21,9 +23,8 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'chat_ai_custom.dart';
 import 'chat_ai_convert.dart';
 import 'package:http_parser/http_parser.dart';
-// Import separated modules
-import 'chat_ai_network.dart';
-import 'chat_ai_ui.dart';
+
+enum AvatarState { hello, thinking, speaking, congrat, listening, idle }
 
 class ChatAIScreen extends StatefulWidget {
   const ChatAIScreen({Key? key}) : super(key: key);
@@ -3432,5 +3433,597 @@ Widget _buildImageWidget(String imageData) {
     }
   }
 }
-// Data models moved to chat_ai_network.dart
-// UI widgets moved to chat_ai_ui.dart
+class CreditBalance {
+  final double currentToken;
+  final double startingToken;
+  final double percentRemaining;
+  final bool canUse;
+  CreditBalance({
+    required this.currentToken,
+    required this.startingToken,
+    required this.percentRemaining,
+    required this.canUse,
+  });
+  factory CreditBalance.fromJson(Map<String, dynamic> json) {
+    return CreditBalance(
+      currentToken: (json['currentToken'] ?? 0).toDouble(),
+      startingToken: (json['startingToken'] ?? 250000).toDouble(),
+      percentRemaining: (json['percentRemaining'] ?? 100).toDouble(),
+      canUse: json['canUse'] ?? true,
+    );
+  }
+}
+class ChatSession {
+  final String id;
+  String title;
+  List<ChatMessage> messages;
+  List<Map<String, dynamic>> history;
+  final DateTime createdAt;
+  DateTime lastUpdated;
+  ChatSession({
+    required this.id,
+    required this.title,
+    required this.messages,
+    required this.history,
+    required this.createdAt,
+    required this.lastUpdated,
+  });
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'messages': messages.map((m) => m.toJson()).toList(),
+    'history': history,
+    'createdAt': createdAt.toIso8601String(),
+    'lastUpdated': lastUpdated.toIso8601String(),
+  };
+  factory ChatSession.fromJson(Map<String, dynamic> json) => ChatSession(
+    id: json['id'],
+    title: json['title'],
+    messages: (json['messages'] as List).map((m) => ChatMessage.fromJson(m)).toList(),
+    history: List<Map<String, dynamic>>.from(json['history'] ?? []),
+    createdAt: DateTime.parse(json['createdAt']),
+    lastUpdated: DateTime.parse(json['lastUpdated']),
+  );
+}
+class ChatMessage {
+  final String id;
+  final String role;
+  final String content;
+  final List<String>? attachedFiles;
+  final String? generatedImageData;
+  final String? generatedVideoUrl;
+  final DateTime timestamp;
+
+  ChatMessage({
+    required this.id,
+    required this.role,
+    required this.content,
+    this.attachedFiles,
+    this.generatedImageData,
+    this.generatedVideoUrl,
+    required this.timestamp,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'role': role,
+    'content': content,
+    'attachedFiles': attachedFiles,
+    'generatedImageData': generatedImageData,
+    'generatedVideoUrl': generatedVideoUrl,
+    'timestamp': timestamp.toIso8601String(),
+  };
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
+    id: json['id'],
+    role: json['role'],
+    content: json['content'],
+    attachedFiles: json['attachedFiles'] != null ? List<String>.from(json['attachedFiles']) : null,
+    generatedImageData: json['generatedImageData'],
+    generatedVideoUrl: json['generatedVideoUrl'],
+    timestamp: DateTime.parse(json['timestamp']),
+  );
+}
+class VideoThumbnail extends StatefulWidget {
+  final String videoUrl;
+  const VideoThumbnail({Key? key, required this.videoUrl}) : super(key: key);
+  @override
+  State<VideoThumbnail> createState() => _VideoThumbnailState();
+}
+
+class _VideoThumbnailState extends State<VideoThumbnail> {
+  late VideoPlayerController _controller;
+  bool _initialized = false;
+  bool _error = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeVideo();
+  }
+
+  Future<void> _initializeVideo() async {
+    try {
+      if (widget.videoUrl.startsWith('http')) {
+        _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+      } else {
+        _controller = VideoPlayerController.file(File(widget.videoUrl));
+      }
+      
+      await _controller.initialize();
+      if (mounted) {
+        setState(() {
+          _initialized = true;
+        });
+      }
+    } catch (e) {
+      print('Error initializing video thumbnail: $e');
+      if (mounted) {
+        setState(() {
+          _error = true;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error) {
+      return Container(
+        color: Colors.grey[800],
+        child: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, color: Colors.white, size: 24),
+              SizedBox(height: 4),
+              Text(
+                'Không thể tải video',
+                style: TextStyle(color: Colors.white, fontSize: 10),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    
+    if (!_initialized) {
+      return Container(
+        color: Colors.grey[800],
+        child: const Center(
+          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+        ),
+      );
+    }
+    
+    return FittedBox(
+      fit: BoxFit.cover,
+      child: SizedBox(
+        width: _controller.value.size.width,
+        height: _controller.value.size.height,
+        child: VideoPlayer(_controller),
+      ),
+    );
+  }
+}
+class VideoPlayerDialog extends StatefulWidget {
+  final String videoUrl;
+  final Color primaryColor;
+  final VoidCallback onSave;
+  const VideoPlayerDialog({
+    Key? key,
+    required this.videoUrl,
+    required this.primaryColor,
+    required this.onSave,
+  }) : super(key: key);
+  @override
+  State<VideoPlayerDialog> createState() => _VideoPlayerDialogState();
+}
+class _VideoPlayerDialogState extends State<VideoPlayerDialog> {
+  late VideoPlayerController _controller;
+  bool _initialized = false;
+  bool _error = false;
+  bool _isPlaying = false;
+  @override
+  void initState() {
+    super.initState();
+    _initializeVideo();
+  }
+  Future<void> _initializeVideo() async {
+    try {
+      _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+      await _controller.initialize();
+      _controller.addListener(() {
+        if (mounted) {
+          setState(() {
+            _isPlaying = _controller.value.isPlaying;
+          });
+        }
+      });
+      if (mounted) {
+        setState(() {
+          _initialized = true;
+        });
+        _controller.play();
+      }
+    } catch (e) {
+      print('Error initializing video player: $e');
+      if (mounted) {
+        setState(() {
+          _error = true;
+        });
+      }
+    }
+  }
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+  void _togglePlayPause() {
+    setState(() {
+      if (_controller.value.isPlaying) {
+        _controller.pause();
+      } else {
+        _controller.play();
+      }
+    });
+  }
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    return '$minutes:$seconds';
+  }
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.9,
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(12),
+                  topRight: Radius.circular(12),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Video',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          widget.onSave();
+                        },
+                        icon: const Icon(Icons.download, size: 18),
+                        label: const Text('Lưu video'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: widget.primaryColor,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: Container(
+                color: Colors.black,
+                child: _error
+                    ? const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.error_outline, color: Colors.white, size: 64),
+                            SizedBox(height: 16),
+                            Text(
+                              'Không thể phát video',
+                              style: TextStyle(color: Colors.white, fontSize: 16),
+                            ),
+                          ],
+                        ),
+                      )
+                    : !_initialized
+                        ? const Center(
+                            child: CircularProgressIndicator(color: Colors.white),
+                          )
+                        : Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              AspectRatio(
+                                aspectRatio: _controller.value.aspectRatio,
+                                child: VideoPlayer(_controller),
+                              ),
+                              GestureDetector(
+                                onTap: _togglePlayPause,
+                                child: Container(
+                                  color: Colors.transparent,
+                                  child: Center(
+                                    child: AnimatedOpacity(
+                                      opacity: _isPlaying ? 0.0 : 1.0,
+                                      duration: const Duration(milliseconds: 200),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(16),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.6),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                          _isPlaying ? Icons.pause : Icons.play_arrow,
+                                          color: Colors.white,
+                                          size: 64,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Colors.transparent,
+                                        Colors.black.withOpacity(0.7),
+                                      ],
+                                    ),
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      VideoProgressIndicator(
+                                        _controller,
+                                        allowScrubbing: true,
+                                        colors: VideoProgressColors(
+                                          playedColor: widget.primaryColor,
+                                          bufferedColor: Colors.grey,
+                                          backgroundColor: Colors.grey.shade800,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          IconButton(
+                                            icon: Icon(
+                                              _isPlaying ? Icons.pause : Icons.play_arrow,
+                                              color: Colors.white,
+                                            ),
+                                            onPressed: _togglePlayPause,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            '${_formatDuration(_controller.value.position)} / ${_formatDuration(_controller.value.duration)}',
+                                            style: const TextStyle(color: Colors.white),
+                                          ),
+                                          const Spacer(),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+class _AvatarVideoPlayer extends StatefulWidget {
+  final AvatarState state;
+  final Map<AvatarState, List<String>> videos;
+
+  const _AvatarVideoPlayer({
+    required this.state,
+    required this.videos,
+  });
+
+  @override
+  State<_AvatarVideoPlayer> createState() => _AvatarVideoPlayerState();
+}
+
+class _AvatarVideoPlayerState extends State<_AvatarVideoPlayer> with SingleTickerProviderStateMixin {
+  Player? _player;
+  VideoController? _videoController;
+  AvatarState? _currentState;
+  String? _currentVideo;
+  String _currentBubbleText = '';
+  late AnimationController _dotAnimationController;
+  late Animation<int> _dotAnimation;
+
+  final Map<AvatarState, List<String>> _bubbleTexts = {
+    AvatarState.hello: ['Xin chào!', 'Bạn muốn hỏi gì?', 'Chào bạn!', 'Tôi có thể giúp gì?'],
+    AvatarState.listening: ['Bạn có thể thêm ảnh', 'Có thể đính kèm file', 'Thêm file nếu muốn'],
+    AvatarState.thinking: ['🤔...'],
+    AvatarState.speaking: ['💭...', '📢...'],
+    AvatarState.congrat: ['❤️', '💙', '💚', '💛'],
+    AvatarState.idle: ['Bạn có thể chuyển sang chế độ tạo ảnh', 'Tôi có thể giúp bạn tạo video!', 'Bạn muốn biết gì nào?'],
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _dotAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+    _dotAnimation = IntTween(begin: 0, end: 3).animate(_dotAnimationController);
+    _initializeVideo();
+  }
+
+  @override
+  void didUpdateWidget(_AvatarVideoPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.state != widget.state) {
+      _initializeVideo();
+      _updateBubbleText();
+    }
+  }
+
+  void _updateBubbleText() {
+    final texts = _bubbleTexts[widget.state] ?? [];
+    setState(() {
+      _currentBubbleText = texts.isNotEmpty ? texts[Random().nextInt(texts.length)] : '';
+    });
+  }
+
+  Future<void> _initializeVideo() async {
+    final videos = widget.videos[widget.state] ?? widget.videos[AvatarState.idle]!;
+    final randomVideo = videos[Random().nextInt(videos.length)];
+
+    if (_currentVideo == randomVideo && _currentState == widget.state) return;
+
+    _currentState = widget.state;
+    _currentVideo = randomVideo;
+    _updateBubbleText();
+
+    await _player?.dispose();
+
+    final player = Player();
+    final controller = VideoController(player);
+
+    setState(() {
+      _player = player;
+      _videoController = controller;
+    });
+
+    try {
+      await player.open(
+        Media('asset://assets/aivideo/$randomVideo'),
+        play: true,
+      );
+      player.setPlaylistMode(PlaylistMode.loop);
+    } catch (e) {
+      print('Error initializing media_kit video: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _player?.dispose();
+    _dotAnimationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final size = (screenWidth * 0.09).clamp(20.0, 160.0);
+
+    return SizedBox(
+      width: size * 1.8,
+      height: size,
+      child: Stack(
+        alignment: Alignment.centerRight,
+        children: [
+          if (_currentBubbleText.isNotEmpty)
+            Positioned(
+              left: 10,
+              bottom: size * 0.33,
+              child: Container(
+                constraints: BoxConstraints(maxWidth: size * 1.5),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2A3446),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF00D9FF).withOpacity(0.3)),
+                ),
+                child: widget.state == AvatarState.thinking || widget.state == AvatarState.speaking
+                    ? AnimatedBuilder(
+                        animation: _dotAnimation,
+                        builder: (context, child) {
+                          final dots = '.' * (_dotAnimation.value + 1);
+                          return Text(
+                            dots,
+                            style: const TextStyle(
+                              color: Colors.teal,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          );
+                        },
+                      )
+                    : Text(
+                        _currentBubbleText,
+                        style: const TextStyle(
+                          color: Colors.teal,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+              ),
+            ),
+          Positioned(
+            right: 0,
+            child: Container(
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFF00D9FF), width: 3),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF00D9FF).withOpacity(0.5),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: ClipOval(
+                child: _videoController != null
+                    ? Video(controller: _videoController!)
+                    : Container(
+                        color: Colors.grey.shade800,
+                        child: const Center(child: CircularProgressIndicator()),
+                      ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
