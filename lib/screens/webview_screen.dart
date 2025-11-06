@@ -461,7 +461,7 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
   Widget _buildVideoSection() {
     return Container(
       width: double.infinity,
-      height: 300,
+      height: 200,
       color: Colors.black,
       child: Stack(
         children: [
@@ -473,7 +473,7 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
                   fit: BoxFit.cover,
                 )
               : Container(
-                  height: 300,
+                  height: 200,
                   child: Center(
                     child: CircularProgressIndicator(color: Colors.white),
                   ),
@@ -482,9 +482,12 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
           Container(
             color: Colors.black.withOpacity(0.5),
           ),
-          // Welcome section centered
+          // Welcome section centered horizontally
           Center(
-            child: _buildWelcomeSection(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: 600),
+              child: _buildWelcomeSection(),
+            ),
           ),
         ],
       ),
@@ -594,24 +597,9 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
 
   Widget _buildChatAISection() {
     return Container(
-      height: 500,
       width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: Offset(0, 5),
-          ),
-        ],
-      ),
-      margin: EdgeInsets.all(16),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: ChatAIScreen(),
-      ),
+      height: double.infinity,
+      child: ChatAIScreen(),
     );
   }
   
@@ -681,117 +669,108 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
   }
 
   Widget _buildHorizontalLayout(bool isLoggedIn, String username) {
-  return Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
+  return Column(
     children: [
+      _buildAppBar(),
       Expanded(
-        flex: 60,
-        child: Column(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildAppBar(),
+            // Left column: ChatAI section (full height and width)
             Expanded(
+              flex: 60,
               child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, videoOverlayBottom],
-                    stops: [0.0, 0.3],
-                  ),
-                ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      _buildVideoSection(),
-                      _buildChatAISection(),
-                      Container(
-                        height: 100,
-                        color: videoOverlayBottom,
+                color: Colors.white,
+                child: _buildChatAISection(),
+              ),
+            ),
+            // Right column: Video section at top, then tabs
+            Expanded(
+              flex: 40,
+              child: Column(
+                children: [
+                  _buildVideoSection(),
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.9),
+                        border: Border(
+                          left: BorderSide(color: Colors.grey.withOpacity(0.3), width: 1),
+                        ),
                       ),
-                    ],
+                      child: Column(
+                        children: [
+                          Container(
+                            color: tabBarColor,
+                            child: TabBar(
+                              controller: _tabController,
+                              indicatorColor: Colors.white,
+                              labelColor: Colors.white,
+                              unselectedLabelColor: Colors.white.withOpacity(0.6),
+                              tabs: [
+                                Tab(text: 'Ứng dụng'),
+                                Tab(text: 'Quản trị'),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: TabBarView(
+                              controller: _tabController,
+                              children: [
+                                isLoggedIn
+                                  ? ListView.separated(
+                                      padding: EdgeInsets.zero,
+                                      itemCount: _getFilteredGridItems(currentUsername: username, tabIndex: 0).length,
+                                      itemBuilder: (context, index) {
+                                        final itemData = _getFilteredGridItems(currentUsername: username, tabIndex: 0)[index];
+                                        return _buildListItem(itemData, index, username);
+                                      },
+                                      separatorBuilder: (context, index) {
+                                        return Divider(height: 1, color: Colors.grey[300], indent: 16, endIndent: 16);
+                                      },
+                                    )
+                                  : Center(
+                                      child: Text(
+                                        'Bạn cần đăng nhập lại để xem các chức năng',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(color: Colors.black87),
+                                      ),
+                                    ),
+                                isLoggedIn
+                                  ? ListView.separated(
+                                      padding: EdgeInsets.zero,
+                                      itemCount: _getFilteredGridItems(currentUsername: username, tabIndex: 1).length,
+                                      itemBuilder: (context, index) {
+                                        final itemData = _getFilteredGridItems(currentUsername: username, tabIndex: 1)[index];
+                                        return _buildListItem(itemData, index, username);
+                                      },
+                                      separatorBuilder: (context, index) {
+                                        return Divider(height: 1, color: Colors.grey[300], indent: 16, endIndent: 16);
+                                      },
+                                    )
+                                  : Center(
+                                      child: Text(
+                                        'Bạn cần đăng nhập lại để xem các chức năng',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(color: Colors.black87),
+                                      ),
+                                    ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ],
         ),
       ),
-      Expanded(
-        flex: 40,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.9),
-            border: Border(
-              left: BorderSide(color: Colors.grey.withOpacity(0.3), width: 1),
-            ),
-          ),
-          child: Column(
-            children: [
-              Container(
-                color: tabBarColor,
-                child: TabBar(
-                  controller: _tabController,
-                  indicatorColor: Colors.white,
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white.withOpacity(0.6),
-                  tabs: [
-                    Tab(text: 'Ứng dụng'), 
-                    Tab(text: 'Quản trị'), 
-                  ],
-                ),
-              ),
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                      isLoggedIn
-                        ? ListView.separated(
-                            padding: EdgeInsets.zero,
-                            itemCount: _getFilteredGridItems(currentUsername: username, tabIndex: 0).length,
-                            itemBuilder: (context, index) {
-                              final itemData = _getFilteredGridItems(currentUsername: username, tabIndex: 0)[index];
-                              return _buildListItem(itemData, index, username);
-                            },
-                            separatorBuilder: (context, index) {
-                              return Divider(height: 1, color: Colors.grey[300], indent: 16, endIndent: 16);
-                            },
-                          )
-                        : Center(
-                            child: Text(
-                              'Bạn cần đăng nhập lại để xem các chức năng',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.black87),
-                            ),
-                          ),
-                      isLoggedIn
-                        ? ListView.separated(
-                            padding: EdgeInsets.zero,
-                            itemCount: _getFilteredGridItems(currentUsername: username, tabIndex: 1).length,
-                            itemBuilder: (context, index) {
-                              final itemData = _getFilteredGridItems(currentUsername: username, tabIndex: 1)[index];
-                              return _buildListItem(itemData, index, username);
-                            },
-                            separatorBuilder: (context, index) {
-                              return Divider(height: 1, color: Colors.grey[300], indent: 16, endIndent: 16);
-                            },
-                          )
-                        : Center(
-                            child: Text(
-                              'Bạn cần đăng nhập lại để xem các chức năng',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.black87),
-                            ),
-                          ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+    ],
+  );
+}
 
   Widget _buildVerticalLayout(bool isLoggedIn, String username) {
   return SafeArea(
