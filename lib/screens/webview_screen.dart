@@ -27,6 +27,7 @@ import '../projectgiamsat.dart';
 import 'daily_report_screen.dart';
 import '../checklist_manager.dart';
 import '../pay_page.dart';
+import '../chat_ai_embed.dart';
 import '../chat_ai.dart';
 import '../checklist_supervisor.dart';
 import '../projectlichlamviec.dart';
@@ -47,8 +48,8 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
   String _username = '';
   late TabController _tabController;
   
-  final Color appBarTop = Color(0xFF024965);
-  final Color appBarBottom = Color(0xFF03a6cf);
+final Color appBarTop = Color(0xFF004D40);
+final Color appBarBottom = Color(0xFF26A69A);
   final Color videoOverlayTop = Color(0xFF03a6cf);
   final Color videoOverlayMiddle = Color(0xFF016585);
   final Color videoOverlayBottom = Color(0xFF016585);
@@ -584,7 +585,7 @@ Widget _buildAppBar() {
     return Container(
       width: double.infinity,
       height: double.infinity,
-      child: ChatAIScreen(),
+      child: ChatAIScreenEmbed(),
     );
   }
   

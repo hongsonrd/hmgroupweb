@@ -25,12 +25,12 @@ import 'package:http_parser/http_parser.dart';
 import 'chat_ai_network.dart';
 import 'chat_ai_ui.dart';
 
-class ChatAIScreen extends StatefulWidget {
-  const ChatAIScreen({Key? key}) : super(key: key);
+class ChatAIScreenEmbed extends StatefulWidget {
+  const ChatAIScreenEmbed({Key? key}) : super(key: key);
   @override
-  State<ChatAIScreen> createState() => _ChatAIScreenState();
+  State<ChatAIScreenEmbed> createState() => _ChatAIScreenEmbedState();
 }
-class _ChatAIScreenState extends State<ChatAIScreen> with SingleTickerProviderStateMixin {
+class _ChatAIScreenEmbedState extends State<ChatAIScreenEmbed> with SingleTickerProviderStateMixin {
   static const String _ttsLanguage = 'vi-VN';
   static const double _ttsDefaultRate = 0.6;
   static const double _ttsDefaultPitch = 0.86;
@@ -109,7 +109,7 @@ String? _selectedProfessionalId;
   final List<Map<String, String>> _imageRatios = [
     {'value': '1:1', 'label': '1:1 Vuông'},
   ];
-  Color get _primaryColor => _mode == 'image' ? Colors.green : Colors.blue;
+  Color get _primaryColor => _mode == 'image' ? Colors.green : Colors.teal.shade800;
   Color get _lightPrimaryColor => _mode == 'image' ? Colors.green.shade50 : Colors.blue.shade50;
   @override
   void initState() {
@@ -1736,23 +1736,6 @@ Padding(
     ),
   ),
 ),  
-        const SizedBox(height: 4),
-        Container(
-padding: const EdgeInsets.only(top: 0, left: 16, right: 16, bottom: 16),
-child: ElevatedButton.icon(
-  onPressed: () => Navigator.pop(context),
-  icon: const Icon(Icons.arrow_back),
-  label: const Text('Quay lại'),
-  style: ElevatedButton.styleFrom(
-    backgroundColor: Colors.tealAccent,
-    foregroundColor: Colors.black,
-    minimumSize: const Size(double.infinity, 48),
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(12),
-    ),
-  ),
-),
-                ),
                 Expanded(
                   child: _sessions.isEmpty
                       ? const Center(
