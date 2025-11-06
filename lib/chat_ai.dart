@@ -117,7 +117,6 @@ String? _selectedProfessionalId;
     super.initState();
     _loadUserData();
     _loadSessions();
-    _loadCreditBalance();
     _gradientController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 3),
@@ -127,7 +126,6 @@ String? _selectedProfessionalId;
     _userAvatarEmoji = avatarEmojis[Random().nextInt(avatarEmojis.length)];
     _messageController.addListener(_onTextChanged);
     _initTts();
-    _loadCustomProfessionals();
   }
   Future<void> _loadCustomProfessionals() async {
   final professionals = await AIProfessionalManager.loadProfessionals(_username);
@@ -264,6 +262,10 @@ void _onTextChanged() {
           _username = userObj;
         });
       }
+
+      // Load data that depends on username after it's set
+      await _loadCustomProfessionals();
+      await _loadCreditBalance();
     }
   }
   Future<void> _loadCreditBalance() async {
