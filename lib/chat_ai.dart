@@ -103,7 +103,7 @@ String? _selectedProfessionalId;
     'image': [
       {'value': 'imagen-4', 'name': '🇺🇸Cá heo', 'cost': 461, 'rating': 3, 'systemPrompt': 'Không chỉ tạo ảnh với chữ, phải tạo hình ảnh thiết kế:'},
       {'value': 'flash-2.5-image', 'name': '🇺🇸Cá đuối', 'cost': 1383, 'rating': 4, 'systemPrompt': 'Không chỉ tạo ảnh với chữ, phải tạo hình ảnh thiết kế:'},
-      {'value': 'veo-3.0-fast', 'name': '🇺🇸Cá đuối', 'cost': 24043, 'rating': 5, 'systemPrompt': 'Tạo video dọc 9:16, 6s, 720p trừ khi user yêu cầu khác sau đây:'},
+      {'value': 'veo-3.0-fast', 'name': '🇺🇸Cá hoa tiêu', 'cost': 24043, 'rating': 5, 'systemPrompt': 'Tạo video dọc 9:16, 6s, 720p trừ khi user yêu cầu khác sau đây:'},
       {'value': 'veo-3.0', 'name': '🇺🇸Cá voi xanh', 'cost': 64115, 'rating': 6, 'systemPrompt': 'Tạo video ngang 9:16, 6s, 1080p trừ khi user yêu cầu khác sau đây:'},
     ],
   };

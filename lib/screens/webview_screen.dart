@@ -461,7 +461,7 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
   Widget _buildVideoSection() {
     return Container(
       width: double.infinity,
-      height: 350,
+      height: 300,
       color: Colors.black,
       child: _videoInitialized
           ? Video(
@@ -470,7 +470,7 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
               fit: BoxFit.cover,
             )
           : Container(
-              height: 200,
+              height: 300,
               child: Center(
                 child: CircularProgressIndicator(color: Colors.white),
               ),
