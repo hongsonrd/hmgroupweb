@@ -1684,7 +1684,6 @@ bool showAirportButton = airportPermissions.isEmpty || airportPermissions.contai
             ),
             child: Column(
               children: [
-                // Action buttons at the top
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   child: Column(
