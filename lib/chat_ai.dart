@@ -2779,52 +2779,122 @@ Widget _buildImageWidget(String imageData) {
 }
   Widget _buildFormattedText(String text, Color color) {
     final List<TextSpan> spans = [];
-    final RegExp boldPattern = RegExp(r'\*\*(.*?)\*\*');
-    int lastIndex = 0;
-    for (final match in boldPattern.allMatches(text)) {
-      if (match.start > lastIndex) {
+    final lines = text.split('\n');
+
+    for (int i = 0; i < lines.length; i++) {
+      final line = lines[i];
+
+      // Check for markdown headers (2-5 #)
+      final headerMatch = RegExp(r'^(#{2,5})\s+(.*)$').firstMatch(line);
+      if (headerMatch != null) {
+        final hashCount = headerMatch.group(1)!.length;
+        final headerText = headerMatch.group(2)!;
+
+        // Calculate font size increase: 2# -> +2, 3# -> +4, 4# -> +6, 5# -> +8
+        final sizeIncrease = (hashCount - 1) * 2.0;
+
         spans.add(TextSpan(
-          text: text.substring(lastIndex, match.start),
+          text: headerText,
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.bold,
+            fontSize: 14 + sizeIncrease,
+          ),
+        ));
+      } else {
+        // Process bold patterns **text**
+        final RegExp boldPattern = RegExp(r'\*\*(.*?)\*\*');
+        int lastIndex = 0;
+        for (final match in boldPattern.allMatches(line)) {
+          if (match.start > lastIndex) {
+            spans.add(TextSpan(
+              text: line.substring(lastIndex, match.start),
+              style: TextStyle(color: color),
+            ));
+          }
+          spans.add(TextSpan(
+            text: match.group(1),
+            style: TextStyle(color: color, fontWeight: FontWeight.bold),
+          ));
+          lastIndex = match.end;
+        }
+        if (lastIndex < line.length) {
+          spans.add(TextSpan(
+            text: line.substring(lastIndex),
+            style: TextStyle(color: color),
+          ));
+        }
+      }
+
+      // Add newline between lines (except for the last line)
+      if (i < lines.length - 1) {
+        spans.add(TextSpan(
+          text: '\n',
           style: TextStyle(color: color),
         ));
       }
-      spans.add(TextSpan(
-        text: match.group(1),
-        style: TextStyle(color: color, fontWeight: FontWeight.bold),
-      ));
-      lastIndex = match.end;
     }
-    if (lastIndex < text.length) {
-      spans.add(TextSpan(
-        text: text.substring(lastIndex),
-        style: TextStyle(color: color),
-      ));
-    }
+
     return RichText(text: TextSpan(children: spans));
   }
   Widget _buildSelectableFormattedText(String text, Color color) {
     final List<TextSpan> spans = [];
-    final RegExp boldPattern = RegExp(r'\*\*(.*?)\*\*');
-    int lastIndex = 0;
-    for (final match in boldPattern.allMatches(text)) {
-      if (match.start > lastIndex) {
+    final lines = text.split('\n');
+
+    for (int i = 0; i < lines.length; i++) {
+      final line = lines[i];
+
+      // Check for markdown headers (2-5 #)
+      final headerMatch = RegExp(r'^(#{2,5})\s+(.*)$').firstMatch(line);
+      if (headerMatch != null) {
+        final hashCount = headerMatch.group(1)!.length;
+        final headerText = headerMatch.group(2)!;
+
+        // Calculate font size increase: 2# -> +2, 3# -> +4, 4# -> +6, 5# -> +8
+        final sizeIncrease = (hashCount - 1) * 2.0;
+
         spans.add(TextSpan(
-          text: text.substring(lastIndex, match.start),
+          text: headerText,
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.bold,
+            fontSize: 14 + sizeIncrease,
+          ),
+        ));
+      } else {
+        // Process bold patterns **text**
+        final RegExp boldPattern = RegExp(r'\*\*(.*?)\*\*');
+        int lastIndex = 0;
+        for (final match in boldPattern.allMatches(line)) {
+          if (match.start > lastIndex) {
+            spans.add(TextSpan(
+              text: line.substring(lastIndex, match.start),
+              style: TextStyle(color: color),
+            ));
+          }
+          spans.add(TextSpan(
+            text: match.group(1),
+            style: TextStyle(color: color, fontWeight: FontWeight.bold),
+          ));
+          lastIndex = match.end;
+        }
+        if (lastIndex < line.length) {
+          spans.add(TextSpan(
+            text: line.substring(lastIndex),
+            style: TextStyle(color: color),
+          ));
+        }
+      }
+
+      // Add newline between lines (except for the last line)
+      if (i < lines.length - 1) {
+        spans.add(TextSpan(
+          text: '\n',
           style: TextStyle(color: color),
         ));
       }
-      spans.add(TextSpan(
-        text: match.group(1),
-        style: TextStyle(color: color, fontWeight: FontWeight.bold),
-      ));
-      lastIndex = match.end;
     }
-    if (lastIndex < text.length) {
-      spans.add(TextSpan(
-        text: text.substring(lastIndex),
-        style: TextStyle(color: color),
-      ));
-    }
+
     return SelectableText.rich(
       TextSpan(children: spans),
       style: TextStyle(color: color),
