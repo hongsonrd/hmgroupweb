@@ -1578,7 +1578,7 @@ Future<void> _sendMessage() async {
         children: [
           if (_sidebarVisible)
             Container(
-              width: 280,
+              width: 250,
               decoration: BoxDecoration(
                 color: const Color(0xFF1E2837),
                 boxShadow: [
@@ -1592,59 +1592,97 @@ Future<void> _sendMessage() async {
               child: Column(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF252D3D),
-                      border: Border(bottom: BorderSide(color: Colors.grey.shade800)),
+  padding: const EdgeInsets.all(16),
+  decoration: BoxDecoration(
+    color: const Color(0xFF252D3D),
+    border: Border(bottom: BorderSide(color: Colors.grey.shade800)),
+  ),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          Icon(_mode == 'text' ? Icons.chat : Icons.image, size: 20, color: _primaryColor),
+          const SizedBox(width: 8),
+          Text(
+            _mode == 'text' ? 'Chế độ Chat' : 'Chế độ Hình ảnh',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+        ],
+      ),
+      const SizedBox(height: 8),
+      GestureDetector(
+        onTap: () => _showModelSelector(),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFF2A3446),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: _primaryColor.withOpacity(0.5)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _getModelName(_selectedModel),
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(_mode == 'text' ? Icons.chat : Icons.image, size: 20, color: _primaryColor),
-                            const SizedBox(width: 8),
-                            Text(
-                              _mode == 'text' ? 'Chế độ Chat' : 'Chế độ Hình ảnh',
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        GestureDetector(
-                          onTap: () => _showModelSelector(),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF2A3446),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: _primaryColor.withOpacity(0.5)),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        _getModelName(_selectedModel),
-                                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
-                                      ),
-                                      Text(
-                                        'Chi phí: ${_getModelCost(_selectedModel)}%',
-                                        style: const TextStyle(fontSize: 10, color: Colors.grey),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Icon(Icons.arrow_drop_down, color: _primaryColor),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
+                    Text(
+                      'Chi phí: ${_getModelCost(_selectedModel)}%',
+                      style: const TextStyle(fontSize: 10, color: Colors.grey),
                     ),
-                  ),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_drop_down, color: _primaryColor),
+            ],
+          ),
+        ),
+      ),
+
+      // 👇 Inserted dropdown appears here
+      if (_mode == 'text')
+        Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: Expanded(
+            flex: 2,
+            child: Container(
+              height: 36,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: Colors.blueGrey[700],
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _selectedProfessionalId,
+                  hint: const Text('✨ Chọn AI đã tạo', style: TextStyle(color: Colors.amber, fontSize: 13)),
+                  isExpanded: true,
+                  isDense: true,
+                  dropdownColor: Colors.blueGrey[700],
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  items: _customProfessionals.map((prof) {
+                    return DropdownMenuItem(
+                      value: prof.id,
+                      child: Text(prof.name, style: const TextStyle(fontSize: 13)),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    setState(() {
+                      _selectedProfessionalId = val;
+                    });
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+    ],
+  ),
+),
                   Container(
 padding: const EdgeInsets.only(top: 16, left: 16, right: 16, bottom: 0),
                   child: Column(
@@ -1779,10 +1817,10 @@ child: ElevatedButton.icon(
                               const SizedBox(height: 16),
                               Text(
                                 _mode == 'text' 
-                                    ? 'Chọn hoặc tạo cuộc trò chuyện mới'
-                                    : 'Tạo cuộc trò chuyện mới để tạo hình ảnh',
+                                    ? 'Chọn hoặc tạo cuộc trò chuyện mới\nChọn mô hình khác/ chế độ tạo ảnh, video ở góc trên bên trái'
+                                    : 'Tạo cuộc trò chuyện mới để tạo hình ảnh\nChế độ ảnh thứ 2 cho phép sửa ảnh đã gửi',
                                 style: TextStyle(
-                                  fontSize: 18,
+                                  fontSize: 14,
                                   color: Colors.indigo[400],
                                 ),
                               ),
@@ -3146,39 +3184,6 @@ Widget _buildImageWidget(String imageData) {
         ),
         Row(
           children: [
-            if (_mode == 'text')
-              Expanded(
-                flex: 2,
-                child: Container(
-                  height: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.blueGrey[700],
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedProfessionalId,
-                      hint: const Text('✨ Chọn AI đã tạo', style: TextStyle(color: Colors.amber, fontSize: 13)),
-                      isExpanded: true,
-                      isDense: true,
-                      dropdownColor: Colors.blueGrey[700],
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
-                      items: _customProfessionals.map((prof) {
-                        return DropdownMenuItem(
-                          value: prof.id,
-                          child: Text(prof.name, style: const TextStyle(fontSize: 13)),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedProfessionalId = val;
-                        });
-                      },
-                    ),
-                  ),
-                ),
-              ),
             if (_mode == 'text') const SizedBox(width: 6),
             Expanded(
               flex: 3,
@@ -3944,7 +3949,7 @@ class _AvatarVideoPlayerState extends State<_AvatarVideoPlayer> with SingleTicke
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final size = (screenWidth * 0.14).clamp(64.0, 154.0);
+    final size = (screenWidth * 0.09).clamp(20.0, 160.0);
 
     return SizedBox(
       width: size * 1.8,

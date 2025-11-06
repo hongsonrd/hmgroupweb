@@ -1582,7 +1582,7 @@ Widget build(BuildContext context) {
   final Map<int, List<String>> allowedQueryTypes = {
     0: [], // Projects tab
     1: ['1','2', '4'], // Work tab
-    2: ['1','2', '4'], // HM AI tab
+    2: [''], // HM AI tab
     3: ['1','2', '4', '5'], // Guide tab
     4: [''] //KH tab
   };

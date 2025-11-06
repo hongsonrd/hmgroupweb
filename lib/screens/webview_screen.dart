@@ -10,7 +10,6 @@ import 'dart:async';
 import 'package:intl/intl.dart';
 import '../user_state.dart';
 import '../main.dart' show MainScreen;
-import '../floating_draggable_icon.dart';
 import '../chamcong.dart';
 import '../location_provider.dart';
 import '../user_credentials.dart';
@@ -424,39 +423,19 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
     }).toList();
   }
 
-  Widget _buildAppBar() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [appBarTop, appBarBottom],
-          stops: [0.0, 1.0],
-        ),
+Widget _buildAppBar() {
+  return Container(
+    height: 12,
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [appBarTop, appBarBottom],
+        stops: [0.0, 1.0],
       ),
-      padding: EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          Container(
-            width: 24,
-            height: 24,
-            decoration: BoxDecoration(
-              color: searchBarColor, 
-              shape: BoxShape.circle,
-            ),
-            child: IconButton(
-              padding: EdgeInsets.zero,
-              icon: Icon(Icons.refresh, color: Colors.white, size: 14),
-              onPressed: () {
-                print("Refresh button pressed!");
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildVideoSection() {
     return Container(
@@ -465,7 +444,6 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
       color: Colors.black,
       child: Stack(
         children: [
-          // Video background
           _videoInitialized
               ? Video(
                   controller: _videoController,
@@ -478,9 +456,8 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
                     child: CircularProgressIndicator(color: Colors.white),
                   ),
                 ),
-          // Dark overlay
           Container(
-            color: Colors.black.withOpacity(0.5),
+            color: Colors.black.withOpacity(0.35),
           ),
           // Welcome section centered horizontally
           Center(
@@ -499,6 +476,7 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
     padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
     child: Column(
       children: [
+        SizedBox(height: 36),
         Text(
           'Chào mừng đến với HM Group',
           style: TextStyle(
@@ -521,62 +499,69 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
         ),
         Row(
           children: [
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  _handleUrlOpen('time_link', 'HM Time');
-                },
-                icon: Icon(Icons.hourglass_bottom, color: Colors.white, size: 18),
-                label: Text('Chấm công', style: TextStyle(color: Colors.white, fontSize: 14.0)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: buttonColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(width: 16),
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  final userState = Provider.of<UserState>(context, listen: false);
-                  final userData = userState.currentUser;
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => HSKhachHangScreen()),
-                  );
-                },
-                icon: Icon(Icons.local_library, color: Colors.white, size: 18),
-                label: Text('Khách hàng', style: TextStyle(color: Colors.white, fontSize: 14.0)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: buttonColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(width: 16),
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => ChatAIScreen()),
-                  );
-                },
-                icon: Icon(Icons.api, color: Colors.white, size: 18),
-                label: Text('AI Chat', style: TextStyle(color: Colors.white, fontSize: 14.0)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: buttonColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ),
-          ],
+  SizedBox(
+    width: 80,
+    child: ElevatedButton(
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => ChatAIScreen()),
+        );
+      },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.blue,
+        padding: EdgeInsets.symmetric(vertical: 10), 
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+      child: Text(
+        'AI',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 13.0,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    ),
+  ),              SizedBox(width: 8),
+  Expanded(
+    child: ElevatedButton.icon(
+      onPressed: () {
+        _handleUrlOpen('time_link', 'HM Time');
+      },
+      icon: Icon(Icons.hourglass_bottom, color: Colors.white, size: 18),
+      label: Text('Chấm công', style: TextStyle(color: Colors.white, fontSize: 14.0)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: buttonColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    ),
+  ),
+  SizedBox(width: 8),
+  Expanded(
+    child: ElevatedButton.icon(
+      onPressed: () {
+        final userState = Provider.of<UserState>(context, listen: false);
+        final userData = userState.currentUser;
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => HSKhachHangScreen()),
+        );
+      },
+      icon: Icon(Icons.local_library, color: Colors.white, size: 18),
+      label: Text('Khách hàng', style: TextStyle(color: Colors.white, fontSize: 14.0)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: buttonColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    ),
+  ),
+],
         ),
         Padding(
           padding: EdgeInsets.only(top: 11),
@@ -647,19 +632,16 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
               Row(
                 children: [
                   Expanded(
-                    flex: 70,
+                    flex: 75,
                     child: isLandscape || isDesktop
                       ? _buildHorizontalLayout(isLoggedIn, username)
                       : _buildVerticalLayout(isLoggedIn, username),
                   ),
                   Expanded(
-                    flex: 30,
+                    flex: 25,
                     child: NewsSection(),
                   ),
                 ],
-              ),
-              FloatingDraggableIcon(
-                key: FloatingDraggableIcon.globalKey,
               ),
             ],
           ),
@@ -678,7 +660,7 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
           children: [
             // Left column: ChatAI section (full height and width)
             Expanded(
-              flex: 60,
+              flex: 66,
               child: Container(
                 color: Colors.white,
                 child: _buildChatAISection(),
@@ -686,7 +668,7 @@ class _WebViewScreenState extends State<WebViewScreen> with AutomaticKeepAliveCl
             ),
             // Right column: Video section at top, then tabs
             Expanded(
-              flex: 40,
+              flex: 34,
               child: Column(
                 children: [
                   _buildVideoSection(),
