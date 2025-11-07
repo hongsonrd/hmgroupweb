@@ -1075,9 +1075,14 @@ Future<void> _sendMessage() async {
       contextString += '\nTin nhắn hiện tại:\n';
     }
 
-    final fullQuery = systemPrompt.isNotEmpty 
-        ? '$systemPrompt$contextString$finalMessageText' 
-        : '$contextString$finalMessageText';
+    // Get current date and time
+    final now = DateTime.now();
+    final timeString = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+    final dateString = 'Hiện tại $timeString ngày ${now.day} tháng ${now.month} năm ${now.year}';
+
+    final fullQuery = systemPrompt.isNotEmpty
+        ? '$systemPrompt$contextString$finalMessageText\n\n$dateString'
+        : '$contextString$finalMessageText\n\n$dateString';
 
     request.fields['userid'] = _username;
     request.fields['model'] = _selectedModel;
