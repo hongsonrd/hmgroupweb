@@ -1059,9 +1059,6 @@ Future<void> _sendMessage() async {
   try {
     final request = http.MultipartRequest('POST', Uri.parse('$_apiBaseUrl/aichat'));
     
-    // Get current date-time in Vietnamese
-    final dateTimePrefix = _getCurrentDateTimeInVietnamese();
-
     String systemPrompt = '';
     if (_selectedProfessionalId != null) {
       final professional = _customProfessionals.firstWhere(
@@ -1075,12 +1072,11 @@ Future<void> _sendMessage() async {
       systemPrompt = _getSystemPrompt(_selectedModel);
     }
 
-    // Prepend date-time to system prompt
-    if (systemPrompt.isNotEmpty) {
-      systemPrompt = '$dateTimePrefix, $systemPrompt';
-    } else {
-      systemPrompt = dateTimePrefix;
-    }
+    // Always prepend current date-time in Vietnamese
+    final dateTimePrefix = _getCurrentDateTimeInVietnamese();
+    systemPrompt = systemPrompt.isNotEmpty
+        ? '$dateTimePrefix, $systemPrompt'
+        : dateTimePrefix;
 
     String contextString = '';
     final recentMessages = _currentSession!.messages.length > 17
