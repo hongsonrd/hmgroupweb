@@ -922,7 +922,7 @@ class _ProjectGiamSatKPIState extends State<ProjectGiamSatKPI> {
     final isLateCheckin = checkinTotalMinutes >= 720;
 
     final hour = int.tryParse(timeParts[0]) ?? 0;
-    final threshold = isLateCheckin ? 13 : 9;
+    final threshold = isLateCheckin ? 14 : 9;
     final score = hour < threshold ? 5.0 : 3.0;
     log.writeln('[Biến động NS] Vào: ${attendance.batDau}, Ngưỡng: ${threshold}h, Báo cáo cuối: $latestTime → $score điểm');
     return score;
