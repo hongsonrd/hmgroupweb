@@ -808,6 +808,17 @@ Future<void> _saveVideoToDevice(String videoUrl) async {
     }
     return '';
   }
+
+  String _getCurrentDateTimeInVietnamese() {
+    final now = DateTime.now();
+    final hour = now.hour.toString().padLeft(2, '0');
+    final minute = now.minute.toString().padLeft(2, '0');
+    final day = now.day.toString().padLeft(2, '0');
+    final month = now.month.toString();
+    final year = now.year.toString();
+
+    return 'Hiện tại là $hour:$minute ngày $day tháng $month năm $year';
+  }
   void _showModelSelector() {
     showDialog(
       context: context,
@@ -1048,6 +1059,9 @@ Future<void> _sendMessage() async {
   try {
     final request = http.MultipartRequest('POST', Uri.parse('$_apiBaseUrl/aichat'));
     
+    // Get current date-time in Vietnamese
+    final dateTimePrefix = _getCurrentDateTimeInVietnamese();
+
     String systemPrompt = '';
     if (_selectedProfessionalId != null) {
       final professional = _customProfessionals.firstWhere(
@@ -1059,6 +1073,13 @@ Future<void> _sendMessage() async {
       systemPrompt = CaseFileManager.getCustomPrompt(_selectedCaseType!);
     } else {
       systemPrompt = _getSystemPrompt(_selectedModel);
+    }
+
+    // Prepend date-time to system prompt
+    if (systemPrompt.isNotEmpty) {
+      systemPrompt = '$dateTimePrefix, $systemPrompt';
+    } else {
+      systemPrompt = dateTimePrefix;
     }
 
     String contextString = '';
