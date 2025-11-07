@@ -26,12 +26,12 @@ import 'package:http_parser/http_parser.dart';
 
 enum AvatarState { hello, thinking, speaking, congrat, listening, idle }
 
-class ChatAIScreen extends StatefulWidget {
-  const ChatAIScreen({Key? key}) : super(key: key);
+class ChatAIScreenEmbed extends StatefulWidget {
+  const ChatAIScreenEmbed({Key? key}) : super(key: key);
   @override
-  State<ChatAIScreen> createState() => _ChatAIScreenState();
+  State<ChatAIScreenEmbed> createState() => _ChatAIScreenEmbedState();
 }
-class _ChatAIScreenState extends State<ChatAIScreen> with SingleTickerProviderStateMixin {
+class _ChatAIScreenEmbedState extends State<ChatAIScreenEmbed> with SingleTickerProviderStateMixin {
   static const String _ttsLanguage = 'vi-VN';
   static const double _ttsDefaultRate = 0.6;
   static const double _ttsDefaultPitch = 0.86;
@@ -1580,7 +1580,7 @@ Future<void> _sendMessage() async {
         children: [
           if (_sidebarVisible)
             Container(
-              width: 280,
+              width: 240,
               decoration: BoxDecoration(
                 color: const Color(0xFF1E2837),
                 boxShadow: [
