@@ -1096,9 +1096,13 @@ Future<void> _sendMessage() async {
       contextString += '\nTin nhắn hiện tại:\n';
     }
 
-    final fullQuery = systemPrompt.isNotEmpty 
-        ? '$systemPrompt$contextString$finalMessageText' 
+    final fullQuery = systemPrompt.isNotEmpty
+        ? '$systemPrompt$contextString$finalMessageText'
         : '$contextString$finalMessageText';
+
+    // Debug: Print to verify date-time is included
+    print('📅 System Prompt with DateTime: $systemPrompt');
+    print('📝 Full Query being sent: ${fullQuery.substring(0, fullQuery.length > 200 ? 200 : fullQuery.length)}...');
 
     request.fields['userid'] = _username;
     request.fields['model'] = _selectedModel;
