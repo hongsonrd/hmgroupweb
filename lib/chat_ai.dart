@@ -51,7 +51,7 @@ String? _selectedProfessionalId;
   String _currentStreamingMessage = '';
   String? _currentStreamingImage;
   String? _currentStreamingVideo;
-  String _selectedModel = 'flash-2.5-lite';
+  String _selectedModel = '';
   String _mode = 'text';
   String? _hoveredMessageId;
   bool _sidebarVisible = true;
@@ -115,6 +115,7 @@ String? _selectedProfessionalId;
   @override
   void initState() {
     super.initState();
+    _selectedModel = _getRandomTextModel();
     _loadUserData();
     _loadSessions();
     _gradientController = AnimationController(
@@ -760,10 +761,16 @@ Future<void> _saveVideoToDevice(String videoUrl) async {
       if (_mode == 'image') {
         _selectedModel = 'imagen-4';
       } else {
-        _selectedModel = 'flash-2.5-lite';
+        _selectedModel = _getRandomTextModel();
       }
     });
   }
+  String _getRandomTextModel() {
+    final allTextModels = [..._models['fast']!, ..._models['precise']!];
+    final randomIndex = Random().nextInt(allTextModels.length);
+    return allTextModels[randomIndex]['value'] as String;
+  }
+
   List<Map<String, dynamic>> _getAvailableModels() {
     if (_mode == 'image') {
       return _models['image']!;
@@ -821,7 +828,7 @@ Future<void> _saveVideoToDevice(String videoUrl) async {
                       onPressed: () {
                         setState(() {
                           _mode = 'text';
-                          _selectedModel = 'flash-2.5-lite';
+                          _selectedModel = _getRandomTextModel();
                         });
                         Navigator.pop(context);
                       },
