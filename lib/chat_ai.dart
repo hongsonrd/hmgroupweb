@@ -23,6 +23,8 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'chat_ai_custom.dart';
 import 'chat_ai_convert.dart';
 import 'package:http_parser/http_parser.dart';
+import 'chat_ai_case_image.dart';
+import 'package:image/image.dart' as img;
 
 enum AvatarState { hello, thinking, speaking, congrat, listening, idle }
 
@@ -67,6 +69,10 @@ String? _selectedProfessionalId;
   DateTime _selectedCaseDate = DateTime.now();
   CaseFileData? _caseFileData;
   bool _isCaseFileLoading = false;
+
+  // Image mode preset variables
+  ImagePreset? _selectedImagePreset;
+  bool _isImagePresetReady = false;
   
   AvatarState _avatarState = AvatarState.hello;
   Timer? _congratTimer;
@@ -169,8 +175,13 @@ String? _selectedProfessionalId;
           }
           _selectedFiles.add(file);
         }
-        
-        setState(() {});
+
+        setState(() {
+          // Mark preset as ready if in image mode with preset selected and has image
+          if (_mode == 'image' && _selectedImagePreset != null && _selectedFiles.isNotEmpty) {
+            _isImagePresetReady = true;
+          }
+        });
       }
     } catch (e) {
       _showError('Không thể chọn file: $e');
@@ -179,6 +190,10 @@ String? _selectedProfessionalId;
   void _removeFile(int index) {
     setState(() {
       _selectedFiles.removeAt(index);
+      // Unmark preset as ready if no more files
+      if (_selectedFiles.isEmpty) {
+        _isImagePresetReady = false;
+      }
     });
   }
   Future<void> _speakText(String text) async {
@@ -199,6 +214,54 @@ String? _selectedProfessionalId;
   Future<void> _stopSpeaking() async {
     await _flutterTts.stop();
     setState(() => _isSpeaking = false);
+  }
+
+  // Fuse two images side by side
+  Future<File?> _fuseTwoImages(File file1, File file2) async {
+    try {
+      print('🔄 Fusing two images side by side...');
+
+      // Read both images
+      final bytes1 = await file1.readAsBytes();
+      final bytes2 = await file2.readAsBytes();
+
+      final image1 = img.decodeImage(bytes1);
+      final image2 = img.decodeImage(bytes2);
+
+      if (image1 == null || image2 == null) {
+        print('❌ Failed to decode one or both images');
+        return null;
+      }
+
+      // Calculate dimensions for side-by-side layout
+      final height = max(image1.height, image2.height);
+      final width = image1.width + image2.width;
+
+      // Create new composite image
+      final composite = img.Image(width: width, height: height);
+
+      // Fill with white background
+      img.fill(composite, color: img.ColorRgb8(255, 255, 255));
+
+      // Copy first image to left side
+      img.compositeImage(composite, image1, dstX: 0, dstY: 0);
+
+      // Copy second image to right side
+      img.compositeImage(composite, image2, dstX: image1.width, dstY: 0);
+
+      // Save to temporary file
+      final tempDir = await getTemporaryDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fusedFile = File('${tempDir.path}/fused_$timestamp.jpg');
+
+      await fusedFile.writeAsBytes(img.encodeJpg(composite, quality: 90));
+
+      print('✅ Images fused successfully: ${fusedFile.path}');
+      return fusedFile;
+    } catch (e) {
+      print('❌ Error fusing images: $e');
+      return null;
+    }
   }
   
   Future<void> _updateTtsVolume(double volume) async {
@@ -997,6 +1060,9 @@ Future<void> _sendMessage() async {
   if (messageText.isEmpty && _selectedFiles.isEmpty) {
     if (_selectedCaseType != null && _caseFileData != null) {
       _messageController.text = 'Phân tích dữ liệu $_selectedCaseType';
+    } else if (_mode == 'image' && _selectedImagePreset != null && _isImagePresetReady) {
+      // Allow empty message for image preset mode - the hidden prompt will be used
+      _messageController.text = 'Phân tích hình ảnh';
     } else {
       return;
     }
@@ -1042,14 +1108,28 @@ Future<void> _sendMessage() async {
   _messageController.clear();
   final filesToSend = List<File>.from(_selectedFiles);
   _selectedFiles.clear();
-  
+
+  // Capture preset state before resetting for query construction
+  final usePresetHiddenPrompt = _mode == 'image' && _selectedImagePreset != null && _isImagePresetReady;
+  final capturedPreset = _selectedImagePreset;
+
+  // Reset image preset state after sending
+  if (_mode == 'image' && _selectedImagePreset != null) {
+    setState(() {
+      _isImagePresetReady = false;
+    });
+  }
+
   _scrollToBottom();
 
   try {
     final request = http.MultipartRequest('POST', Uri.parse('$_apiBaseUrl/aichat'));
-    
+
     String systemPrompt = '';
-    if (_selectedProfessionalId != null) {
+    if (usePresetHiddenPrompt && capturedPreset != null) {
+      // Use hidden prompt from image preset
+      systemPrompt = capturedPreset.hiddenPrompt;
+    } else if (_selectedProfessionalId != null) {
       final professional = _customProfessionals.firstWhere(
         (p) => p.id == _selectedProfessionalId,
         orElse: () => _customProfessionals.first,
@@ -1105,50 +1185,120 @@ Future<void> _sendMessage() async {
       request.files.add(await http.MultipartFile.fromPath('image', tempFile.path));
     } else if (filesToSend.isNotEmpty) {
       print('📦 Processing ${filesToSend.length} files for upload...');
-      
-      for (var file in filesToSend) {
-        final ext = file.path.split('.').last.toLowerCase();
-        final fileName = file.path.split('/').last;
-        
-        // Files that MUST be converted to text
-        if (['doc','docx','xls','xlsx', 'csv','rtf'].contains(ext)) {
-          print('🔄 Converting $ext file: $fileName');
-          
-          try {
-            final converted = await DocumentConverter.convertToText(file);
-            
-            if (converted != null && await converted.exists()) {
-              final textContent = await converted.readAsString();
-              print('✅ Extracted ${textContent.length} characters from $fileName');
-              
-              if (textContent.isEmpty) {
-                print('⚠️ Warning: No text extracted from $fileName');
-                _showError('Không thể trích xuất văn bản từ $fileName');
-                continue;
-              }
-              
-              // Send as text/plain with .txt extension
-              request.files.add(await http.MultipartFile.fromPath(
-                'image',
-                converted.path,
-                contentType: MediaType('text', 'plain'),
-              ));
-              
-              print('📤 Sending converted file: ${converted.path}');
-            } else {
-              print('❌ Conversion failed for $fileName');
-              _showError('Không thể chuyển đổi file $fileName');
-              continue;
+
+      // Special case: In image mode with exactly 2 images, fuse them side by side
+      if (_mode == 'image' && filesToSend.length == 2) {
+        final imageExtensions = ['jpg', 'jpeg', 'png', 'bmp'];
+        final file1Ext = filesToSend[0].path.split('.').last.toLowerCase();
+        final file2Ext = filesToSend[1].path.split('.').last.toLowerCase();
+
+        if (imageExtensions.contains(file1Ext) && imageExtensions.contains(file2Ext)) {
+          print('🔀 Detected 2 images in image mode - fusing them side by side...');
+          final fusedImage = await _fuseTwoImages(filesToSend[0], filesToSend[1]);
+
+          if (fusedImage != null) {
+            print('📤 Sending fused image instead of 2 separate images');
+            request.files.add(await http.MultipartFile.fromPath('image', fusedImage.path));
+          } else {
+            print('⚠️ Failed to fuse images, sending them separately');
+            // Fallback: send them separately
+            for (var file in filesToSend) {
+              request.files.add(await http.MultipartFile.fromPath('image', file.path));
             }
-          } catch (e) {
-            print('❌ Error converting $fileName: $e');
-            _showError('Lỗi chuyển đổi $fileName: $e');
-            continue;
           }
         } else {
-          // Send allowed files as-is (images, videos, PDFs, txt)
-          print('📤 Sending file as-is: $fileName (${ext})');
-          request.files.add(await http.MultipartFile.fromPath('image', file.path));
+          // Not both image files, process normally
+          for (var file in filesToSend) {
+            final ext = file.path.split('.').last.toLowerCase();
+            final fileName = file.path.split('/').last;
+
+            if (['doc','docx','xls','xlsx', 'csv','rtf'].contains(ext)) {
+              print('🔄 Converting $ext file: $fileName');
+
+              try {
+                final converted = await DocumentConverter.convertToText(file);
+
+                if (converted != null && await converted.exists()) {
+                  final textContent = await converted.readAsString();
+                  print('✅ Extracted ${textContent.length} characters from $fileName');
+
+                  if (textContent.isEmpty) {
+                    print('⚠️ Warning: No text extracted from $fileName');
+                    _showError('Không thể trích xuất văn bản từ $fileName');
+                    continue;
+                  }
+
+                  // Send as text/plain with .txt extension
+                  request.files.add(await http.MultipartFile.fromPath(
+                    'image',
+                    converted.path,
+                    contentType: MediaType('text', 'plain'),
+                  ));
+
+                  print('📤 Sending converted file: ${converted.path}');
+                } else {
+                  print('❌ Conversion failed for $fileName');
+                  _showError('Không thể chuyển đổi file $fileName');
+                  continue;
+                }
+              } catch (e) {
+                print('❌ Error converting $fileName: $e');
+                _showError('Lỗi chuyển đổi $fileName: $e');
+                continue;
+              }
+            } else {
+              // Send allowed files as-is (images, videos, PDFs, txt)
+              print('📤 Sending file as-is: $fileName (${ext})');
+              request.files.add(await http.MultipartFile.fromPath('image', file.path));
+            }
+          }
+        }
+      } else {
+        // Not 2 images, process files normally
+        for (var file in filesToSend) {
+          final ext = file.path.split('.').last.toLowerCase();
+          final fileName = file.path.split('/').last;
+
+          // Files that MUST be converted to text
+          if (['doc','docx','xls','xlsx', 'csv','rtf'].contains(ext)) {
+            print('🔄 Converting $ext file: $fileName');
+
+            try {
+              final converted = await DocumentConverter.convertToText(file);
+
+              if (converted != null && await converted.exists()) {
+                final textContent = await converted.readAsString();
+                print('✅ Extracted ${textContent.length} characters from $fileName');
+
+                if (textContent.isEmpty) {
+                  print('⚠️ Warning: No text extracted from $fileName');
+                  _showError('Không thể trích xuất văn bản từ $fileName');
+                  continue;
+                }
+
+                // Send as text/plain with .txt extension
+                request.files.add(await http.MultipartFile.fromPath(
+                  'image',
+                  converted.path,
+                  contentType: MediaType('text', 'plain'),
+                ));
+
+                print('📤 Sending converted file: ${converted.path}');
+              } else {
+                print('❌ Conversion failed for $fileName');
+                _showError('Không thể chuyển đổi file $fileName');
+                continue;
+              }
+            } catch (e) {
+              print('❌ Error converting $fileName: $e');
+              _showError('Lỗi chuyển đổi $fileName: $e');
+              continue;
+            }
+          } else {
+            // Send allowed files as-is (images, videos, PDFs, txt)
+            print('📤 Sending file as-is: $fileName (${ext})');
+            request.files.add(await http.MultipartFile.fromPath('image', file.path));
+          }
         }
       }
       
@@ -1588,9 +1738,11 @@ Future<void> _sendMessage() async {
     return Scaffold(
       backgroundColor: const Color(0xFF1A1F2E),
 
-      body: Row(
+      body: Stack(
         children: [
-          if (_sidebarVisible)
+          Row(
+            children: [
+              if (_sidebarVisible)
             Container(
               width: 280,
               decoration: BoxDecoration(
@@ -1830,15 +1982,78 @@ child: ElevatedButton.icon(
                                 color: Colors.indigo[600],
                               ),
                               const SizedBox(height: 16),
-                              Text(
-                                _mode == 'text' 
-                                    ? 'Chọn hoặc tạo cuộc trò chuyện mới\nChọn mô hình khác/ chế độ tạo ảnh, video ở góc trên bên trái'
-                                    : 'Tạo cuộc trò chuyện mới để tạo hình ảnh\nChế độ ảnh thứ 2 cho phép sửa ảnh đã gửi',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.indigo[400],
+                              if (_mode == 'image' && _selectedImagePreset != null)
+                                Container(
+                                  padding: const EdgeInsets.all(20),
+                                  margin: const EdgeInsets.symmetric(horizontal: 40),
+                                  decoration: BoxDecoration(
+                                    color: _selectedImagePreset!.glowColor.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: _selectedImagePreset!.glowColor, width: 2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: _selectedImagePreset!.glowColor.withOpacity(0.3),
+                                        blurRadius: 20,
+                                        spreadRadius: 2,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        _selectedImagePreset!.name,
+                                        style: TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.bold,
+                                          color: _selectedImagePreset!.glowColor,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        _selectedImagePreset!.description,
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: _selectedImagePreset!.glowColor.withOpacity(0.8),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: _selectedImagePreset!.glowColor.withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.info_outline, color: _selectedImagePreset!.glowColor, size: 20),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'Tạo cuộc trò chuyện và chọn ảnh để bắt đầu',
+                                              style: TextStyle(
+                                                color: _selectedImagePreset!.glowColor,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else
+                                Text(
+                                  _mode == 'text'
+                                      ? 'Chọn hoặc tạo cuộc trò chuyện mới\nChọn mô hình khác/ chế độ tạo ảnh, video ở góc trên bên trái'
+                                      : 'Tạo cuộc trò chuyện mới để tạo hình ảnh\nChọn chế độ từ cột bên trái\nChế độ ảnh thứ 2 cho phép sửa ảnh đã gửi',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.indigo[400],
+                                  ),
                                 ),
-                              ),
                             ],
                           ),
                         )
@@ -1858,6 +2073,110 @@ child: ElevatedButton.icon(
               ],
             ),
           ),
+            ],
+          ),
+          // Hovering preset buttons - truly floating on top layer
+          if (_mode == 'image' && _sidebarVisible)
+            Positioned(
+              left: 280, // Right after sidebar
+              top: MediaQuery.of(context).size.height * 0.1, // Start at 10% from top
+              child: Container(
+                width: 70,
+                height: MediaQuery.of(context).size.height * 0.6, // 60% screen height
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E2837).withOpacity(0.95),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.grey.shade800,
+                    width: 1,
+                  ),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade900.withOpacity(0.3),
+                        border: Border(bottom: BorderSide(color: Colors.grey.shade800)),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'Chọn mẫu',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.greenAccent,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        physics: const ClampingScrollPhysics(),
+                        itemCount: imagePresets.length,
+                        itemBuilder: (context, index) {
+                          final preset = imagePresets[index];
+                          final isSelected = _selectedImagePreset?.id == preset.id;
+
+                          return Tooltip(
+                            message: '${preset.name}\n${preset.description}',
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  if (_selectedImagePreset?.id == preset.id) {
+                                    _selectedImagePreset = null;
+                                    _isImagePresetReady = false;
+                                  } else {
+                                    _selectedImagePreset = preset;
+                                    _isImagePresetReady = false;
+                                    // Auto select model
+                                    _selectedModel = preset.modelId;
+                                  }
+                                });
+                              },
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                                decoration: BoxDecoration(
+                                  color: preset.glowColor.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? preset.glowColor
+                                        : Colors.grey.shade700,
+                                    width: isSelected ? 2 : 1,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: preset.glowColor.withOpacity(isSelected ? 0.6 : 0.3),
+                                      blurRadius: isSelected ? 16 : 10,
+                                      spreadRadius: isSelected ? 2 : 1,
+                                    ),
+                                  ],
+                                ),
+                                child: Text(
+                                  preset.name,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: isSelected ? preset.glowColor : Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    height: 1.2,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
             appBar: PreferredSize(
@@ -3031,7 +3350,41 @@ Widget _buildImageWidget(String imageData) {
           ),
         Row(
           children: [
-            if (_selectedCaseType != null && _caseFileData != null)
+            // Image preset ready button
+            if (_mode == 'image' && _isImagePresetReady && _selectedImagePreset != null)
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.greenAccent, Colors.green.shade700],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.greenAccent.withOpacity(0.5),
+                      blurRadius: 8,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  icon: _isStreaming
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Icon(Icons.check_circle, size: 28),
+                  onPressed: _isStreaming ? null : _sendMessage,
+                  color: Colors.white,
+                  tooltip: 'Sẵn sàng! Nhấn để phân tích với ${_selectedImagePreset!.name}',
+                ),
+              )
+            else if (_selectedCaseType != null && _caseFileData != null)
               Container(
                 decoration: BoxDecoration(color: Colors.orange, shape: BoxShape.circle),
                 child: IconButton(
@@ -3066,6 +3419,58 @@ Widget _buildImageWidget(String imageData) {
                       : const Icon(Icons.send),
                   onPressed: _isStreaming ? null : _sendMessage,
                   color: Colors.white,
+                ),
+              ),
+            const SizedBox(width: 4),
+            // Image preset indicator
+            if (_mode == 'image' && _selectedImagePreset != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _selectedImagePreset!.glowColor.withOpacity(_isImagePresetReady ? 0.2 : 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _selectedImagePreset!.glowColor,
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _selectedImagePreset!.glowColor.withOpacity(_isImagePresetReady ? 0.4 : 0.2),
+                      blurRadius: 8,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _selectedImagePreset!.name,
+                      style: TextStyle(
+                        color: _selectedImagePreset!.glowColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (!_isImagePresetReady) ...[
+                      const SizedBox(width: 4),
+                      Icon(Icons.add_photo_alternate, color: _selectedImagePreset!.glowColor, size: 14),
+                    ],
+                    const SizedBox(width: 4),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedImagePreset = null;
+                          _isImagePresetReady = false;
+                        });
+                      },
+                      child: Icon(
+                        Icons.close,
+                        color: _selectedImagePreset!.glowColor,
+                        size: 14,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             const SizedBox(width: 4),
@@ -3199,7 +3604,8 @@ Widget _buildImageWidget(String imageData) {
         ),
         Row(
           children: [
-            if (_mode == 'text') const SizedBox(width: 6),
+            if (_mode == 'text') 
+            const SizedBox(width: 6),
             Expanded(
               flex: 3,
               child: Container(
