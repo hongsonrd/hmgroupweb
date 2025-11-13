@@ -31,7 +31,7 @@ import '../chat_ai_embed.dart';
 import '../chat_ai.dart';
 import '../checklist_supervisor.dart';
 import '../projectlichlamviec.dart';
-
+import '../chamcongthangphep_canhan.dart';
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
   @override
@@ -525,10 +525,13 @@ Widget _buildAppBar() {
   Expanded(
     child: ElevatedButton.icon(
       onPressed: () {
-        _handleUrlOpen('time_link', 'HM Time');
-      },
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => ChamCongThangPhepScreen(username: _username)),
+        );
+              },
       icon: Icon(Icons.hourglass_bottom, color: Colors.white, size: 18),
-      label: Text('Chấm công', style: TextStyle(color: Colors.white, fontSize: 14.0)),
+      label: Text('Phép của tôi', style: TextStyle(color: Colors.white, fontSize: 14.0)),
       style: ElevatedButton.styleFrom(
         backgroundColor: buttonColor,
         shape: RoundedRectangleBorder(

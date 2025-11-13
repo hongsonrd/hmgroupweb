@@ -931,25 +931,25 @@ class _ProjectGiamSatKPIState extends State<ProjectGiamSatKPI> {
     return 5.0;
   }
 
-  String? latestTime;
+  String? firstTime;
   final reports = _dailyReports[dateStr] ?? [];
   final supervisorReports = reports.where((r) => r.nguoiDung.toLowerCase().startsWith('hm')).toList();
-  
+
   for (final record in supervisorReports) {
     if (record.nguoiDung == nguoiDung && record.boPhan == project && record.phanLoai == 'Nhân sự' && record.chiTiet.length >= 2) {
       final time = record.gio;
-      if (time.isNotEmpty && (latestTime == null || time.compareTo(latestTime) > 0)) {
-        latestTime = time;
+      if (time.isNotEmpty && (firstTime == null || time.compareTo(firstTime) < 0)) {
+        firstTime = time;
       }
     }
   }
 
-  if (latestTime == null) {
+  if (firstTime == null) {
     log.writeln('[Biến động NS] Không có báo cáo → 0 điểm');
     return 0.0;
   }
 
-  final timeParts = latestTime.split(':');
+  final timeParts = firstTime.split(':');
   if (timeParts.isEmpty) {
     log.writeln('[Biến động NS] Giờ không hợp lệ → 0 điểm');
     return 0.0;
@@ -964,7 +964,7 @@ class _ProjectGiamSatKPIState extends State<ProjectGiamSatKPI> {
   final hour = int.tryParse(timeParts[0]) ?? 0;
   final threshold = isLateCheckin ? 14 : 9;
   final score = hour < threshold ? 5.0 : 3.0;
-  log.writeln('[Biến động NS] Vào: ${attendance.batDau}, Ngưỡng: ${threshold}h, Báo cáo cuối: $latestTime → $score điểm');
+  log.writeln('[Biến động NS] Vào: ${attendance.batDau}, Ngưỡng: ${threshold}h, Báo cáo đầu tiên: $firstTime → $score điểm');
   return score;
 }
 
@@ -2122,25 +2122,25 @@ class _KPICalculationDialogState extends State<KPICalculationDialog> {
     return 5.0;
   }
 
-  String? latestTime;
-  
+  String? firstTime;
+
   final supervisorReports = widget.dailyReports.where((r) => r.nguoiDung.toLowerCase().startsWith('hm')).toList();
-  
+
   for (final record in supervisorReports) {
     if (record.nguoiDung == nguoiDung && record.boPhan == project && record.phanLoai == 'Nhân sự' && record.chiTiet.length >= 2) {
       final time = record.gio;
-      if (time.isNotEmpty && (latestTime == null || time.compareTo(latestTime) > 0)) {
-        latestTime = time;
+      if (time.isNotEmpty && (firstTime == null || time.compareTo(firstTime) < 0)) {
+        firstTime = time;
       }
     }
   }
 
-  if (latestTime == null) {
+  if (firstTime == null) {
     log.writeln('[Biến động NS] Không có báo cáo → 0 điểm');
     return 0.0;
   }
 
-  final timeParts = latestTime.split(':');
+  final timeParts = firstTime.split(':');
   if (timeParts.isEmpty) {
     log.writeln('[Biến động NS] Giờ không hợp lệ → 0 điểm');
     return 0.0;
@@ -2155,7 +2155,7 @@ class _KPICalculationDialogState extends State<KPICalculationDialog> {
   final hour = int.tryParse(timeParts[0]) ?? 0;
   final threshold = isLateCheckin ? 13 : 9;
   final score = hour < threshold ? 5.0 : 3.0;
-  log.writeln('[Biến động NS] Vào: ${attendance.batDau}, Ngưỡng: ${threshold}h, Báo cáo cuối: $latestTime → $score điểm');
+  log.writeln('[Biến động NS] Vào: ${attendance.batDau}, Ngưỡng: ${threshold}h, Báo cáo đầu tiên: $firstTime → $score điểm');
   return score;
 }
   double _calculateRobotControl(String nguoiDung, String project, StringBuffer log) {

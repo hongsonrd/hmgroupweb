@@ -16,6 +16,7 @@ import 'chamcongduyet.dart';
 import 'chamcongthang.dart';
 import 'http_client.dart';
 import 'chamcongthang2.dart';
+import 'chamcongthangphep_canhan.dart';
 
 class ChamCong2Screen extends StatefulWidget {
   final String username;
@@ -596,10 +597,23 @@ const SizedBox(height: 24),
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => ChamCongThang2Screen(
+          builder: (context) => ChamCongThangPhepScreen(
             username: widget.username,
-            userRole: widget.userRole,
-            approverUsername: widget.approverUsername,
+          ),
+        ),
+      );
+    },
+  ),
+                        _buildFunctionButton(
+    icon: Icons.insights,
+    label: 'Lịch sử phép',
+    color: Colors.blue.shade600,
+    onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ChamCongThangPhepScreen(
+            username: widget.username,
           ),
         ),
       );

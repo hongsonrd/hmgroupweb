@@ -24,17 +24,16 @@ import 'dart:io';
 import 'projectdailyview.dart';
 import 'dart:typed_data' show Uint8List;
 import 'package:sqflite/sqflite.dart';
-import 'http_client.dart';
-import 'package:file_picker/file_picker.dart';
+import 'projectdirector.dart';
+import 'map_project.dart';
 import 'projecttimeline.dart';
 import 'projecttimeline2.dart';
 import 'projecttimeline3.dart';
-import 'dart:math' as Math;
-import 'dart:async';
 import 'projecttimeline3single.dart';
+import 'package:uuid/uuid.dart';
+import 'package:image_picker/image_picker.dart';
 
 class ProjectManagement2 extends StatefulWidget {
-    ProjectManagement2({Key? key}) : super(key: key);
   @override
   _ProjectManagement2State createState() => _ProjectManagement2State();
 }
@@ -45,12 +44,13 @@ class SearchableDropdown extends StatefulWidget {
   final Function(String?) onChanged;
   final String hintText;
 
-  SearchableDropdown({
+  const SearchableDropdown({
+    Key? key,
     required this.value,
     required this.items,
     required this.onChanged,
     required this.hintText,
-  });
+  }) : super(key: key);
 
   @override
   _SearchableDropdownState createState() => _SearchableDropdownState();
@@ -58,7 +58,6 @@ class SearchableDropdown extends StatefulWidget {
 
 class _SearchableDropdownState extends State<SearchableDropdown> {
   final TextEditingController _searchController = TextEditingController();
-  final FocusNode _focusNode = FocusNode();
   OverlayEntry? _overlayEntry;
   final LayerLink _layerLink = LayerLink();
   bool _isOpen = false;
@@ -74,6 +73,7 @@ class _SearchableDropdownState extends State<SearchableDropdown> {
   void didUpdateWidget(SearchableDropdown oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.items != widget.items) {
+      // Reset filtered items when the source list changes
       _filteredItems = List.from(widget.items);
     }
   }
@@ -81,8 +81,7 @@ class _SearchableDropdownState extends State<SearchableDropdown> {
   @override
   void dispose() {
     _searchController.dispose();
-    _focusNode.dispose();
-    _hideOverlay();
+    _hideOverlay(); // Ensure overlay is removed when widget is disposed
     super.dispose();
   }
 
@@ -96,70 +95,99 @@ class _SearchableDropdownState extends State<SearchableDropdown> {
 
   void _showOverlay() {
     if (_overlayEntry != null) return;
-    
+
+    // Get the size of the widget (CompositedTransformTarget)
     final RenderBox renderBox = context.findRenderObject() as RenderBox;
     final size = renderBox.size;
-    final offset = renderBox.localToGlobal(Offset.zero);
 
     _overlayEntry = OverlayEntry(
-      builder: (context) => Positioned(
-        left: offset.dx,
-        top: offset.dy + size.height,
-        width: size.width,
-        child: Material(
-          elevation: 4,
-          child: Container(
-            constraints: BoxConstraints(
-              maxHeight: 250,
-              minHeight: 50,
-            ),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: Colors.grey.shade300),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Tìm kiếm...',
-                      prefixIcon: Icon(Icons.search),
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: (value) {
-                      setState(() {
-                        _filteredItems = widget.items
-                            .where((item) => item.toLowerCase()
-                                .contains(value.toLowerCase()))
-                            .toList();
-                      });
-                    },
-                  ),
-                ),
-                Flexible(
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: _filteredItems.length,
-                    itemBuilder: (context, index) {
-                      final item = _filteredItems[index];
-                      return ListTile(
-                        title: Text(item),
-                        selected: item == widget.value,
-                        onTap: () {
-                          widget.onChanged(item);
-                          _hideOverlay();
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
+      builder: (context) => Stack(
+        children: [
+          // A full-screen GestureDetector to dismiss the overlay when tapping outside
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: _hideOverlay,
+              behavior: HitTestBehavior.translucent,
             ),
           ),
-        ),
+          // Use CompositedTransformFollower to position the dropdown
+          Positioned(
+            child: CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              offset: Offset(0.0, size.height + 5.0), // 5.0 for small vertical space
+              child: Material(
+                elevation: 4,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  width: size.width, // Match the width of the parent widget
+                  constraints: const BoxConstraints(
+                    maxHeight: 250,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: TextField(
+                          controller: _searchController,
+                          autofocus: true, // Auto-focus when the dropdown opens
+                          decoration: InputDecoration(
+                            hintText: 'Tìm kiếm...',
+                            prefixIcon: const Icon(Icons.search),
+                            contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 10),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            isDense: true,
+                          ),
+                          onChanged: (value) {
+                            setState(() {
+                              _filteredItems = widget.items
+                                  .where((item) => item.toLowerCase().contains(value.toLowerCase()))
+                                  .toList();
+                              // Force the overlay to rebuild to update the list
+                              _overlayEntry?.markNeedsBuild();
+                            });
+                          },
+                        ),
+                      ),
+                      Flexible(
+                        child: _filteredItems.isEmpty
+                            ? const Padding(
+                                padding: EdgeInsets.all(16.0),
+                                child: Text('Không tìm thấy kết quả', style: TextStyle(color: Colors.grey)),
+                              )
+                            : ListView.builder(
+                                padding: EdgeInsets.zero,
+                                shrinkWrap: true,
+                                itemCount: _filteredItems.length,
+                                itemBuilder: (context, index) {
+                                  final item = _filteredItems[index];
+                                  return ListTile(
+                                    title: Text(item, style: const TextStyle(fontSize: 14)),
+                                    selected: item == widget.value,
+                                    dense: true,
+                                    onTap: () {
+                                      widget.onChanged(item);
+                                      _hideOverlay();
+                                    },
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
 
@@ -169,40 +197,64 @@ class _SearchableDropdownState extends State<SearchableDropdown> {
   }
 
   void _hideOverlay() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-    _isOpen = false;
-    _searchController.clear();
-    setState(() {
+    // Only remove if it exists
+    if (_overlayEntry != null) {
+      _overlayEntry?.remove();
+      _overlayEntry = null;
+      _isOpen = false;
+      _searchController.clear();
+      // Reset filtered items when closing
       _filteredItems = widget.items;
-    });
+      setState(() {});
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: _toggleDropdown,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey),
-          borderRadius: BorderRadius.circular(4),
-          color: Colors.white,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Text(
-                widget.value.isEmpty ? widget.hintText : widget.value,
-                overflow: TextOverflow.ellipsis,
+    // Use CompositedTransformTarget to establish the link for the overlay
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: GestureDetector(
+        onTap: _toggleDropdown,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          // Style to look more like a typical form field, but keep your original styling intention
+          decoration: BoxDecoration(
+            // Keeping the style consistent with the user's provided context container (DropdownButtonFormField)
+            // You can replace this with a border-based decoration if preferred.
+            gradient: const LinearGradient(
+              colors: [
+                Color.fromARGB(255, 200, 255, 220),
+                Color.fromARGB(255, 140, 230, 200),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(
+              color: const Color.fromARGB(255, 144, 238, 144),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  widget.value.isEmpty ? widget.hintText : widget.value,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    // Match the color for the text inside the box
+                    color: widget.value.isEmpty ? Colors.black54 : Colors.black,
+                  ),
+                ),
               ),
-            ),
-            Icon(
-              _isOpen ? Icons.arrow_drop_up : Icons.arrow_drop_down,
-              color: Colors.black54,
-            ),
-          ],
+              Icon(
+                _isOpen ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                color: Colors.black54,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -753,6 +805,12 @@ for (String date in dateRange) {
   }
 }
 
+ for (var table in excel.tables.keys) {
+   final sheet = excel.tables[table]!;
+   for (var colIndex = 0; colIndex < sheet.maxCols; colIndex++) {
+     sheet.setColWidth(colIndex, table == 'Báo cáo giám sát' ? 35.0 : 25.0);
+   }
+ }
 final weeklySheet = excel['Báo cáo tuần'];
 final monthlySheet = excel['Báo cáo tháng'];
 
@@ -792,120 +850,10 @@ while (currentDate.isBefore(endDate) || currentDate.isAtSameMomentAs(endDate)) {
 
 await _addSupervisorReport(weeklySheet, weeklyGroups, dbHelper);
 await _addSupervisorReport(monthlySheet, monthlyGroups, dbHelper);
-
- for (var table in excel.tables.keys) {
-   final sheet = excel.tables[table]!;
-   for (var colIndex = 0; colIndex < sheet.maxCols; colIndex++) {
-     sheet.setColWidth(colIndex, table == 'Báo cáo giám sát' ? 35.0 : 25.0);
-   }
- }
-
- // Generate the Excel file with a unique filename including timestamp
- final dateStr = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
- final fileName = 'BaoCaoTongHop_${_selectedStartDate}_${_selectedEndDate}_$dateStr.xlsx';
- final fileBytes = excel.encode()!;
- 
- // Platform-specific saving logic
- if (Platform.isWindows) {
-   try {
-     // First attempt: Use file_picker save dialog to let user choose location
-     String? outputFile = await FilePicker.platform.saveFile(
-       dialogTitle: 'Lưu báo cáo tổng hợp',
-       fileName: fileName,
-       type: FileType.custom,
-       allowedExtensions: ['xlsx'],
-     );
-     
-     if (outputFile != null) {
-       // User selected a location
-       final file = File(outputFile);
-       await file.writeAsBytes(fileBytes);
-       
-       ScaffoldMessenger.of(context).showSnackBar(
-         SnackBar(
-           content: Text('File đã được lưu tại: $outputFile'),
-           backgroundColor: Colors.green,
-         ),
-       );
-       
-       return file;
-     } else {
-       // If user cancels dialog, fall back to saving in Downloads folder
-       return await _saveToDownloadsWindows(fileBytes, fileName);
-     }
-   } catch (e) {
-     // If FilePicker fails, fall back to Documents folder
-     return await _saveToDocumentsWindows(fileBytes, fileName);
-   }
- } else {
-   // For mobile platforms, save to temp directory and use Share.shareFiles
-   final output = await getTemporaryDirectory();
-   final file = File('${output.path}/$fileName');
-   await file.writeAsBytes(fileBytes);
-   return file;
- }
-}
-
-// Helper methods for Windows platform
-Future<File> _saveToDownloadsWindows(List<int> fileBytes, String fileName) async {
-  try {
-    final userHome = Platform.environment['USERPROFILE'];
-    if (userHome != null) {
-      final downloadsPath = '$userHome\\Downloads';
-      final directory = Directory(downloadsPath);
-      
-      if (await directory.exists()) {
-        final filePath = '$downloadsPath\\$fileName';
-        final file = File(filePath);
-        await file.writeAsBytes(fileBytes);
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('File đã được lưu tại: $filePath'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        return file;
-      }
-    }
-    // If Downloads folder not accessible, fall back to Documents
-    return await _saveToDocumentsWindows(fileBytes, fileName);
-  } catch (e) {
-    print('Error saving to Downloads: $e');
-    return await _saveToDocumentsWindows(fileBytes, fileName);
-  }
-}
-
-Future<File> _saveToDocumentsWindows(List<int> fileBytes, String fileName) async {
-  try {
-    final directory = await getApplicationDocumentsDirectory();
-    final filePath = '${directory.path}\\$fileName';
-    final file = File(filePath);
-    await file.writeAsBytes(fileBytes);
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('File đã được lưu tại: $filePath'),
-        backgroundColor: Colors.green,
-      ),
-    );
-    return file;
-  } catch (e) {
-    print('Error saving to Documents: $e');
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Lỗi khi lưu file: $e'),
-        backgroundColor: Colors.red,
-      ),
-    );
-    
-    // Return an empty temporary file in case of error
-    final temp = await getTemporaryDirectory();
-    final file = File('${temp.path}/$fileName');
-    await file.writeAsBytes(fileBytes);
-    return file;
-  }
+ final output = await getTemporaryDirectory();
+ final excelFile = File('${output.path}/bao_cao_${_selectedStartDate}_${_selectedEndDate}.xlsx');
+ await excelFile.writeAsBytes(excel.encode()!);
+ return excelFile;
 }
 
 String _formatStatus(String? trangThai, String? phuongAn, String? hoTro) {
@@ -1023,77 +971,41 @@ Future<void> _loadHistory() async {
     final userCredentials = Provider.of<UserCredentials>(context, listen: false);
     final username = userCredentials.username.toLowerCase();
     
-  // Step 1: Try to fetch task history with userType
-setState(() => _syncStatus = 'Đang lấy lịch sử báo cáo...');
-final taskHistoryResponse = await AuthenticatedHttpClient.get(
-  Uri.parse('$baseUrl/historybaocao2/$username')
-);
+    // Step 1: Try to fetch task history with userType
+    setState(() => _syncStatus = 'Đang lấy lịch sử báo cáo...');
+    final taskHistoryResponse = await http.get(
+  Uri.parse('$baseUrl/historybaocao/$username')
+    );
 
-if (taskHistoryResponse.statusCode != 200) {
-  throw Exception('Failed to load task history: ${taskHistoryResponse.statusCode}');
-}
-
-// Add debug logging
-print('Task history response: ${taskHistoryResponse.body}');
-
-final List<dynamic> taskHistoryData = json.decode(taskHistoryResponse.body);
-await dbHelper.clearTable(DatabaseTables.taskHistoryTable);
-
-final taskHistories = <TaskHistoryModel>[];
-List<String> errorMessages = [];
-
-for (int i = 0; i < taskHistoryData.length; i++) {
-  try {
-    final data = taskHistoryData[i];
-    // Log the data we're processing
-    print('Processing task history item: $data');
-    
-    final ngayStr = data['Ngay'] as String? ?? '';
-    
-    // Only add validation if the date is not null/empty
-    if (ngayStr.isNotEmpty && !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(ngayStr)) {
-      errorMessages.add('Invalid date format: Record #$i, Format="$ngayStr"');
-      continue;
+    if (taskHistoryResponse.statusCode != 200) {
+      throw Exception('Failed to load task history: ${taskHistoryResponse.statusCode}');
     }
-    
-    // Safely handle potential null values
-    taskHistories.add(TaskHistoryModel(
-      uid: data['UID'] ?? '',
-      taskId: data['TaskID'] ?? '',
-      ngay: data['Ngay'] != null ? DateTime.parse(data['Ngay']) : DateTime.now(),
-      gio: data['Gio'] ?? '',
-      nguoiDung: data['NguoiDung'] ?? '',
-      ketQua: data['KetQua'] ?? '',
-      chiTiet: data['ChiTiet'] ?? '',
-      chiTiet2: data['ChiTiet2'] ?? '',
-      viTri: data['ViTri'] ?? '',
-      boPhan: data['BoPhan'] ?? '',
-      phanLoai: data['PhanLoai'] ?? '',
-      hinhAnh: data['HinhAnh'], // Can be null
-      giaiPhap: data['GiaiPhap'], // Can be null
-    ));
-  } catch (e) {
-    final error = e.toString();
-    final recordInfo = json.encode(taskHistoryData[i]).substring(0, 100) + '...';
-    errorMessages.add('Error on record #$i: ${error.substring(0, 100)}\nRecord: $recordInfo');
-    print('Error processing task history item: $e');
-    print('Problematic data: ${taskHistoryData[i]}');
-    // Continue with next item instead of failing whole process
-  }
-}
 
-// Only proceed if we have valid items
-if (taskHistories.isNotEmpty) {
-  await dbHelper.batchInsertTaskHistory(taskHistories);
-  print('Successfully inserted ${taskHistories.length} task history records');
-} else {
-  print('No valid task history records to insert');
-}
+    final List<dynamic> taskHistoryData = json.decode(taskHistoryResponse.body);
+    await dbHelper.clearTable(DatabaseTables.taskHistoryTable);
+
+    final taskHistories = taskHistoryData.map((data) => TaskHistoryModel(
+      uid: data['UID'],
+      taskId: data['TaskID'],
+      ngay: DateTime.parse(data['Ngay']),
+      gio: data['Gio'],
+      nguoiDung: data['NguoiDung'],
+      ketQua: data['KetQua'],
+      chiTiet: data['ChiTiet'],
+      chiTiet2: data['ChiTiet2'],
+      viTri: data['ViTri'],
+      boPhan: data['BoPhan'],
+      phanLoai: data['PhanLoai'],
+      hinhAnh: data['HinhAnh'],
+      giaiPhap: data['GiaiPhap'],
+    )).toList();
+
+    await dbHelper.batchInsertTaskHistory(taskHistories);
 
     // Step 2: Try to fetch position history
     try {
       setState(() => _syncStatus = 'Đang lấy lịch sử vị trí...');
-      final vtHistoryResponse = await AuthenticatedHttpClient.get(
+      final vtHistoryResponse = await http.get(
         Uri.parse('$baseUrl/historyvitri/$username')
       );
 
@@ -1123,7 +1035,7 @@ if (taskHistories.isNotEmpty) {
     // Step 3: Try to fetch uniform data
     try {
       setState(() => _syncStatus = 'Đang lấy dữ liệu đồng phục...');
-      final dongPhucResponse = await AuthenticatedHttpClient.get(
+      final dongPhucResponse = await http.get(
         Uri.parse('$baseUrl/dongphucql/$username')
       );
 
@@ -1139,7 +1051,7 @@ if (taskHistories.isNotEmpty) {
 
         // Step 4: Try to fetch uniform list
         setState(() => _syncStatus = 'Đang lấy danh sách đồng phục...');
-        final chiTietDPResponse = await AuthenticatedHttpClient.get(
+        final chiTietDPResponse = await http.get(
           Uri.parse('$baseUrl/dongphuclist')
         );
 
@@ -1161,7 +1073,7 @@ if (taskHistories.isNotEmpty) {
     // Step 5: Try to fetch interaction history
     try {
       setState(() => _syncStatus = 'Đang lấy lịch sử tương tác...');
-      final interactionResponse = await AuthenticatedHttpClient.get(
+      final interactionResponse = await http.get(
         Uri.parse('$baseUrl/historytuongtac/$username')
       );
 
@@ -1188,139 +1100,46 @@ if (taskHistories.isNotEmpty) {
     }
     // Step 6: Try to fetch department attendance history
 try {
-  print('=== STEP 6: ATTENDANCE HISTORY SYNC START ===');
-  print('Current time: ${DateTime.now()}');
-  print('Username: $username');
-  print('Base URL: $baseUrl');
-  
+  print('Starting attendance history sync...');
   setState(() => _syncStatus = 'Đang lấy lịch sử chấm công...');
   
-  final attendanceUrl = '$baseUrl/chamcongqldv/$username';
-  print('Fetching attendance data from: $attendanceUrl');
-  
-  // Add timeout to the request
+  print('Fetching attendance data from: $baseUrl/chamcongqldv/$username');
   final chamCongResponse = await http.get(
-    Uri.parse(attendanceUrl)
-  ).timeout(Duration(seconds: 230));
+    Uri.parse('$baseUrl/chamcongqldv/$username')
+  );
 
   print('Attendance API response status: ${chamCongResponse.statusCode}');
-  print('Response headers: ${chamCongResponse.headers}');
-  print('Response body length: ${chamCongResponse.body.length}');
-  print('Response body preview (first 500 chars): ${chamCongResponse.body.length > 500 ? chamCongResponse.body.substring(0, 500) + "..." : chamCongResponse.body}');
-  
   if (chamCongResponse.statusCode == 200) {
-    print('✓ Successfully received attendance data');
-    
-    // Check if response is empty
-    if (chamCongResponse.body.trim().isEmpty) {
-      print('⚠️ WARNING: Response body is empty');
-      return;
-    }
-    
-    // Try to parse JSON
-    List<dynamic> chamCongData;
-    try {
-      chamCongData = json.decode(chamCongResponse.body);
-      print('✓ JSON parsing successful');
-      print('Parsed attendance records count: ${chamCongData.length}');
-    } catch (jsonError) {
-      print('❌ JSON parsing failed: $jsonError');
-      print('Raw response: ${chamCongResponse.body}');
-      return;
-    }
-    
-    // Check if data is empty
-    if (chamCongData.isEmpty) {
-      print('⚠️ WARNING: No attendance records returned from API');
-      return;
-    }
-    
-    // Log first few records for inspection
-    print('Sample attendance records:');
-    for (int i = 0; i < Math.min(3, chamCongData.length); i++) {
-      print('Record $i: ${chamCongData[i]}');
-    }
+    print('Successfully received attendance data');
+    final List<dynamic> chamCongData = json.decode(chamCongResponse.body);
+    print('Parsed attendance records: ${chamCongData.length}');
 
     print('Clearing existing attendance table...');
-    final clearResult = await dbHelper.clearTable(DatabaseTables.chamCongCNTable);
-    print('✓ Table cleared successfully');
+    await dbHelper.clearTable(DatabaseTables.chamCongCNTable);
 
     print('Converting attendance data to models...');
-    final List<ChamCongCNModel> chamCongModels = [];
-    int successCount = 0;
-    int errorCount = 0;
-    
-    for (int i = 0; i < chamCongData.length; i++) {
+    final chamCongModels = chamCongData.map((data) {
       try {
-        final model = ChamCongCNModel.fromMap(chamCongData[i] as Map<String, dynamic>);
-        chamCongModels.add(model);
-        successCount++;
-        
-        // Log every 100th record to track progress
-        if ((i + 1) % 100 == 0) {
-          print('Processed ${i + 1}/${chamCongData.length} records...');
-        }
+        return ChamCongCNModel.fromMap(data as Map<String, dynamic>);
       } catch (e) {
-        errorCount++;
-        print('❌ Error converting attendance record $i: $e');
-        print('Problematic attendance data: ${chamCongData[i]}');
-        
-        // Stop if too many errors
-        if (errorCount > 10) {
-          print('❌ Too many conversion errors, stopping...');
-          break;
-        }
-      }
-    }
-
-    print('Conversion summary:');
-    print('- Successfully converted: $successCount records');
-    print('- Failed to convert: $errorCount records');
-    print('- Total models to insert: ${chamCongModels.length}');
-
-    if (chamCongModels.isNotEmpty) {
-      print('Inserting ${chamCongModels.length} attendance records...');
-      
-      try {
-        await dbHelper.batchInsertChamCongCN(chamCongModels);
-        print('✓ Attendance records inserted successfully');
-        
-        // Verify insertion
-        final db = await dbHelper.database;
-        final verifyResult = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseTables.chamCongCNTable}');
-        final insertedCount = Sqflite.firstIntValue(verifyResult) ?? 0;
-        print('✓ Verification: $insertedCount records found in database');
-        
-        if (insertedCount != chamCongModels.length) {
-          print('⚠️ WARNING: Expected ${chamCongModels.length} but found $insertedCount in database');
-        }
-        
-      } catch (insertError) {
-        print('❌ Error inserting attendance records: $insertError');
-        print('Insert error type: ${insertError.runtimeType}');
+        print('Error converting attendance record: $e');
+        print('Problematic attendance data: $data');
         rethrow;
       }
-    } else {
-      print('⚠️ WARNING: No valid attendance models to insert');
-    }
-    
-    print('✓ Attendance history sync completed successfully');
+    }).toList();
+
+    print('Inserting ${chamCongModels.length} attendance records...');
+    await dbHelper.batchInsertChamCongCN(chamCongModels);
+    print('Attendance history sync completed');
   } else {
-    print('❌ Failed to fetch attendance data');
-    print('Status code: ${chamCongResponse.statusCode}');
-    print('Status text: ${chamCongResponse.reasonPhrase}');
-    print('Response body: ${chamCongResponse.body}');
+    print('Failed to fetch attendance data: ${chamCongResponse.body}');
   }
 } catch (e) {
-  print('=== ATTENDANCE SYNC ERROR ===');
+  print('ERROR in attendance sync:');
   print('Error type: ${e.runtimeType}');
   print('Error message: $e');
-  print('Stack trace:');
-  print(StackTrace.current);
-  print('=== END ATTENDANCE SYNC ERROR ===');
-} finally {
-  print('=== STEP 6: ATTENDANCE HISTORY SYNC END ===');
-} 
+  print('Stack trace: ${StackTrace.current}');
+}
 
 // Step 7: Try to fetch order history
 try {
@@ -1328,7 +1147,7 @@ try {
   setState(() => _syncStatus = 'Đang lấy lịch sử đơn hàng...');
   
   print('Fetching order data from: $baseUrl/orderdon/$username');
-  final orderResponse = await AuthenticatedHttpClient.get(
+  final orderResponse = await http.get(
     Uri.parse('$baseUrl/orderdon/$username')
   );
 
@@ -1371,7 +1190,7 @@ try {
   setState(() => _syncStatus = 'Đang lấy chi tiết đơn hàng...');
   
   print('Fetching order details from: $baseUrl/orderchitiet/$username');
-  final orderChiTietResponse = await AuthenticatedHttpClient.get(
+  final orderChiTietResponse = await http.get(
     Uri.parse('$baseUrl/orderchitiet/$username')
   );
 
@@ -1437,7 +1256,7 @@ try {
     
     // Step 1: Get user role
     setState(() => _syncStatus = 'Đang lấy thông tin người dùng...');
-    final roleResponse = await AuthenticatedHttpClient.get(
+    final roleResponse = await http.get(
       Uri.parse('$baseUrl/myrole/$username')
     );
 
@@ -1452,7 +1271,7 @@ try {
         try {
       setState(() => _syncStatus = 'Đang lấy danh sách dự án...');
       print('Fetching project list for: $username');
-      final projectResponse = await AuthenticatedHttpClient.get(
+      final projectResponse = await http.get(
         Uri.parse('$baseUrl/projectlist/$username')
       );
       
@@ -1497,10 +1316,9 @@ try {
       print('Error message: $e');
       throw e;
     }
-
     // Step 3: Fetch staff bio data
     setState(() => _syncStatus = 'Đang lấy thông tin công nhân...');
-    final staffbioResponse = await AuthenticatedHttpClient.get(
+    final staffbioResponse = await http.get(
       Uri.parse('$baseUrl/staffbio')
     );
 
@@ -1516,7 +1334,7 @@ try {
 
     // Step 4: Fetch staff list
     setState(() => _syncStatus = 'Đang lấy danh sách công nhân...');
-    final staffListResponse = await AuthenticatedHttpClient.get(
+    final staffListResponse = await http.get(
       Uri.parse('$baseUrl/dscn/$username')
     );
 
@@ -1667,6 +1485,8 @@ List<Map<String, dynamic>> _filteredTaskHistory = [];
       return 'NV DVV $username';
     case 'HM-HS':
       return 'Hotel Supply $username';
+    case 'HM-KS':
+    return 'Hotel Supply $username';
     default:
       return 'User $username';
   }
@@ -1688,6 +1508,291 @@ Future<int> _getStaffCount() async {
   ''');
   return result.length;
 }
+
+Future<void> _reportIssue() async {
+  final userCredentials = Provider.of<UserCredentials>(context, listen: false);
+  final username = userCredentials.username.toLowerCase();
+
+  final fixedTopics = [
+    'Chất lượng',
+    'Nhân sự',
+    'Ý kiến khách hàng',
+    'Vật tư',
+    'Máy móc'
+  ];
+
+  // Auto-select first available options
+  String? selectedProject = _boPhanList.where((bp) => bp != 'Tất cả').isNotEmpty
+      ? _boPhanList.where((bp) => bp != 'Tất cả').first
+      : null;
+  String? selectedTopic = fixedTopics.first;
+
+  final chiTietController = TextEditingController();
+  File? imageFile;
+  final ImagePicker picker = ImagePicker();
+
+  Future<void> pickImage(StateSetter setState) async {
+    try {
+      final XFile? pickedFile = await picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 70,
+      );
+      if (pickedFile != null) {
+        setState(() {
+          imageFile = File(pickedFile.path);
+        });
+      }
+    } catch (e) {
+      print('Error picking image: $e');
+      _showError('Không thể chọn ảnh: ${e.toString()}');
+    }
+  }
+
+  Future<void> submitIssue() async {
+    if (selectedProject == null || selectedTopic == null || chiTietController.text.trim().isEmpty) {
+      _showError('Vui lòng điền đầy đủ thông tin');
+      return;
+    }
+
+    try {
+      final uuid = Uuid().v4();
+      final now = DateTime.now();
+      final formattedDate = now.toIso8601String().split('T')[0];
+      final formattedTime = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
+      // Build task data - use uppercase field names to match server expectations
+      final taskData = {
+        'UID': uuid,
+        'TaskID': uuid,
+        'Ngay': formattedDate,
+        'Gio': formattedTime,
+        'NguoiDung': username,
+        'KetQua': '❌',
+        'ChiTiet': chiTietController.text.trim(),
+        'ChiTiet2': 'Báo cáo vấn đề',
+        'ViTri': 'QLDV',
+        'BoPhan': selectedProject!,
+        'PhanLoai': selectedTopic!,
+        'GiaiPhap': '',
+        'HinhAnh': '', // Empty for now - image uploads may need separate endpoint
+      };
+
+      // Use regular POST request instead of multipart
+      final response = await http.post(
+        Uri.parse('$baseUrl/taskhistory'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(taskData),
+      );
+
+      if (response.statusCode == 200) {
+        // Create TaskHistoryModel from our local data instead of parsing server response
+        // Server response may have different field names/structure
+        final taskHistory = TaskHistoryModel(
+          uid: uuid,
+          taskId: uuid,
+          ngay: now,
+          gio: formattedTime,
+          nguoiDung: username,
+          ketQua: '❌',
+          chiTiet: chiTietController.text.trim(),
+          chiTiet2: 'Báo cáo vấn đề',
+          viTri: 'QLDV',
+          boPhan: selectedProject!,
+          phanLoai: selectedTopic!,
+          giaiPhap: '',
+          hinhAnh: '',
+        );
+
+        await dbHelper.insertTaskHistory(taskHistory);
+
+        Navigator.of(context).pop();
+        _showSuccess('Đã báo cáo vấn đề thành công');
+
+        // Reload data
+        await _loadTaskHistoryData();
+      } else {
+        throw Exception('Server returned ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('Error submitting issue: $e');
+      _showError('Không thể gửi báo cáo: ${e.toString()}');
+    }
+  }
+
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.report_problem, color: Colors.red),
+                SizedBox(width: 8),
+                Text('Báo cáo vấn đề', style: TextStyle(fontSize: 18)),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Container(
+                width: MediaQuery.of(context).size.width * 0.9,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Project Dropdown
+                    Text('Dự án *', style: TextStyle(fontWeight: FontWeight.bold)),
+                    SizedBox(height: 8),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: DropdownButton<String>(
+                        value: selectedProject,
+                        isExpanded: true,
+                        underline: SizedBox(),
+                        hint: Text('Chọn dự án'),
+                        items: _boPhanList
+                            .where((bp) => bp != 'Tất cả')
+                            .map((String value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(value),
+                          );
+                        }).toList(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            selectedProject = newValue;
+                          });
+                        },
+                      ),
+                    ),
+
+                    SizedBox(height: 16),
+
+                    // Topic Dropdown
+                    Text('Phân loại vấn đề *', style: TextStyle(fontWeight: FontWeight.bold)),
+                    SizedBox(height: 8),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: DropdownButton<String>(
+                        value: selectedTopic,
+                        isExpanded: true,
+                        underline: SizedBox(),
+                        hint: Text('Chọn phân loại'),
+                        items: fixedTopics.map((String value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(value),
+                          );
+                        }).toList(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            selectedTopic = newValue;
+                          });
+                        },
+                      ),
+                    ),
+
+                    SizedBox(height: 16),
+
+                    // Detail Input
+                    Text('Chi tiết vấn đề *', style: TextStyle(fontWeight: FontWeight.bold)),
+                    SizedBox(height: 8),
+                    TextField(
+                      controller: chiTietController,
+                      maxLines: 4,
+                      decoration: InputDecoration(
+                        hintText: 'Nhập chi tiết vấn đề...',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        contentPadding: EdgeInsets.all(12),
+                      ),
+                    ),
+
+                    SizedBox(height: 16),
+
+                    // Image Input
+                    Text('Hình ảnh', style: TextStyle(fontWeight: FontWeight.bold)),
+                    SizedBox(height: 8),
+                    if (imageFile != null) ...[
+                      Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(
+                              imageFile!,
+                              height: 200,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: IconButton(
+                              icon: Icon(Icons.close, color: Colors.white),
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.red.withOpacity(0.7),
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  imageFile = null;
+                                });
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 8),
+                    ],
+                    ElevatedButton.icon(
+                      onPressed: () => pickImage(setState),
+                      icon: Icon(Icons.camera_alt),
+                      label: Text(imageFile == null ? 'Chụp ảnh' : 'Chụp lại'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        minimumSize: Size(double.infinity, 45),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  chiTietController.dispose();
+                  Navigator.of(context).pop();
+                },
+                child: Text('Hủy'),
+              ),
+              ElevatedButton(
+                onPressed: submitIssue,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                ),
+                child: Text('Gửi báo cáo'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
 Widget _buildCompactButton(
   String label,
   IconData icon,
@@ -1737,25 +1842,67 @@ Widget build(BuildContext context) {
   String username = userCredentials.username.toUpperCase();
 
   return Scaffold(
-    appBar: AppBar(
-  toolbarHeight: 45,
-  flexibleSpace: Container(
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Color.fromARGB(255, 114, 255, 217),
-          Color.fromARGB(255, 201, 255, 236),
-          Color.fromARGB(255, 79, 255, 214),
-          Color.fromARGB(255, 188, 255, 235),
-        ],
+    appBar: PreferredSize(
+  preferredSize: const Size.fromHeight(55),
+  child: SafeArea(
+    bottom: false,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(30),
+        child: AppBar(
+          automaticallyImplyLeading: false,
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          flexibleSpace: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color.fromARGB(255, 114, 255, 217),
+                  Color.fromARGB(255, 201, 255, 236),
+                  Color.fromARGB(255, 79, 255, 214),
+                  Color.fromARGB(255, 188, 255, 235),
+                ],
+              ),
+            ),
+          ),
+          title: Text(
+            _getUserTypeTitle(username),
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 16,
+              color: Colors.black87,
+            ),
+          ),
+          actions: [
+Padding(
+  padding: const EdgeInsets.only(right: 10),
+  child: TextButton(
+    onPressed: _reportIssue,
+    style: TextButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      backgroundColor: const Color.fromARGB(255, 220, 30, 30),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: Colors.amber, width: 1.2),
+      ),
+    ),
+    child: const Text(
+      'Báo vấn đề',
+      style: TextStyle(
+        fontSize: 11,
+        color: Colors.white,
+        fontWeight: FontWeight.w600,
       ),
     ),
   ),
-  title: Text(
-    _getUserTypeTitle(username),
-    style: TextStyle(fontWeight: FontWeight.bold),
+),
+          ],
+        ),
+      ),
+    ),
   ),
 ),
     body: SingleChildScrollView(
@@ -1777,11 +1924,11 @@ Widget build(BuildContext context) {
                 ),
               ),
             // Action Buttons Grid
-  Container(
+Container(
   margin: EdgeInsets.symmetric(vertical: 4),
-  height: 76,
   child: Column(
     children: [
+      // First row - 3 buttons
       Row(
         children: [
           Expanded(
@@ -1820,54 +1967,24 @@ Widget build(BuildContext context) {
               ),
             ),
           ),
+          SizedBox(width: 4),
           Expanded(
-            child:
-          _buildCompactButton(
-            'Timeline',
-            Icons.timeline,
-            Color(0xFF3F51B5),
-            () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ProjectTimeline(
-                  username: userCredentials.username.toLowerCase(),
+            child: _buildCompactButton(
+              'Xem theo BP', 
+              Icons.settings,
+              Color(0xFF795548),
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProjectTimeline3Single(username: 'damhoang'),
+                  ),
                 ),
               ),
             ),
-          ),),
-                    Expanded(
-            child:
-          _buildCompactButton(
-            'TV2',
-            Icons.timeline,
-            Color(0xFF3F51B5),
-            () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ProjectProgressDashboard(
-                  username: userCredentials.username.toLowerCase(),
-                ),
-              ),
-            ),
-          ),),
-          Expanded(
-            child:
-          _buildCompactButton(
-            'TV1',
-            Icons.timeline,
-            Color(0xFF3F51B5),
-            () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ImageSlideshow(
-                  username: userCredentials.username.toLowerCase(),
-                ),
-              ),
-            ),
-          ),),
         ],
       ),
       SizedBox(height: 4),
+      // Second row - 4 buttons
       Row(
         children: [
           Expanded(
@@ -1928,17 +2045,78 @@ Widget build(BuildContext context) {
               ),
             ),
           ),
-          SizedBox(width: 4),
+        ],
+      ),
+      SizedBox(height: 4),
+      // Third row - 3 buttons
+      Row(
+        children: [
           Expanded(
             child: _buildCompactButton(
-              'Xem theo BP', 
-              Icons.settings,
-              Color(0xFF795548),
+              'Timeline',
+              Icons.timeline,
+              Color(0xFF3F51B5),
               () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => ProjectTimeline3Single(username: 'damhoang'),
+                  builder: (context) => ProjectTimeline(
+                    username: userCredentials.username.toLowerCase(),
+                  ),
                 ),
+              ),
+            ),
+          ),
+          SizedBox(width: 4),
+          Expanded(
+            child: _buildCompactButton(
+              'TV1',
+              Icons.timeline,
+              Color(0xFF3F51B5),
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ImageSlideshow(
+                    username: userCredentials.username.toLowerCase(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(width: 4),
+          Expanded(
+            child: _buildCompactButton(
+              'TV2',
+              Icons.timeline,
+              Color(0xFF3F51B5),
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProjectProgressDashboard(
+                    username: userCredentials.username.toLowerCase(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(width: 4),
+          Expanded(
+            child: _buildCompactButton(
+              'Quản trị',
+              Icons.assignment,
+              Color(0xFFE91E63),
+              () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const ProjectDirectorScreen()),
+              ),
+            ),
+          ),
+          SizedBox(width: 4),
+          Expanded(
+            child: _buildCompactButton(
+              'Sa bàn',
+              Icons.assignment,
+              Color(0xFFE91E63),
+              () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const MapProjectScreen(username: 'bpthunghiem'),)
               ),
             ),
           ),
@@ -1948,7 +2126,7 @@ Widget build(BuildContext context) {
   ),
 ),
 // Date Range Selection
-SizedBox(height: 24),
+SizedBox(height: 12),
 Row(
   children: [
     Expanded(
@@ -1966,8 +2144,8 @@ Row(
           Container(
             padding: EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey),
-              borderRadius: BorderRadius.circular(4),
+              color: Colors.blueGrey[100],
+              borderRadius: BorderRadius.circular(8),
             ),
             child: DropdownButton<String>(
               value: _selectedStartDate,
@@ -2009,8 +2187,8 @@ Row(
           Container(
             padding: EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey),
-              borderRadius: BorderRadius.circular(4),
+              color: Colors.blueGrey[100],
+              borderRadius: BorderRadius.circular(8),
             ),
             child: DropdownButton<String>(
               value: _selectedEndDate,
@@ -2038,26 +2216,36 @@ Row(
     ),
   ],
 ),
-            // Department Dropdown
             SizedBox(height: 16),
-            Text(
-              'Chọn Bộ Phận:',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            SizedBox(height: 8),
-            SearchableDropdown(
-  value: _selectedBoPhan ?? '',
-  items: _boPhanList,
-  hintText: 'Chọn bộ phận',
-  onChanged: (String? newValue) {
-    setState(() {
-      _selectedBoPhan = newValue;
-    });
-    _loadTaskHistoryData();
-  },
+            Container(
+  width: double.infinity,
+  decoration: BoxDecoration(
+    gradient: LinearGradient(
+      colors: [
+        Color.fromARGB(255, 200, 255, 220), 
+        Color.fromARGB(255, 140, 230, 200),
+      ],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    borderRadius: BorderRadius.circular(30),
+  ),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      SearchableDropdown(
+        value: _selectedBoPhan ?? '',
+        items: _boPhanList,
+        hintText: 'Chọn bộ phận',
+        onChanged: (String? newValue) {
+          setState(() {
+            _selectedBoPhan = newValue;
+          });
+          _loadTaskHistoryData();
+        },
+      ),
+    ],
+  ),
 ),
 FutureBuilder<List<int>>(
   future: Future.wait([
@@ -2118,13 +2306,11 @@ FutureBuilder<List<int>>(
               'Tỉ lệ vấn đề được giải quyết',
               issueResolutionStats,
             ),
-            
             SizedBox(height: 24),
             _buildPieChart(
               'Phân loại vấn đề',
               issuePhanLoaiStats,
             ),
-
             // Recent Issues List
             SizedBox(height: 24),
             Text(
@@ -2136,10 +2322,130 @@ FutureBuilder<List<int>>(
             ),
             SizedBox(height: 8),
             _buildRecentIssuesList(),
-            SizedBox(height: 24), // Bottom padding
+            SizedBox(height: 24),
           ],
         ),
       ),
+    ),
+  );
+}
+Widget _buildPieChart(String title, List<Map<String, dynamic>> data) {
+  if (data.isEmpty) return SizedBox();
+  
+  String chartId;
+  if (title == 'Chủ đề báo cáo') {
+    chartId = 'phanLoaiChart';
+  } else if (title == 'Tỉ lệ vấn đề được giải quyết') {
+    chartId = 'issueResolutionChart';
+  } else {
+    chartId = 'issueTypeChart';
+  }
+
+  final List<Color> colorScheme = title == 'Chủ đề báo cáo' ? [
+    Colors.blue[400]!,
+    Colors.green[400]!,
+    Colors.orange[400]!,
+    Colors.purple[400]!,
+    Colors.teal[400]!,
+    Colors.indigo[400]!,
+  ] : title == 'Tỉ lệ vấn đề được giải quyết' ? [
+    Colors.red[400]!,
+    Colors.grey[400]!,
+  ] : [
+    Colors.deepOrange[400]!,
+    Colors.yellow[700]!,
+    Colors.cyan[400]!,
+    Colors.pink[400]!,
+    Colors.lime[700]!,
+  ];
+
+  return Container(
+    height: 300,
+    padding: EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(8),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.grey.withOpacity(0.2),
+          blurRadius: 4,
+          offset: Offset(0, 2),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        SizedBox(height: 16),
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: RepaintBoundary(
+                  key: _chartKeys[chartId],
+                  child: PieChart(
+                    PieChartData(
+                      sections: data.map((item) {
+                        final index = data.indexOf(item) % colorScheme.length;
+                        return PieChartSectionData(
+                          value: item['value'].toDouble(),
+                          title: '${((item['value'] / totalReports) * 100).toStringAsFixed(1)}%',
+                          color: colorScheme[index],
+                          radius: 100,
+                          titleStyle: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        );
+                      }).toList(),
+                      sectionsSpace: 2,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(width: 16),
+              Expanded(
+                flex: 1,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: data.map((item) {
+                      final index = data.indexOf(item) % colorScheme.length;
+                      return Padding(
+                        padding: EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 12,
+                              height: 12,
+                              color: colorScheme[index],
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '${item['name']}: ${item['value']}',
+                                style: TextStyle(fontSize: 12),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     ),
   );
 }
@@ -2189,128 +2495,6 @@ FutureBuilder<List<int>>(
   );
 }
 
-  Widget _buildPieChart(String title, List<Map<String, dynamic>> data) {
-  if (data.isEmpty) return SizedBox();
-  
-  String chartId;
-  if (title == 'Chủ đề báo cáo') {
-    chartId = 'phanLoaiChart';
-  } else if (title == 'Tỉ lệ vấn đề được giải quyết') {
-    chartId = 'issueResolutionChart';
-  } else {
-    chartId = 'issueTypeChart';
-  }
-
-  final List<Color> colorScheme = title == 'Chủ đề báo cáo' ? [
-    Colors.blue[400]!,
-    Colors.green[400]!,
-    Colors.orange[400]!,
-    Colors.purple[400]!,
-    Colors.teal[400]!,
-    Colors.indigo[400]!,
-  ] : title == 'Tỉ lệ vấn đề được giải quyết' ? [
-    Colors.red[400]!,
-    Colors.grey[400]!,
-  ] : [
-    Colors.deepOrange[400]!,
-    Colors.yellow[700]!,
-    Colors.cyan[400]!,
-    Colors.pink[400]!,
-    Colors.lime[700]!,
-  ];
-
-  return Container(
-    height: 300,
-    padding: EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(8),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.grey.withOpacity(0.2),
-          blurRadius: 4,
-          offset: Offset(0, 2),
-        ),
-      ],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        SizedBox(height: 16),
-        Expanded(
-          child: Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: RepaintBoundary(
-                  key: _chartKeys[chartId],
-                  child: PieChart(
-                    PieChartData(
-                      sections: data.map((item) {
-                        final index = data.indexOf(item) % colorScheme.length;
-                        return PieChartSectionData(
-                          value: item['value'].toDouble(),
-                          title: '${((item['value'] / totalReports) * 100).toStringAsFixed(1)}%',
-                          color: colorScheme[index],
-                          radius: 100,
-                          titleStyle: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        );
-                      }).toList(),
-                      sectionsSpace: 2,
-                    ),
-                  ),
-                ),
-              ),
-              // Legend stays the same
-              Expanded(
-                flex: 1,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: data.map((item) {
-                    final index = data.indexOf(item) % colorScheme.length;
-                    return Padding(
-                      padding: EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 12,
-                            height: 12,
-                            color: colorScheme[index],
-                          ),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '${item['name']}: ${item['value']}',
-                              style: TextStyle(fontSize: 12),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-}
 
   Widget _buildRecentIssuesList() {
   final issues = _filteredTaskHistory
