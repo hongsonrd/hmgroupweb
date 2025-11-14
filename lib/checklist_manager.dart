@@ -287,6 +287,22 @@ class _ChecklistManagerState extends State<ChecklistManager> {
     return result;
   }
 
+  Map<String, Map<String, int>> _getReportCountsByProjectChecklistUserAndDay() {
+    final Map<String, Map<String, int>> result = {};
+    for (var report in _checklistReports) {
+      final projectName = report.projectName ?? 'N/A';
+      final checklistId = report.checklistId ?? 'N/A';
+      final userId = report.userId ?? 'N/A';
+      final date = report.reportDate;
+      final key = '$projectName|$checklistId|$userId';
+      if (!result.containsKey(key)) {
+        result[key] = {};
+      }
+      result[key]![date] = (result[key]![date] ?? 0) + 1;
+    }
+    return result;
+  }
+
   List<String> _getRecentDays(int days) {
     final now = DateTime.now();
     final List<String> dates = [];
@@ -362,6 +378,75 @@ class _ChecklistManagerState extends State<ChecklistManager> {
       }
       sheet.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: recentDays.length + 2, rowIndex: currentRow)).value = grandTotal;
       sheet.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: recentDays.length + 2, rowIndex: currentRow)).cellStyle = excel_pkg.CellStyle(bold: true, backgroundColorHex: '#FF5722', fontColorHex: '#FFFFFF');
+      
+      final sheet2 = excelDoc['Chi tiết theo user'];
+      final countDataByUser = _getReportCountsByProjectChecklistUserAndDay();
+      final userKeys = countDataByUser.keys.toList()..sort();
+      
+      sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0)).value = 'BÁO CÁO CHI TIẾT THEO USER (45 NGÀY)';
+      sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1)).value = 'Người tạo: ${widget.username}';
+      sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 2)).value = 'Ngày xuất: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}';
+      
+      int headerRow2 = 4;
+      sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: headerRow2)).value = 'Dự án';
+      sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: headerRow2)).cellStyle = excel_pkg.CellStyle(bold: true, backgroundColorHex: '#4CAF50', fontColorHex: '#FFFFFF');
+      
+      sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: headerRow2)).value = 'Checklist ID';
+      sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: headerRow2)).cellStyle = excel_pkg.CellStyle(bold: true, backgroundColorHex: '#4CAF50', fontColorHex: '#FFFFFF');
+      
+      sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: headerRow2)).value = 'User ID';
+      sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: headerRow2)).cellStyle = excel_pkg.CellStyle(bold: true, backgroundColorHex: '#4CAF50', fontColorHex: '#FFFFFF');
+      
+      for (int i = 0; i < recentDays.length; i++) {
+        final date = recentDays[i];
+        final displayDate = DateFormat('dd/MM').format(DateTime.parse(date));
+        sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: i + 3, rowIndex: headerRow2)).value = displayDate;
+        sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: i + 3, rowIndex: headerRow2)).cellStyle = excel_pkg.CellStyle(bold: true, backgroundColorHex: '#4CAF50', fontColorHex: '#FFFFFF');
+      }
+      sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: recentDays.length + 3, rowIndex: headerRow2)).value = 'Tổng';
+      sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: recentDays.length + 3, rowIndex: headerRow2)).cellStyle = excel_pkg.CellStyle(bold: true, backgroundColorHex: '#2196F3', fontColorHex: '#FFFFFF');
+      
+      int currentRow2 = headerRow2 + 1;
+      for (var key in userKeys) {
+        final parts = key.split('|');
+        final projectName = parts[0];
+        final checklistId = parts[1];
+        final userId = parts[2];
+        
+        sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow2)).value = projectName;
+        sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: currentRow2)).value = checklistId;
+        sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: currentRow2)).value = userId;
+        
+        int rowTotal = 0;
+        for (int i = 0; i < recentDays.length; i++) {
+          final date = recentDays[i];
+          final count = countDataByUser[key]?[date] ?? 0;
+          rowTotal += count;
+          sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: i + 3, rowIndex: currentRow2)).value = count > 0 ? count : '';
+        }
+        sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: recentDays.length + 3, rowIndex: currentRow2)).value = rowTotal;
+        sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: recentDays.length + 3, rowIndex: currentRow2)).cellStyle = excel_pkg.CellStyle(bold: true);
+        currentRow2++;
+      }
+      
+      sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow2)).value = 'TỔNG';
+      sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow2)).cellStyle = excel_pkg.CellStyle(bold: true, backgroundColorHex: '#FFC107');
+      sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: currentRow2)).cellStyle = excel_pkg.CellStyle(bold: true, backgroundColorHex: '#FFC107');
+      sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: currentRow2)).cellStyle = excel_pkg.CellStyle(bold: true, backgroundColorHex: '#FFC107');
+      
+      int grandTotal2 = 0;
+      for (int i = 0; i < recentDays.length; i++) {
+        final date = recentDays[i];
+        int dayTotal = 0;
+        for (var key in userKeys) {
+          dayTotal += countDataByUser[key]?[date] ?? 0;
+        }
+        grandTotal2 += dayTotal;
+        sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: i + 3, rowIndex: currentRow2)).value = dayTotal;
+        sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: i + 3, rowIndex: currentRow2)).cellStyle = excel_pkg.CellStyle(bold: true, backgroundColorHex: '#FFC107');
+      }
+      sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: recentDays.length + 3, rowIndex: currentRow2)).value = grandTotal2;
+      sheet2.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: recentDays.length + 3, rowIndex: currentRow2)).cellStyle = excel_pkg.CellStyle(bold: true, backgroundColorHex: '#FF5722', fontColorHex: '#FFFFFF');
       
       final excelBytes = excelDoc.encode()!;
       final dir = await getApplicationDocumentsDirectory();
